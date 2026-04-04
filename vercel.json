@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/alert-24h",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/alert-6h",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/receipt",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}

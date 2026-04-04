@@ -1,0 +1,341 @@
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
+
+export type Database = {
+  public: {
+    PostgrestVersion: "12"
+    Tables: {
+      users: {
+        Row: {
+          id: string
+          name: string
+          email: string
+          phone: string | null
+          whatsapp: string | null
+          padrinho: string | null
+          apelido: string | null
+          observacao: string | null
+          is_manual: boolean
+          provider: string
+          approved: boolean
+          paid: boolean
+          is_admin: boolean
+          status: 'email_pendente' | 'aprovacao_pendente' | 'aprovado'
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          email: string
+          phone?: string | null
+          whatsapp?: string | null
+          padrinho?: string | null
+          apelido?: string | null
+          observacao?: string | null
+          is_manual?: boolean
+          provider?: string
+          approved?: boolean
+          paid?: boolean
+          is_admin?: boolean
+          status?: 'email_pendente' | 'aprovacao_pendente' | 'aprovado'
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          email?: string
+          phone?: string | null
+          whatsapp?: string | null
+          padrinho?: string | null
+          apelido?: string | null
+          observacao?: string | null
+          is_manual?: boolean
+          provider?: string
+          approved?: boolean
+          paid?: boolean
+          is_admin?: boolean
+          status?: 'email_pendente' | 'aprovacao_pendente' | 'aprovado'
+          created_at?: string
+        }
+        Relationships: []
+      }
+      matches: {
+        Row: {
+          id: string
+          match_number: number
+          phase: MatchPhase
+          group_name: string | null
+          round: number | null
+          team_home: string
+          team_away: string
+          flag_home: string
+          flag_away: string
+          match_datetime: string
+          city: string
+          score_home: number | null
+          score_away: number | null
+          is_brazil: boolean
+          betting_deadline: string
+        }
+        Insert: {
+          id?: string
+          match_number: number
+          phase: MatchPhase
+          group_name?: string | null
+          round?: number | null
+          team_home: string
+          team_away: string
+          flag_home: string
+          flag_away: string
+          match_datetime: string
+          city: string
+          score_home?: number | null
+          score_away?: number | null
+          is_brazil?: boolean
+          betting_deadline: string
+        }
+        Update: {
+          id?: string
+          match_number?: number
+          phase?: MatchPhase
+          group_name?: string | null
+          round?: number | null
+          team_home?: string
+          team_away?: string
+          flag_home?: string
+          flag_away?: string
+          match_datetime?: string
+          city?: string
+          score_home?: number | null
+          score_away?: number | null
+          is_brazil?: boolean
+          betting_deadline?: string
+        }
+        Relationships: []
+      }
+      bets: {
+        Row: {
+          id: string
+          user_id: string
+          match_id: string
+          score_home: number
+          score_away: number
+          points: number | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          match_id: string
+          score_home: number
+          score_away: number
+          points?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          match_id?: string
+          score_home?: number
+          score_away?: number
+          points?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      group_bets: {
+        Row: {
+          id: string
+          user_id: string
+          group_name: string
+          first_place: string
+          second_place: string
+          points: number | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          group_name: string
+          first_place: string
+          second_place: string
+          points?: number | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          group_name?: string
+          first_place?: string
+          second_place?: string
+          points?: number | null
+        }
+        Relationships: []
+      }
+      tournament_bets: {
+        Row: {
+          id: string
+          user_id: string
+          champion: string
+          runner_up: string
+          semi1: string
+          semi2: string
+          top_scorer: string
+          points: number | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          champion: string
+          runner_up: string
+          semi1: string
+          semi2: string
+          top_scorer: string
+          points?: number | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          champion?: string
+          runner_up?: string
+          semi1?: string
+          semi2?: string
+          top_scorer?: string
+          points?: number | null
+        }
+        Relationships: []
+      }
+      scoring_rules: {
+        Row: {
+          key: string
+          label: string
+          points: number
+          category: string
+          is_zebra_bonus: boolean
+        }
+        Insert: {
+          key: string
+          label: string
+          points: number
+          category: string
+          is_zebra_bonus?: boolean
+        }
+        Update: {
+          key?: string
+          label?: string
+          points?: number
+          category?: string
+          is_zebra_bonus?: boolean
+        }
+        Relationships: []
+      }
+      settings: {
+        Row: {
+          key: string
+          value: string
+        }
+        Insert: {
+          key: string
+          value: string
+        }
+        Update: {
+          key?: string
+          value?: string
+        }
+        Relationships: []
+      }
+      email_logs: {
+        Row: {
+          id: string
+          user_id: string | null
+          email: string
+          job_type: string
+          etapa_key: string
+          message_id: string | null
+          status: string
+          error_msg: string | null
+          sent_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          email: string
+          job_type: string
+          etapa_key: string
+          message_id?: string | null
+          status?: string
+          error_msg?: string | null
+          sent_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          email?: string
+          job_type?: string
+          etapa_key?: string
+          message_id?: string | null
+          status?: string
+          error_msg?: string | null
+          sent_at?: string
+        }
+        Relationships: []
+      }
+      third_place_bets: {
+        Row: {
+          id: string
+          user_id: string
+          group_name: string
+          team: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          group_name: string
+          team: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          group_name?: string
+          team?: string
+        }
+        Relationships: []
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      [_ in never]: never
+    }
+    Enums: {
+      [_ in never]: never
+    }
+  }
+}
+
+// ── Tipos auxiliares ──────────────────────────────────────────────────────────
+
+export type MatchPhase =
+  | 'group'
+  | 'round_of_32'
+  | 'round_of_16'
+  | 'quarterfinal'
+  | 'semifinal'
+  | 'third_place'
+  | 'final'
+
+export type Tables<T extends keyof Database['public']['Tables']> =
+  Database['public']['Tables'][T]['Row']
+
+export type UserRow       = Tables<'users'>
+export type MatchRow      = Tables<'matches'>
+export type BetRow        = Tables<'bets'>
+export type GroupBetRow   = Tables<'group_bets'>
+export type TournamentBetRow = Tables<'tournament_bets'>
