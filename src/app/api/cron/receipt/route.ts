@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { createAdminClient } from '@/lib/supabase/server'
@@ -11,7 +12,7 @@ import {
 import { html0h, subject0h, FROM_NAME } from '@/lib/cron/templates'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
-const FROM   = `${FROM_NAME} <${process.env.EMAIL_FROM ?? 'noreply@melhorbolao.app.br'}>`
+const FROM = `${FROM_NAME} <${process.env.EMAIL_FROM ?? 'noreply@melhorbolao.app.br'}>`
 const AUDIT_CC = process.env.AUDIT_EMAIL ?? 'auditoria@melhorbolao.app.br'
 
 // T-0h: deadline acabou de passar (dentro dos últimos 5 min)
@@ -51,14 +52,14 @@ export async function GET(req: Request) {
       const { buffer } = await buildPalpitesBuffer(supabase, p.id)
 
       const { data, error } = await resend.emails.send({
-        from:    FROM,
-        to:      [p.email],
-        cc:      [AUDIT_CC],
+        from: FROM,
+        to: [p.email],
+        cc: [AUDIT_CC],
         subject: subject0h(etapa),
-        html:    html0h(p, etapa),
+        html: html0h(p, etapa),
         attachments: [{
-          filename:    'Meus_Palpites.xlsx',
-          content:     buffer,
+          filename: 'Meus_Palpites.xlsx',
+          content: buffer,
           contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         }],
       })
@@ -66,23 +67,23 @@ export async function GET(req: Request) {
       if (error) throw new Error(error.message)
 
       await logEmail(supabase, {
-        userId:    p.id,
-        email:     p.email,
-        jobType:   'receipt',
-        etapaKey:  etapa.key,
+        userId: p.id,
+        email: p.email,
+        jobType: 'receipt',
+        etapaKey: etapa.key,
         messageId: data?.id ?? null,
-        status:    'sent',
+        status: 'sent',
       })
       results.sent++
     } catch (err) {
       await logEmail(supabase, {
-        userId:    p.id,
-        email:     p.email,
-        jobType:   'receipt',
-        etapaKey:  etapa.key,
+        userId: p.id,
+        email: p.email,
+        jobType: 'receipt',
+        etapaKey: etapa.key,
         messageId: null,
-        status:    'error',
-        errorMsg:  err instanceof Error ? err.message : String(err),
+        status: 'error',
+        errorMsg: err instanceof Error ? err.message : String(err),
       })
       results.errors++
     }

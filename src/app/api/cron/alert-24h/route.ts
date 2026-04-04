@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { createAdminClient } from '@/lib/supabase/server'
@@ -15,10 +16,10 @@ import {
 } from '@/lib/cron/templates'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
-const FROM   = `${FROM_NAME} <${process.env.EMAIL_FROM ?? 'noreply@melhorbolao.app.br'}>`
+const FROM = `${FROM_NAME} <${process.env.EMAIL_FROM ?? 'noreply@melhorbolao.app.br'}>`
 
-const WINDOW_24H_MS  = 24 * 3600 * 1000
-const TOLERANCE_MS   = 35 * 60 * 1000  // ±35 min (cron roda a cada hora)
+const WINDOW_24H_MS = 24 * 3600 * 1000
+const TOLERANCE_MS = 35 * 60 * 1000  // ±35 min (cron roda a cada hora)
 
 export async function GET(req: Request) {
   // Protege com CRON_SECRET (Vercel injeta automaticamente em prod)
@@ -57,12 +58,12 @@ export async function GET(req: Request) {
 
       const { data, error } = await resend.emails.send({
         from: FROM,
-        to:   [p.email],
+        to: [p.email],
         subject,
         html,
         attachments: [{
-          filename:    'Meus_Palpites.xlsx',
-          content:     buffer,
+          filename: 'Meus_Palpites.xlsx',
+          content: buffer,
           contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         }],
       })
@@ -70,23 +71,23 @@ export async function GET(req: Request) {
       if (error) throw new Error(error.message)
 
       await logEmail(supabase, {
-        userId:    p.id,
-        email:     p.email,
-        jobType:   'alert_24h',
-        etapaKey:  etapa.key,
+        userId: p.id,
+        email: p.email,
+        jobType: 'alert_24h',
+        etapaKey: etapa.key,
         messageId: data?.id ?? null,
-        status:    'sent',
+        status: 'sent',
       })
       results.sent++
     } catch (err) {
       await logEmail(supabase, {
-        userId:    p.id,
-        email:     p.email,
-        jobType:   'alert_24h',
-        etapaKey:  etapa.key,
+        userId: p.id,
+        email: p.email,
+        jobType: 'alert_24h',
+        etapaKey: etapa.key,
         messageId: null,
-        status:    'error',
-        errorMsg:  err instanceof Error ? err.message : String(err),
+        status: 'error',
+        errorMsg: err instanceof Error ? err.message : String(err),
       })
       results.errors++
     }
