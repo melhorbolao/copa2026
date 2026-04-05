@@ -30,6 +30,11 @@ export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBet
 
   const { setThirdSelections } = useThirdPlace()
 
+  // Sincroniza quando o servidor revalida (ex: auto-preenchimento)
+  useEffect(() => {
+    setSelections(Object.fromEntries((existingBets ?? []).map(b => [b.group_name, b.team])))
+  }, [JSON.stringify(existingBets)]) // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     setThirdSelections(selections)
   }, [selections]) // eslint-disable-line react-hooks/exhaustive-deps
