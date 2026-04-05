@@ -7,9 +7,10 @@ const COL_KEY    = 1
 const COL_VAL_A  = 7
 const COL_VAL_B  = 8
 const COL_TEAM_B = 9
-const COL_PRAZO  = 10
-const COL_STATUS = 11
-const TOTAL_COLS = 11
+const COL_CITY   = 10
+const COL_PRAZO  = 11
+const COL_STATUS = 12
+const TOTAL_COLS = 12
 
 // Cores
 const C_GREEN     = 'FF004D1A'
@@ -23,6 +24,9 @@ const C_RED_FG    = 'FFDC2626'
 const C_RED_VIVID = 'FFFF0000'
 
 const GROUP_ORDER = ['A','B','C','D','E','F','G','H','I','J','K','L']
+
+// Converte Date UTC para horário de Brasília (UTC-3) para exibição correta no Excel
+function toBR(d: Date): Date { return new Date(d.getTime() - 3 * 60 * 60 * 1000) }
 
 const colToLetter = (n: number): string => {
   let s = ''
@@ -48,7 +52,7 @@ export async function buildPalpitesBuffer(
     { data: profile },
   ] = await Promise.all([
     supabase.from('matches')
-      .select('id, match_number, round, group_name, match_datetime, betting_deadline, team_home, team_away')
+      .select('id, match_number, round, group_name, match_datetime, betting_deadline, team_home, team_away, city')
       .eq('phase', 'group')
       .order('match_datetime', { ascending: true }),
     supabase.from('bets').select('match_id, score_home, score_away').eq('user_id', userId),
@@ -109,9 +113,10 @@ export async function buildPalpitesBuffer(
   ws.getColumn(4).width          = 8
   ws.getColumn(5).width          = 18
   ws.getColumn(6).width          = 22
-  ws.getColumn(COL_VAL_A).width  = 12
-  ws.getColumn(COL_VAL_B).width  = 12
+  ws.getColumn(COL_VAL_A).width  = 18
+  ws.getColumn(COL_VAL_B).width  = 18
   ws.getColumn(COL_TEAM_B).width = 22
+  ws.getColumn(COL_CITY).width   = 18
   ws.getColumn(COL_PRAZO).width  = 18
   ws.getColumn(COL_STATUS).width = 14
 
@@ -133,7 +138,7 @@ export async function buildPalpitesBuffer(
   t2.protection = { locked: true }
   ws.getRow(2).height = 22
 
-  const hdr = ['Chave','Jogo','Etapa','Grupo','Data/Hora','Seleção A / Aposta','Gols A / Valor','Gols B / 2º','Seleção B','Prazo','Status']
+  const hdr = ['Chave','Jogo','Etapa','Grupo','Data/Hora','Seleção A','Gols A','Gols B','Seleção B','Cidade','Prazo','Status']
   const hRow = ws.getRow(3)
   hRow.height = 18
   hdr.forEach((h, i) => {
@@ -218,7 +223,7 @@ export async function buildPalpitesBuffer(
   let thirdEndRow   = 0
   const g4RowNums: number[] = []
 
-  const bonusDeadlineDisplay = bonusDeadline ?? new Date()
+  const bonusDeadlineDisplay = toBR(bonusDeadline ?? new Date())
   const bonusStatus = bonusLocked ? '🔒 Bloqueado' : '✏️ Editável'
 
   // SEÇÃO 1: JOGOS
@@ -239,12 +244,13 @@ export async function buildPalpitesBuffer(
     baseCell(row, 2,          m.match_number, locked, { align: 'center' })
     baseCell(row, 3,          `R${m.round}`,  locked, { align: 'center' })
     baseCell(row, 4,          m.group_name,   locked, { align: 'center' })
-    baseCell(row, 5,          new Date(m.match_datetime), locked, { align: 'center', numFmt: 'dd/MM/yy HH:mm' })
+    baseCell(row, 5,          toBR(new Date(m.match_datetime)), locked, { align: 'center', numFmt: 'dd/MM/yy HH:mm' })
     baseCell(row, 6,          m.team_home,    locked, { align: 'right' })
     editCell(row, COL_VAL_A,  (bet as any)?.score_home ?? null, locked, 'number')
     editCell(row, COL_VAL_B,  (bet as any)?.score_away ?? null, locked, 'number')
     baseCell(row, COL_TEAM_B, m.team_away,    locked, { align: 'left' })
-    baseCell(row, COL_PRAZO,  deadline,       true,   { align: 'center', numFmt: 'dd/MM/yy HH:mm' })
+    baseCell(row, COL_CITY,   m.city ?? '',   locked, { align: 'center' })
+    baseCell(row, COL_PRAZO,  toBR(deadline), true,   { align: 'center', numFmt: 'dd/MM/yy HH:mm' })
     baseCell(row, COL_STATUS, locked ? '🔒 Bloqueado' : '✏️ Editável', true, { align: 'center' })
   }
 
@@ -271,6 +277,7 @@ export async function buildPalpitesBuffer(
     editCell(row, COL_VAL_A,  gb?.first_place  ?? null, bonusLocked, 'team', g)
     editCell(row, COL_VAL_B,  gb?.second_place ?? null, bonusLocked, 'team', g)
     baseCell(row, COL_TEAM_B, '', bonusLocked, {})
+    baseCell(row, COL_CITY,   '', bonusLocked, {})
     baseCell(row, COL_PRAZO,  bonusDeadlineDisplay, true, { align: 'center', numFmt: 'dd/MM/yy HH:mm' })
     baseCell(row, COL_STATUS, bonusStatus, true, { align: 'center' })
   }
@@ -298,6 +305,7 @@ export async function buildPalpitesBuffer(
     editCell(row, COL_VAL_A,  tb?.team ?? null, bonusLocked, 'team', g)
     baseCell(row, COL_VAL_B,  '', bonusLocked, {})
     baseCell(row, COL_TEAM_B, '', bonusLocked, {})
+    baseCell(row, COL_CITY,   '', bonusLocked, {})
     baseCell(row, COL_PRAZO,  bonusDeadlineDisplay, true, { align: 'center', numFmt: 'dd/MM/yy HH:mm' })
     baseCell(row, COL_STATUS, bonusStatus, true, { align: 'center' })
   }
