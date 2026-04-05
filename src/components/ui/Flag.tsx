@@ -16,6 +16,8 @@ const sizes = {
 export function Flag({ code, name = '', size = 'md', className = '' }: FlagProps) {
   const { width, height } = sizes[size]
 
+  if (!code) return null
+
   // Aceita URL completa (ex: https://flagcdn.com/w40/de.png) ou código ISO (ex: 'de')
   const isUrl = code.startsWith('http')
   const src    = isUrl ? code : `https://flagcdn.com/w80/${code.toLowerCase()}.png`

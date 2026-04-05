@@ -54,7 +54,7 @@ export default async function AdminUsuariosPage() {
                 </tr>
               </thead>
               <tbody>
-                {users!.map((user, i) => (
+                {(users ?? []).map((user, i) => (
                   <UserRow
                     key={user.id}
                     user={user as Parameters<typeof UserRow>[0]['user']}

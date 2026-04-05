@@ -110,8 +110,9 @@ function buildGroupTeams(
   }
 
   for (const m of groupMatches) {
-    ensure(m.team_home, m.flag_home)
-    ensure(m.team_away, m.flag_away)
+    if (!m.team_home || !m.team_away) continue
+    ensure(m.team_home, m.flag_home ?? '')
+    ensure(m.team_away, m.flag_away ?? '')
 
     const bet = betMap.get(m.id)
     if (!bet) continue  // sem palpite → partida não contabilizada
@@ -148,7 +149,7 @@ function sortGroup(teams: TeamRow[]): TeamRow[] {
     if (b.pts !== a.pts) return b.pts - a.pts
     if (b.gd  !== a.gd)  return b.gd  - a.gd
     if (b.gf  !== a.gf)  return b.gf  - a.gf
-    return a.team.localeCompare(b.team)
+    return (a.team ?? '').localeCompare(b.team ?? '')
   })
 }
 
@@ -225,6 +226,40 @@ export function resolveThirdSlots(
  * @param thirdSlots  resultado de resolveThirdSlots (ex: { "1A": "3E", ... })
  * @param matchNum    ex: "M74" (para saber qual slot usar)
  */
+/** Resolve cada um dos 16 slots do R32 em { team, flag } a partir das classificações calculadas. */
+export function buildR32Teams(
+  standings: CalcGroupStanding[],
+  thirds: ThirdTeam[],
+  thirdSlots: Record<string, string> | null,
+): { matchNum: string; teamA: { team: string; flag: string } | null; teamB: { team: string; flag: string } | null }[] {
+  const standMap = new Map(standings.map(s => [s.group, s]))
+  const thirdMap = new Map(thirds.filter(t => t.advances).map(t => [t.group, t]))
+
+  const resolveSlot = (slot: string, matchNum: string): { team: string; flag: string } | null => {
+    if (slot.startsWith('1')) {
+      const t = standMap.get(slot[1])?.teams[0]
+      return t ? { team: t.team, flag: t.flag } : null
+    }
+    if (slot.startsWith('2')) {
+      const t = standMap.get(slot[1])?.teams[1]
+      return t ? { team: t.team, flag: t.flag } : null
+    }
+    if (slot.startsWith('3rd:') && thirdSlots) {
+      const ref = resolveR32ThirdSlot(matchNum, thirdSlots) // e.g. "3E"
+      if (!ref) return null
+      const t = thirdMap.get(ref[1])
+      return t ? { team: t.team, flag: t.flag } : null
+    }
+    return null
+  }
+
+  return R32_MATCHES.map(m => ({
+    matchNum: m.matchNum,
+    teamA: resolveSlot(m.slotA, m.matchNum),
+    teamB: resolveSlot(m.slotB, m.matchNum),
+  }))
+}
+
 export function resolveR32ThirdSlot(
   matchNum: string,
   thirdSlots: Record<string, string> | null,
