@@ -308,7 +308,7 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
       {/* Rodapé */}
       <div className="mt-3 flex items-center justify-between gap-4 flex-wrap">
         <p className="text-xs text-gray-400">
-          Clique em um time para avançá-lo ao próximo round.
+          Clique em uma seleção para avançá-la à próxima fase.
         </p>
         <button
           onClick={() => setPicks(emptyPicks())}
