@@ -3,7 +3,7 @@
 import { useTransition, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
-import { toggleApproved, togglePaid, deleteUser, updateObservacao, updateApelido, updatePadrinho } from '../actions'
+import { toggleApproved, togglePaid, deleteUser, updateObservacao, updateApelido, updatePadrinho, toggleAdmin } from '../actions'
 import { getDisplayName } from '@/utils/display'
 import { formatBrasilia } from '@/utils/date'
 
@@ -24,6 +24,7 @@ interface UserRowProps {
     paid: boolean
     status: Status
     is_manual: boolean
+    is_admin: boolean
     created_at: string
   }
   index: number
@@ -38,6 +39,7 @@ export function UserRow({ user, index }: UserRowProps) {
   const [pendingObs,      startObs]      = useTransition()
   const [pendingApelido,  startApelido]  = useTransition()
   const [pendingPadrinho, startPadrinho] = useTransition()
+  const [pendingAdmin,    startAdmin]    = useTransition()
 
   const [confirming,     setConfirming]     = useState(false)
   const [editingObs,     setEditingObs]     = useState(false)
@@ -110,6 +112,16 @@ export function UserRow({ user, index }: UserRowProps) {
       void deleteUser(user.id)
         .then(() => router.refresh())
         .catch(() => toast.error('Erro ao excluir usuário'))
+    })
+  }
+
+  const isMaster = user.email === 'gmousinho@gmail.com'
+
+  const handleToggleAdmin = () => {
+    startAdmin(() => {
+      void toggleAdmin(user.id, user.is_admin)
+        .then(() => router.refresh())
+        .catch(e => toast.error(e instanceof Error ? e.message : 'Erro ao alterar admin'))
     })
   }
 
@@ -301,6 +313,20 @@ export function UserRow({ user, index }: UserRowProps) {
                 📝
               </button>
             )}
+            {!isMaster && (
+              <button
+                onClick={handleToggleAdmin}
+                disabled={pendingAdmin}
+                title={user.is_admin ? 'Remover admin' : 'Tornar admin'}
+                className={`rounded p-1.5 transition disabled:opacity-50 ${
+                  user.is_admin
+                    ? 'bg-purple-100 text-purple-600 hover:bg-purple-200'
+                    : 'text-gray-300 hover:bg-purple-50 hover:text-purple-400'
+                }`}
+              >
+                <ShieldIcon />
+              </button>
+            )}
             <button
               onClick={() => setConfirming(true)}
               title="Excluir"
@@ -354,6 +380,14 @@ function TrashIcon() {
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
       <path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+    </svg>
+  )
+}
+
+function ShieldIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
     </svg>
   )
 }

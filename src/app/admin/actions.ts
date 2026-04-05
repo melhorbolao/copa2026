@@ -183,6 +183,22 @@ function buildStageFilter(stage: string): { phases: string[]; match?: Record<str
   }
 }
 
+// ── Admin toggle (protege master) ────────────────────────────
+const MASTER_ADMIN_EMAIL = 'gmousinho@gmail.com'
+
+export async function toggleAdmin(userId: string, current: boolean) {
+  await requireAdmin()
+  const supabase = await createAdminClient()
+
+  // Não permite alterar o master admin
+  const { data: target } = await supabase
+    .from('users').select('email').eq('id', userId).single()
+  if (target?.email === MASTER_ADMIN_EMAIL) throw new Error('O Admin Master não pode ser alterado')
+
+  await supabase.from('users').update({ is_admin: !current }).eq('id', userId)
+  revalidatePath('/admin/usuarios')
+}
+
 // ── Pagamento ─────────────────────────────────────────────────
 export async function togglePaid(userId: string, current: boolean) {
   await requireAdmin()
