@@ -207,8 +207,8 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
           {/* ── R32 ── */}
           {r32Slots.map((slot, i) => (
             <div key={slot.matchNum}>
-              {/* Separador visual a cada 4 partidas (entre QFs) */}
-              {i > 0 && i % 4 === 0 && (
+              {/* Separador visual entre todas as partidas do R32 */}
+              {i > 0 && (
                 <div
                   style={{
                     position: 'absolute',
