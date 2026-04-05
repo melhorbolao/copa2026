@@ -186,7 +186,7 @@ export function ScoringTable({ rules, isAdmin }: Props) {
               {zebraRule && (
                 <div className="flex items-center gap-1">
                   <span className="text-xs text-amber-700">Limite:</span>
-                  <PointsCell rule={zebraRule} isAdmin={isAdmin} />
+                  <PointsCell rule={zebraRule} isAdmin={canEdit} />
                 </div>
               )}
             </div>
