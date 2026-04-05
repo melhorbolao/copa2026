@@ -79,7 +79,7 @@ function ScoreInput({
       max={99}
       value={value}
       onChange={e => onChange(Math.max(0, parseInt(e.target.value) || 0))}
-      className="w-12 rounded-lg border border-gray-200 py-1.5 text-center text-lg font-black text-gray-900 focus:border-azul-escuro focus:outline-none"
+      className="w-12 rounded-lg border border-gray-200 py-1.5 text-center text-lg font-black text-gray-900 focus:border-azul-escuro focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
     />
   )
 }

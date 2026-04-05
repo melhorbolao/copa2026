@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Navbar } from '@/components/layout/Navbar'
 import { ScoringTable } from './ScoringTable'
 import { ScoreSimulator } from './ScoreSimulator'
+import { GroupSimulator } from './GroupSimulator'
 
 export const metadata = { title: 'Pontuação — Melhor Bolão' }
 
@@ -37,6 +38,7 @@ export default async function PontuacaoPage() {
 
         <ScoringTable rules={rules ?? []} isAdmin={isAdmin} />
         <ScoreSimulator rules={rules ?? []} />
+        <GroupSimulator rules={rules ?? []} />
       </div>
     </>
   )
