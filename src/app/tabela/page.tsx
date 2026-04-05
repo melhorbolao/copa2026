@@ -154,6 +154,15 @@ export default async function TabelaPage() {
             />
           </div>
         </div>
+
+        <div className="mt-4 text-center">
+          <a
+            href="/palpites"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-azul-escuro hover:underline"
+          >
+            📊 Veja aqui seus palpites
+          </a>
+        </div>
       </div>
     </>
   )
