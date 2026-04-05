@@ -14,7 +14,7 @@ export async function POST() {
   const email = user.email
   if (!email) return NextResponse.json({ error: 'Usuário sem e-mail cadastrado.' }, { status: 400 })
 
-  const { buffer, displayName } = await buildPalpitesBuffer(supabase, user.id)
+  const { buffer, displayName, fileName } = await buildPalpitesBuffer(supabase, user.id)
 
   const now = new Date()
   const dataHora = now.toLocaleString('pt-BR', {
@@ -31,7 +31,7 @@ export async function POST() {
       <div style="background: #f9fafb; padding: 28px 32px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
         <p style="margin: 0 0 12px;">Olá, <strong>${displayName}</strong>!</p>
         <p style="margin: 0 0 12px;">Segue em anexo o comprovante atualizado dos seus palpites para o Bolão da Copa 2026.</p>
-        <p style="margin: 0 0 20px;">O arquivo <strong>palpites-copa2026.xlsx</strong> contém todos os seus palpites de jogos, classificados de grupos e apostas bônus registrados até agora.</p>
+        <p style="margin: 0 0 20px;">O arquivo <strong>${fileName}</strong> contém todos os seus palpites de jogos, classificados de grupos e apostas bônus registrados até agora.</p>
         <div style="background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px 16px; margin-bottom: 20px;">
           <p style="margin: 0; font-size: 13px; color: #6b7280;">📅 Gerado em: <strong>${dataHora} (horário de Brasília)</strong></p>
         </div>
@@ -49,7 +49,7 @@ export async function POST() {
     subject: '⚽ Seu Comprovante de Palpites - Bolão Copa 2026',
     html,
     attachments: [{
-      filename:     'palpites-copa2026.xlsx',
+      filename:     fileName,
       content:      buffer,
       contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     }],

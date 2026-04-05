@@ -39,10 +39,27 @@ function genPassword(): string {
   return Array.from({ length: 16 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
 }
 
+function makeFileName(apelido: string): string {
+  const now = new Date()
+  // Selo no horário de Brasília (UTC-3)
+  const brNow = new Date(now.getTime() - 3 * 60 * 60 * 1000)
+  const mm   = String(brNow.getUTCMonth() + 1).padStart(2, '0')
+  const dd   = String(brNow.getUTCDate()).padStart(2, '0')
+  const hh   = String(brNow.getUTCHours()).padStart(2, '0')
+  const min  = String(brNow.getUTCMinutes()).padStart(2, '0')
+  const selo = `${mm}${dd}${hh}${min}`
+  const slug = apelido
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')  // remove acentos
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return `melhorbolao-copa2026-${slug}-${selo}.xlsx`
+}
+
 export async function buildPalpitesBuffer(
   supabase: AnySupabase,
   userId: string,
-): Promise<{ buffer: Buffer; displayName: string }> {
+): Promise<{ buffer: Buffer; displayName: string; fileName: string }> {
   const [
     { data: matches },
     { data: bets },
@@ -68,7 +85,9 @@ export async function buildPalpitesBuffer(
   const groupBetMap = new Map((groupBets ?? []).map((b: any) => [b.group_name, b]))
   const thirdBetMap = new Map((thirdBets ?? []).map((b: any) => [b.group_name, b]))
   const now         = new Date()
-  const displayName = (profile as any)?.apelido || (profile as any)?.name || 'Participante'
+  const apelido     = (profile as any)?.apelido || (profile as any)?.name || 'participante'
+  const displayName = apelido
+  const fileName    = makeFileName(apelido)
 
   const matchList = (matches ?? []) as any[]
 
@@ -398,5 +417,5 @@ export async function buildPalpitesBuffer(
   })
 
   const buffer = Buffer.from(await wb.xlsx.writeBuffer())
-  return { buffer, displayName }
+  return { buffer, displayName, fileName }
 }
