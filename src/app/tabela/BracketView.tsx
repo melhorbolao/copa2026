@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useTransition } from 'react'
 import { Flag } from '@/components/ui/Flag'
+import { fillG4FromBracket } from '@/app/palpites/actions'
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -11,6 +12,8 @@ export interface R32Slot { matchNum: string; teamA: BracketTeam | null; teamB: B
 interface Props {
   r32Slots: R32Slot[]
   userId: string
+  g4Deadline: string
+  hasTournamentBet: boolean
 }
 
 type Picks = {
@@ -97,7 +100,7 @@ function buildFlagMap(r32Slots: R32Slot[]): Map<string, string> {
 
 // ── Componente principal ──────────────────────────────────────────────────────
 
-export function BracketView({ r32Slots, userId }: Props) {
+export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: Props) {
   const storageKey = `bracket_v1_${userId}`
 
   const [picks,   setPicks]   = useState<Picks>(emptyPicks)
@@ -122,6 +125,43 @@ export function BracketView({ r32Slots, userId }: Props) {
 
   const pick = (round: string, idx: number, team: string) =>
     setPicks(prev => makePick(prev, round, idx, team))
+
+  // ── G4 fill ────────────────────────────────────────────────
+  const [g4Pending, startG4] = useTransition()
+  const [showG4Confirm, setShowG4Confirm] = useState(false)
+  const [g4Error, setG4Error] = useState('')
+
+  const canFillG4 =
+    picks.qf.every(p => p !== null) &&
+    picks.sf.every(p => p !== null) &&
+    picks.final !== null
+
+  const g4Open = g4Deadline ? new Date() < new Date(g4Deadline) : false
+
+  const deriveG4 = () => {
+    const champion  = picks.final!
+    const runner_up = picks.sf[0] === champion ? picks.sf[1]! : picks.sf[0]!
+    const semi1     = picks.sf[0] === picks.qf[0] ? picks.qf[1]! : picks.qf[0]!
+    const semi2     = picks.sf[1] === picks.qf[2] ? picks.qf[3]! : picks.qf[2]!
+    return { champion, runner_up, semi1, semi2 }
+  }
+
+  const doFillG4 = () => {
+    setG4Error('')
+    startG4(async () => {
+      try {
+        await fillG4FromBracket(deriveG4())
+        setShowG4Confirm(false)
+      } catch (e) {
+        setG4Error(e instanceof Error ? e.message : 'Erro')
+      }
+    })
+  }
+
+  const handleG4Click = () => {
+    if (hasTournamentBet) setShowG4Confirm(true)
+    else doFillG4()
+  }
 
   // Perdedores das SFs → jogo de 3º lugar
   const sfLoser = (sfIdx: number): string | null => {
@@ -247,7 +287,7 @@ export function BracketView({ r32Slots, userId }: Props) {
       </div>
 
       {/* Rodapé */}
-      <div className="mt-2 flex items-center justify-between">
+      <div className="mt-3 flex items-center justify-between gap-4 flex-wrap">
         <p className="text-xs text-gray-400">
           Clique em um time para avançá-lo ao próximo round.
         </p>
@@ -258,6 +298,58 @@ export function BracketView({ r32Slots, userId }: Props) {
           Limpar chaveamento
         </button>
       </div>
+
+      {/* Botão G4 */}
+      {g4Open && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-azul-escuro/20 bg-blue-50 px-4 py-3">
+          <div>
+            <p className="text-sm font-semibold text-azul-escuro">
+              Preencher / atualizar palpites do G4 com base no chaveamento
+            </p>
+            {!canFillG4 && (
+              <p className="mt-0.5 text-xs text-gray-500">
+                Complete o chaveamento até a final para habilitar.
+              </p>
+            )}
+            {g4Error && <p className="mt-0.5 text-xs text-red-500">{g4Error}</p>}
+          </div>
+          <button
+            onClick={handleG4Click}
+            disabled={!canFillG4 || g4Pending}
+            className="rounded-lg bg-azul-escuro px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {g4Pending ? 'Preenchendo…' : 'Preencher G4'}
+          </button>
+        </div>
+      )}
+
+      {/* Confirmação G4 */}
+      {showG4Confirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-base font-bold text-gray-900">Sobrescrever palpites do G4?</h3>
+            <p className="mt-2 text-sm text-gray-600">
+              Você já tem palpites do G4 preenchidos. Deseja substituí-los pelos times do seu chaveamento?
+              O artilheiro não será alterado.
+            </p>
+            <div className="mt-4 flex justify-end gap-3">
+              <button
+                onClick={() => setShowG4Confirm(false)}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={doFillG4}
+                disabled={g4Pending}
+                className="rounded-lg bg-azul-escuro px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-40"
+              >
+                {g4Pending ? 'Preenchendo…' : 'Sim, substituir'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

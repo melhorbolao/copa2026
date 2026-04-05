@@ -3,10 +3,12 @@ import { createClient } from '@/lib/supabase/server'
 import { Navbar } from '@/components/layout/Navbar'
 import { GroupCard } from './GroupCard'
 import { ThirdsTable } from './ThirdsTable'
+import { BracketView } from './BracketView'
 import {
   calcGroupStandings,
   rankThirds,
   resolveThirdSlots,
+  buildR32Teams,
 } from '@/lib/bracket/engine'
 import type { BetSlim, MatchSlim } from '@/lib/bracket/engine'
 
@@ -19,7 +21,7 @@ export default async function TabelaPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [{ data: rawMatches }, { data: rawBets }] = await Promise.all([
+  const [{ data: rawMatches }, { data: rawBets }, { data: tBet }] = await Promise.all([
     supabase
       .from('matches')
       .select('*')
@@ -29,6 +31,11 @@ export default async function TabelaPage() {
       .from('bets')
       .select('match_id, score_home, score_away')
       .eq('user_id', user.id),
+    supabase
+      .from('tournament_bets')
+      .select('champion')
+      .eq('user_id', user.id)
+      .maybeSingle(),
   ])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -47,9 +54,17 @@ export default async function TabelaPage() {
     ((rawBets ?? []) as any[]).map((b: any) => [b.match_id, { match_id: b.match_id, score_home: b.score_home, score_away: b.score_away }]),
   )
 
-  const standings = calcGroupStandings(matches, betMap)
+  const standings  = calcGroupStandings(matches, betMap)
   const thirds     = rankThirds(standings)
   const thirdSlots = resolveThirdSlots(thirds)
+  const r32Slots   = buildR32Teams(standings, thirds, thirdSlots)
+
+  // Prazo do G4 = menor betting_deadline dos jogos de grupo
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const g4Deadline = ((rawMatches ?? []) as any[])
+    .map((m: any) => m.betting_deadline as string)
+    .sort()[0] ?? ''
+  const hasTournamentBet = !!(tBet?.champion)
 
   // Quais grupos têm o terceiro entre os 8 melhores
   const advancingThirdGroups = new Set(
@@ -120,22 +135,25 @@ export default async function TabelaPage() {
           </div>
         )}
 
-        {/* Info Anexo C */}
-        {thirdSlots && (
-          <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4 text-xs text-gray-500">
-            <p className="font-semibold text-gray-700 mb-1">Chaveamento dos terceiros (Anexo C FIFA)</p>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {Object.entries(thirdSlots).sort().map(([slot, team]) => (
-                <span key={slot} className="rounded-lg border border-gray-200 bg-white px-2 py-1 font-mono">
-                  {slot} ← <span className="font-semibold text-azul-escuro">{team}</span>
-                </span>
-              ))}
-            </div>
-            <p className="mt-2 text-[11px] text-gray-400">
-              Slots: 1A=M79, 1B=M85, 1D=M81, 1E=M74, 1G=M82, 1I=M77, 1K=M87, 1L=M80
-            </p>
+        {/* Chaveamento visual */}
+        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <div className="flex items-center gap-2 px-4 py-3" style={{ backgroundColor: '#002776' }}>
+            <span className="text-sm font-black uppercase tracking-widest text-white">
+              🏆 Chaveamento — Mata-Mata — USO OPCIONAL
+            </span>
+            <span className="ml-auto text-[11px] font-medium text-white/60">
+              baseado nos seus palpites · editável
+            </span>
           </div>
-        )}
+          <div className="p-4">
+            <BracketView
+              r32Slots={r32Slots}
+              userId={user.id}
+              g4Deadline={g4Deadline}
+              hasTournamentBet={hasTournamentBet}
+            />
+          </div>
+        </div>
       </div>
     </>
   )
