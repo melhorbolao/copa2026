@@ -32,7 +32,9 @@ export async function updateSession(request: NextRequest) {
 
   const publicPaths = ['/', '/login', '/regulamento', '/confirmar-email']
   const isPublicPath =
-    publicPaths.includes(pathname) || pathname.startsWith('/auth/')
+    publicPaths.includes(pathname) ||
+    pathname.startsWith('/auth/') ||
+    pathname.startsWith('/api/cron/')
 
   // 1. Não autenticado → login
   if (!user && !isPublicPath) {
