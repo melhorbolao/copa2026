@@ -11,15 +11,14 @@ import {
 } from '@/lib/cron/engine'
 import { html0h, subject0h, FROM_NAME } from '@/lib/cron/templates'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
-const FROM = `${FROM_NAME} <${process.env.EMAIL_FROM ?? 'noreply@melhorbolao.app.br'}>`
-const AUDIT_CC = process.env.AUDIT_EMAIL ?? 'auditoria@melhorbolao.app.br'
-
 // T-0h: deadline acabou de passar (dentro dos últimos 5 min)
 // Tolerância negativa = deadline no passado
 const TOLERANCE_MS = 5 * 60 * 1000
 
 export async function GET(req: Request) {
+  const resend = new Resend(process.env.RESEND_API_KEY)
+  const FROM = `${FROM_NAME} <${process.env.EMAIL_FROM ?? 'noreply@melhorbolao.app.br'}>`
+  const AUDIT_CC = process.env.AUDIT_EMAIL ?? 'auditoria@melhorbolao.app.br'
   const auth = req.headers.get('authorization')
   if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

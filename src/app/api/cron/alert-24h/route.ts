@@ -15,13 +15,12 @@ import {
   FROM_NAME,
 } from '@/lib/cron/templates'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
-const FROM = `${FROM_NAME} <${process.env.EMAIL_FROM ?? 'noreply@melhorbolao.app.br'}>`
-
 const WINDOW_24H_MS = 24 * 3600 * 1000
 const TOLERANCE_MS = 35 * 60 * 1000  // ±35 min (cron roda a cada hora)
 
 export async function GET(req: Request) {
+  const resend = new Resend(process.env.RESEND_API_KEY)
+  const FROM = `${FROM_NAME} <${process.env.EMAIL_FROM ?? 'noreply@melhorbolao.app.br'}>`
   // Protege com CRON_SECRET (Vercel injeta automaticamente em prod)
   const auth = req.headers.get('authorization')
   if (auth !== `Bearer ${process.env.CRON_SECRET}`) {

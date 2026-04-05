@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { createAdminClient } from '@/lib/supabase/server'
@@ -9,13 +10,12 @@ import {
 } from '@/lib/cron/engine'
 import { html6h, subject6h, FROM_NAME } from '@/lib/cron/templates'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
-const FROM   = `${FROM_NAME} <${process.env.EMAIL_FROM ?? 'noreply@melhorbolao.app.br'}>`
-
 const WINDOW_6H_MS  = 6 * 3600 * 1000
 const TOLERANCE_MS  = 35 * 60 * 1000   // ±35 min
 
 export async function GET(req: Request) {
+  const resend = new Resend(process.env.RESEND_API_KEY)
+  const FROM   = `${FROM_NAME} <${process.env.EMAIL_FROM ?? 'noreply@melhorbolao.app.br'}>`
   const auth = req.headers.get('authorization')
   if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
