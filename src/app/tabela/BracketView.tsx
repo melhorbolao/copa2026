@@ -177,7 +177,7 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
   const thirdA = sfLoser(0)
   const thirdB = sfLoser(1)
   const finalTop  = matchTop(4, 0)
-  const thirdTop  = finalTop + MATCH_H + 20
+  const thirdTop  = finalTop + MATCH_H + 48  // espaço fixo independente do badge
 
   if (!mounted) {
     return <div className="flex h-32 items-center justify-center text-sm text-gray-400">Carregando chaveamento…</div>
@@ -252,15 +252,19 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
             />
           ))}
 
+          {/* ── Badge campeão (acima da Final, cresce para cima) ── */}
+          {picks.final && (
+            <div style={{ position: 'absolute', left: COL_STEP * 4, top: finalTop - 34, width: MATCH_W }}
+              className="flex items-center justify-center gap-1 rounded-lg bg-amarelo-100 px-2 py-1"
+            >
+              <Flag code={flagMap.get(picks.final) ?? ''} size="sm" className="!h-2.5 !w-3.5 shrink-0" />
+              <span className="text-[11px] font-black text-amarelo-800">{picks.final}</span>
+              <span className="text-[10px]">🏆</span>
+            </div>
+          )}
+
           {/* ── Final ── */}
           <div style={{ position: 'absolute', left: COL_STEP * 4, top: finalTop }}>
-            {picks.final && (
-              <div className="mb-1 flex items-center justify-center gap-1 rounded-lg bg-amarelo-100 px-2 py-1">
-                <Flag code={flagMap.get(picks.final) ?? ''} size="sm" className="!h-2.5 !w-3.5 shrink-0" />
-                <span className="text-[11px] font-black text-amarelo-800">{picks.final}</span>
-                <span className="text-[10px]">🏆</span>
-              </div>
-            )}
             <div className="mb-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-amarelo-600">Final</div>
             <MatchCard
               style={{}}
