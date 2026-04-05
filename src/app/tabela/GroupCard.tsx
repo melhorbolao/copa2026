@@ -45,7 +45,7 @@ export function GroupCard({ standing, advancingGroups }: Props) {
             <th className="w-7 px-1 py-1.5 text-center font-medium">D</th>
             <th className="w-7 px-1 py-1.5 text-center font-medium">GP</th>
             <th className="w-7 px-1 py-1.5 text-center font-medium">GC</th>
-            <th className="w-7 px-1 py-1.5 text-center font-medium">DG</th>
+            <th className="w-7 px-1 py-1.5 text-center font-medium">SG</th>
             <th className="w-8 px-2 py-1.5 text-center font-medium">Pts</th>
           </tr>
         </thead>
