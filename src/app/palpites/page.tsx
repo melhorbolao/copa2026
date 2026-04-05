@@ -13,6 +13,7 @@ import { Countdown } from './Countdown'
 import { ExcelActions } from './ExcelActions'
 import { RoundProgress } from './RoundProgress'
 import { StickyStats } from './StickyStats'
+import { AutoFillButton } from './AutoFillButton'
 import type { MatchPhase } from '@/types/database'
 
 const GROUP_ORDER = ['A','B','C','D','E','F','G','H','I','J','K','L']
@@ -152,6 +153,13 @@ export default async function PalpitesPage({
   const activeRoundTotal = activeRoundIds.size
   const activeRoundBets  = (bets ?? []).filter(b => activeRoundIds.has(b.match_id)).length
 
+  // Auto-fill flags
+  const groupMatchIds = new Set(groupMatches.map(m => m.id))
+  const groupBetCount = (bets ?? []).filter(b => groupMatchIds.has(b.match_id)).length
+  const allGroupsFilled = groupMatches.length > 0 && groupBetCount >= groupMatches.length
+  const alreadyFilled = (groupBets ?? []).filter(b => b.first_place && b.second_place).length > 0
+    || (thirdBets ?? []).length > 0
+
   // Contadores bônus granulares — ignora valores vazios
   const thirdCount = (thirdBets ?? []).filter(b => b.team && b.team.trim().length > 0).length
   const bonusCount = tBet
@@ -272,6 +280,14 @@ export default async function PalpitesPage({
                   {visibleGroupMatches.map(m => (
                     <MatchBetRow key={m.id} match={m} bet={betMap.get(m.id) ?? null} />
                   ))}
+
+                  {/* ── BOTÃO AUTO-PREENCHIMENTO ────────────── */}
+                  {visibleGroupMatches.length > 0 && (
+                    <AutoFillButton
+                      enabled={allGroupsFilled}
+                      alreadyFilled={alreadyFilled}
+                    />
+                  )}
 
                   {/* ── CLASSIFICAÇÃO DOS GRUPOS (bônus) ─────── */}
                   {showBonusBets && visibleGroupOrder.some(g => groupTeams[g]) && (

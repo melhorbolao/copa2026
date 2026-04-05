@@ -56,76 +56,104 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet }: Props) 
   const showCheck = justSaved || (!justSaved && existingBet !== null && !pending)
 
   return (
-    <tr className="border-b border-gray-100 bg-blue-50/30 hover:bg-gray-50/60">
-      {/* Grupo */}
-      <td className="px-3 py-1.5 text-xs font-bold text-gray-500 whitespace-nowrap">
-        Gr. {groupName}
-      </td>
+    <tr className="border-b border-gray-100 bg-blue-50/30 hover:bg-blue-50/50">
+      <td colSpan={7} className="px-3 py-2">
+        <div className="flex min-w-0 items-center gap-3">
 
-      {/* Times (bandeiras) */}
-      <td className="px-2 py-1.5 w-full">
-        <div className="flex items-center justify-between flex-nowrap overflow-x-auto scrollbar-thin">
-          {teams.map(t => (
-            <span key={t.team} className="flex flex-1 items-center justify-center gap-0.5 text-[11px] text-gray-500 whitespace-nowrap max-w-[120px]">
-              <Flag code={t.flag} size="sm" className="!w-4 !h-3" />
-              <span className="hidden xl:inline">{t.team}</span>
-            </span>
-          ))}
-        </div>
-      </td>
+          {/* Rótulo do grupo */}
+          <span className="w-8 shrink-0 text-xs font-bold text-gray-500">
+            Gr. {groupName}
+          </span>
 
-      {/* 1º Lugar */}
-      <td className="px-3 py-2.5 text-center">
-        {deadlinePassed ? (
-          existingBet ? (
-            <span className="text-xs font-bold text-gray-600">🔒 {existingBet.first_place}</span>
+          {/* Times com bandeira + nome */}
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
+            {teams.map(t => (
+              <span key={t.team} className="flex items-center gap-1 whitespace-nowrap text-xs text-gray-600">
+                <Flag code={t.flag} size="sm" className="!h-3 !w-4 shrink-0" />
+                <span>{t.team}</span>
+              </span>
+            ))}
+          </div>
+
+          {/* Seletores ou leitura após prazo */}
+          {deadlinePassed ? (
+            <div className="flex shrink-0 items-center gap-3">
+              {existingBet ? (
+                <>
+                  <span className="text-xs font-semibold text-gray-700">🥇 {existingBet.first_place}</span>
+                  <span className="text-xs font-semibold text-gray-700">🥈 {existingBet.second_place}</span>
+                </>
+              ) : (
+                <span className="text-xs text-gray-300">—</span>
+              )}
+            </div>
           ) : (
-            <span className="text-xs text-gray-300">—</span>
-          )
-        ) : (
-          <Combobox
-            value={first}
-            onChange={handleFirst}
-            placeholder="1º lugar"
-            options={teams.map(t => ({ value: t.team, label: t.team, disabled: t.team === second || (!!thirdTeam && t.team === thirdTeam) }))}
-            className="w-full"
-          />
-        )}
-      </td>
+            <>
+              {/* 1º lugar */}
+              <div className="flex w-36 shrink-0 items-center gap-1">
+                <Combobox
+                  value={first}
+                  onChange={handleFirst}
+                  placeholder="1º lugar"
+                  options={teams.map(t => ({
+                    value: t.team,
+                    label: t.team,
+                    disabled: t.team === second || (!!thirdTeam && t.team === thirdTeam),
+                  }))}
+                  className="flex-1 min-w-0"
+                />
+                {first && (
+                  <button
+                    type="button"
+                    onClick={() => setFirst('')}
+                    className="shrink-0 text-sm leading-none text-gray-300 hover:text-gray-500"
+                    tabIndex={-1}
+                    title="Limpar"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
 
-      {/* 2º Lugar */}
-      <td className="px-3 py-2.5">
-        {deadlinePassed ? (
-          existingBet ? (
-            <span className="text-xs font-bold text-gray-600">{existingBet.second_place}</span>
-          ) : null
-        ) : (
-          <Combobox
-            value={second}
-            onChange={handleSecond}
-            placeholder="2º lugar"
-            options={teams.map(t => ({ value: t.team, label: t.team, disabled: t.team === first || (!!thirdTeam && t.team === thirdTeam) }))}
-            className="w-full"
-          />
-        )}
-        {error && <p className="mt-0.5 text-xs text-red-400">{error}</p>}
-      </td>
+              {/* 2º lugar */}
+              <div className="flex w-36 shrink-0 items-center gap-1">
+                <Combobox
+                  value={second}
+                  onChange={handleSecond}
+                  placeholder="2º lugar"
+                  options={teams.map(t => ({
+                    value: t.team,
+                    label: t.team,
+                    disabled: t.team === first || (!!thirdTeam && t.team === thirdTeam),
+                  }))}
+                  className="flex-1 min-w-0"
+                />
+                {second && (
+                  <button
+                    type="button"
+                    onClick={() => setSecond('')}
+                    className="shrink-0 text-sm leading-none text-gray-300 hover:text-gray-500"
+                    tabIndex={-1}
+                    title="Limpar"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            </>
+          )}
 
-      {/* Data (vazia — grupo não tem horário de jogo) */}
-      <td className="hidden sm:table-cell" />
+          {/* Status / erro */}
+          <div className="w-5 shrink-0 text-right">
+            {pending ? (
+              <span className="text-xs text-gray-400">…</span>
+            ) : !deadlinePassed && showCheck ? (
+              <span className="text-xs font-medium text-verde-600">✓</span>
+            ) : null}
+          </div>
 
-      {/* Prazo */}
-      <td className="hidden px-3 py-2.5 text-xs text-gray-400 sm:table-cell whitespace-nowrap">
-        {formatBrasilia(deadline, "dd/MM HH:mm")}
-      </td>
-
-      {/* Status */}
-      <td className="px-3 py-2.5 text-right">
-        {pending ? (
-          <span className="text-xs text-gray-400">…</span>
-        ) : !deadlinePassed && showCheck ? (
-          <span className="text-xs font-medium text-verde-600">✓</span>
-        ) : null}
+        </div>
+        {error && <p className="mt-0.5 pl-11 text-xs text-red-400">{error}</p>}
       </td>
     </tr>
   )

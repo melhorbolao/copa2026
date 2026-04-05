@@ -61,7 +61,11 @@ export function GroupCard({ standing, advancingGroups }: Props) {
               >
                 <td className="px-2 py-2 text-center">
                   <span
-                    className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-black ${POS_COLORS[i]}`}
+                    className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-black ${
+                      i === 2
+                        ? (isThirdAdvancing ? 'bg-amber-400 text-amber-900' : 'bg-gray-200 text-gray-600')
+                        : POS_COLORS[i]
+                    }`}
                     title={POS_TITLE[i]}
                   >
                     {i + 1}
@@ -73,11 +77,6 @@ export function GroupCard({ standing, advancingGroups }: Props) {
                     <span className={`font-medium ${i < 2 ? 'text-gray-900' : 'text-gray-600'}`}>
                       {team.team}
                     </span>
-                    {isThirdAdvancing && (
-                      <span className="ml-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-black text-amber-700">
-                        3º ✓
-                      </span>
-                    )}
                   </div>
                 </td>
                 <td className="px-1 py-2 text-center text-gray-500">{team.gp}</td>
