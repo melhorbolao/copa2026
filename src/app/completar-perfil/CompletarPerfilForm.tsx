@@ -15,6 +15,7 @@ export function CompletarPerfilForm({ initialName }: Props) {
   const [whatsapp, setWhatsapp] = useState('')
   const [padrinho, setPadrinho] = useState('')
   const [apelido,  setApelido]  = useState('')
+  const [bio,      setBio]      = useState('')
   const [loading,  setLoading]  = useState(false)
   const [error,    setError]    = useState('')
   const router = useRouter()
@@ -29,7 +30,7 @@ export function CompletarPerfilForm({ initialName }: Props) {
 
     setLoading(true)
     try {
-      await saveUserProfile(name.trim(), whatsapp.trim(), padrinho, apelido.trim())
+      await saveUserProfile(name.trim(), whatsapp.trim(), padrinho, apelido.trim(), bio.trim())
       router.push('/aguardando-aprovacao')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao salvar. Tente novamente.')
@@ -67,6 +68,19 @@ export function CompletarPerfilForm({ initialName }: Props) {
         </label>
         <input type="text" value={apelido} onChange={e => setApelido(e.target.value)}
           placeholder="Como quer ser chamado? (opcional)" className={inputCls} />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-semibold text-gray-500">
+          Apresentação para resenha <span className="font-normal text-gray-400">(opcional)</span>
+        </label>
+        <textarea
+          value={bio}
+          onChange={e => setBio(e.target.value)}
+          rows={5}
+          placeholder="Escreva uma breve apresentação sua, opcional, para ser usada nas resenhas do Melhor Bolão. Participa do Melhor Bolão desde quando? Como foi a sua participação nas outras edições? Qual a sua idade? Onde mora? O que faz da vida? Vai pra Copa? Qual o seu time? Alguma outra curiosidade?"
+          className={`${inputCls} resize-none leading-relaxed`}
+        />
       </div>
 
       {error && (

@@ -41,6 +41,7 @@ export async function saveUserProfile(
   whatsapp: string,
   padrinho: string,
   apelido = '',
+  bio = '',
 ) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -61,6 +62,7 @@ export async function saveUserProfile(
       whatsapp: whatsapp.trim(),
       padrinho: padrinho || null,
       apelido:  apelido.trim() || null,
+      bio:      bio.trim() || null,
     })
     .eq('id', user.id)
 
