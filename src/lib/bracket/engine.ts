@@ -72,23 +72,26 @@ export interface R32MatchDef {
   slotB: string
 }
 
+// Ordem correta conforme chave oficial FIFA 2026 (Anexo C / Match Schedule):
+// Pares adjacentes se encontram no R16: (0,1)→M89, (2,3)→M90, (4,5)→M93,
+// (6,7)→M94, (8,9)→M91, (10,11)→M92, (12,13)→M96, (14,15)→M95
 export const R32_MATCHES: R32MatchDef[] = [
-  { matchNum: 'M73', slotA: '2A', slotB: '2B' },
-  { matchNum: 'M74', slotA: '1E', slotB: '3rd:ABCDF' },
-  { matchNum: 'M75', slotA: '1F', slotB: '2C' },
-  { matchNum: 'M76', slotA: '1C', slotB: '2F' },
-  { matchNum: 'M77', slotA: '1I', slotB: '3rd:CDFGH' },
-  { matchNum: 'M78', slotA: '2E', slotB: '2I' },
-  { matchNum: 'M79', slotA: '1A', slotB: '3rd:CEFHI' },
-  { matchNum: 'M80', slotA: '1L', slotB: '3rd:EHIJK' },
-  { matchNum: 'M81', slotA: '1D', slotB: '3rd:BEFIJ' },
-  { matchNum: 'M82', slotA: '1G', slotB: '3rd:AEHIJ' },
-  { matchNum: 'M83', slotA: '2K', slotB: '2L' },
-  { matchNum: 'M84', slotA: '1H', slotB: '2J' },
-  { matchNum: 'M85', slotA: '1B', slotB: '3rd:EFGIJ' },
-  { matchNum: 'M86', slotA: '1J', slotB: '2H' },
-  { matchNum: 'M87', slotA: '1K', slotB: '3rd:DEIJL' },
-  { matchNum: 'M88', slotA: '2D', slotB: '2G' },
+  { matchNum: 'M74', slotA: '1E', slotB: '3rd:ABCDF' }, // → R16 M89
+  { matchNum: 'M77', slotA: '1I', slotB: '3rd:CDFGH' }, // → R16 M89
+  { matchNum: 'M73', slotA: '2A', slotB: '2B' },        // → R16 M90
+  { matchNum: 'M75', slotA: '1F', slotB: '2C' },        // → R16 M90
+  { matchNum: 'M84', slotA: '1H', slotB: '2J' },        // → R16 M93
+  { matchNum: 'M88', slotA: '2D', slotB: '2G' },        // → R16 M93
+  { matchNum: 'M81', slotA: '1D', slotB: '3rd:BEFIJ' }, // → R16 M94
+  { matchNum: 'M82', slotA: '1G', slotB: '3rd:AEHIJ' }, // → R16 M94
+  { matchNum: 'M76', slotA: '1C', slotB: '2F' },        // → R16 M91
+  { matchNum: 'M78', slotA: '2E', slotB: '2I' },        // → R16 M91
+  { matchNum: 'M79', slotA: '1A', slotB: '3rd:CEFHI' }, // → R16 M92
+  { matchNum: 'M80', slotA: '1L', slotB: '3rd:EHIJK' }, // → R16 M92
+  { matchNum: 'M85', slotA: '1B', slotB: '3rd:EFGIJ' }, // → R16 M96
+  { matchNum: 'M87', slotA: '1K', slotB: '3rd:DEIJL' }, // → R16 M96
+  { matchNum: 'M83', slotA: '2K', slotB: '2L' },        // → R16 M95
+  { matchNum: 'M86', slotA: '1J', slotB: '2H' },        // → R16 M95
 ]
 
 // ── Motor de cálculo de grupos ────────────────────────────────────────────────

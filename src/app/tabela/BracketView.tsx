@@ -101,7 +101,7 @@ function buildFlagMap(r32Slots: R32Slot[]): Map<string, string> {
 // ── Componente principal ──────────────────────────────────────────────────────
 
 export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: Props) {
-  const storageKey = `bracket_v1_${userId}`
+  const storageKey = `bracket_v2_${userId}`
 
   const [picks,   setPicks]   = useState<Picks>(emptyPicks)
   const [mounted, setMounted] = useState(false)
@@ -206,14 +206,29 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
 
           {/* ── R32 ── */}
           {r32Slots.map((slot, i) => (
-            <MatchCard
-              key={slot.matchNum}
-              style={{ position: 'absolute', left: 0, top: matchTop(0, i) }}
-              teamA={slot.teamA}
-              teamB={slot.teamB}
-              winner={picks.r32[i]}
-              onPick={t => pick('r32', i, t)}
-            />
+            <div key={slot.matchNum}>
+              {/* Separador visual a cada 4 partidas (entre QFs) */}
+              {i > 0 && i % 4 === 0 && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: -4,
+                    top: matchTop(0, i) - 6,
+                    width: MATCH_W + 8,
+                    height: 2,
+                    background: 'linear-gradient(to right, #e5e7eb, #9ca3af, #e5e7eb)',
+                    borderRadius: 1,
+                  }}
+                />
+              )}
+              <MatchCard
+                style={{ position: 'absolute', left: 0, top: matchTop(0, i) }}
+                teamA={slot.teamA}
+                teamB={slot.teamB}
+                winner={picks.r32[i]}
+                onPick={t => pick('r32', i, t)}
+              />
+            </div>
           ))}
 
           {/* ── R16 ── */}

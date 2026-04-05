@@ -142,7 +142,7 @@ export default async function TabelaPage() {
               🏆 Chaveamento — Mata-Mata — USO OPCIONAL
             </span>
             <span className="ml-auto text-[11px] font-medium text-white/60">
-              baseado nos seus palpites · editável
+              baseado nos seus palpites
             </span>
           </div>
           <div className="p-4">
