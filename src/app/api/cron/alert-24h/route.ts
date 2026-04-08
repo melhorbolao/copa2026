@@ -29,6 +29,12 @@ export async function GET(req: Request) {
 
   const supabase = await createAdminClient()
 
+  // Verifica se o e-mail está habilitado nas configurações
+  const { data: setting } = await supabase.from('email_settings').select('enabled').eq('key', 'alert_24h').maybeSingle()
+  if (setting?.enabled === false) {
+    return NextResponse.json({ skipped: true, reason: 'Desativado nas configurações de e-mail' })
+  }
+
   const etapa = await findEtapaInWindow(supabase, WINDOW_24H_MS, TOLERANCE_MS)
   if (!etapa) {
     return NextResponse.json({ skipped: true, reason: 'Nenhuma etapa com prazo em ~24h' })

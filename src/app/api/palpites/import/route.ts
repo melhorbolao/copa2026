@@ -12,6 +12,11 @@ export async function POST(req: NextRequest) {
   const file = form.get('file') as File | null
   if (!file) return NextResponse.json({ error: 'Nenhum arquivo enviado.' }, { status: 400 })
 
+  // Limite de tamanho: 5 MB
+  if (file.size > 5 * 1024 * 1024) {
+    return NextResponse.json({ error: 'Arquivo muito grande. Máximo 5 MB.' }, { status: 400 })
+  }
+
   const arrayBuf = await file.arrayBuffer()
   const wb = new ExcelJS.Workbook()
   try {
@@ -26,11 +31,16 @@ export async function POST(req: NextRequest) {
 
   const now = new Date()
 
-  // Busca prazos das partidas + prazo bônus
-  const { data: matches } = await supabase
+  // Busca times válidos (para validação) + prazos das partidas
+  const { data: allMatches } = await supabase
     .from('matches')
-    .select('id, betting_deadline, round, phase')
-    .eq('phase', 'group')
+    .select('id, team_home, team_away, betting_deadline, round, phase, score_home, score_away')
+
+  const validTeams = new Set<string>(
+    (allMatches ?? []).flatMap(m => [m.team_home, m.team_away]).filter(t => t && t !== 'TBD')
+  )
+
+  const matches = (allMatches ?? []).filter(m => m.phase === 'group')
 
   const matchDeadlineMap = new Map((matches ?? []).map(m => [m.id as string, m.betting_deadline as string]))
   const bonusDeadlineStr = (matches ?? []).find(m => m.round === 1)?.betting_deadline ?? ''
@@ -80,6 +90,9 @@ export async function POST(req: NextRequest) {
       const first  = parseStr(valA)
       const second = parseStr(valB)
       if (!first && !second) return
+      // Valida nomes de times
+      if (first  && !validTeams.has(first))  { skipped++; return }
+      if (second && !validTeams.has(second)) { skipped++; return }
       if (!groupBetMap[g]) groupBetMap[g] = {}
       if (first)  groupBetMap[g].first_place  = first
       if (second) groupBetMap[g].second_place = second
@@ -92,6 +105,7 @@ export async function POST(req: NextRequest) {
       const g    = key.replace('grp_3rd:', '')
       const team = parseStr(valA)
       if (!team) return
+      if (!validTeams.has(team)) { skipped++; return }
       thirdBetMap[g] = team
       updatedBonus++
       return
@@ -102,6 +116,9 @@ export async function POST(req: NextRequest) {
       const field = key.replace('trn:', '')
       const val   = parseStr(valA)
       if (!val) return
+      // Artilheiro é nome livre; times G4 devem ser válidos
+      const isTeamField = ['champion', 'runner_up', 'semi1', 'semi2'].includes(field)
+      if (isTeamField && !validTeams.has(val)) { skipped++; return }
       trnFields[field] = val
       updatedBonus++
       return

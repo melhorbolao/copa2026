@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { notifyAdminNewUser } from '@/lib/email'
+import { isEmailEnabled } from '@/lib/email-settings'
 
 // ── Verifica se e-mail já existe na tabela de usuários ───────────────────────
 export async function checkEmailExists(email: string): Promise<boolean> {
@@ -82,7 +83,7 @@ export async function saveUserProfile(
   if (error) throw new Error(error.message)
 
   // Notifica admin apenas no primeiro preenchimento de perfil (fluxo OAuth)
-  if (isNewUser) {
+  if (isNewUser && await isEmailEnabled('notify_new_user')) {
     try {
       await notifyAdminNewUser({ name: name.trim(), email: user.email ?? '' })
     } catch { /* silent */ }

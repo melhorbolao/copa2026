@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { notifyUserApproved, sendReminderEmail } from '@/lib/email'
+import { isEmailEnabled } from '@/lib/email-settings'
 import type { MatchPhase } from '@/types/database'
 
 type Rules = Record<string, number>
@@ -104,7 +105,7 @@ export async function toggleApproved(userId: string, current: boolean) {
       .select('name, email')
       .eq('id', userId)
       .single()
-    if (u) {
+    if (u && await isEmailEnabled('notify_approved')) {
       try { await notifyUserApproved({ name: u.name, email: u.email }) } catch { /* silent */ }
     }
   }
@@ -223,6 +224,16 @@ export async function toggleAdmin(userId: string, current: boolean) {
 
   await supabase.from('users').update({ is_admin: !current }).eq('id', userId)
   revalidatePath('/admin/usuarios')
+}
+
+// ── Configurações de e-mail ───────────────────────────────────
+export async function toggleEmailSetting(key: string, enabled: boolean) {
+  await requireAdmin()
+  const supabase = await createAdminClient()
+  await supabase
+    .from('email_settings')
+    .upsert({ key, enabled, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+  revalidatePath('/admin/emails')
 }
 
 // ── Pagamento ─────────────────────────────────────────────────

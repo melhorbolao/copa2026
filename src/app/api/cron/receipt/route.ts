@@ -26,6 +26,11 @@ export async function GET(req: Request) {
 
   const supabase = await createAdminClient()
 
+  const { data: setting } = await supabase.from('email_settings').select('enabled').eq('key', 'receipt').maybeSingle()
+  if (setting?.enabled === false) {
+    return NextResponse.json({ skipped: true, reason: 'Desativado nas configurações de e-mail' })
+  }
+
   // targetOffset = 0 mas queremos deadlines no passado recente
   // Window: deadline entre (now - 5min) e (now + 1min) — pequena tolerância positiva
   const etapa = await findEtapaInWindow(supabase, 0, TOLERANCE_MS)
