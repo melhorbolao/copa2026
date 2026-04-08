@@ -1,4 +1,5 @@
 import { createServerClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import type { Database } from '@/types/database'
 
@@ -24,6 +25,19 @@ export async function createClient() {
         },
       },
     }
+  )
+}
+
+/**
+ * Cliente puro (sem cookies) para operações de auth.admin.
+ * Usa createClient do supabase-js porque createServerClient não expõe auth.admin.
+ * Nunca usar no lado do cliente.
+ */
+export function createAuthAdminClient() {
+  return createClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } },
   )
 }
 

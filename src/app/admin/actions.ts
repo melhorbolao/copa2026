@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient, createAuthAdminClient } from '@/lib/supabase/server'
 import { notifyUserApproved, sendReminderEmail } from '@/lib/email'
 import { isEmailEnabled } from '@/lib/email-settings'
 import type { MatchPhase } from '@/types/database'
@@ -77,10 +77,17 @@ export async function updatePadrinho(userId: string, padrinho: string) {
 // ── Exclusão de usuário ───────────────────────────────────────
 export async function deleteUser(userId: string) {
   await requireAdmin()
-  const supabase = await createAdminClient()
-  // Deleta de auth.users — o CASCADE apaga public.users e todas as tabelas filhas
-  const { error } = await supabase.auth.admin.deleteUser(userId)
-  if (error) throw new Error(error.message)
+  const db        = await createAdminClient()
+  const authAdmin = createAuthAdminClient()
+
+  // 1. Remove da tabela pública (cascata apaga bets, group_bets, etc.)
+  const { error: dbError } = await db.from('users').delete().eq('id', userId)
+  if (dbError) throw new Error(dbError.message)
+
+  // 2. Remove de auth.users usando o cliente puro (createServerClient não expõe auth.admin)
+  const { error: authError } = await authAdmin.auth.admin.deleteUser(userId)
+  if (authError) throw new Error(authError.message)
+
   revalidatePath('/admin/usuarios')
 }
 
