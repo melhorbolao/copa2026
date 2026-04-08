@@ -98,8 +98,8 @@ export function TournamentSection({ allTeams, deadline, existingBet }: Props) {
             {([
               ['🥇 Campeão',        existingBet.champion],
               ['🥈 Vice',           existingBet.runner_up],
-              ['3º Semifinalista',  existingBet.semi1],
-              ['4º Semifinalista',  existingBet.semi2],
+              ['3º Lugar',  existingBet.semi1],
+              ['4º Lugar',  existingBet.semi2],
               ['⚽ Artilheiro',     existingBet.top_scorer],
             ] as [string, string][]).map(([label, val]) => (
               <div key={label} className="px-4 py-3">
@@ -135,7 +135,7 @@ export function TournamentSection({ allTeams, deadline, existingBet }: Props) {
       <div className="p-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {(['champion','runner_up','semi1','semi2'] as const).map((field, i) => {
-            const labels = ['🥇 Campeão','🥈 Vice-Campeão','3º Semifinalista','4º Semifinalista']
+            const labels = ['🥇 Campeão','🥈 Vice-Campeão','🥉 3º Lugar','4️⃣ 4º Lugar']
             const others = selected.filter((_, j) => j !== i)
             const hasConflict = conflictFields.has(field)
             return (
