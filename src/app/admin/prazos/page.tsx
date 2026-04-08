@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { PrazosClient } from './PrazosClient'
 import type { MatchPhase } from '@/types/database'
+import type { MatchDeadlineRow, PhaseGroup } from './types'
 
 const PHASE_ORDER: MatchPhase[] = [
   'group',
@@ -12,7 +13,7 @@ const PHASE_ORDER: MatchPhase[] = [
   'final',
 ]
 
-export const PHASE_LABELS: Record<MatchPhase, string> = {
+const PHASE_LABELS: Record<MatchPhase, string> = {
   group:        'Fase de Grupos',
   round_of_32:  'Rodada de 32 (16avos)',
   round_of_16:  'Oitavas de Final',
@@ -22,23 +23,18 @@ export const PHASE_LABELS: Record<MatchPhase, string> = {
   final:        'Final',
 }
 
-export interface MatchDeadlineRow {
-  id: string
-  match_number: number
-  phase: MatchPhase
-  team_home: string
-  team_away: string
-  betting_deadline: string
-  match_datetime: string
-}
-
-export interface PhaseGroup {
-  phase: MatchPhase
-  label: string
-  matches: MatchDeadlineRow[]
-  sharedDeadline: string | null   // null quando há prazos diferentes entre as partidas
-  minDeadline: string
-  maxDeadline: string
+function makeGroup(
+  key: string,
+  label: string,
+  phase: MatchPhase,
+  groupRound: number | null,
+  matches: MatchDeadlineRow[],
+): PhaseGroup {
+  const deadlines     = matches.map(m => m.betting_deadline)
+  const minDeadline   = deadlines.reduce((a, b) => a < b ? a : b)
+  const maxDeadline   = deadlines.reduce((a, b) => a > b ? a : b)
+  const sharedDeadline = deadlines.every(d => d === deadlines[0]) ? deadlines[0] : null
+  return { key, label, phase, groupRound, matches, sharedDeadline, minDeadline, maxDeadline }
 }
 
 export default async function AdminPrazosPage() {
@@ -46,32 +42,34 @@ export default async function AdminPrazosPage() {
 
   const { data: matches } = await supabase
     .from('matches')
-    .select('id, match_number, phase, team_home, team_away, betting_deadline, match_datetime')
+    .select('id, match_number, phase, round, team_home, team_away, betting_deadline, match_datetime')
     .order('match_number', { ascending: true })
 
-  const rows = (matches ?? []) as MatchDeadlineRow[]
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = (matches ?? []) as any[] as MatchDeadlineRow[]
 
-  // Agrupa por fase na ordem canônica
-  const phases: PhaseGroup[] = PHASE_ORDER
-    .map(phase => {
-      const phaseMatches = rows.filter(m => m.phase === phase)
-      if (phaseMatches.length === 0) return null
+  const phases: PhaseGroup[] = []
 
-      const deadlines = phaseMatches.map(m => m.betting_deadline)
-      const minDeadline = deadlines.reduce((a, b) => a < b ? a : b)
-      const maxDeadline = deadlines.reduce((a, b) => a > b ? a : b)
-      const sharedDeadline = deadlines.every(d => d === deadlines[0]) ? deadlines[0] : null
+  for (const phase of PHASE_ORDER) {
+    const phaseMatches = rows.filter(m => m.phase === phase)
+    if (phaseMatches.length === 0) continue
 
-      return {
-        phase,
-        label: PHASE_LABELS[phase],
-        matches: phaseMatches,
-        sharedDeadline,
-        minDeadline,
-        maxDeadline,
+    if (phase === 'group') {
+      for (const roundNum of [1, 2, 3]) {
+        const roundMatches = phaseMatches.filter(m => m.round === roundNum)
+        if (roundMatches.length === 0) continue
+        phases.push(makeGroup(
+          `group_${roundNum}`,
+          `Fase de Grupos — Rodada ${roundNum}`,
+          phase,
+          roundNum,
+          roundMatches,
+        ))
       }
-    })
-    .filter(Boolean) as PhaseGroup[]
+    } else {
+      phases.push(makeGroup(phase, PHASE_LABELS[phase], phase, null, phaseMatches))
+    }
+  }
 
   return <PrazosClient phases={phases} />
 }

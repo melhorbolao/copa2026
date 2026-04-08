@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { updatePhaseDeadline, updateMatchDeadline } from '@/app/admin/actions'
-import type { PhaseGroup, MatchDeadlineRow } from './page'
+import { updatePhaseDeadline, updateGroupRoundDeadline, updateMatchDeadline } from '@/app/admin/actions'
+import type { PhaseGroup, MatchDeadlineRow } from './types'
 
 // ── Helpers de fuso horário ──────────────────────────────────────────────────
 // Brasil não usa horário de verão desde 2019: sempre UTC-3.
@@ -70,7 +70,11 @@ function PhaseCard({ group }: { group: PhaseGroup }) {
     setBulkSaved(false)
     startBulk(async () => {
       try {
-        await updatePhaseDeadline(group.phase, brtToISO(bulkValue))
+        if (group.groupRound !== null) {
+          await updateGroupRoundDeadline(group.groupRound, brtToISO(bulkValue))
+        } else {
+          await updatePhaseDeadline(group.phase, brtToISO(bulkValue))
+        }
         setBulkSaved(true)
         setTimeout(() => setBulkSaved(false), 3000)
       } catch (e) {

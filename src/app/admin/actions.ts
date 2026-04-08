@@ -78,10 +78,9 @@ export async function updatePadrinho(userId: string, padrinho: string) {
 export async function deleteUser(userId: string) {
   await requireAdmin()
   const supabase = await createAdminClient()
-  // Remove da tabela pública (cascade apaga bets, etc.)
-  await supabase.from('users').delete().eq('id', userId)
-  // Remove da autenticação do Supabase
-  await supabase.auth.admin.deleteUser(userId)
+  // Deleta de auth.users — o CASCADE apaga public.users e todas as tabelas filhas
+  const { error } = await supabase.auth.admin.deleteUser(userId)
+  if (error) throw new Error(error.message)
   revalidatePath('/admin/usuarios')
 }
 
@@ -255,6 +254,20 @@ export async function updatePhaseDeadline(phase: string, isoDeadline: string) {
     .from('matches')
     .update({ betting_deadline: isoDeadline })
     .eq('phase', phase)
+  if (error) throw new Error(error.message)
+  revalidatePath('/admin/prazos')
+  revalidatePath('/palpites')
+}
+
+/** Atualiza o betting_deadline de todas as partidas de uma rodada da fase de grupos */
+export async function updateGroupRoundDeadline(round: number, isoDeadline: string) {
+  await requireAdmin()
+  const supabase = await createAdminClient()
+  const { error } = await supabase
+    .from('matches')
+    .update({ betting_deadline: isoDeadline })
+    .eq('phase', 'group' as string)
+    .eq('round', round)
   if (error) throw new Error(error.message)
   revalidatePath('/admin/prazos')
   revalidatePath('/palpites')
