@@ -3,12 +3,11 @@ import { createClient } from '@/lib/supabase/server'
 import { Navbar } from '@/components/layout/Navbar'
 import { GroupCard } from './GroupCard'
 import { ThirdsTable } from './ThirdsTable'
-import { BracketView } from './BracketView'
+import { BracketSection } from './BracketSection'
 import {
   calcGroupStandings,
   rankThirds,
   resolveThirdSlots,
-  buildR32Teams,
 } from '@/lib/bracket/engine'
 import type { BetSlim, MatchSlim } from '@/lib/bracket/engine'
 
@@ -70,7 +69,9 @@ export default async function TabelaPage() {
   const standings  = calcGroupStandings(matches, betMap)
   const thirds     = rankThirds(standings)
   const thirdSlots = resolveThirdSlots(thirds)
-  const r32Slots   = buildR32Teams(standings, thirds, thirdSlots, groupBetsOverride)
+
+  // Converte para objeto serializável (Map não pode ser passado a Client Components)
+  const groupBetsObj = Object.fromEntries(groupBetsOverride)
 
   // Prazo do G4 = menor betting_deadline dos jogos de grupo
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -160,8 +161,11 @@ export default async function TabelaPage() {
             </span>
           </div>
           <div className="p-4">
-            <BracketView
-              r32Slots={r32Slots}
+            <BracketSection
+              standings={standings}
+              thirds={thirds}
+              thirdSlots={thirdSlots}
+              groupBetsOverride={groupBetsObj}
               userId={user.id}
               g4Deadline={g4Deadline}
               hasTournamentBet={hasTournamentBet}

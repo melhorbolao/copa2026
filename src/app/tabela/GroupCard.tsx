@@ -19,7 +19,7 @@ const POS_COLORS = [
 
 export function GroupCard({ standing, advancingGroups, userId }: Props) {
   const storageKey = `tie_order_${userId}_${standing.group}`
-  const hasTie = standing.tiedTeams.size > 0
+  const hasTie = standing.tiedTeams.length > 0
 
   const [manualOrder, setManualOrder] = useState<string[] | null>(null)
   const [mounted,     setMounted]     = useState(false)
@@ -73,7 +73,7 @@ export function GroupCard({ standing, advancingGroups, userId }: Props) {
   }
 
   const isManuallyOrdered = mounted && manualOrder !== null
-  const isTied   = (team: TeamRow) => standing.tiedTeams.has(team.team)
+  const isTied   = (team: TeamRow) => standing.tiedTeams.includes(team.team)
   const third     = displayTeams[2]
   const thirdAdv  = third && advancingGroups.has(standing.group)
 

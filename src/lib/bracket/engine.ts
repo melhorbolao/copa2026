@@ -26,8 +26,8 @@ export interface TeamRow {
 
 export interface CalcGroupStanding {
   group: string
-  teams: TeamRow[]       // sorted: [0]=1st … [3]=4th
-  tiedTeams: Set<string> // nomes dos times ainda empatados após todos os critérios FIFA
+  teams: TeamRow[]      // sorted: [0]=1st … [3]=4th
+  tiedTeams: string[]   // nomes dos times ainda empatados após todos os critérios FIFA
 }
 
 export interface ThirdTeam extends TeamRow {
@@ -222,7 +222,7 @@ function sortGroupFIFA(
   clusters.push(cur)
 
   // ── Passo 3: resolve cada cluster com H2H (critérios 4-6) ────
-  const tiedTeams = new Set<string>()
+  const tiedSet = new Set<string>()
   const sorted: TeamRow[] = []
 
   for (const cluster of clusters) {
@@ -246,16 +246,16 @@ function sortGroupFIFA(
       if (hp.pts === hc.pts && hp.gd === hc.gd && hp.gf === hc.gf) {
         subCur.push(h2hSorted[i])
       } else {
-        if (subCur.length > 1) subCur.forEach(t => tiedTeams.add(t.team))
+        if (subCur.length > 1) subCur.forEach(t => tiedSet.add(t.team))
         sorted.push(...subCur)
         subCur = [h2hSorted[i]]
       }
     }
-    if (subCur.length > 1) subCur.forEach(t => tiedTeams.add(t.team))
+    if (subCur.length > 1) subCur.forEach(t => tiedSet.add(t.team))
     sorted.push(...subCur)
   }
 
-  return { sorted, tiedTeams }
+  return { sorted, tiedTeams: [...tiedSet] }
 }
 
 /** Calcula a classificação de todos os grupos a partir dos palpites do usuário. */
