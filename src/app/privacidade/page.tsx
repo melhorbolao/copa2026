@@ -69,8 +69,8 @@ export default function PrivacidadePage() {
             <h2 className="mb-2 font-bold text-gray-900">7. Contato</h2>
             <p>
               Dúvidas ou solicitações relacionadas à privacidade:{' '}
-              <a href="mailto:gmousinho@gmail.com" className="font-medium text-blue-600 hover:underline">
-                gmousinho@gmail.com
+              <a href="mailto:admin@melhorbolao.app.br" className="font-medium text-blue-600 hover:underline">
+                admin@melhorbolao.app.br
               </a>
             </p>
           </div>
