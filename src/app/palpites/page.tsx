@@ -363,17 +363,15 @@ export default async function PalpitesPage({
               />
             )}
 
-            {/* Link para Minha Tabela */}
-            {showBonusBets && !grupo && (
-              <div className="mt-2 text-center">
-                <a
-                  href="/tabela"
-                  className="inline-flex items-center gap-1.5 text-sm font-medium text-azul-escuro hover:underline"
-                >
-                  📊 Veja aqui a classificação com base nos seus palpites
-                </a>
-              </div>
-            )}
+            {/* Link para Minha Tabela — sempre visível independente dos filtros */}
+            <div className="mt-2 text-center">
+              <a
+                href="/tabela"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-azul-escuro hover:underline"
+              >
+                📊 Veja aqui a classificação com base nos seus palpites
+              </a>
+            </div>
           </div>
         )}
         </ThirdPlaceProvider>
