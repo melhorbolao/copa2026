@@ -245,6 +245,34 @@ export async function togglePaid(userId: string, current: boolean) {
 }
 
 // ── Resultado de partida + recálculo de pontos ────────────────
+// ── Prazos de apostas ────────────────────────────────────────
+
+/** Atualiza o betting_deadline de TODAS as partidas de uma fase */
+export async function updatePhaseDeadline(phase: string, isoDeadline: string) {
+  await requireAdmin()
+  const supabase = await createAdminClient()
+  const { error } = await supabase
+    .from('matches')
+    .update({ betting_deadline: isoDeadline })
+    .eq('phase', phase)
+  if (error) throw new Error(error.message)
+  revalidatePath('/admin/prazos')
+  revalidatePath('/palpites')
+}
+
+/** Atualiza o betting_deadline de uma partida específica */
+export async function updateMatchDeadline(matchId: string, isoDeadline: string) {
+  await requireAdmin()
+  const supabase = await createAdminClient()
+  const { error } = await supabase
+    .from('matches')
+    .update({ betting_deadline: isoDeadline })
+    .eq('id', matchId)
+  if (error) throw new Error(error.message)
+  revalidatePath('/admin/prazos')
+  revalidatePath('/palpites')
+}
+
 export async function saveMatchScore(
   matchId: string,
   scoreHome: number | null,
