@@ -26,7 +26,8 @@ export interface TeamRow {
 
 export interface CalcGroupStanding {
   group: string
-  teams: TeamRow[]  // sorted: [0]=1st … [3]=4th
+  teams: TeamRow[]       // sorted: [0]=1st … [3]=4th
+  tiedTeams: Set<string> // nomes dos times ainda empatados após todos os critérios FIFA
 }
 
 export interface ThirdTeam extends TeamRow {
@@ -150,16 +151,111 @@ function buildGroupTeams(
 }
 
 /**
- * Ordena times de um grupo pelos critérios do Art. 13 (simplificado):
- * 1. Pts; 2. DG; 3. GP; 4. Alfabético (confronto direto omitido — requer mais dados)
+ * Calcula o confronto direto (H2H) entre um subconjunto de times dentro do grupo.
+ * Retorna um mapa de nome → { pts, gd, gf } considerando apenas as partidas entre eles.
  */
-function sortGroup(teams: TeamRow[]): TeamRow[] {
-  return [...teams].sort((a, b) => {
+function computeH2H(
+  teamNames: string[],
+  groupMatches: MatchSlim[],
+  betMap: Map<string, BetSlim>,
+): Map<string, { pts: number; gd: number; gf: number }> {
+  const subset = new Set(teamNames)
+  const result = new Map(teamNames.map(t => [t, { pts: 0, gd: 0, gf: 0 }]))
+
+  for (const m of groupMatches) {
+    if (!subset.has(m.team_home) || !subset.has(m.team_away)) continue
+    const bet = betMap.get(m.id)
+    if (!bet) continue
+
+    const gh = bet.score_home
+    const ga = bet.score_away
+    const home = result.get(m.team_home)!
+    const away = result.get(m.team_away)!
+
+    home.gf += gh; home.gd += gh - ga
+    away.gf += ga; away.gd += ga - gh
+
+    if (gh > ga)      { home.pts += 3 }
+    else if (gh < ga) { away.pts += 3 }
+    else              { home.pts += 1; away.pts += 1 }
+  }
+
+  return result
+}
+
+/**
+ * Ordena um grupo aplicando os 6 critérios da FIFA (Art. 13 – Copa 2026):
+ *   1. Pts (todos os jogos)
+ *   2. Saldo de gols (todos)
+ *   3. Gols marcados (todos)
+ *   → Para cada cluster ainda empatado:
+ *   4. Pts H2H
+ *   5. Saldo de gols H2H
+ *   6. Gols marcados H2H
+ *   → Se persistir: retorna no tiedTeams (requer override manual)
+ */
+function sortGroupFIFA(
+  teams: TeamRow[],
+  groupMatches: MatchSlim[],
+  betMap: Map<string, BetSlim>,
+): { sorted: TeamRow[]; tiedTeams: Set<string> } {
+  // ── Passo 1: ordenação global (critérios 1-3) ─────────────────
+  const byGlobal = [...teams].sort((a, b) => {
     if (b.pts !== a.pts) return b.pts - a.pts
     if (b.gd  !== a.gd)  return b.gd  - a.gd
     if (b.gf  !== a.gf)  return b.gf  - a.gf
-    return (a.team ?? '').localeCompare(b.team ?? '')
+    return 0
   })
+
+  // ── Passo 2: agrupa clusters com mesmo (Pts, GD, GF) ─────────
+  const clusters: TeamRow[][] = []
+  let cur: TeamRow[] = [byGlobal[0]]
+  for (let i = 1; i < byGlobal.length; i++) {
+    const p = byGlobal[i - 1], c = byGlobal[i]
+    if (p.pts === c.pts && p.gd === c.gd && p.gf === c.gf) {
+      cur.push(c)
+    } else {
+      clusters.push(cur)
+      cur = [c]
+    }
+  }
+  clusters.push(cur)
+
+  // ── Passo 3: resolve cada cluster com H2H (critérios 4-6) ────
+  const tiedTeams = new Set<string>()
+  const sorted: TeamRow[] = []
+
+  for (const cluster of clusters) {
+    if (cluster.length === 1) { sorted.push(cluster[0]); continue }
+
+    const h2h = computeH2H(cluster.map(t => t.team), groupMatches, betMap)
+
+    const h2hSorted = [...cluster].sort((a, b) => {
+      const ha = h2h.get(a.team)!, hb = h2h.get(b.team)!
+      if (hb.pts !== ha.pts) return hb.pts - ha.pts
+      if (hb.gd  !== ha.gd)  return hb.gd  - ha.gd
+      if (hb.gf  !== ha.gf)  return hb.gf  - ha.gf
+      return 0
+    })
+
+    // Detecta sub-clusters que continuam empatados após H2H
+    let subCur: TeamRow[] = [h2hSorted[0]]
+    for (let i = 1; i < h2hSorted.length; i++) {
+      const hp = h2h.get(h2hSorted[i - 1].team)!
+      const hc = h2h.get(h2hSorted[i].team)!
+      if (hp.pts === hc.pts && hp.gd === hc.gd && hp.gf === hc.gf) {
+        subCur.push(h2hSorted[i])
+      } else {
+        if (subCur.length > 1) subCur.forEach(t => tiedTeams.add(t.team))
+        sorted.push(...subCur)
+        subCur = [h2hSorted[i]]
+      }
+    }
+    if (subCur.length > 1) subCur.forEach(t => tiedTeams.add(t.team))
+    sorted.push(...subCur)
+  }
+
+  return { sorted, tiedTeams }
 }
 
 /** Calcula a classificação de todos os grupos a partir dos palpites do usuário. */
@@ -175,10 +271,12 @@ export function calcGroupStandings(
     ),
   ].sort()
 
-  return groups.map(group => ({
-    group,
-    teams: sortGroup(buildGroupTeams(group, matches, betMap)),
-  }))
+  return groups.map(group => {
+    const groupMatches = matches.filter(m => m.phase === 'group' && m.group_name === group)
+    const teams = buildGroupTeams(group, matches, betMap)
+    const { sorted, tiedTeams } = sortGroupFIFA(teams, groupMatches, betMap)
+    return { group, teams: sorted, tiedTeams }
+  })
 }
 
 // ── Melhores 8 terceiros (Art. 13) ───────────────────────────────────────────

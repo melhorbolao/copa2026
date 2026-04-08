@@ -137,6 +137,7 @@ export default async function TabelaPage() {
               key={standing.group}
               standing={standing}
               advancingGroups={advancingThirdGroups}
+              userId={user.id}
             />
           ))}
         </div>
