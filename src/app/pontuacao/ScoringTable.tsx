@@ -52,7 +52,7 @@ function suffix(ruleKey: string) {
 
 function isBonusRow(rule: ScoringRule) {
   return rule.is_zebra_bonus ||
-    ['bonus_finalista', 'bonus_quarto', 'bonus_terceiro', 'bonus_vice', 'bonus_campeao'].includes(rule.key)
+    ['bonus_finalista', 'bonus_quarto', 'bonus_terceiro', 'bonus_vice', 'bonus_campeao', 'terceiro_classificado'].includes(rule.key)
 }
 
 // ── Célula de pontos editável (admin) ou só leitura ───────────
