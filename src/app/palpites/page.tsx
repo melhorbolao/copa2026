@@ -14,6 +14,7 @@ import { ExcelActions } from './ExcelActions'
 import { RoundProgress } from './RoundProgress'
 import { StickyStats } from './StickyStats'
 import { AutoFillButton } from './AutoFillButton'
+import { formatBrasilia } from '@/utils/date'
 import type { MatchPhase } from '@/types/database'
 
 const GROUP_ORDER = ['A','B','C','D','E','F','G','H','I','J','K','L']
@@ -291,7 +292,11 @@ export default async function PalpitesPage({
 
                   {/* ── CLASSIFICAÇÃO DOS GRUPOS (bônus) ─────── */}
                   {showBonusBets && visibleGroupOrder.some(g => groupTeams[g]) && (
-                    <SectionRow label="Classificação dos Grupos" sub />
+                    <SectionRow
+                      label="Classificação dos Grupos"
+                      deadline={tournamentDeadline}
+                      sub
+                    />
                   )}
                   {showBonusBets && visibleGroupOrder.map(g => {
                     const data = groupTeams[g]
@@ -377,7 +382,7 @@ export default async function PalpitesPage({
   )
 }
 
-function SectionRow({ label, sub }: { label: string; sub?: boolean }) {
+function SectionRow({ label, deadline, sub }: { label: string; deadline?: string; sub?: boolean }) {
   return (
     <tr>
       <td colSpan={7} className={`px-3 py-1.5 text-xs font-bold uppercase tracking-widest border-b border-t ${
@@ -385,7 +390,14 @@ function SectionRow({ label, sub }: { label: string; sub?: boolean }) {
           ? 'bg-blue-50 text-blue-400 border-blue-100'
           : 'bg-gray-800 text-gray-300 border-gray-700'
       }`}>
-        {label}
+        <span className="flex items-center justify-between gap-2">
+          <span>{label}</span>
+          {deadline && (
+            <span className={`font-normal normal-case tracking-normal ${sub ? 'text-blue-400' : 'text-gray-400'}`}>
+              Prazo: {formatBrasilia(deadline, "dd/MM 'às' HH:mm")}
+            </span>
+          )}
+        </span>
       </td>
     </tr>
   )
