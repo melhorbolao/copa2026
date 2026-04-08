@@ -78,11 +78,11 @@ export function TournamentBetForm({ allTeams, deadline, existingBet }: Props) {
           <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500">🔒 encerrado</span>
         </div>
         {([
-          ['Campeão',        existingBet.champion],
-          ['Vice-Campeão',   existingBet.runner_up],
-          ['Semifinalista 1',existingBet.semi1],
-          ['Semifinalista 2',existingBet.semi2],
-          ['Artilheiro',     existingBet.top_scorer],
+          ['Campeão',      existingBet.champion],
+          ['Vice-Campeão', existingBet.runner_up],
+          ['3º Lugar',     existingBet.semi1],
+          ['4º Lugar',     existingBet.semi2],
+          ['Artilheiro',   existingBet.top_scorer],
         ] as [string,string][]).map(([label, value]) => (
           <div key={label} className="flex items-center justify-between border-b border-gray-50 pb-2 last:border-0">
             <span className="text-sm text-gray-500">{label}</span>
@@ -146,10 +146,10 @@ export function TournamentBetForm({ allTeams, deadline, existingBet }: Props) {
       <Countdown deadline={deadline} label="Prazo:" />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {teamSelect('champion',   '🥇 Campeão',         'vence a final')}
-        {teamSelect('runner_up',  '🥈 Vice-Campeão',    'perde a final')}
-        {teamSelect('semi1',      '🥉 Semifinalista 1', 'perde a semi')}
-        {teamSelect('semi2',      '4º Semifinalista 2', 'perde a semi')}
+        {teamSelect('champion',  '🥇 Campeão',      'vence a final')}
+        {teamSelect('runner_up', '🥈 Vice-Campeão', 'perde a final')}
+        {teamSelect('semi1',     '🥉 3º Lugar',     'perde a semi')}
+        {teamSelect('semi2',     '4️⃣ 4º Lugar',     'perde a semi')}
       </div>
 
       {/* Artilheiro */}

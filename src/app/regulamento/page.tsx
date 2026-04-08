@@ -98,13 +98,13 @@ Os prazos são sempre às **23:59 (horário de Brasília)**. Na fase de grupos h
 | 1º e 2º corretos em ordem invertida | 10 |
 | Apenas 1º correto (2º errado) | 8 |
 | Apenas 2º correto (1º errado) | 6 |
-| Acertou 1 dos 2 classificados na ordem errada | 3 |
+| Apenas 1 dos dois na posição errada (1º classificado em 2º ou 2º classificado em 1º) | 3 |
 
 **21)** Terceiros classificados (regra 2026). Além do item 19, o participante deve: indicar **exatamente 8 grupos** (dentre A a L) que terão o 3º colocado avançando; e indicar **qual seleção** será a 3ª colocada em cada um desses 8 grupos. Prazo: **Rodada 1**.
 
 **22)** Pontuação dos terceiros classificados. Cada acerto vale **3 pontos**, total máximo **24 pontos** (8 × 3). Para pontuar, é necessário acertar simultaneamente o **grupo** cuja equipe em 3º avança e a **seleção** que termina em 3º nesse grupo.
 
-## 7. Bônus de G4, Pódio e Artilheiro
+## 7. Bônus de G4 e Artilheiro
 
 **23)** Antes do início da Copa (prazo: **Rodada 1**), o participante indica:
 

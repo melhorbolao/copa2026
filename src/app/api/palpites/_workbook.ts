@@ -352,12 +352,12 @@ export async function buildPalpitesBuffer(
   }
 
   // SEÇÃO 4: G4 E ARTILHEIRO
-  addSection('BÔNUS: G4 — SEMIFINALISTAS (todos devem ser diferentes)')
+  addSection('BÔNUS: G4 (todos devem ser diferentes)')
   const trnRows = [
-    { key: 'trn:semi1',     label: 'Semifinalista 1', value: (tBet as any)?.semi1      ?? null },
-    { key: 'trn:semi2',     label: 'Semifinalista 2', value: (tBet as any)?.semi2      ?? null },
-    { key: 'trn:champion',  label: 'Campeão',         value: (tBet as any)?.champion   ?? null },
-    { key: 'trn:runner_up', label: 'Vice-Campeão',    value: (tBet as any)?.runner_up  ?? null },
+    { key: 'trn:champion',  label: 'Campeão',      value: (tBet as any)?.champion   ?? null },
+    { key: 'trn:runner_up', label: 'Vice-Campeão', value: (tBet as any)?.runner_up  ?? null },
+    { key: 'trn:semi1',     label: '3º Lugar',     value: (tBet as any)?.semi1      ?? null },
+    { key: 'trn:semi2',     label: '4º Lugar',     value: (tBet as any)?.semi2      ?? null },
   ]
   for (const t of trnRows) {
     const rowNum = rowIdx
