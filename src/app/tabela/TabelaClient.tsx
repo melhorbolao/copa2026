@@ -113,6 +113,7 @@ export function TabelaClient({
             originalTiedTeams={
               standings.find(s => s.group === standing.group)?.tiedTeams ?? []
             }
+            formalBet={groupBetsOverride[standing.group] ?? null}
             manualOrder={mounted ? (manualOrders[standing.group] ?? null) : null}
             onOrderChange={order => handleOrderChange(standing.group, order)}
             onOrderReset={() => handleOrderReset(standing.group)}
