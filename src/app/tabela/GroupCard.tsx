@@ -5,12 +5,14 @@ import { Flag } from '@/components/ui/Flag'
 import type { CalcGroupStanding, TeamRow } from '@/lib/bracket/engine'
 
 interface Props {
-  standing:        CalcGroupStanding
-  advancingGroups: Set<string>
-  userId:          string
-  manualOrder:     string[] | null
-  onOrderChange:   (order: string[]) => void
-  onOrderReset:    () => void
+  standing:           CalcGroupStanding
+  advancingGroups:    Set<string>
+  userId:             string
+  /** Nomes dos times que têm empate real (da classificação FIFA, antes de qualquer override manual) */
+  originalTiedTeams:  string[]
+  manualOrder:        string[] | null
+  onOrderChange:      (order: string[]) => void
+  onOrderReset:       () => void
 }
 
 const POS_COLORS = [
@@ -24,31 +26,44 @@ export function GroupCard({
   standing,
   advancingGroups,
   userId,
+  originalTiedTeams,
   manualOrder,
   onOrderChange,
   onOrderReset,
 }: Props) {
   const storageKey = `tie_order_${userId}_${standing.group}`
-  const hasTie = standing.tiedTeams.length > 0
-  const [dragOver, setDragOver] = useState<number | null>(null)
+
+  // hasTie baseia-se no empate ORIGINAL (antes de qualquer ordem manual),
+  // para que o drag continue ativo mesmo após uma ordem ser confirmada.
+  const hasTie = originalTiedTeams.length > 0
+
+  // draftOrder: ordem de rascunho local — atualizada por cada drag, mas não
+  // commitada ao pai até o usuário clicar em "Salvar".
+  const [draftOrder, setDraftOrder] = useState<string[] | null>(null)
+  const [dragOver,   setDragOver]   = useState<number | null>(null)
   const dragIdx = useRef<number | null>(null)
 
-  // Ordem de exibição: prop manualOrder > ordem calculada no standing
+  // Prioridade de exibição: rascunho > ordem confirmada > ordem calculada
   const displayTeams: TeamRow[] = (() => {
-    if (!manualOrder) return standing.teams
+    const order = draftOrder ?? manualOrder
+    if (!order) return standing.teams
     const teamMap = new Map(standing.teams.map(t => [t.team, t]))
-    const ordered = manualOrder.map(n => teamMap.get(n)).filter(Boolean) as TeamRow[]
+    const ordered = order.map(n => teamMap.get(n)).filter(Boolean) as TeamRow[]
     if (ordered.length !== standing.teams.length) return standing.teams
     return ordered
   })()
 
-  const saveOrder = (teams: TeamRow[]) => {
-    const order = teams.map(t => t.team)
-    onOrderChange(order)
-    try { localStorage.setItem(storageKey, JSON.stringify(order)) } catch { /* ignore */ }
+  const commitOrder = () => {
+    if (!draftOrder) return
+    onOrderChange(draftOrder)
+    try { localStorage.setItem(storageKey, JSON.stringify(draftOrder)) } catch { /* ignore */ }
+    setDraftOrder(null)
   }
 
+  const discardDraft = () => setDraftOrder(null)
+
   const resetOrder = () => {
+    setDraftOrder(null)
     onOrderReset()
     try { localStorage.removeItem(storageKey) } catch { /* ignore */ }
   }
@@ -64,15 +79,20 @@ export function GroupCard({
     const next = [...displayTeams]
     const [moved] = next.splice(dragIdx.current, 1)
     next.splice(i, 0, moved)
-    saveOrder(next)
+    setDraftOrder(next.map(t => t.team))   // apenas rascunho — não commita ainda
     dragIdx.current = null
     setDragOver(null)
   }
 
   const isManuallyOrdered = manualOrder !== null
-  const isTied    = (team: TeamRow) => standing.tiedTeams.includes(team.team)
-  const third     = displayTeams[2]
-  const thirdAdv  = third && advancingGroups.has(standing.group)
+  const hasDraft          = draftOrder !== null
+
+  // "?" somente quando há empate não resolvido (sem rascunho nem ordem confirmada)
+  const isTiedUnresolved = (team: TeamRow) =>
+    originalTiedTeams.includes(team.team) && !isManuallyOrdered && !hasDraft
+
+  const third    = displayTeams[2]
+  const thirdAdv = third && advancingGroups.has(standing.group)
 
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200 shadow-sm">
@@ -81,12 +101,34 @@ export function GroupCard({
         <span className="text-sm font-black uppercase tracking-widest text-white">
           Grupo {standing.group}
         </span>
-        {hasTie && !isManuallyOrdered && (
+
+        {/* Estado: empate não resolvido */}
+        {hasTie && !isManuallyOrdered && !hasDraft && (
           <span className="ml-auto rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-bold text-amber-900">
             ⚠️ Empate — arraste para definir
           </span>
         )}
-        {isManuallyOrdered && (
+
+        {/* Estado: rascunho pendente → botão Salvar + Descartar */}
+        {hasDraft && (
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={discardDraft}
+              className="text-[10px] font-medium text-white/60 underline hover:text-white/80"
+            >
+              Descartar
+            </button>
+            <button
+              onClick={commitOrder}
+              className="rounded-full bg-verde-500 px-2.5 py-0.5 text-[10px] font-bold text-white hover:bg-verde-600"
+            >
+              💾 Salvar ordem
+            </button>
+          </div>
+        )}
+
+        {/* Estado: ordem confirmada, sem rascunho */}
+        {isManuallyOrdered && !hasDraft && (
           <button
             onClick={resetOrder}
             className="ml-auto rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-white/30"
@@ -96,12 +138,19 @@ export function GroupCard({
         )}
       </div>
 
-      {/* Aviso de empate */}
-      {hasTie && !isManuallyOrdered && (
+      {/* Aviso de empate (só quando não há ordem nem rascunho) */}
+      {hasTie && !isManuallyOrdered && !hasDraft && (
         <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
           <strong>Empate nos critérios 1–6 da FIFA</strong> entre{' '}
-          {[...standing.tiedTeams].join(' e ')}.{' '}
+          {originalTiedTeams.join(' e ')}.{' '}
           Arraste as linhas para definir manualmente (simula Ranking FIFA ou Cartões).
+        </div>
+      )}
+
+      {/* Aviso de rascunho pendente */}
+      {hasDraft && (
+        <div className="border-b border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+          Ordem alterada — clique em <strong>💾 Salvar ordem</strong> para aplicar ao chaveamento e à tabela de terceiros.
         </div>
       )}
 
@@ -124,9 +173,9 @@ export function GroupCard({
         </thead>
         <tbody>
           {displayTeams.map((team, i) => {
-            const isThirdAdv = i === 2 && thirdAdv
-            const tied       = isTied(team)
-            const draggable  = hasTie
+            const isThirdAdv    = i === 2 && thirdAdv
+            const tiedUnresolved = isTiedUnresolved(team)
+            const draggable     = hasTie
 
             return (
               <tr
@@ -139,27 +188,32 @@ export function GroupCard({
                 className={[
                   'border-t border-gray-100 transition',
                   i % 2 === 0 ? 'bg-white' : 'bg-gray-50/40',
-                  dragOver === i  ? 'bg-amber-50 ring-1 ring-inset ring-amber-300' : '',
-                  draggable       ? 'cursor-grab active:cursor-grabbing select-none' : '',
+                  dragOver === i ? 'bg-amber-50 ring-1 ring-inset ring-amber-300' : '',
+                  draggable     ? 'cursor-grab active:cursor-grabbing select-none' : '',
                 ].join(' ')}
               >
+                {/* Handle de drag */}
                 {hasTie && (
                   <td className="px-1 py-2 text-center text-gray-300">
-                    {tied ? '⠿' : <span className="opacity-30">⠿</span>}
+                    {originalTiedTeams.includes(team.team)
+                      ? '⠿'
+                      : <span className="opacity-30">⠿</span>
+                    }
                   </td>
                 )}
 
+                {/* Posição */}
                 <td className="px-2 py-2 text-center">
                   <span
                     className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-black ${
-                      tied && !isManuallyOrdered
+                      tiedUnresolved
                         ? 'bg-amber-400 text-amber-900'
                         : i === 2
                           ? (isThirdAdv ? 'bg-amber-400 text-amber-900' : 'bg-gray-200 text-gray-600')
                           : POS_COLORS[i]
                     }`}
                   >
-                    {tied && !isManuallyOrdered ? '?' : i + 1}
+                    {tiedUnresolved ? '?' : i + 1}
                   </span>
                 </td>
 
@@ -193,8 +247,8 @@ export function GroupCard({
 
       {/* Legenda */}
       <div className="flex flex-wrap items-center gap-3 border-t border-gray-100 bg-gray-50 px-3 py-2">
-        <LegendItem color="bg-verde-600"    label="Classificado (1º)" />
-        <LegendItem color="bg-azul-escuro"  label="Classificado (2º)" />
+        <LegendItem color="bg-verde-600"   label="Classificado (1º)" />
+        <LegendItem color="bg-azul-escuro" label="Classificado (2º)" />
         {thirdAdv && <LegendItem color="bg-amber-400" label="Melhor 3º" />}
       </div>
     </div>

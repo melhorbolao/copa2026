@@ -110,6 +110,9 @@ export function TabelaClient({
             standing={standing}
             advancingGroups={advancingThirdGroups}
             userId={userId}
+            originalTiedTeams={
+              standings.find(s => s.group === standing.group)?.tiedTeams ?? []
+            }
             manualOrder={mounted ? (manualOrders[standing.group] ?? null) : null}
             onOrderChange={order => handleOrderChange(standing.group, order)}
             onOrderReset={() => handleOrderReset(standing.group)}
