@@ -7,7 +7,7 @@ import { fillG4FromBracket } from '@/app/palpites/actions'
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
 export interface BracketTeam { team: string; flag: string }
-export interface R32Slot { matchNum: string; teamA: BracketTeam | null; teamB: BracketTeam | null }
+export interface R32Slot { matchNum: string; teamA: BracketTeam | null; teamB: BracketTeam | null; labelA: string; labelB: string }
 
 interface Props {
   r32Slots: R32Slot[]
@@ -85,7 +85,7 @@ const MATCH_W  = 156
 const COL_GAP  = 20
 const COL_STEP = MATCH_W + COL_GAP
 
-const ROUND_HEADERS = ['R32', 'R16', 'QF', 'SF', 'Final / 3º']
+const ROUND_HEADERS = ['16avos', 'Oitavas', 'Quartas', 'Semi', '3º', 'Final']
 
 // ── Mapa de bandeiras ─────────────────────────────────────────────────────────
 
@@ -176,14 +176,14 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
 
   const thirdA = sfLoser(0)
   const thirdB = sfLoser(1)
-  const finalTop  = matchTop(4, 0)
-  const thirdTop  = finalTop + MATCH_H + 48  // espaço fixo independente do badge
+  const finalTop = matchTop(4, 0)
+  const thirdTop = matchTop(4, 0)  // mesmo nível vertical que a Final (coluna separada)
 
   if (!mounted) {
     return <div className="flex h-32 items-center justify-center text-sm text-gray-400">Carregando chaveamento…</div>
   }
 
-  const totalWidth = COL_STEP * 4 + MATCH_W
+  const totalWidth = COL_STEP * 5 + MATCH_W
 
   return (
     <div>
@@ -202,7 +202,7 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
 
       {/* Bracket */}
       <div className="overflow-x-auto pb-4">
-        <div className="relative" style={{ height: Math.max(CONTAINER_H, thirdTop + MATCH_H + 8), width: totalWidth }}>
+        <div className="relative" style={{ height: Math.max(CONTAINER_H, finalTop + MATCH_H + 8), width: totalWidth }}>
 
           {/* ── R32 ── */}
           {r32Slots.map((slot, i) => (
@@ -227,6 +227,8 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
                 teamB={slot.teamB}
                 winner={picks.r32[i]}
                 onPick={t => pick('r32', i, t)}
+                labelA={slot.labelA}
+                labelB={slot.labelB}
               />
             </div>
           ))}
@@ -267,30 +269,7 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
             />
           ))}
 
-          {/* ── Badge campeão (acima da Final, cresce para cima) ── */}
-          {picks.final && (
-            <div style={{ position: 'absolute', left: COL_STEP * 4, top: finalTop - 34, width: MATCH_W }}
-              className="flex items-center justify-center gap-1 rounded-lg bg-amarelo-100 px-2 py-1"
-            >
-              <Flag code={flagMap.get(picks.final) ?? ''} size="sm" className="!h-2.5 !w-3.5 shrink-0" />
-              <span className="text-[11px] font-black text-amarelo-800">{picks.final}</span>
-              <span className="text-[10px]">🏆</span>
-            </div>
-          )}
-
-          {/* ── Final ── */}
-          <div style={{ position: 'absolute', left: COL_STEP * 4, top: finalTop }}>
-            <div className="mb-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-amarelo-600">Final</div>
-            <MatchCard
-              style={{}}
-              teamA={getTeam(picks.sf[0])}
-              teamB={getTeam(picks.sf[1])}
-              winner={picks.final}
-              onPick={t => pick('final', 0, t)}
-            />
-          </div>
-
-          {/* ── 3º Lugar ── */}
+          {/* ── 3º Lugar (coluna 4) ── */}
           <div style={{ position: 'absolute', left: COL_STEP * 4, top: thirdTop }}>
             <div className="mb-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-gray-400">3º Lugar</div>
             <MatchCard
@@ -299,6 +278,29 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
               teamB={getTeam(thirdB)}
               winner={picks.third}
               onPick={t => pick('third', 0, t)}
+            />
+          </div>
+
+          {/* ── Badge campeão (acima da Final, cresce para cima) ── */}
+          {picks.final && (
+            <div style={{ position: 'absolute', left: COL_STEP * 5, top: finalTop - 34, width: MATCH_W }}
+              className="flex items-center justify-center gap-1 rounded-lg bg-amarelo-100 px-2 py-1"
+            >
+              <Flag code={flagMap.get(picks.final) ?? ''} size="sm" className="!h-2.5 !w-3.5 shrink-0" />
+              <span className="text-[11px] font-black text-amarelo-800">{picks.final}</span>
+              <span className="text-[10px]">🏆</span>
+            </div>
+          )}
+
+          {/* ── Final (coluna 5) ── */}
+          <div style={{ position: 'absolute', left: COL_STEP * 5, top: finalTop }}>
+            <div className="mb-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-amarelo-600">Final</div>
+            <MatchCard
+              style={{}}
+              teamA={getTeam(picks.sf[0])}
+              teamB={getTeam(picks.sf[1])}
+              winner={picks.final}
+              onPick={t => pick('final', 0, t)}
             />
           </div>
 
@@ -376,13 +378,15 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
 // ── Sub-componentes ───────────────────────────────────────────────────────────
 
 function MatchCard({
-  teamA, teamB, winner, onPick, label, style,
+  teamA, teamB, winner, onPick, label, style, labelA, labelB,
 }: {
   teamA: BracketTeam | null
   teamB: BracketTeam | null
   winner: string | null
   onPick: (team: string) => void
   label?: string
+  labelA?: string
+  labelB?: string
   style: React.CSSProperties
 }) {
   const canPick = !!(teamA && teamB)
@@ -400,23 +404,26 @@ function MatchCard({
         team={teamA}
         isWinner={!!teamA && winner === teamA.team}
         onClick={canPick ? () => onPick(teamA!.team) : undefined}
+        posLabel={labelA}
       />
       <div className="h-px bg-gray-100" />
       <TeamSlot
         team={teamB}
         isWinner={!!teamB && winner === teamB.team}
         onClick={canPick ? () => onPick(teamB!.team) : undefined}
+        posLabel={labelB}
       />
     </div>
   )
 }
 
 function TeamSlot({
-  team, isWinner, onClick,
+  team, isWinner, onClick, posLabel,
 }: {
   team: BracketTeam | null
   isWinner: boolean
   onClick?: () => void
+  posLabel?: string
 }) {
   return (
     <div
@@ -436,7 +443,12 @@ function TeamSlot({
           {isWinner && <span className="ml-auto shrink-0 text-[10px] text-verde-500">✓</span>}
         </>
       ) : (
-        <span>—</span>
+        <>
+          {posLabel && (
+            <span className="text-[9px] font-bold text-gray-300 mr-0.5">{posLabel}</span>
+          )}
+          <span className="text-gray-300">—</span>
+        </>
       )}
     </div>
   )

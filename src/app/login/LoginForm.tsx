@@ -5,12 +5,13 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { createPendingUserProfile } from '@/app/auth/actions'
 
-type Mode = 'login' | 'signup'
+type Mode = 'login' | 'signup' | 'forgot'
 
 export function LoginForm() {
   const [mode, setMode]       = useState<Mode>('login')
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
+  const [info, setInfo]       = useState('')
 
   // Campos compartilhados
   const [email,    setEmail]    = useState('')
@@ -25,7 +26,7 @@ export function LoginForm() {
   const router   = useRouter()
   const supabase = createClient()
 
-  const switchMode = (m: Mode) => { setMode(m); setError('') }
+  const switchMode = (m: Mode) => { setMode(m); setError(''); setInfo('') }
 
   // ── Google OAuth ──────────────────────────────────────────────
   const handleGoogle = async () => {
@@ -90,7 +91,26 @@ export function LoginForm() {
       } catch { /* silent */ }
     }
 
+    setInfo('Após o cadastro, aguarde aprovação do administrador para acessar o Melhor Bolão.')
     router.push('/confirmar-email')
+  }
+
+  // ── Recuperação de senha ──────────────────────────────────────
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    if (!email.trim()) { setError('Informe seu e-mail cadastrado.'); return }
+    setLoading(true)
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/callback?next=/auth/redefinir-senha`,
+    })
+    setLoading(false)
+    if (resetError) {
+      setError('Não foi possível enviar o e-mail. Verifique o endereço informado.')
+    } else {
+      setInfo('E-mail de recuperação enviado! Verifique sua caixa de entrada e siga as instruções.')
+      setError('')
+    }
   }
 
   return (
@@ -114,24 +134,58 @@ export function LoginForm() {
       </div>
 
       {/* Tabs */}
-      <div className="flex rounded-lg bg-gray-100 p-0.5">
-        {(['login', 'signup'] as Mode[]).map(m => (
-          <button
-            key={m}
-            type="button"
-            onClick={() => switchMode(m)}
-            className={`flex-1 rounded-md py-1.5 text-xs font-semibold transition ${
-              mode === m
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {m === 'login' ? 'Entrar' : 'Criar conta'}
-          </button>
-        ))}
-      </div>
+      {mode !== 'forgot' && (
+        <div className="flex rounded-lg bg-gray-100 p-0.5">
+          {(['login', 'signup'] as const).map(m => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => switchMode(m)}
+              className={`flex-1 rounded-md py-1.5 text-xs font-semibold transition ${
+                mode === m
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {m === 'login' ? 'Entrar' : 'Criar conta'}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {/* Formulário */}
+      {/* Formulário — Esqueci minha senha */}
+      {mode === 'forgot' && (
+        <form onSubmit={handleForgotPassword} className="flex flex-col gap-3">
+          <p className="text-sm font-semibold text-gray-700">Recuperar senha</p>
+          <p className="text-xs text-gray-500">Informe seu e-mail cadastrado e enviaremos um link para redefinir sua senha.</p>
+          <Field label="E-mail" id="email-forgot">
+            <input
+              id="email-forgot" type="email" required autoComplete="email"
+              value={email} onChange={e => setEmail(e.target.value)}
+              placeholder="seu@email.com"
+              className={inputCls}
+            />
+          </Field>
+          {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>}
+          {info  && <p className="rounded-lg bg-green-50 px-3 py-2 text-xs text-green-700">{info}</p>}
+          <button
+            type="submit" disabled={loading}
+            className="mt-1 w-full rounded-lg py-3 text-sm font-bold text-white transition disabled:opacity-60"
+            style={{ backgroundColor: '#009c3b' }}
+          >
+            {loading ? 'Enviando…' : 'Enviar link de recuperação'}
+          </button>
+          <button
+            type="button" onClick={() => switchMode('login')}
+            className="text-xs text-gray-400 hover:text-gray-600 text-center"
+          >
+            Voltar ao login
+          </button>
+        </form>
+      )}
+
+      {/* Formulário — Login / Cadastro */}
+      {mode !== 'forgot' && (
       <form onSubmit={mode === 'login' ? handleLogin : handleSignup} className="flex flex-col gap-3">
 
         {mode === 'signup' && (
@@ -185,6 +239,9 @@ export function LoginForm() {
         {error && (
           <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>
         )}
+        {info && (
+          <p className="rounded-lg bg-green-50 px-3 py-2 text-xs text-green-700">{info}</p>
+        )}
 
         <button
           type="submit"
@@ -194,7 +251,18 @@ export function LoginForm() {
         >
           {loading ? 'Aguarde...' : mode === 'login' ? 'Entrar' : 'Criar conta'}
         </button>
+
+        {mode === 'login' && (
+          <button
+            type="button"
+            onClick={() => switchMode('forgot')}
+            className="text-xs text-gray-400 hover:text-gray-600 text-center"
+          >
+            Esqueci minha senha
+          </button>
+        )}
       </form>
+      )}
     </div>
   )
 }

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { UserRow } from './UserRow'
 import { ReminderSection } from './ReminderSection'
 import { CreateUserModal } from './CreateUserModal'
+import { CopyEmailsButton } from './CopyEmailsButton'
 
 export default async function AdminUsuariosPage() {
   const supabase = await createClient()
@@ -15,6 +16,10 @@ export default async function AdminUsuariosPage() {
   const pendentes = users?.filter(u => u.status === 'aprovacao_pendente').length ?? 0
   const pagos     = users?.filter(u => u.paid).length ?? 0
 
+  const approvedEmails = (users ?? [])
+    .filter(u => u.status === 'aprovado')
+    .map(u => u.email)
+
   return (
     <div>
       {/* Resumo */}
@@ -25,10 +30,13 @@ export default async function AdminUsuariosPage() {
         <StatCard label="Pagos"             value={pagos}     color="amarelo" />
       </div>
 
-      {/* Lembrete + Cadastrar */}
+      {/* Lembrete + Cadastrar + Copiar e-mails */}
       <div className="mb-4 flex items-start justify-between gap-3 flex-wrap">
         <ReminderSection />
-        <CreateUserModal />
+        <div className="flex items-center gap-2 flex-wrap">
+          <CopyEmailsButton emails={approvedEmails} />
+          <CreateUserModal />
+        </div>
       </div>
 
       {/* Tabela */}

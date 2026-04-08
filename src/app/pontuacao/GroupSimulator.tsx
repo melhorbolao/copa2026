@@ -25,8 +25,8 @@ type GroupBreakdown = {
   top2Label: string   // descrição do acerto 1º/2º
   top2Pts: number
   thirdPts: number
+  // zebra apenas para 1º colocado; não há zebra para 2º ou 3º
   zebraBonus1: number
-  zebraBonus2: number
   total: number
 }
 
@@ -38,7 +38,6 @@ function calcGroupPoints(
   real: Team[],          // ordered [0]=1st … [3]=4th
   realThirdAdvances: boolean,
   isZebra1: boolean,
-  isZebra2: boolean,
   ruleMap: Record<string, number>,
 ): GroupBreakdown {
   const real1st = real[0]?.name ?? ''
@@ -57,17 +56,20 @@ function calcGroupPoints(
     (bet1st === real2nd || bet2nd === real1st) &&
     !(bet1st === real1st) && !(bet2nd === real2nd)
 
+  // Registra se o 1º foi especificamente acertado (para aplicar zebra)
+  const first1stCorrect = exactOrder || only1st
+
   if (exactOrder) {
-    top2Pts   = ruleMap['grupo_ordem_certa'] ?? 15
+    top2Pts   = ruleMap['grupo_ordem_certa'] ?? 16
     top2Label = 'Ordem certa (1º e 2º)'
   } else if (inverted) {
     top2Pts   = ruleMap['grupo_ordem_invertida'] ?? 10
     top2Label = 'Ordem invertida (1º e 2º trocados)'
   } else if (only1st) {
-    top2Pts   = ruleMap['grupo_primeiro_certo'] ?? 7
+    top2Pts   = ruleMap['grupo_primeiro_certo'] ?? 8
     top2Label = 'Somente o 1º correto'
   } else if (only2nd) {
-    top2Pts   = ruleMap['grupo_segundo_certo'] ?? 5
+    top2Pts   = ruleMap['grupo_segundo_certo'] ?? 6
     top2Label = 'Somente o 2º correto'
   } else if (oneInTop2) {
     top2Pts   = ruleMap['grupo_um_dos_dois'] ?? 3
@@ -79,19 +81,18 @@ function calcGroupPoints(
   // 3º classificado: só pontua se ambos os lados têm o flag ativo e o time bate
   const thirdPts =
     betThirdAdvances && realThirdAdvances && bet3rd === real3rd
-      ? (ruleMap['terceiro_classificado'] ?? 5)
+      ? (ruleMap['terceiro_classificado'] ?? 3)
       : 0
 
-  const zebraBonus1 = isZebra1 && top2Pts > 0 ? (ruleMap['bonus_zebra_grupo_1'] ?? 5) : 0
-  const zebraBonus2 = isZebra2 && thirdPts > 0 ? (ruleMap['bonus_zebra_grupo_2'] ?? 5) : 0
+  // Zebra somente para 1º colocado (itens 17.1 e 17.2 do regulamento)
+  const zebraBonus1 = isZebra1 && first1stCorrect ? (ruleMap['bonus_zebra_grupo_1'] ?? 6) : 0
 
   return {
     top2Label,
     top2Pts,
     thirdPts,
     zebraBonus1,
-    zebraBonus2,
-    total: top2Pts + thirdPts + zebraBonus1 + zebraBonus2,
+    total: top2Pts + thirdPts + zebraBonus1,
   }
 }
 
@@ -209,20 +210,19 @@ export function GroupSimulator({ rules }: Props) {
   const [realOrder,         setRealOrder]         = useState<Team[]>([...GROUP_A_TEAMS])
   const [realThirdAdvances, setRealThirdAdvances] = useState(false)
 
-  // Zebra
+  // Zebra apenas para 1º colocado
   const [isZebra1, setIsZebra1] = useState(false)
-  const [isZebra2, setIsZebra2] = useState(false)
 
   const result = calcGroupPoints(
     bet1st, bet2nd, betThirdAdvances, bet3rd,
     realOrder, realThirdAdvances,
-    isZebra1, isZebra2,
+    isZebra1,
     ruleMap,
   )
 
   const totalColor =
-    result.total === 0          ? 'text-gray-400'
-    : result.zebraBonus1 > 0 || result.zebraBonus2 > 0 ? 'text-amber-700'
+    result.total === 0       ? 'text-gray-400'
+    : result.zebraBonus1 > 0 ? 'text-amber-700'
     : 'text-azul-escuro'
 
   const hasPts = result.total > 0
@@ -314,7 +314,7 @@ export function GroupSimulator({ rules }: Props) {
           </div>
         </div>
 
-        {/* Zebra toggles */}
+        {/* Zebra toggle — apenas para 1º colocado */}
         <div className="flex flex-wrap items-center justify-center gap-2">
           <button
             onClick={() => setIsZebra1(v => !v)}
@@ -325,18 +325,7 @@ export function GroupSimulator({ rules }: Props) {
             }`}
           >
             <span>🦓</span>
-            <span>Zebra 1 (1º/2º)</span>
-          </button>
-          <button
-            onClick={() => setIsZebra2(v => !v)}
-            className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition ${
-              isZebra2
-                ? 'border-amber-300 bg-amber-100 text-amber-800'
-                : 'border-gray-200 bg-white text-gray-400 hover:border-amber-200 hover:bg-amber-50 hover:text-amber-600'
-            }`}
-          >
-            <span>🦓</span>
-            <span>Zebra 2 (3º)</span>
+            <span>Zebra 1º do grupo</span>
           </button>
         </div>
 
@@ -354,10 +343,7 @@ export function GroupSimulator({ rules }: Props) {
                 <p className="text-xs text-gray-600">+ {result.thirdPts} pts (3º classificado)</p>
               )}
               {result.zebraBonus1 > 0 && (
-                <p className="text-xs text-amber-700">🦓 +{result.zebraBonus1} pts zebra (1º/2º)</p>
-              )}
-              {result.zebraBonus2 > 0 && (
-                <p className="text-xs text-amber-700">🦓 +{result.zebraBonus2} pts zebra (3º)</p>
+                <p className="text-xs text-amber-700">🦓 +{result.zebraBonus1} pts zebra (1º)</p>
               )}
               {result.total === 0 && (
                 <p className="text-xs text-gray-400">Nenhum ponto marcado</p>
@@ -372,12 +358,11 @@ export function GroupSimulator({ rules }: Props) {
           </div>
 
           {/* Breakdown detalhado quando há múltiplas parcelas */}
-          {hasPts && (result.thirdPts > 0 || result.zebraBonus1 > 0 || result.zebraBonus2 > 0) && (
+          {hasPts && (result.thirdPts > 0 || result.zebraBonus1 > 0) && (
             <div className="mt-3 border-t border-gray-200 pt-3 flex flex-wrap items-center justify-end gap-x-2 gap-y-1 text-xs text-gray-500">
               {result.top2Pts > 0 && <span>{result.top2Pts} pts</span>}
               {result.thirdPts > 0  && <><span>+</span><span>{result.thirdPts} pts (3º)</span></>}
-              {result.zebraBonus1 > 0 && <><span>+</span><span className="text-amber-700">{result.zebraBonus1} (zebra 1)</span></>}
-              {result.zebraBonus2 > 0 && <><span>+</span><span className="text-amber-700">{result.zebraBonus2} (zebra 2)</span></>}
+              {result.zebraBonus1 > 0 && <><span>+</span><span className="text-amber-700">{result.zebraBonus1} (zebra 1º)</span></>}
               <span>=</span>
               <span className={`font-black ${totalColor}`}>{result.total} pts</span>
             </div>

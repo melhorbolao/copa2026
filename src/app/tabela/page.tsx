@@ -21,7 +21,7 @@ export default async function TabelaPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [{ data: rawMatches }, { data: rawBets }, { data: tBet }] = await Promise.all([
+  const [{ data: rawMatches }, { data: rawBets }, { data: tBet }, { data: rawGroupBets }] = await Promise.all([
     supabase
       .from('matches')
       .select('*')
@@ -36,6 +36,10 @@ export default async function TabelaPage() {
       .select('champion')
       .eq('user_id', user.id)
       .maybeSingle(),
+    supabase
+      .from('group_bets')
+      .select('group_name, first_place, second_place')
+      .eq('user_id', user.id),
   ])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -54,10 +58,19 @@ export default async function TabelaPage() {
     ((rawBets ?? []) as any[]).map((b: any) => [b.match_id, { match_id: b.match_id, score_home: b.score_home, score_away: b.score_away }]),
   )
 
+  // Override de ranking: os palpites manuais de 1º/2º do grupo prevalecem sobre os placares calculados
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const groupBetsOverride = new Map<string, { first_place: string; second_place: string }>(
+    ((rawGroupBets ?? []) as any[]).map((gb: any) => [
+      gb.group_name as string,
+      { first_place: gb.first_place as string, second_place: gb.second_place as string },
+    ]),
+  )
+
   const standings  = calcGroupStandings(matches, betMap)
   const thirds     = rankThirds(standings)
   const thirdSlots = resolveThirdSlots(thirds)
-  const r32Slots   = buildR32Teams(standings, thirds, thirdSlots)
+  const r32Slots   = buildR32Teams(standings, thirds, thirdSlots, groupBetsOverride)
 
   // Prazo do G4 = menor betting_deadline dos jogos de grupo
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

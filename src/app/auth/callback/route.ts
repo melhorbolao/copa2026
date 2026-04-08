@@ -17,6 +17,11 @@ export async function GET(request: Request) {
     const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!exchangeError) {
+      // Fluxo de recuperação de senha — redireciona direto para redefinição
+      if (next === '/auth/redefinir-senha') {
+        return NextResponse.redirect(`${requestUrl.origin}/auth/redefinir-senha`)
+      }
+
       const { data: { user } } = await supabase.auth.getUser()
 
       if (user) {

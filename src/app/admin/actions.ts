@@ -114,7 +114,7 @@ export async function toggleApproved(userId: string, current: boolean) {
 
 // ── Lembrete em massa ─────────────────────────────────────────
 export async function sendReminderEmails(
-  recipients: 'all' | 'pending',
+  recipients: 'all' | 'pending' | 'cut1' | 'cut2',
   stage: string,
   body: string,
 ) {
@@ -155,6 +155,32 @@ export async function sendReminderEmails(
       }
 
       targets = users.filter(u => (betCountByUser.get(u.id) ?? 0) < matchIds.size)
+    }
+  }
+
+  // Filtros de corte: classificados = quem apostou na fase indicada
+  if (recipients === 'cut1' || recipients === 'cut2') {
+    const cutPhase = recipients === 'cut1' ? ['round_of_32'] : ['quarterfinal']
+    const { data: cutMatches } = await supabase
+      .from('matches')
+      .select('id')
+      .in('phase', cutPhase as MatchPhase[])
+
+    if (cutMatches?.length) {
+      const cutMatchIds = new Set(cutMatches.map(m => m.id))
+      const { data: bets } = await supabase
+        .from('bets')
+        .select('user_id, match_id')
+        .in('user_id', users.map(u => u.id))
+
+      const usersWithBets = new Set<string>()
+      for (const bet of bets ?? []) {
+        if (cutMatchIds.has(bet.match_id)) usersWithBets.add(bet.user_id)
+      }
+
+      targets = users.filter(u => usersWithBets.has(u.id))
+    } else {
+      targets = []
     }
   }
 

@@ -1,108 +1,14 @@
 'use client'
 
-import { useState, useTransition } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { toast } from 'react-hot-toast'
-import { saveRegulamento } from './actions'
-import { useAdminView } from '@/contexts/AdminViewContext'
 
 interface Props {
   content: string
-  isAdmin: boolean
 }
 
-export function RegulamentoContent({ content, isAdmin }: Props) {
-  const { viewMode } = useAdminView()
-  const canEdit = isAdmin && viewMode === 'admin'
-  const [editing,  setEditing]  = useState(false)
-  const [saved,    setSaved]    = useState(content)
-  const [draft,    setDraft]    = useState(content)
-  const [pending,  startSave]   = useTransition()
-
-  const handleSave = () => {
-    startSave(async () => {
-      try {
-        await saveRegulamento(draft)
-        setSaved(draft)
-        setEditing(false)
-        toast.success('Regulamento salvo!')
-      } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : 'Erro ao salvar')
-      }
-    })
-  }
-
-  const handleCancel = () => {
-    setDraft(saved)
-    setEditing(false)
-  }
-
-  if (editing) {
-    return (
-      <div className="fixed inset-0 z-50 flex flex-col bg-white">
-        {/* Barra do editor */}
-        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 bg-gray-900">
-          <span className="text-sm font-black uppercase tracking-wide text-white">Editar Regulamento</span>
-          <div className="flex gap-2">
-            <button
-              onClick={handleCancel}
-              className="rounded-lg px-4 py-1.5 text-sm font-semibold bg-gray-700 text-gray-200 hover:bg-gray-600 transition"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={pending}
-              className="rounded-lg px-4 py-1.5 text-sm font-bold bg-verde-600 text-white hover:bg-verde-700 disabled:opacity-50 transition"
-            >
-              {pending ? 'Salvando…' : 'Salvar'}
-            </button>
-          </div>
-        </div>
-
-        {/* Editor + Preview lado a lado */}
-        <div className="flex flex-1 overflow-hidden">
-          <div className="flex flex-1 flex-col border-r border-gray-200">
-            <div className="border-b border-gray-100 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">
-              Markdown
-            </div>
-            <textarea
-              value={draft}
-              onChange={e => setDraft(e.target.value)}
-              className="flex-1 resize-none p-4 font-mono text-sm text-gray-800 focus:outline-none"
-              spellCheck={false}
-            />
-          </div>
-          <div className="flex flex-1 flex-col overflow-auto">
-            <div className="border-b border-gray-100 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">
-              Preview
-            </div>
-            <div className="p-6 overflow-auto">
-              <MarkdownRenderer content={draft} />
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="relative">
-      {canEdit && (
-        <div className="mb-4 flex justify-end">
-          <button
-            onClick={() => { setDraft(saved); setEditing(true) }}
-            className="rounded-lg px-4 py-2 text-sm font-semibold text-white transition"
-            style={{ backgroundColor: '#009c3b' }}
-          >
-            ✏️ Editar regulamento
-          </button>
-        </div>
-      )}
-      <MarkdownRenderer content={saved} />
-    </div>
-  )
+export function RegulamentoContent({ content }: Props) {
+  return <MarkdownRenderer content={content} />
 }
 
 function MarkdownRenderer({ content }: { content: string }) {

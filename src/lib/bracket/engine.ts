@@ -72,26 +72,32 @@ export interface R32MatchDef {
   slotB: string
 }
 
-// Ordem correta conforme chave oficial FIFA 2026 (Anexo C / Match Schedule):
-// Pares adjacentes se encontram no R16: (0,1)→M89, (2,3)→M90, (4,5)→M93,
-// (6,7)→M94, (8,9)→M91, (10,11)→M92, (12,13)→M96, (14,15)→M95
+// Ordem de exibição do chaveamento (16avos), organizada em 4 blocos de 4.
+// Bloco 1: 2A, 1F, 1E, 1I
+// Bloco 2: 2K, 1H, 1D, 1G
+// Bloco 3: 1C, 2E, 1A, 1L
+// Bloco 4: 1J, 2D, 1B, 1K
 export const R32_MATCHES: R32MatchDef[] = [
-  { matchNum: 'M74', slotA: '1E', slotB: '3rd:ABCDF' }, // → R16 M89
-  { matchNum: 'M77', slotA: '1I', slotB: '3rd:CDFGH' }, // → R16 M89
-  { matchNum: 'M73', slotA: '2A', slotB: '2B' },        // → R16 M90
-  { matchNum: 'M75', slotA: '1F', slotB: '2C' },        // → R16 M90
-  { matchNum: 'M84', slotA: '1H', slotB: '2J' },        // → R16 M93
-  { matchNum: 'M88', slotA: '2D', slotB: '2G' },        // → R16 M93
-  { matchNum: 'M81', slotA: '1D', slotB: '3rd:BEFIJ' }, // → R16 M94
-  { matchNum: 'M82', slotA: '1G', slotB: '3rd:AEHIJ' }, // → R16 M94
-  { matchNum: 'M76', slotA: '1C', slotB: '2F' },        // → R16 M91
-  { matchNum: 'M78', slotA: '2E', slotB: '2I' },        // → R16 M91
-  { matchNum: 'M79', slotA: '1A', slotB: '3rd:CEFHI' }, // → R16 M92
-  { matchNum: 'M80', slotA: '1L', slotB: '3rd:EHIJK' }, // → R16 M92
-  { matchNum: 'M85', slotA: '1B', slotB: '3rd:EFGIJ' }, // → R16 M96
-  { matchNum: 'M87', slotA: '1K', slotB: '3rd:DEIJL' }, // → R16 M96
-  { matchNum: 'M83', slotA: '2K', slotB: '2L' },        // → R16 M95
-  { matchNum: 'M86', slotA: '1J', slotB: '2H' },        // → R16 M95
+  // Bloco 1
+  { matchNum: 'M73', slotA: '2A', slotB: '2B' },
+  { matchNum: 'M75', slotA: '1F', slotB: '2C' },
+  { matchNum: 'M74', slotA: '1E', slotB: '3rd:ABCDF' },
+  { matchNum: 'M77', slotA: '1I', slotB: '3rd:CDFGH' },
+  // Bloco 2
+  { matchNum: 'M83', slotA: '2K', slotB: '2L' },
+  { matchNum: 'M84', slotA: '1H', slotB: '2J' },
+  { matchNum: 'M81', slotA: '1D', slotB: '3rd:BEFIJ' },
+  { matchNum: 'M82', slotA: '1G', slotB: '3rd:AEHIJ' },
+  // Bloco 3
+  { matchNum: 'M76', slotA: '1C', slotB: '2F' },
+  { matchNum: 'M78', slotA: '2E', slotB: '2I' },
+  { matchNum: 'M79', slotA: '1A', slotB: '3rd:CEFHI' },
+  { matchNum: 'M80', slotA: '1L', slotB: '3rd:EHIJK' },
+  // Bloco 4
+  { matchNum: 'M86', slotA: '1J', slotB: '2H' },
+  { matchNum: 'M88', slotA: '2D', slotB: '2G' },
+  { matchNum: 'M85', slotA: '1B', slotB: '3rd:EFGIJ' },
+  { matchNum: 'M87', slotA: '1K', slotB: '3rd:DEIJL' },
 ]
 
 // ── Motor de cálculo de grupos ────────────────────────────────────────────────
@@ -229,22 +235,63 @@ export function resolveThirdSlots(
  * @param thirdSlots  resultado de resolveThirdSlots (ex: { "1A": "3E", ... })
  * @param matchNum    ex: "M74" (para saber qual slot usar)
  */
-/** Resolve cada um dos 16 slots do R32 em { team, flag } a partir das classificações calculadas. */
+/** Formata o label de exibição de um slot: "1A" → "(1A)", "3rd:XYZ" → "(3X)" */
+function slotDisplayLabel(
+  slot: string,
+  matchNum: string,
+  thirdSlots: Record<string, string> | null,
+): string {
+  if (slot.startsWith('1') || slot.startsWith('2')) return `(${slot})`
+  if (slot.startsWith('3rd:') && thirdSlots) {
+    const ref = resolveR32ThirdSlot(matchNum, thirdSlots)
+    if (ref) return `(3${ref[1]})`
+  }
+  return '(3º)'
+}
+
+/**
+ * Resolve cada um dos 16 slots do R32 em { team, flag, label } a partir das classificações calculadas.
+ *
+ * groupBetsOverride: mapa de grupo → { first_place, second_place } com os picks manuais do usuário.
+ * Quando presente, o ranking manual prevalece sobre os standings calculados pelos placares.
+ */
 export function buildR32Teams(
   standings: CalcGroupStanding[],
   thirds: ThirdTeam[],
   thirdSlots: Record<string, string> | null,
-): { matchNum: string; teamA: { team: string; flag: string } | null; teamB: { team: string; flag: string } | null }[] {
+  groupBetsOverride?: Map<string, { first_place: string; second_place: string }>,
+): { matchNum: string; teamA: { team: string; flag: string } | null; teamB: { team: string; flag: string } | null; labelA: string; labelB: string }[] {
   const standMap = new Map(standings.map(s => [s.group, s]))
   const thirdMap = new Map(thirds.filter(t => t.advances).map(t => [t.group, t]))
 
+  /** Busca a flag de um time pelo nome nas standings */
+  const findFlag = (teamName: string): string => {
+    for (const s of standings) {
+      const t = s.teams.find(t => t.team === teamName)
+      if (t) return t.flag
+    }
+    return ''
+  }
+
   const resolveSlot = (slot: string, matchNum: string): { team: string; flag: string } | null => {
     if (slot.startsWith('1')) {
-      const t = standMap.get(slot[1])?.teams[0]
+      const group = slot[1]
+      // Respeita ranking manual do usuário se disponível
+      if (groupBetsOverride?.has(group)) {
+        const name = groupBetsOverride.get(group)!.first_place
+        return { team: name, flag: findFlag(name) }
+      }
+      const t = standMap.get(group)?.teams[0]
       return t ? { team: t.team, flag: t.flag } : null
     }
     if (slot.startsWith('2')) {
-      const t = standMap.get(slot[1])?.teams[1]
+      const group = slot[1]
+      // Respeita ranking manual do usuário se disponível
+      if (groupBetsOverride?.has(group)) {
+        const name = groupBetsOverride.get(group)!.second_place
+        return { team: name, flag: findFlag(name) }
+      }
+      const t = standMap.get(group)?.teams[1]
       return t ? { team: t.team, flag: t.flag } : null
     }
     if (slot.startsWith('3rd:') && thirdSlots) {
@@ -258,8 +305,10 @@ export function buildR32Teams(
 
   return R32_MATCHES.map(m => ({
     matchNum: m.matchNum,
-    teamA: resolveSlot(m.slotA, m.matchNum),
-    teamB: resolveSlot(m.slotB, m.matchNum),
+    teamA:  resolveSlot(m.slotA, m.matchNum),
+    teamB:  resolveSlot(m.slotB, m.matchNum),
+    labelA: slotDisplayLabel(m.slotA, m.matchNum, thirdSlots),
+    labelB: slotDisplayLabel(m.slotB, m.matchNum, thirdSlots),
   }))
 }
 

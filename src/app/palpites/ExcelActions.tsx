@@ -7,8 +7,9 @@ import { toast } from 'react-hot-toast'
 export function ExcelActions() {
   const router      = useRouter()
   const fileRef     = useRef<HTMLInputElement>(null)
-  const [importing, setImporting] = useState(false)
-  const [emailing,  setEmailing]  = useState(false)
+  const [importing,     setImporting]     = useState(false)
+  const [emailing,      setEmailing]      = useState(false)
+  const [showEmailConf, setShowEmailConf] = useState(false)
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -43,7 +44,8 @@ export function ExcelActions() {
     }
   }
 
-  const handleEmail = async () => {
+  const doSendEmail = async () => {
+    setShowEmailConf(false)
     setEmailing(true)
     try {
       const res  = await fetch('/api/palpites/email', { method: 'POST' })
@@ -84,13 +86,39 @@ export function ExcelActions() {
 
       {/* E-mail */}
       <button
-        onClick={handleEmail}
+        onClick={() => setShowEmailConf(true)}
         disabled={emailing}
         className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50 transition"
       >
         {emailing ? <SpinnerIcon /> : <MailIcon />}
         {emailing ? 'Enviando…' : 'E-mail'}
       </button>
+
+      {/* Modal de confirmação de envio */}
+      {showEmailConf && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-base font-bold text-gray-900">Enviar palpites por e-mail?</h3>
+            <p className="mt-2 text-sm text-gray-600">
+              Deseja enviar seus palpites para o seu e-mail?
+            </p>
+            <div className="mt-4 flex justify-end gap-3">
+              <button
+                onClick={() => setShowEmailConf(false)}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={doSendEmail}
+                className="rounded-lg bg-azul-escuro px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+              >
+                Sim, enviar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <input
         ref={fileRef}

@@ -14,6 +14,12 @@ const STAGES = [
   { value: 'final', label: '3º e Final'    },
 ]
 
+// Filtros de corte (baseados em quem apostou nas fases posteriores)
+const CUT_FILTERS = [
+  { value: 'cut1', label: 'Classificados após 1º corte (apostaram nos 16avos)' },
+  { value: 'cut2', label: 'Classificados após 2º corte (apostaram nas quartas)' },
+]
+
 const DEFAULT_BODY =
   `Olá {nome},
 
@@ -25,7 +31,7 @@ Boa sorte! 🏆`
 
 export function ReminderSection() {
   const [open,        setOpen]       = useState(false)
-  const [recipients,  setRecipients] = useState<'all' | 'pending'>('all')
+  const [recipients,  setRecipients] = useState<'all' | 'pending' | 'cut1' | 'cut2'>('all')
   const [stage,       setStage]      = useState('r1')
   const [body,        setBody]       = useState(DEFAULT_BODY)
   const [result,      setResult]     = useState<string | null>(null)
@@ -70,21 +76,26 @@ export function ReminderSection() {
           <label className="mb-1 block text-xs font-semibold text-gray-600">Destinatários</label>
           <select
             value={recipients}
-            onChange={e => setRecipients(e.target.value as 'all' | 'pending')}
+            onChange={e => setRecipients(e.target.value as 'all' | 'pending' | 'cut1' | 'cut2')}
             className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none"
           >
             <option value="all">Todos os aprovados</option>
             <option value="pending">Aprovados com palpites pendentes na etapa:</option>
+            <optgroup label="Filtros de corte">
+              {CUT_FILTERS.map(f => (
+                <option key={f.value} value={f.value}>{f.label}</option>
+              ))}
+            </optgroup>
           </select>
         </div>
 
         {/* Etapa (só para "pending") */}
-        <div className={recipients === 'all' ? 'opacity-40 pointer-events-none' : ''}>
+        <div className={recipients !== 'pending' ? 'opacity-40 pointer-events-none' : ''}>
           <label className="mb-1 block text-xs font-semibold text-gray-600">Etapa</label>
           <select
             value={stage}
             onChange={e => setStage(e.target.value)}
-            disabled={recipients === 'all'}
+            disabled={recipients !== 'pending'}
             className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none"
           >
             {STAGES.map(s => (

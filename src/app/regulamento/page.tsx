@@ -1,154 +1,192 @@
 import { Navbar } from '@/components/layout/Navbar'
-import { createClient } from '@/lib/supabase/server'
 import { RegulamentoContent } from './RegulamentoContent'
 
 export const metadata = { title: 'Regulamento — Melhor Bolão' }
 
-const DEFAULT_CONTENT = `## 1. Participação
+const REGULAMENTO = `## Resumo Executivo
 
-O bolão é restrito a convidados. Após cadastro via Google, o acesso aos palpites fica disponível somente após aprovação e confirmação de pagamento pelo administrador.
+O Melhor Bolão é uma competição de palpites da Copa do Mundo 2026 com participação restrita a convidados, mediante inscrição de **R$ 250,00**, com pagamentos e prêmios via **PIX**.
 
-## 2. Prazos
+Os palpites são enviados prioritariamente pelo site **melhorbolao.app.br**, por login individual, com contingência por **e-mail em Excel** caso o site fique indisponível. Os organizadores podem prorrogar prazos em caso de indisponibilidade, comunicando o procedimento oficial.
 
-O prazo para envio e edição de palpites é **23h59 (horário de Brasília) do dia anterior ao primeiro jogo de cada etapa**. Após o prazo, os campos ficam bloqueados.
+Os prazos são sempre às **23:59 (horário de Brasília)**. Na fase de grupos há três rodadas e, portanto, três prazos. Nas fases eliminatórias, o prazo é sempre a véspera do primeiro jogo da fase.
 
-| Etapa | Prazo |
-|---|---|
-| Rodada 1 + Bônus (classificados, G4, artilheiro) | 10/06 às 23h59 |
-| Rodada 2 | 15/06 às 23h59 |
-| Rodada 3 | 22/06 às 23h59 |
-| 16 avos de final | 28/06 às 23h59 |
-| Oitavas de final | 06/07 às 23h59 |
-| Quartas de final | 10/07 às 23h59 |
-| Semifinais | 13/07 às 23h59 |
-| 3º lugar e Final | 17/07 às 23h59 |
+## 1. Participação e Inscrição
 
-## 3. Pontuação dos jogos
+**1)** Participação por convite. O bolão é restrito a convidados e a inclusão/retirada de participantes é prerrogativa dos **organizadores**.
 
-Para cada partida, o participante informa o placar exato ao final do tempo regulamentar (90 minutos). Nas fases eliminatórias, considera-se o placar incluindo prorrogação. Gols em disputa de pênaltis não são computados.
+**2)** Inscrição. O valor de inscrição é **R$ 250,00** por participante.
+
+**3)** Pagamento. A inscrição e os prêmios serão pagos via **PIX**. A chave PIX será informada pelos organizadores.
+
+**4)** Aceite. Ao realizar o pagamento, o participante declara ciência e concordância integral com este regulamento.
+
+## 2. Prazos e Envio de Palpites
+
+**5)** Horário oficial. Todos os prazos são em **horário de Brasília**.
+
+**6)** Canal principal. Os palpites devem ser enviados via **melhorbolao.app.br**, por login individual. Até o prazo, é permitido enviar e editar; após o prazo, os campos ficam **bloqueados**. Os demais participantes não têm acesso aos palpites enviados enquanto estiverem editáveis.
+
+**7)** Contingência (site indisponível). Se houver indisponibilidade do site, os organizadores poderão: aceitar envio por **e-mail em arquivo Excel** (modelo definido pelos organizadores); e/ou **prorrogar prazos**, informando novo horário-limite e canal oficial válido.
+
+**8)** Carimbo de hora na contingência. Para envios por e-mail, vale como comprovação de prazo o horário de recebimento definido pelos organizadores.
+
+**9)** Palpite não enviado. Se o participante habilitado não enviar palpites de uma etapa até o prazo, sua pontuação naquela etapa será **zero**, sem efeito retroativo.
+
+### Tabela de Fases e Prazos
+
+| Etapa | Primeiro jogo | Prazo (BRT) |
+|---|---|---|
+| Fase de grupos — Rodada 1 + TODOS os bônus pré-torneio | 11/06/2026 | 10/06/2026 23:59 |
+| Fase de grupos — Rodada 2 | 18/06/2026 | 17/06/2026 23:59 |
+| Fase de grupos — Rodada 3 | 24/06/2026 | 23/06/2026 23:59 |
+| 16 avos de final | 28/06/2026 | 27/06/2026 23:59 |
+| Oitavas de final | 04/07/2026 | 03/07/2026 23:59 |
+| Quartas de final | 09/07/2026 | 08/07/2026 23:59 |
+| Semifinais | 14/07/2026 | 13/07/2026 23:59 |
+| Disputa de 3º lugar e Final | 18/07/2026 | 17/07/2026 23:59 |
+
+## 3. Pontuação dos Jogos
+
+**10)** Fase de grupos: vale o placar ao final do **tempo regulamentar (90 minutos + acréscimos do árbitro)**.
+
+**11)** Fases eliminatórias: vale o placar final **incluindo prorrogação**, quando houver.
+
+**12)** Disputa de pênaltis: gols nos pênaltis **não** são computados.
+
+**13)** Resultados oficiais: são os divulgados pela FIFA.
+
+**14)** Para cada partida, o participante informa um placar. A pontuação é:
 
 | Situação | Pontos |
 |---|---|
-| Placar exato + vencedor correto | 12 pts |
-| Empate com placar exato | 12 pts |
-| Empate com resultado correto (gols errados) | 7 pts |
-| Vencedor correto + nº de gols do vencedor | 6 pts |
-| Vencedor correto + diferença de gols | 5 pts |
-| Vencedor correto + nº de gols do perdedor | 5 pts |
-| Somente o vencedor correto | 4 pts |
-
-**Exemplos:**
-- Palpite Brasil 2×1 Argentina · Resultado Brasil 2×1 Argentina → **12 pts** (placar exato)
-- Palpite Brasil 1×1 Argentina · Resultado França 0×0 Alemanha → **7 pts** (empate correto, gols errados)
-- Palpite Brasil 2×0 Argentina · Resultado Brasil 2×1 Argentina → **6 pts** (vencedor + gols do vencedor)
-- Palpite Brasil 1×0 Argentina · Resultado Brasil 3×2 Argentina → **5 pts** (vencedor + diferença de 1 gol)
-- Palpite Brasil 4×1 Argentina · Resultado Brasil 2×1 Argentina → **5 pts** (vencedor + gols do perdedor)
-- Palpite Brasil 3×0 Argentina · Resultado Brasil 2×1 Argentina → **4 pts** (somente o vencedor)
+| Placar exato + vencedor correto | 12 |
+| Empate com placar exato | 12 |
+| Empate, errando o número de gols | 7 |
+| Vencedor correto + nº de gols do vencedor | 6 |
+| Vencedor correto + diferença de gols | 5 |
+| Vencedor correto + nº de gols do perdedor | 5 |
+| Somente o vencedor correto | 4 |
 
 ## 4. Jogos do Brasil — Peso 2
 
-Em todos os jogos em que o Brasil participa, a **pontuação base é multiplicada por 2**.
+**15)** Em todos os jogos em que a seleção do Brasil participar, a **pontuação (incluindo eventual bônus zebra do jogo) é multiplicada por 2**.
 
-Exemplo: acertar o placar exato de um jogo do Brasil vale **24 pts** (12 × 2). Acertar somente o vencedor vale **8 pts** (4 × 2). O bônus zebra (item 5) também é dobrado nos jogos do Brasil.
+## 5. Bônus Zebra
 
-## 5. Bônus Zebra — Jogos
+**16)** Zebra em jogos (15%). Quando um resultado (vitória de um time ou empate) tiver sido escolhido por **15% ou menos** dos participantes que enviaram palpites para aquela etapa, ele é "zebra potencial". Se ocorrer a zebra, todos que **pontuarem** no jogo recebem **+6 pontos** adicionais naquele jogo.
 
-Quando um resultado (vitória de um time ou empate) tiver sido apostado por **15% ou menos dos participantes**, aquele resultado é considerado uma potencial zebra. Se o jogo der zebra, todos os participantes que pontuarem naquele jogo recebem **+6 pts extras** (dobrado nos jogos do Brasil).
+> **16.1)** Em jogos do Brasil (peso 2), o bônus zebra do jogo também é dobrado.
+
+**17)** Zebra no 1º do grupo (15%). Se o 1º colocado de um grupo tiver sido indicado como 1º por **15% ou menos** dos participantes, quem acertar o 1º lugar recebe **+6 pontos** adicionais naquele grupo.
+
+> **17.1)** Não há zebra para o 2º colocado do grupo.
+>
+> **17.2)** Não há zebra para o 3º colocado do grupo.
+
+**18)** Zebra no G4 (15%). Se uma seleção tiver sido indicada no G4 por **15% ou menos** dos participantes e chegar à semifinal, quem a indicou no G4 recebe **+6 pontos** de bônus zebra G4.
+
+## 6. Bônus da Fase de Grupos
+
+**19)** Classificados por grupo (1º e 2º). Para cada grupo (A a L), o participante indica as seleções que terminarão em **1º e 2º**. Não é permitido repetir a mesma seleção em 1º e 2º. Prazo: **Rodada 1**.
+
+**20)** Pontuação dos classificados (por grupo):
+
+| Acerto | Pontos |
+|---|---|
+| 1º e 2º corretos na ordem certa | 16 |
+| 1º e 2º corretos em ordem invertida | 10 |
+| Apenas 1º correto (2º errado) | 8 |
+| Apenas 2º correto (1º errado) | 6 |
+| Acertou 1 dos 2 classificados na ordem errada | 3 |
+
+**21)** Terceiros classificados (regra 2026). Além do item 19, o participante deve: indicar **exatamente 8 grupos** (dentre A a L) que terão o 3º colocado avançando; e indicar **qual seleção** será a 3ª colocada em cada um desses 8 grupos. Prazo: **Rodada 1**.
+
+**22)** Pontuação dos terceiros classificados. Cada acerto vale **3 pontos**, total máximo **24 pontos** (8 × 3). Para pontuar, é necessário acertar simultaneamente o **grupo** cuja equipe em 3º avança e a **seleção** que termina em 3º nesse grupo.
+
+## 7. Bônus de G4, Pódio e Artilheiro
+
+**23)** Antes do início da Copa (prazo: **Rodada 1**), o participante indica:
+
+- O **campeão**
+- O **vice-campeão**
+- O **3º colocado**
+- O **4º colocado**
+- O **artilheiro**
+
+**24)** Pontuação do G4 (cumulativa):
+
+| Acerto | Pontos |
+|---|---|
+| Cada semifinalista correto | +4 |
+| 4º colocado correto | +4 |
+| 3º colocado correto | +6 |
+| Cada finalista correto (além dos pontos da semi) | +8 |
+| Vice-campeão correto | +8 |
+| Campeão correto | +12 |
 
 > **Exemplos:**
-> - Palpite Porto 0×1 Al Ahly · Resultado Porto 0×1 Al Ahly · apenas 10% apostaram em vitória do Al Ahly → 12 pts (placar exato) + 6 pts (zebra) = **18 pts**
-> - Mesmo jogo com Brasil envolvido → **36 pts**
+> - Acerto do campeão: 4 (semi) + 8 (final) + 12 (campeão) = **24 pts**
+> - Se o time apostado como campeão for vice: 4 (semi) + 8 (final) = **12 pts**
 
-## 6. Bônus: Classificados por grupo
+**25)** Artilheiro: artilheiro correto vale **+18 pts**. Em caso de empate em gols, todos os artilheiros empatados são considerados corretos. Não há bônus zebra no artilheiro.
 
-Para cada grupo (A a L), o participante aposta quais seleções terminarão em **1º e 2º lugar**. O prazo é o mesmo da Rodada 1. Não é permitido colocar o mesmo time em 1º e 2º.
+## 8. Classificação e Cortes
 
-| Acerto | Pontos |
-|---|---|
-| 1º e 2º lugares corretos na ordem certa | 12 pts |
-| 1º e 2º lugares corretos em ordem invertida | 8 pts |
-| Apenas 1º lugar correto (2º errado) | 6 pts |
-| Apenas 2º lugar correto (1º errado) | 4 pts |
-| Acertou 1 dos 2 classificados na ordem errada | 3 pts |
+**26)** Classificação geral. A classificação é determinada pela soma de todos os pontos.
 
-Na Copa 2026, os **8 melhores terceiros colocados** (de 12 grupos) também se classificam para a fase eliminatória. O participante aposta em quais seleções terminarão em 3º em cada grupo, e cada acerto entre os 8 classificados vale:
+**27)** Cortes limitam envio (não apagam pontos). Os cortes servem para definir quem segue habilitado a enviar palpites nas fases seguintes. Os pontos já obtidos permanecem registrados.
 
-| Acerto | Pontos |
-|---|---|
-| Acertar 3º do grupo classificado | 2 pts |
+**28)** Primeiro corte (após fase de grupos). Seguem habilitados na segunda fase (16 avos de final) os **50% com maior pontuação** após o encerramento da fase de grupos. O número de classificados é arredondado **para cima** até o próximo **múltiplo de 10**.
 
-> **Bônus zebra nos classificados:**
-> - Se o 1º do grupo tiver sido apostado como 1º por 15% ou menos dos participantes → **+6 pts** para quem acertou
-> - Se o 2º do grupo tiver sido apostado como classificado (1º ou 2º) por 15% ou menos → **+6 pts** para quem acertou em 2º
+**29)** Segundo corte (após oitavas de final). Seguem habilitados para enviar palpites das quartas os **50% com maior pontuação** dentre os habilitados após o primeiro corte.
 
-## 7. Bônus G4 e Artilheiro
+**30)** Empates. Não há critério de desempate: para premiação, empates dividem prêmios; para cortes, todos os empatados na linha de corte são classificados.
 
-Antes do início da Copa, o participante aposta nos quatro semifinalistas e no artilheiro. O prazo é o mesmo da Rodada 1.
-
-| Acerto | Pontos |
-|---|---|
-| Cada semifinalista correto | +8 pts |
-| Cada finalista correto (além do semi) | +4 pts |
-| Vice-campeão correto | +6 pts |
-| Campeão correto | +12 pts |
-| Artilheiro correto | 12 pts |
-
-**Os pontos são cumulativos. Exemplos:**
-- Acertar os 4 semifinalistas + campeão + vice → 4×8 + 2×4 + 6 + 12 = **58 pts**
-- Acertar apenas o campeão (errou os outros 3) → 8 + 4 + 12 = **24 pts**
-
-> **Bônus zebra G4:** se um time tiver sido apostado no G4 por 15% ou menos dos participantes e chegar à semifinal → **+6 pts** para quem o apostou no G4.
->
-> **Artilheiro:** em caso de mais de um artilheiro empatado em gols, todos os acertos pontuam. Gols em disputa de pênaltis não são contados. Não há bônus zebra no artilheiro.
-
-## 8. Classificação geral
-
-A classificação é determinada pela soma de todos os pontos. Em caso de empate, os critérios são:
-
-1. Maior número de placares exatos (12 pts)
-2. Maior número de resultados corretos (qualquer pontuação)
-3. Maior pontuação nos bônus (grupos + G4 + artilheiro)
-4. Sorteio entre os empatados
+> **Exemplo de cálculo de corte:** Com N = 150 participantes:
+> - 50% × 150 = 75 → arredondado para **80** (próximo múltiplo de 10)
+> - **80 participantes** habilitados para os 16 avos de final.
+> - Se o 80º e 81º tiverem a mesma pontuação, os 81 primeiros são classificados.
 
 ## 9. Premiação
 
-A distribuição do prêmio será anunciada pelo administrador após encerramento das inscrições e confirmação dos pagamentos.
+**32)** A arrecadação total do bolão é distribuída do **1º ao 10º lugar**:
 
-## 10. Disposições gerais
+| Colocação | % da arrecadação |
+|---|---|
+| 1º | 55,0% |
+| 2º | 15,0% |
+| 3º | 9,0% |
+| 4º | 6,0% |
+| 5º | 5,0% |
+| 6º | 3,0% |
+| 7º | 2,5% |
+| 8º | 2,0% |
+| 9º | 1,5% |
+| 10º | 1,0% |
 
-- O administrador é o árbitro final em caso de dúvidas.
+**33)** Sem critério de desempate. Em caso de empate em posições premiadas, o prêmio é dividido (somam-se as faixas empatadas e divide-se igualmente).
+
+**34)** Pagamento de prêmios. O pagamento será feito via **PIX** no prazo e procedimento definidos pelos organizadores.
+
+> **Exemplo:** Para N = 150 participantes, arrecadação = 150 × R$ 250,00 = **R$ 37.500,00**
+
+## 10. Disposições Gerais
+
+- Os organizadores são os árbitros finais em caso de dúvidas ou interpretações do regulamento.
 - Resultados oficiais são os divulgados pela FIFA.
 - Jogos cancelados ou suspensos não pontuam.
 - O participante é responsável por enviar seus palpites dentro do prazo.
 `
 
-export default async function RegulamentoPage() {
-  const supabase = await createClient()
-
-  const [
-    { data: { user } },
-    { data: setting },
-  ] = await Promise.all([
-    supabase.auth.getUser(),
-    supabase.from('settings').select('value').eq('key', 'regulamento').single(),
-  ])
-
-  let isAdmin = false
-  if (user) {
-    const { data: profile } = await supabase
-      .from('users').select('is_admin').eq('id', user.id).single()
-    isAdmin = profile?.is_admin ?? false
-  }
-
-  const content = setting?.value ?? DEFAULT_CONTENT
-
+export default function RegulamentoPage() {
   return (
     <>
       <Navbar />
       <div className="mx-auto max-w-3xl px-4 py-8">
         <h1 className="text-3xl font-black text-gray-900 mb-1">Regulamento</h1>
-        <p className="text-sm text-gray-500 mb-8">Melhor Bolão · Copa 2026</p>
-        <RegulamentoContent content={content} isAdmin={isAdmin} />
+        <p className="text-sm text-gray-500 mb-8">Melhor Bolão · Copa do Mundo 2026</p>
+        <RegulamentoContent content={REGULAMENTO} />
       </div>
     </>
   )

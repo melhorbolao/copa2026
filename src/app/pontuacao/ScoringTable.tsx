@@ -29,7 +29,7 @@ const CATEGORY_ORDER: Record<string, string[]> = {
     'grupo_ordem_certa', 'grupo_ordem_invertida', 'grupo_primeiro_certo',
     'grupo_segundo_certo', 'grupo_um_dos_dois',
     'terceiro_classificado',
-    'bonus_zebra_grupo_1', 'bonus_zebra_grupo_2',
+    'bonus_zebra_grupo_1',
   ],
   g4_artilheiro: [
     'artilheiro', 'semifinalista', 'bonus_finalista',
@@ -195,6 +195,7 @@ export function ScoringTable({ rules, isAdmin }: Props) {
               <strong>{zebraRule?.points ?? 15}% ou menos</strong>{' '}
               dos participantes apostaram naquele desfecho. Quem pontuar recebe o bônus automaticamente.
               Nos jogos do Brasil, o bônus zebra também é multiplicado (×{ruleMap['multiplicador_brasil']?.points ?? 2}).
+              Nos grupos: zebra somente para o 1º colocado — não há zebra para 2º ou 3º colocados.
             </p>
           </div>
         </div>
