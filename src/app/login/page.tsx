@@ -50,6 +50,11 @@ export default async function LoginPage({
         <p className="mt-6 text-center text-xs text-white" style={{ opacity: 0.55 }}>
           Após o cadastro, aguarde aprovação do administrador para acessar os palpites.
         </p>
+        <p className="mt-3 text-center text-xs" style={{ opacity: 0.4 }}>
+          <a href="/privacidade" className="text-white underline hover:opacity-80">Política de Privacidade</a>
+          {' · '}
+          <a href="/termos" className="text-white underline hover:opacity-80">Termos de Uso</a>
+        </p>
       </div>
     </main>
   )
