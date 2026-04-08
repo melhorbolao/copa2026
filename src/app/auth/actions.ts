@@ -23,6 +23,7 @@ export async function createPendingUserProfile(
   whatsapp: string,
   padrinho: string,
   apelido = '',
+  bio = '',
 ) {
   const supabase = await createAdminClient()
 
@@ -43,6 +44,7 @@ export async function createPendingUserProfile(
     paid:      false,
     is_admin:  false,
     is_manual: false,
+    bio:       bio.trim() || null,
   })
 }
 
