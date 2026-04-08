@@ -1,19 +1,11 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Navbar } from '@/components/layout/Navbar'
-import { GroupCard } from './GroupCard'
-import { ThirdsTable } from './ThirdsTable'
-import { BracketSection } from './BracketSection'
-import {
-  calcGroupStandings,
-  rankThirds,
-  resolveThirdSlots,
-} from '@/lib/bracket/engine'
+import { TabelaClient } from './TabelaClient'
+import { calcGroupStandings } from '@/lib/bracket/engine'
 import type { BetSlim, MatchSlim } from '@/lib/bracket/engine'
 
 export const metadata = { title: 'Minha Tabela — Melhor Bolão' }
-
-const GROUP_ORDER = ['A','B','C','D','E','F','G','H','I','J','K','L']
 
 export default async function TabelaPage() {
   const supabase = await createClient()
@@ -57,21 +49,15 @@ export default async function TabelaPage() {
     ((rawBets ?? []) as any[]).map((b: any) => [b.match_id, { match_id: b.match_id, score_home: b.score_home, score_away: b.score_away }]),
   )
 
-  // Override de ranking: os palpites manuais de 1º/2º do grupo prevalecem sobre os placares calculados
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const groupBetsOverride = new Map<string, { first_place: string; second_place: string }>(
+  const groupBetsOverride = Object.fromEntries(
     ((rawGroupBets ?? []) as any[]).map((gb: any) => [
       gb.group_name as string,
       { first_place: gb.first_place as string, second_place: gb.second_place as string },
     ]),
   )
 
-  const standings  = calcGroupStandings(matches, betMap)
-  const thirds     = rankThirds(standings)
-  const thirdSlots = resolveThirdSlots(thirds)
-
-  // Converte para objeto serializável (Map não pode ser passado a Client Components)
-  const groupBetsObj = Object.fromEntries(groupBetsOverride)
+  const standings = calcGroupStandings(matches, betMap)
 
   // Prazo do G4 = menor betting_deadline dos jogos de grupo
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -79,16 +65,6 @@ export default async function TabelaPage() {
     .map((m: any) => m.betting_deadline as string)
     .sort()[0] ?? ''
   const hasTournamentBet = !!(tBet?.champion)
-
-  // Quais grupos têm o terceiro entre os 8 melhores
-  const advancingThirdGroups = new Set(
-    thirds.filter(t => t.advances).map(t => t.group),
-  )
-
-  // Ordenação canônica dos grupos
-  const sortedStandings = GROUP_ORDER
-    .map(g => standings.find(s => s.group === g))
-    .filter(Boolean) as typeof standings
 
   // Contar palpites preenchidos
   const groupMatchIds = new Set(matches.map(m => m.id))
@@ -131,47 +107,14 @@ export default async function TabelaPage() {
           )}
         </div>
 
-        {/* Grade de grupos — 2 colunas em telas médias */}
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 mb-8">
-          {sortedStandings.map(standing => (
-            <GroupCard
-              key={standing.group}
-              standing={standing}
-              advancingGroups={advancingThirdGroups}
-              userId={user.id}
-            />
-          ))}
-        </div>
-
-        {/* Melhores terceiros */}
-        {thirds.length > 0 && (
-          <div className="mb-8">
-            <ThirdsTable thirds={thirds} />
-          </div>
-        )}
-
-        {/* Chaveamento visual */}
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-          <div className="flex items-center gap-2 px-4 py-3" style={{ backgroundColor: '#002776' }}>
-            <span className="text-sm font-black uppercase tracking-widest text-white">
-              🏆 Chaveamento — Mata-Mata — USO OPCIONAL
-            </span>
-            <span className="ml-auto text-[11px] font-medium text-white/60">
-              baseado nos seus palpites
-            </span>
-          </div>
-          <div className="p-4">
-            <BracketSection
-              standings={standings}
-              thirds={thirds}
-              thirdSlots={thirdSlots}
-              groupBetsOverride={groupBetsObj}
-              userId={user.id}
-              g4Deadline={g4Deadline}
-              hasTournamentBet={hasTournamentBet}
-            />
-          </div>
-        </div>
+        {/* Conteúdo interativo: grupos, terceiros, chaveamento */}
+        <TabelaClient
+          standings={standings}
+          groupBetsOverride={groupBetsOverride}
+          userId={user.id}
+          g4Deadline={g4Deadline}
+          hasTournamentBet={hasTournamentBet}
+        />
 
         <div className="mt-4 text-center">
           <a

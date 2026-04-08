@@ -198,7 +198,7 @@ function sortGroupFIFA(
   teams: TeamRow[],
   groupMatches: MatchSlim[],
   betMap: Map<string, BetSlim>,
-): { sorted: TeamRow[]; tiedTeams: Set<string> } {
+): { sorted: TeamRow[]; tiedTeams: string[] } {
   // ── Passo 1: ordenação global (critérios 1-3) ─────────────────
   const byGlobal = [...teams].sort((a, b) => {
     if (b.pts !== a.pts) return b.pts - a.pts

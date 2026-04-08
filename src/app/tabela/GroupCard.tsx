@@ -1,13 +1,16 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useRef } from 'react'
 import { Flag } from '@/components/ui/Flag'
 import type { CalcGroupStanding, TeamRow } from '@/lib/bracket/engine'
 
 interface Props {
-  standing: CalcGroupStanding
+  standing:        CalcGroupStanding
   advancingGroups: Set<string>
-  userId: string
+  userId:          string
+  manualOrder:     string[] | null
+  onOrderChange:   (order: string[]) => void
+  onOrderReset:    () => void
 }
 
 const POS_COLORS = [
@@ -17,45 +20,39 @@ const POS_COLORS = [
   'bg-gray-200 text-gray-600',
 ]
 
-export function GroupCard({ standing, advancingGroups, userId }: Props) {
+export function GroupCard({
+  standing,
+  advancingGroups,
+  userId,
+  manualOrder,
+  onOrderChange,
+  onOrderReset,
+}: Props) {
   const storageKey = `tie_order_${userId}_${standing.group}`
   const hasTie = standing.tiedTeams.length > 0
-
-  const [manualOrder, setManualOrder] = useState<string[] | null>(null)
-  const [mounted,     setMounted]     = useState(false)
-  const [dragOver,    setDragOver]    = useState<number | null>(null)
+  const [dragOver, setDragOver] = useState<number | null>(null)
   const dragIdx = useRef<number | null>(null)
 
-  useEffect(() => {
-    setMounted(true)
-    try {
-      const raw = localStorage.getItem(storageKey)
-      if (raw) setManualOrder(JSON.parse(raw))
-    } catch { /* ignore */ }
-  }, [storageKey])
-
-  // Aplica a ordem manual se existir; caso contrário usa a ordem calculada
-  const displayTeams = useMemo<TeamRow[]>(() => {
-    if (!mounted || !manualOrder) return standing.teams
+  // Ordem de exibição: prop manualOrder > ordem calculada no standing
+  const displayTeams: TeamRow[] = (() => {
+    if (!manualOrder) return standing.teams
     const teamMap = new Map(standing.teams.map(t => [t.team, t]))
     const ordered = manualOrder.map(n => teamMap.get(n)).filter(Boolean) as TeamRow[]
-    // Garante que todos os times aparecem (caso o standing tenha mudado)
     if (ordered.length !== standing.teams.length) return standing.teams
     return ordered
-  }, [standing.teams, manualOrder, mounted])
+  })()
 
   const saveOrder = (teams: TeamRow[]) => {
     const order = teams.map(t => t.team)
-    setManualOrder(order)
+    onOrderChange(order)
     try { localStorage.setItem(storageKey, JSON.stringify(order)) } catch { /* ignore */ }
   }
 
   const resetOrder = () => {
-    setManualOrder(null)
+    onOrderReset()
     try { localStorage.removeItem(storageKey) } catch { /* ignore */ }
   }
 
-  // Drag handlers — só ativos quando há empate
   const handleDragStart = (i: number) => { dragIdx.current = i }
   const handleDragOver  = (e: React.DragEvent, i: number) => { e.preventDefault(); setDragOver(i) }
   const handleDragEnd   = () => { dragIdx.current = null; setDragOver(null) }
@@ -72,8 +69,8 @@ export function GroupCard({ standing, advancingGroups, userId }: Props) {
     setDragOver(null)
   }
 
-  const isManuallyOrdered = mounted && manualOrder !== null
-  const isTied   = (team: TeamRow) => standing.tiedTeams.includes(team.team)
+  const isManuallyOrdered = manualOrder !== null
+  const isTied    = (team: TeamRow) => standing.tiedTeams.includes(team.team)
   const third     = displayTeams[2]
   const thirdAdv  = third && advancingGroups.has(standing.group)
 
@@ -129,7 +126,7 @@ export function GroupCard({ standing, advancingGroups, userId }: Props) {
           {displayTeams.map((team, i) => {
             const isThirdAdv = i === 2 && thirdAdv
             const tied       = isTied(team)
-            const draggable  = hasTie // qualquer linha é arrastável quando há empate
+            const draggable  = hasTie
 
             return (
               <tr
@@ -146,14 +143,12 @@ export function GroupCard({ standing, advancingGroups, userId }: Props) {
                   draggable       ? 'cursor-grab active:cursor-grabbing select-none' : '',
                 ].join(' ')}
               >
-                {/* Handle de drag */}
                 {hasTie && (
                   <td className="px-1 py-2 text-center text-gray-300">
                     {tied ? '⠿' : <span className="opacity-30">⠿</span>}
                   </td>
                 )}
 
-                {/* Posição */}
                 <td className="px-2 py-2 text-center">
                   <span
                     className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-black ${
