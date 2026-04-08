@@ -85,7 +85,7 @@ const MATCH_W  = 156
 const COL_GAP  = 20
 const COL_STEP = MATCH_W + COL_GAP
 
-const ROUND_HEADERS = ['16avos', 'Oitavas', 'Quartas', 'Semi', '3º', 'Final']
+const ROUND_HEADERS = ['16avos', 'Oitavas', 'Quartas', 'Semi', 'Final']
 
 // ── Mapa de bandeiras ─────────────────────────────────────────────────────────
 
@@ -177,13 +177,13 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
   const thirdA = sfLoser(0)
   const thirdB = sfLoser(1)
   const finalTop = matchTop(4, 0)
-  const thirdTop = matchTop(4, 0)  // mesmo nível vertical que a Final (coluna separada)
+  const thirdTop = finalTop + MATCH_H + 48  // abaixo da Final, mesma coluna
 
   if (!mounted) {
     return <div className="flex h-32 items-center justify-center text-sm text-gray-400">Carregando chaveamento…</div>
   }
 
-  const totalWidth = COL_STEP * 5 + MATCH_W
+  const totalWidth = COL_STEP * 4 + MATCH_W
 
   return (
     <div>
@@ -202,7 +202,7 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
 
       {/* Bracket */}
       <div className="overflow-x-auto pb-4">
-        <div className="relative" style={{ height: Math.max(CONTAINER_H, finalTop + MATCH_H + 8), width: totalWidth }}>
+        <div className="relative" style={{ height: Math.max(CONTAINER_H, thirdTop + MATCH_H + 8), width: totalWidth }}>
 
           {/* ── R32 ── */}
           {r32Slots.map((slot, i) => (
@@ -269,7 +269,7 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
             />
           ))}
 
-          {/* ── 3º Lugar (coluna 4) ── */}
+          {/* ── 3º Lugar (abaixo da Final, mesma coluna) ── */}
           <div style={{ position: 'absolute', left: COL_STEP * 4, top: thirdTop }}>
             <div className="mb-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-gray-400">3º Lugar</div>
             <MatchCard
@@ -283,7 +283,7 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
 
           {/* ── Badge campeão (acima da Final, cresce para cima) ── */}
           {picks.final && (
-            <div style={{ position: 'absolute', left: COL_STEP * 5, top: finalTop - 34, width: MATCH_W }}
+            <div style={{ position: 'absolute', left: COL_STEP * 4, top: finalTop - 34, width: MATCH_W }}
               className="flex items-center justify-center gap-1 rounded-lg bg-amarelo-100 px-2 py-1"
             >
               <Flag code={flagMap.get(picks.final) ?? ''} size="sm" className="!h-2.5 !w-3.5 shrink-0" />
@@ -292,8 +292,8 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
             </div>
           )}
 
-          {/* ── Final (coluna 5) ── */}
-          <div style={{ position: 'absolute', left: COL_STEP * 5, top: finalTop }}>
+          {/* ── Final (coluna 4) ── */}
+          <div style={{ position: 'absolute', left: COL_STEP * 4, top: finalTop }}>
             <div className="mb-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-amarelo-600">Final</div>
             <MatchCard
               style={{}}
@@ -439,7 +439,8 @@ function TeamSlot({
       {team ? (
         <>
           <Flag code={team.flag} size="sm" className="!h-2.5 !w-3.5 shrink-0" />
-          <span className="truncate">{team.team}</span>
+          <span className="min-w-0 flex-1 truncate">{team.team}</span>
+          {posLabel && <span className="shrink-0 text-[9px] font-medium text-gray-400">{posLabel}</span>}
           {isWinner && <span className="ml-auto shrink-0 text-[10px] text-verde-500">✓</span>}
         </>
       ) : (

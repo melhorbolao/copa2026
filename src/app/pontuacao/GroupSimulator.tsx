@@ -197,8 +197,19 @@ function SortableList({
 
 // ── Componente principal ──────────────────────────────────────
 
+// Valores do regulamento (sobrescrevem os do banco, que podem estar desatualizados)
+const REGULATION_GROUP_RULES: Record<string, number> = {
+  grupo_ordem_certa:     16,
+  grupo_ordem_invertida: 10,
+  grupo_primeiro_certo:  8,
+  grupo_segundo_certo:   6,
+  grupo_um_dos_dois:     3,
+  terceiro_classificado: 3,
+  bonus_zebra_grupo_1:   6,
+}
+
 export function GroupSimulator({ rules }: Props) {
-  const ruleMap = Object.fromEntries(rules.map(r => [r.key, r.points]))
+  const ruleMap = { ...Object.fromEntries(rules.map(r => [r.key, r.points])), ...REGULATION_GROUP_RULES }
 
   // Palpite
   const [bet1st,            setBet1st]            = useState('México')

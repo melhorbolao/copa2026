@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { createPendingUserProfile } from '@/app/auth/actions'
+import { createPendingUserProfile, checkEmailExists } from '@/app/auth/actions'
 
 type Mode = 'login' | 'signup' | 'forgot'
 
@@ -66,6 +66,14 @@ export function LoginForm() {
     if (!padrinho.trim()) { setError('Selecione o padrinho no bolão.'); return }
 
     setLoading(true)
+
+    // Verifica duplicidade de e-mail antes de criar conta
+    const emailTaken = await checkEmailExists(email)
+    if (emailTaken) {
+      setError('Este e-mail já está cadastrado. Tente entrar ou use outro e-mail.')
+      setLoading(false)
+      return
+    }
 
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,

@@ -33,6 +33,7 @@ const CATEGORY_ORDER: Record<string, string[]> = {
   ],
   g4_artilheiro: [
     'artilheiro', 'semifinalista', 'bonus_finalista',
+    'bonus_quarto', 'bonus_terceiro',
     'bonus_vice', 'bonus_campeao', 'bonus_zebra_g4',
   ],
 }
@@ -51,7 +52,7 @@ function suffix(ruleKey: string) {
 
 function isBonusRow(rule: ScoringRule) {
   return rule.is_zebra_bonus ||
-    ['bonus_finalista', 'bonus_vice', 'bonus_campeao'].includes(rule.key)
+    ['bonus_finalista', 'bonus_quarto', 'bonus_terceiro', 'bonus_vice', 'bonus_campeao'].includes(rule.key)
 }
 
 // ── Célula de pontos editável (admin) ou só leitura ───────────

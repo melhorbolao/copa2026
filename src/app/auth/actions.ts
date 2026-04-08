@@ -4,6 +4,17 @@ import { revalidatePath } from 'next/cache'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { notifyAdminNewUser } from '@/lib/email'
 
+// ── Verifica se e-mail já existe na tabela de usuários ───────────────────────
+export async function checkEmailExists(email: string): Promise<boolean> {
+  const supabase = await createAdminClient()
+  const { data } = await supabase
+    .from('users')
+    .select('id')
+    .eq('email', email.toLowerCase().trim())
+    .maybeSingle()
+  return !!data
+}
+
 // ── Cria perfil imediatamente após signUp (antes da confirmação de e-mail)
 export async function createPendingUserProfile(
   userId: string,
