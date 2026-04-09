@@ -4,6 +4,7 @@ import { useTransition, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
 import { toggleApproved, togglePaid, deleteUser, updateObservacao, updateApelido, updatePadrinho, toggleAdmin } from '../actions'
+import { PalpitesModal } from './PalpitesModal'
 import { getDisplayName } from '@/utils/display'
 import { formatBrasilia } from '@/utils/date'
 
@@ -329,6 +330,10 @@ export function UserRow({ user, index }: UserRowProps) {
                 <ShieldIcon />
               </button>
             )}
+            <PalpitesModal
+              userId={user.id}
+              userName={getDisplayName(user)}
+            />
             <button
               onClick={() => setConfirming(true)}
               title="Excluir"
