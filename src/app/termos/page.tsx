@@ -1,4 +1,4 @@
-export const metadata = { title: 'Termos de Uso' }
+export const metadata = {}
 
 export default function TermosPage() {
   return (

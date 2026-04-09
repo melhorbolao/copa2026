@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { CompletarPerfilForm } from './CompletarPerfilForm'
 
-export const metadata = { title: 'Complete seu perfil' }
+export const metadata = {}
 
 export default async function CompletarPerfilPage() {
   const supabase = await createClient()

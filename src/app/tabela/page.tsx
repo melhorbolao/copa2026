@@ -5,7 +5,7 @@ import { TabelaClient } from './TabelaClient'
 import { calcGroupStandings } from '@/lib/bracket/engine'
 import type { BetSlim, MatchSlim } from '@/lib/bracket/engine'
 
-export const metadata = { title: 'Minha Tabela' }
+export const metadata = {}
 
 export default async function TabelaPage() {
   const supabase = await createClient()

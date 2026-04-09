@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import type { AdminAlertRow } from '@/types/database'
 import { CreateAlertForm, AlertList } from './AvisosClient'
 
-export const metadata = { title: 'Avisos' }
+export const metadata = {}
 
 export default async function AvisosPage() {
   const supabase = await createClient()
