@@ -59,7 +59,7 @@ export function AlertBanner() {
   if (visible.length === 0) return null
 
   return (
-    <div className="sticky top-0 z-50 w-full">
+    <div className="w-full">
       {visible.map(alert => (
         <div
           key={alert.id}

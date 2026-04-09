@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { NavbarLinks } from './NavbarLinks'
+import { AlertBannerWrapper } from '@/components/AlertBannerWrapper'
 
 export async function Navbar() {
   const supabase = await createClient()
@@ -32,6 +33,7 @@ export async function Navbar() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-verde-600 shadow-sm">
+      <AlertBannerWrapper />
       <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
         {/* Logo */}
         <div className="flex items-center gap-3">

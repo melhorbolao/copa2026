@@ -8,7 +8,7 @@ export default async function AdminUsuariosPage() {
   const supabase = await createClient()
 
   const { data: users } = await supabase.from('users')
-    .select('id, name, email, whatsapp, padrinho, apelido, bio, observacao, provider, approved, paid, status, is_manual, is_admin, created_at')
+    .select('id, name, email, whatsapp, padrinho, apelido, observacao, provider, approved, paid, status, is_manual, is_admin, created_at')
     .order('created_at', { ascending: false })
 
   const total    = users?.length ?? 0
