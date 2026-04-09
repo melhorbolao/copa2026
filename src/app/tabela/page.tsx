@@ -12,7 +12,12 @@ export default async function TabelaPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
-  const participantId = await getActiveParticipantId(supabase, user.id)
+  let participantId: string
+  try {
+    participantId = await getActiveParticipantId(supabase, user.id)
+  } catch {
+    redirect('/aguardando-aprovacao')
+  }
 
   const [{ data: rawMatches }, { data: rawBets }, { data: tBet }, { data: rawGroupBets }] = await Promise.all([
     supabase
