@@ -2,7 +2,7 @@
  * Motor de cálculo do chaveamento baseado nos palpites do usuário.
  *
  * Regras FIFA 2026:
- * - Classificação por grupo (Art. 13): Pts → DG → GP → confronto direto → alfabético
+ * - Classificação por grupo (Art. 13): Pts → H2H (Pts/DG/GP) → DG global → GP global → [manual]
  * - Melhores 8 terceiros (Art. 13): Pts → DG → GP → Vitórias → alfabético
  * - Chaveamento (Anexo C): 495 combinações possíveis de 8 terceiros
  */
@@ -184,78 +184,110 @@ function computeH2H(
 }
 
 /**
- * Ordena um grupo aplicando os 6 critérios da FIFA (Art. 13 – Copa 2026):
- *   1. Pts (todos os jogos)
- *   2. Saldo de gols (todos)
- *   3. Gols marcados (todos)
- *   → Para cada cluster ainda empatado:
- *   4. Pts H2H
- *   5. Saldo de gols H2H
- *   6. Gols marcados H2H
- *   → Se persistir: retorna no tiedTeams (requer override manual)
+ * Ordena um grupo aplicando o Art. 13 da FIFA (Copa 2026).
+ *
+ * Passo 1 — todos os times empatados em Pts:
+ *   a) Pts H2H (partidas entre os times empatados)
+ *   b) Saldo de gols H2H
+ *   c) Gols marcados H2H
+ *
+ * Passo 2 — sub-conjunto ainda empatado após Passo 1:
+ *   Recalcula a,b,c usando SOMENTE as partidas entre os times desse sub-conjunto.
+ *   (Não reinicia o Passo 2 para sub-sub-conjuntos.)
+ *
+ * Passo 3 — ainda empatados após Passo 2:
+ *   d) Saldo de gols (todos os jogos do grupo)
+ *   e) Gols marcados (todos os jogos do grupo)
+ *   → Persistindo: marcado em tiedTeams (requer desempate manual)
  */
 function sortGroupFIFA(
   teams: TeamRow[],
   groupMatches: MatchSlim[],
   betMap: Map<string, BetSlim>,
 ): { sorted: TeamRow[]; tiedTeams: string[] } {
-  // ── Passo 1: ordenação global (critérios 1-3) ─────────────────
-  const byGlobal = [...teams].sort((a, b) => {
-    if (b.pts !== a.pts) return b.pts - a.pts
-    if (b.gd  !== a.gd)  return b.gd  - a.gd
-    if (b.gf  !== a.gf)  return b.gf  - a.gf
-    return 0
-  })
-
-  // ── Passo 2: agrupa clusters com mesmo (Pts, GD, GF) ─────────
-  const clusters: TeamRow[][] = []
-  let cur: TeamRow[] = [byGlobal[0]]
-  for (let i = 1; i < byGlobal.length; i++) {
-    const p = byGlobal[i - 1], c = byGlobal[i]
-    if (p.pts === c.pts && p.gd === c.gd && p.gf === c.gf) {
-      cur.push(c)
-    } else {
-      clusters.push(cur)
-      cur = [c]
-    }
-  }
-  clusters.push(cur)
-
-  // ── Passo 3: resolve cada cluster com H2H (critérios 4-6) ────
   const tiedSet = new Set<string>()
+
+  // ── Passo 0: agrupa por Pts totais ──────────────────────────────
+  const byPts = [...teams].sort((a, b) => b.pts - a.pts)
+  const ptsClusters = splitClusters(byPts, (a, b) => a.pts === b.pts)
+
   const sorted: TeamRow[] = []
-
-  for (const cluster of clusters) {
+  for (const cluster of ptsClusters) {
     if (cluster.length === 1) { sorted.push(cluster[0]); continue }
-
-    const h2h = computeH2H(cluster.map(t => t.team), groupMatches, betMap)
-
-    const h2hSorted = [...cluster].sort((a, b) => {
-      const ha = h2h.get(a.team)!, hb = h2h.get(b.team)!
-      if (hb.pts !== ha.pts) return hb.pts - ha.pts
-      if (hb.gd  !== ha.gd)  return hb.gd  - ha.gd
-      if (hb.gf  !== ha.gf)  return hb.gf  - ha.gf
-      return 0
-    })
-
-    // Detecta sub-clusters que continuam empatados após H2H
-    let subCur: TeamRow[] = [h2hSorted[0]]
-    for (let i = 1; i < h2hSorted.length; i++) {
-      const hp = h2h.get(h2hSorted[i - 1].team)!
-      const hc = h2h.get(h2hSorted[i].team)!
-      if (hp.pts === hc.pts && hp.gd === hc.gd && hp.gf === hc.gf) {
-        subCur.push(h2hSorted[i])
-      } else {
-        if (subCur.length > 1) subCur.forEach(t => tiedSet.add(t.team))
-        sorted.push(...subCur)
-        subCur = [h2hSorted[i]]
-      }
-    }
-    if (subCur.length > 1) subCur.forEach(t => tiedSet.add(t.team))
-    sorted.push(...subCur)
+    sorted.push(...resolveH2H(cluster, groupMatches, betMap, tiedSet, false))
   }
 
   return { sorted, tiedTeams: [...tiedSet] }
+}
+
+/** Divide array em sub-arrays de elementos consecutivos que satisfazem eqFn. */
+function splitClusters<T>(arr: T[], eqFn: (a: T, b: T) => boolean): T[][] {
+  if (arr.length === 0) return []
+  const result: T[][] = []
+  let cur = [arr[0]]
+  for (let i = 1; i < arr.length; i++) {
+    if (eqFn(arr[i - 1], arr[i])) cur.push(arr[i])
+    else { result.push(cur); cur = [arr[i]] }
+  }
+  result.push(cur)
+  return result
+}
+
+/**
+ * Passo 1 (isStep2=false): H2H calculado para o cluster inteiro → sub-clusters ainda empatados entram no Passo 2.
+ * Passo 2 (isStep2=true):  H2H recalculado somente com as partidas desse sub-cluster → ainda empatados vão para Passo 3.
+ */
+function resolveH2H(
+  cluster: TeamRow[],
+  groupMatches: MatchSlim[],
+  betMap: Map<string, BetSlim>,
+  tiedSet: Set<string>,
+  isStep2: boolean,
+): TeamRow[] {
+  // H2H apenas entre os times deste cluster (critérios a, b, c)
+  const h2h = computeH2H(cluster.map(t => t.team), groupMatches, betMap)
+
+  const ordered = [...cluster].sort((a, b) => {
+    const ha = h2h.get(a.team)!, hb = h2h.get(b.team)!
+    if (hb.pts !== ha.pts) return hb.pts - ha.pts  // a) Pts H2H
+    if (hb.gd  !== ha.gd)  return hb.gd  - ha.gd  // b) Saldo H2H
+    if (hb.gf  !== ha.gf)  return hb.gf  - ha.gf  // c) Gols H2H
+    return 0
+  })
+
+  // Sub-clusters ainda empatados em a, b e c
+  const subClusters = splitClusters(ordered, (a, b) => {
+    const ha = h2h.get(a.team)!, hb = h2h.get(b.team)!
+    return ha.pts === hb.pts && ha.gd === hb.gd && ha.gf === hb.gf
+  })
+
+  const result: TeamRow[] = []
+  for (const sub of subClusters) {
+    if (sub.length === 1) {
+      result.push(sub[0])
+    } else if (!isStep2) {
+      // Passo 2: recalcula H2H somente entre os times do sub-cluster
+      result.push(...resolveH2H(sub, groupMatches, betMap, tiedSet, true))
+    } else {
+      // Passo 3: saldo global (d) e gols global (e)
+      result.push(...resolveByOverall(sub, tiedSet))
+    }
+  }
+  return result
+}
+
+/** Passo 3: d) saldo global, e) gols global. Times ainda empatados → tiedSet. */
+function resolveByOverall(teams: TeamRow[], tiedSet: Set<string>): TeamRow[] {
+  const sorted = [...teams].sort((a, b) => {
+    if (b.gd !== a.gd) return b.gd - a.gd  // d) Saldo global
+    if (b.gf !== a.gf) return b.gf - a.gf  // e) Gols global
+    return 0
+  })
+  const remaining = splitClusters(sorted, (a, b) => a.gd === b.gd && a.gf === b.gf)
+  for (const grp of remaining) {
+    if (grp.length > 1) grp.forEach(t => tiedSet.add(t.team))
+  }
+  return sorted
 }
 
 /** Calcula a classificação de todos os grupos a partir dos palpites do usuário. */

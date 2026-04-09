@@ -207,6 +207,7 @@ export function GroupCard({
             {hasTie && <th className="w-4 px-1 py-1.5" />}
             <th className="w-6 px-2 py-1.5 text-center font-medium">#</th>
             <th className="px-2 py-1.5 text-left font-medium">Seleção</th>
+            <th className="w-8 px-2 py-1.5 text-center font-medium">Pts</th>
             <th className="w-7 px-1 py-1.5 text-center font-medium">J</th>
             <th className="w-7 px-1 py-1.5 text-center font-medium">V</th>
             <th className="w-7 px-1 py-1.5 text-center font-medium">E</th>
@@ -214,7 +215,6 @@ export function GroupCard({
             <th className="w-7 px-1 py-1.5 text-center font-medium">GP</th>
             <th className="w-7 px-1 py-1.5 text-center font-medium">GC</th>
             <th className="w-7 px-1 py-1.5 text-center font-medium">SG</th>
-            <th className="w-8 px-2 py-1.5 text-center font-medium">Pts</th>
           </tr>
         </thead>
         <tbody>
@@ -267,6 +267,11 @@ export function GroupCard({
                     </span>
                   </div>
                 </td>
+                <td className="px-2 py-2 text-center">
+                  <span className={`font-black ${i < 2 || isThirdAdv ? 'text-gray-900' : 'text-gray-500'}`}>
+                    {team.pts}
+                  </span>
+                </td>
                 <td className="px-1 py-2 text-center text-gray-500">{team.gp}</td>
                 <td className="px-1 py-2 text-center text-gray-500">{team.w}</td>
                 <td className="px-1 py-2 text-center text-gray-500">{team.d}</td>
@@ -275,11 +280,6 @@ export function GroupCard({
                 <td className="px-1 py-2 text-center text-gray-500">{team.ga}</td>
                 <td className={`px-1 py-2 text-center font-medium ${team.gd > 0 ? 'text-verde-600' : team.gd < 0 ? 'text-red-500' : 'text-gray-500'}`}>
                   {team.gd > 0 ? `+${team.gd}` : team.gd}
-                </td>
-                <td className="px-2 py-2 text-center">
-                  <span className={`font-black ${i < 2 || isThirdAdv ? 'text-gray-900' : 'text-gray-500'}`}>
-                    {team.pts}
-                  </span>
                 </td>
               </tr>
             )

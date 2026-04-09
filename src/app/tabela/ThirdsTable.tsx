@@ -26,6 +26,7 @@ export function ThirdsTable({ thirds }: Props) {
             <th className="w-8 px-3 py-2 text-center font-medium">#</th>
             <th className="w-12 px-2 py-2 text-center font-medium">Grp</th>
             <th className="px-2 py-2 text-left font-medium">Seleção</th>
+            <th className="w-8 px-2 py-2 text-center font-medium">Pts</th>
             <th className="w-7 px-1 py-2 text-center font-medium">J</th>
             <th className="w-7 px-1 py-2 text-center font-medium">V</th>
             <th className="w-7 px-1 py-2 text-center font-medium">E</th>
@@ -33,7 +34,6 @@ export function ThirdsTable({ thirds }: Props) {
             <th className="w-7 px-1 py-2 text-center font-medium">GP</th>
             <th className="w-7 px-1 py-2 text-center font-medium">GC</th>
             <th className="w-7 px-1 py-2 text-center font-medium">SG</th>
-            <th className="w-8 px-2 py-2 text-center font-medium">Pts</th>
           </tr>
         </thead>
         <tbody>
@@ -73,6 +73,11 @@ export function ThirdsTable({ thirds }: Props) {
                   )}
                 </div>
               </td>
+              <td className="px-2 py-2 text-center">
+                <span className={`font-black ${t.advances ? 'text-gray-900' : 'text-gray-400'}`}>
+                  {t.pts}
+                </span>
+              </td>
               <td className="px-1 py-2 text-center text-gray-500">{t.gp}</td>
               <td className="px-1 py-2 text-center text-gray-500">{t.w}</td>
               <td className="px-1 py-2 text-center text-gray-500">{t.d}</td>
@@ -81,11 +86,6 @@ export function ThirdsTable({ thirds }: Props) {
               <td className="px-1 py-2 text-center text-gray-500">{t.ga}</td>
               <td className={`px-1 py-2 text-center font-medium ${t.gd > 0 ? 'text-verde-600' : t.gd < 0 ? 'text-red-500' : 'text-gray-500'}`}>
                 {t.gd > 0 ? `+${t.gd}` : t.gd}
-              </td>
-              <td className="px-2 py-2 text-center">
-                <span className={`font-black ${t.advances ? 'text-gray-900' : 'text-gray-400'}`}>
-                  {t.pts}
-                </span>
               </td>
             </tr>
           ))}
