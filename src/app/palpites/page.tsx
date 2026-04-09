@@ -168,6 +168,14 @@ export default async function PalpitesPage({
         .filter(v => v && String(v).length > 0).length
     : 0
 
+  // Para R1, o progresso inclui todos os 25 campos bônus (mesmo critério da aba Participantes)
+  const r1ProgressFilled = activeRound === 1
+    ? activeRoundBets + bonusCount + Math.min(totalGroupBets, 12) + Math.min(thirdCount, 8)
+    : activeRoundBets
+  const r1ProgressTotal = activeRound === 1
+    ? activeRoundTotal + 5 + 12 + 8
+    : activeRoundTotal
+
   // ── Próximo prazo ───────────────────────────────────────────────
   const DEADLINE_LABELS: Record<string, string> = {
     group_1: 'Rodada 1', group_2: 'Rodada 2', group_3: 'Rodada 3',
@@ -236,8 +244,8 @@ export default async function PalpitesPage({
             )}
             {activeRound !== null && !isKnockoutEtapa && (
               <RoundProgress
-                filled={activeRoundBets}
-                total={activeRoundTotal}
+                filled={r1ProgressFilled}
+                total={r1ProgressTotal}
                 round={activeRound}
               />
             )}

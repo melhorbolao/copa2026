@@ -12,10 +12,7 @@ const font = Plus_Jakarta_Sans({
 })
 
 export const metadata: Metadata = {
-  title: {
-    default:  'Melhor Bolão',
-    template: '%s | Melhor Bolão',
-  },
+  title: 'Melhor Bolão',
   description: 'Faça seus palpites para a Copa do Mundo FIFA 2026 e dispute com seus amigos!',
   keywords: ['bolão', 'copa do mundo', 'fifa 2026', 'palpites', 'futebol'],
   openGraph: {
