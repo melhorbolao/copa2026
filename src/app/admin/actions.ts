@@ -63,8 +63,6 @@ export async function createManualUser(data: {
     await admin.auth.admin.deleteUser(userId)
     throw new Error(dbError.message)
   }
-
-  revalidatePath('/admin/usuarios')
 }
 
 // ── Atualização de observação ────────────────────────────────

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { createManualUser } from '../actions'
 
 const PADRINHOS = ['Bruninho','Cadu','Daniel','Guga','Luizinho','Medel','Nando "Sapo"','Teixeira']
@@ -8,6 +9,7 @@ const PADRINHOS = ['Bruninho','Cadu','Daniel','Guga','Luizinho','Medel','Nando "
 const inputCls = 'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-verde-400 focus:outline-none'
 
 export function CreateUserModal() {
+  const router                  = useRouter()
   const [open, setOpen]         = useState(false)
   const [pending, start]        = useTransition()
   const [error,   setError]     = useState('')
@@ -39,6 +41,7 @@ export function CreateUserModal() {
       try {
         await createManualUser({ name, email, whatsapp, padrinho, apelido, observacao })
         setSuccess(true)
+        router.refresh()
         setTimeout(handleClose, 1200)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Erro ao cadastrar.')
