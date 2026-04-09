@@ -109,7 +109,7 @@ export function UserRow({ user, index }: UserRowProps) {
     startDelete(() => {
       void deleteUser(user.id)
         .then(() => router.refresh())
-        .catch(() => toast.error('Erro ao excluir usuário'))
+        .catch((e: unknown) => toast.error(e instanceof Error ? e.message : 'Erro ao excluir usuário'))
     })
   }
 

@@ -94,21 +94,29 @@ export async function updatePadrinho(userId: string, padrinho: string) {
 // ── Exclusão de usuário ───────────────────────────────────────
 export async function deleteUser(userId: string) {
   await requireAdmin()
-  // Usa cliente puro com service role (sem cookies de sessão que sobrepõem o RLS bypass)
   const admin = createAuthAdminClient()
 
   // Verifica se é usuário manual (sem entrada no auth.users)
   const { data: target } = await admin
     .from('users').select('is_manual').eq('id', userId).single()
 
-  // 1. Remove da tabela pública (cascata apaga bets, group_bets, etc.)
-  const { error: dbError } = await admin.from('users').delete().eq('id', userId)
-  if (dbError) throw new Error(dbError.message)
+  // 1. Apaga registros dependentes explicitamente (evita FK violation)
+  await Promise.all([
+    admin.from('bets').delete().eq('user_id', userId),
+    admin.from('group_bets').delete().eq('user_id', userId),
+    admin.from('tournament_bets').delete().eq('user_id', userId),
+    admin.from('third_place_bets').delete().eq('user_id', userId),
+    admin.from('email_logs').delete().eq('user_id', userId),
+  ])
 
-  // 2. Remove de auth.users apenas para usuários não-manuais
+  // 2. Remove da tabela pública
+  const { error: dbError } = await admin.from('users').delete().eq('id', userId)
+  if (dbError) throw new Error(`DB error: ${dbError.message}`)
+
+  // 3. Remove de auth.users apenas para usuários não-manuais
   if (!target?.is_manual) {
     const { error: authError } = await admin.auth.admin.deleteUser(userId)
-    if (authError) throw new Error(authError.message)
+    if (authError) throw new Error(`Auth error: ${authError.message}`)
   }
 
   revalidatePath('/admin/usuarios')
