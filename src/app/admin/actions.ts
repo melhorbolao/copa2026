@@ -80,6 +80,7 @@ export async function createManualUser(data: {
       is_manual: true,
     })
     if (dbError) return { error: dbError.message }
+    await createParticipantForUser(admin, userId, apelidoTrimmed || nameTrimmed)
     return {}
   }
 
@@ -113,7 +114,33 @@ export async function createManualUser(data: {
     return { error: dbError.message }
   }
 
+  await createParticipantForUser(admin, userId, apelidoTrimmed || nameTrimmed)
   return {}
+}
+
+/** Cria um participant e vincula ao usuário como is_primary=true (se ainda não tiver). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function createParticipantForUser(admin: any, userId: string, apelido: string) {
+  const { data: existing } = await admin
+    .from('user_participants')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('is_primary', true)
+    .maybeSingle()
+  if (existing) return // já tem participante primário
+
+  const { data: p } = await admin
+    .from('participants')
+    .insert({ apelido, paid: false })
+    .select('id')
+    .single()
+  if (!p?.id) return
+
+  await admin.from('user_participants').insert({
+    user_id: userId,
+    participant_id: p.id,
+    is_primary: true,
+  })
 }
 
 // ── Atualização de observação ────────────────────────────────
@@ -149,20 +176,34 @@ export async function deleteUser(userId: string) {
   const { data: target } = await admin
     .from('users').select('is_manual').eq('id', userId).single()
 
-  // 1. Apaga registros dependentes explicitamente (evita FK violation)
-  await Promise.all([
-    admin.from('bets').delete().eq('user_id', userId),
-    admin.from('group_bets').delete().eq('user_id', userId),
-    admin.from('tournament_bets').delete().eq('user_id', userId),
-    admin.from('third_place_bets').delete().eq('user_id', userId),
-    admin.from('email_logs').delete().eq('user_id', userId),
-  ])
+  // 1. Encontra participantes exclusivos deste usuário (sem outros usuários vinculados)
+  const { data: myLinks } = await admin
+    .from('user_participants').select('participant_id').eq('user_id', userId)
+  const myParticipantIds = (myLinks ?? []).map((r: { participant_id: string }) => r.participant_id)
 
-  // 2. Remove da tabela pública
+  // Para cada participante, verifica se tem outros usuários além deste
+  const exclusiveIds: string[] = []
+  for (const pid of myParticipantIds) {
+    const { count } = await admin
+      .from('user_participants')
+      .select('*', { count: 'exact', head: true })
+      .eq('participant_id', pid)
+    if ((count ?? 0) <= 1) exclusiveIds.push(pid)
+  }
+
+  // 2. Apaga participantes exclusivos (bets em cascata via participant_id)
+  if (exclusiveIds.length > 0) {
+    await admin.from('participants').delete().in('id', exclusiveIds)
+  }
+
+  // 3. Apaga email_logs do usuário
+  await admin.from('email_logs').delete().eq('user_id', userId)
+
+  // 4. Remove da tabela pública (user_participants em cascata)
   const { error: dbError } = await admin.from('users').delete().eq('id', userId)
   if (dbError) throw new Error(`DB error: ${dbError.message}`)
 
-  // 3. Remove de auth.users apenas para usuários não-manuais
+  // 5. Remove de auth.users apenas para usuários não-manuais
   if (!target?.is_manual) {
     const { error: authError } = await admin.auth.admin.deleteUser(userId)
     if (authError) throw new Error(`Auth error: ${authError.message}`)
@@ -184,15 +225,21 @@ export async function toggleApproved(userId: string, current: boolean) {
     .update({ approved: newApproved, status: newStatus })
     .eq('id', userId)
 
-  // Envia boas-vindas quando aprovando pela primeira vez
   if (newApproved) {
     const { data: u } = await supabase
       .from('users')
-      .select('name, email')
+      .select('name, email, apelido')
       .eq('id', userId)
       .single()
-    if (u && await isEmailEnabled('notify_approved')) {
-      try { await notifyUserApproved({ name: u.name, email: u.email }) } catch { /* silent */ }
+
+    // Cria participante automaticamente se ainda não existe
+    if (u) {
+      const admin = createAuthAdminClient()
+      await createParticipantForUser(admin, userId, u.apelido || u.name)
+
+      if (await isEmailEnabled('notify_approved')) {
+        try { await notifyUserApproved({ name: u.name, email: u.email }) } catch { /* silent */ }
+      }
     }
   }
 
@@ -218,8 +265,21 @@ export async function sendReminderEmails(
 
   let targets = users
 
+  // Mapa user_id → participant_ids (para filtros que usam bets)
+  const userIds = users.map(u => u.id)
+  const { data: userParticipants } = await supabase
+    .from('user_participants').select('user_id, participant_id').in('user_id', userIds)
+
+  const userToParticipants = new Map<string, string[]>()
+  const participantToUser  = new Map<string, string>()
+  for (const row of userParticipants ?? []) {
+    if (!userToParticipants.has(row.user_id)) userToParticipants.set(row.user_id, [])
+    userToParticipants.get(row.user_id)!.push(row.participant_id)
+    participantToUser.set(row.participant_id, row.user_id)
+  }
+  const allParticipantIds = [...participantToUser.keys()]
+
   if (recipients === 'pending') {
-    // Mapeia phase/round para o stage selecionado
     const stageFilter = buildStageFilter(stage)
     const { data: matches } = await supabase
       .from('matches')
@@ -231,21 +291,21 @@ export async function sendReminderEmails(
       const matchIds = new Set(matches.map(m => m.id))
       const { data: bets } = await supabase
         .from('bets')
-        .select('user_id, match_id')
-        .in('user_id', users.map(u => u.id))
+        .select('participant_id, match_id')
+        .in('participant_id', allParticipantIds)
 
+      // Conta bets por usuário (através do participante)
       const betCountByUser = new Map<string, number>()
       for (const bet of bets ?? []) {
-        if (matchIds.has(bet.match_id)) {
-          betCountByUser.set(bet.user_id, (betCountByUser.get(bet.user_id) ?? 0) + 1)
-        }
+        if (!matchIds.has(bet.match_id)) continue
+        const uid = participantToUser.get(bet.participant_id)
+        if (uid) betCountByUser.set(uid, (betCountByUser.get(uid) ?? 0) + 1)
       }
 
       targets = users.filter(u => (betCountByUser.get(u.id) ?? 0) < matchIds.size)
     }
   }
 
-  // Filtros de corte: classificados = quem apostou na fase indicada
   if (recipients === 'cut1' || recipients === 'cut2') {
     const cutPhase = recipients === 'cut1' ? ['round_of_32'] : ['quarterfinal']
     const { data: cutMatches } = await supabase
@@ -257,12 +317,15 @@ export async function sendReminderEmails(
       const cutMatchIds = new Set(cutMatches.map(m => m.id))
       const { data: bets } = await supabase
         .from('bets')
-        .select('user_id, match_id')
-        .in('user_id', users.map(u => u.id))
+        .select('participant_id, match_id')
+        .in('participant_id', allParticipantIds)
 
       const usersWithBets = new Set<string>()
       for (const bet of bets ?? []) {
-        if (cutMatchIds.has(bet.match_id)) usersWithBets.add(bet.user_id)
+        if (cutMatchIds.has(bet.match_id)) {
+          const uid = participantToUser.get(bet.participant_id)
+          if (uid) usersWithBets.add(uid)
+        }
       }
 
       targets = users.filter(u => usersWithBets.has(u.id))
@@ -326,7 +389,16 @@ export async function toggleEmailSetting(key: string, enabled: boolean) {
 export async function togglePaid(userId: string, current: boolean) {
   await requireAdmin()
   const supabase = await createAdminClient()
-  await supabase.from('users').update({ paid: !current }).eq('id', userId)
+  const newPaid  = !current
+  await supabase.from('users').update({ paid: newPaid }).eq('id', userId)
+
+  // Sincroniza paid no participante primário
+  const { data: up } = await supabase
+    .from('user_participants').select('participant_id').eq('user_id', userId).eq('is_primary', true).maybeSingle()
+  if (up?.participant_id) {
+    await supabase.from('participants').update({ paid: newPaid }).eq('id', up.participant_id)
+  }
+
   revalidatePath('/admin/usuarios')
 }
 
@@ -340,7 +412,7 @@ export async function updatePhaseDeadline(phase: string, isoDeadline: string) {
   const { error } = await supabase
     .from('matches')
     .update({ betting_deadline: isoDeadline })
-    .eq('phase', phase)
+    .eq('phase', phase as MatchPhase)
   if (error) throw new Error(error.message)
   revalidatePath('/admin/prazos')
   revalidatePath('/palpites')
@@ -353,7 +425,7 @@ export async function updateGroupRoundDeadline(round: number, isoDeadline: strin
   const { error } = await supabase
     .from('matches')
     .update({ betting_deadline: isoDeadline })
-    .eq('phase', 'group' as string)
+    .eq('phase', 'group' as MatchPhase)
     .eq('round', round)
   if (error) throw new Error(error.message)
   revalidatePath('/admin/prazos')

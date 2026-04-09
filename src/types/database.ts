@@ -118,10 +118,64 @@ export type Database = {
         }
         Relationships: []
       }
-      bets: {
+      participants: {
+        Row: {
+          id: string
+          apelido: string
+          bio: string | null
+          paid: boolean
+          padrinho: string | null
+          observacao: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          apelido: string
+          bio?: string | null
+          paid?: boolean
+          padrinho?: string | null
+          observacao?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          apelido?: string
+          bio?: string | null
+          paid?: boolean
+          padrinho?: string | null
+          observacao?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      user_participants: {
         Row: {
           id: string
           user_id: string
+          participant_id: string
+          is_primary: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          participant_id: string
+          is_primary?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          participant_id?: string
+          is_primary?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
+      bets: {
+        Row: {
+          id: string
+          participant_id: string
           match_id: string
           score_home: number
           score_away: number
@@ -131,7 +185,7 @@ export type Database = {
         }
         Insert: {
           id?: string
-          user_id: string
+          participant_id: string
           match_id: string
           score_home: number
           score_away: number
@@ -141,7 +195,7 @@ export type Database = {
         }
         Update: {
           id?: string
-          user_id?: string
+          participant_id?: string
           match_id?: string
           score_home?: number
           score_away?: number
@@ -154,7 +208,7 @@ export type Database = {
       group_bets: {
         Row: {
           id: string
-          user_id: string
+          participant_id: string
           group_name: string
           first_place: string
           second_place: string
@@ -162,7 +216,7 @@ export type Database = {
         }
         Insert: {
           id?: string
-          user_id: string
+          participant_id: string
           group_name: string
           first_place: string
           second_place: string
@@ -170,7 +224,7 @@ export type Database = {
         }
         Update: {
           id?: string
-          user_id?: string
+          participant_id?: string
           group_name?: string
           first_place?: string
           second_place?: string
@@ -181,7 +235,7 @@ export type Database = {
       tournament_bets: {
         Row: {
           id: string
-          user_id: string
+          participant_id: string
           champion: string
           runner_up: string
           semi1: string
@@ -191,7 +245,7 @@ export type Database = {
         }
         Insert: {
           id?: string
-          user_id: string
+          participant_id: string
           champion: string
           runner_up: string
           semi1: string
@@ -201,7 +255,7 @@ export type Database = {
         }
         Update: {
           id?: string
-          user_id?: string
+          participant_id?: string
           champion?: string
           runner_up?: string
           semi1?: string
@@ -289,19 +343,19 @@ export type Database = {
       third_place_bets: {
         Row: {
           id: string
-          user_id: string
+          participant_id: string
           group_name: string
           team: string
         }
         Insert: {
           id?: string
-          user_id: string
+          participant_id: string
           group_name: string
           team: string
         }
         Update: {
           id?: string
-          user_id?: string
+          participant_id?: string
           group_name?: string
           team?: string
         }
@@ -385,9 +439,11 @@ export type MatchPhase =
 export type Tables<T extends keyof Database['public']['Tables']> =
   Database['public']['Tables'][T]['Row']
 
-export type UserRow       = Tables<'users'>
-export type MatchRow      = Tables<'matches'>
-export type BetRow        = Tables<'bets'>
-export type GroupBetRow   = Tables<'group_bets'>
+export type UserRow          = Tables<'users'>
+export type MatchRow         = Tables<'matches'>
+export type BetRow           = Tables<'bets'>
+export type GroupBetRow      = Tables<'group_bets'>
 export type TournamentBetRow = Tables<'tournament_bets'>
-export type AdminAlertRow   = Tables<'admin_alerts'>
+export type AdminAlertRow    = Tables<'admin_alerts'>
+export type ParticipantRow   = Tables<'participants'>
+export type UserParticipantRow = Tables<'user_participants'>

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { getActiveParticipantId } from '@/lib/participant'
 import { buildPalpitesBuffer } from '../_workbook'
 
 export async function GET() {
@@ -7,7 +8,8 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return new NextResponse('Não autorizado', { status: 401 })
 
-  const { buffer, fileName } = await buildPalpitesBuffer(supabase, user.id)
+  const participantId = await getActiveParticipantId(supabase, user.id)
+  const { buffer, fileName } = await buildPalpitesBuffer(supabase, participantId)
 
   return new NextResponse(buffer as unknown as BodyInit, {
     headers: {

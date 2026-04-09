@@ -26,14 +26,24 @@ export async function POST(req: NextRequest) {
 
   const admin = createAuthAdminClient()
 
+  // Resolve o participante primário do usuário alvo
+  const { data: up } = await admin
+    .from('user_participants')
+    .select('participant_id')
+    .eq('user_id', targetUserId)
+    .eq('is_primary', true)
+    .maybeSingle()
+  if (!up?.participant_id) return NextResponse.json({ error: 'Participante não encontrado para este usuário.' }, { status: 404 })
+  const targetParticipantId = up.participant_id
+
   // ── Confirmação: checa palpites existentes (sem force) ─────────
   if (!force) {
     const [{ count: betCount }, { count: groupCount }, { count: thirdCount }, { data: tBet }] =
       await Promise.all([
-        admin.from('bets').select('*', { count: 'exact', head: true }).eq('user_id', targetUserId),
-        admin.from('group_bets').select('*', { count: 'exact', head: true }).eq('user_id', targetUserId),
-        admin.from('third_place_bets').select('*', { count: 'exact', head: true }).eq('user_id', targetUserId),
-        admin.from('tournament_bets').select('id').eq('user_id', targetUserId).maybeSingle(),
+        admin.from('bets').select('*', { count: 'exact', head: true }).eq('participant_id', targetParticipantId),
+        admin.from('group_bets').select('*', { count: 'exact', head: true }).eq('participant_id', targetParticipantId),
+        admin.from('third_place_bets').select('*', { count: 'exact', head: true }).eq('participant_id', targetParticipantId),
+        admin.from('tournament_bets').select('id').eq('participant_id', targetParticipantId).maybeSingle(),
       ])
     const existingCount = (betCount ?? 0) + (groupCount ?? 0) + (thirdCount ?? 0) + (tBet ? 1 : 0)
     if (existingCount > 0) {
@@ -68,7 +78,7 @@ export async function POST(req: NextRequest) {
   let updatedBonus   = 0
   let skipped        = 0
 
-  const matchUpserts: { user_id: string; match_id: string; score_home: number; score_away: number }[] = []
+  const matchUpserts: { participant_id: string; match_id: string; score_home: number; score_away: number }[] = []
   const groupBetMap:  Record<string, { first_place?: string; second_place?: string }> = {}
   const thirdBetMap:  Record<string, string> = {}
   const trnFields:    Record<string, string> = {}
@@ -88,7 +98,7 @@ export async function POST(req: NextRequest) {
       const scoreHome = parseNum(valA)
       const scoreAway = parseNum(valB)
       if (scoreHome === null || scoreAway === null) return
-      matchUpserts.push({ user_id: targetUserId, match_id: key, score_home: scoreHome, score_away: scoreAway })
+      matchUpserts.push({ participant_id: targetParticipantId, match_id: key, score_home: scoreHome, score_away: scoreAway })
       updatedMatches++
       return
     }
@@ -134,7 +144,7 @@ export async function POST(req: NextRequest) {
 
   // ── Persiste jogos ────────────────────────────────────────────
   if (matchUpserts.length > 0) {
-    const { error } = await admin.from('bets').upsert(matchUpserts, { onConflict: 'user_id,match_id' })
+    const { error } = await admin.from('bets').upsert(matchUpserts, { onConflict: 'participant_id,match_id' })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
@@ -143,12 +153,12 @@ export async function POST(req: NextRequest) {
     const rows = Object.entries(groupBetMap)
       .filter(([, v]) => v.first_place && v.second_place)
       .map(([g, v]) => ({
-        user_id: targetUserId, group_name: g,
+        participant_id: targetParticipantId, group_name: g,
         first_place:  v.first_place  as string,
         second_place: v.second_place as string,
       }))
     if (rows.length > 0) {
-      const { error } = await admin.from('group_bets').upsert(rows, { onConflict: 'user_id,group_name' })
+      const { error } = await admin.from('group_bets').upsert(rows, { onConflict: 'participant_id,group_name' })
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     }
   }
@@ -164,9 +174,9 @@ export async function POST(req: NextRequest) {
   }
   if (Object.keys(thirdBetMap).length > 0) {
     const rows = Object.entries(thirdBetMap).map(([g, team]) => ({
-      user_id: targetUserId, group_name: g, team,
+      participant_id: targetParticipantId, group_name: g, team,
     }))
-    const { error } = await admin.from('third_place_bets').upsert(rows, { onConflict: 'user_id,group_name' })
+    const { error } = await admin.from('third_place_bets').upsert(rows, { onConflict: 'participant_id,group_name' })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
@@ -198,11 +208,11 @@ export async function POST(req: NextRequest) {
 
   if (Object.keys(trnUpdate).length > 0) {
     const { data: existing } = await admin
-      .from('tournament_bets').select('id').eq('user_id', targetUserId).maybeSingle()
+      .from('tournament_bets').select('id').eq('participant_id', targetParticipantId).maybeSingle()
     if (existing) {
-      await admin.from('tournament_bets').update(trnUpdate).eq('user_id', targetUserId)
+      await admin.from('tournament_bets').update(trnUpdate).eq('participant_id', targetParticipantId)
     } else {
-      await admin.from('tournament_bets').insert({ user_id: targetUserId, ...trnUpdate } as any)
+      await admin.from('tournament_bets').insert({ participant_id: targetParticipantId, ...trnUpdate } as any)
     }
   }
 

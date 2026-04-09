@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { getActiveParticipantId } from '@/lib/participant'
 
 // ── Aposta de classificação de grupo ─────────────────────────
 export async function saveGroupBet(
@@ -15,10 +16,11 @@ export async function saveGroupBet(
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Não autenticado')
+  const participantId = await getActiveParticipantId(supabase, user.id)
 
   const { error } = await supabase.from('group_bets').upsert(
-    { user_id: user.id, group_name: groupName, first_place: firstPlace, second_place: secondPlace },
-    { onConflict: 'user_id,group_name' },
+    { participant_id: participantId, group_name: groupName, first_place: firstPlace, second_place: secondPlace },
+    { onConflict: 'participant_id,group_name' },
   )
   if (error) throw new Error(error.message)
 
@@ -46,10 +48,11 @@ export async function saveTournamentBet(data: {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Não autenticado')
+  const participantId = await getActiveParticipantId(supabase, user.id)
 
   const { error } = await supabase.from('tournament_bets').upsert(
-    { user_id: user.id, champion, runner_up, semi1, semi2, top_scorer },
-    { onConflict: 'user_id' },
+    { participant_id: participantId, champion, runner_up, semi1, semi2, top_scorer },
+    { onConflict: 'participant_id' },
   )
   if (error) throw new Error(error.message)
 

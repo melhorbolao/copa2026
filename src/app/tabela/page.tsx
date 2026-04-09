@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { getActiveParticipantId } from '@/lib/participant'
 import { Navbar } from '@/components/layout/Navbar'
 import { TabelaClient } from './TabelaClient'
 import { calcGroupStandings } from '@/lib/bracket/engine'
@@ -11,6 +12,7 @@ export default async function TabelaPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
+  const participantId = await getActiveParticipantId(supabase, user.id)
 
   const [{ data: rawMatches }, { data: rawBets }, { data: tBet }, { data: rawGroupBets }] = await Promise.all([
     supabase
@@ -21,16 +23,16 @@ export default async function TabelaPage() {
     supabase
       .from('bets')
       .select('match_id, score_home, score_away')
-      .eq('user_id', user.id),
+      .eq('participant_id', participantId),
     supabase
       .from('tournament_bets')
       .select('champion')
-      .eq('user_id', user.id)
+      .eq('participant_id', participantId)
       .maybeSingle(),
     supabase
       .from('group_bets')
       .select('group_name, first_place, second_place')
-      .eq('user_id', user.id),
+      .eq('participant_id', participantId),
   ])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -111,7 +113,7 @@ export default async function TabelaPage() {
         <TabelaClient
           standings={standings}
           groupBetsOverride={groupBetsOverride}
-          userId={user.id}
+          userId={participantId}
           g4Deadline={g4Deadline}
           hasTournamentBet={hasTournamentBet}
         />

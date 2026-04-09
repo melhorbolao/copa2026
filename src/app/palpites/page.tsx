@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { getActiveParticipantId } from '@/lib/participant'
 import { Navbar } from '@/components/layout/Navbar'
 import { MatchBetRow } from './MatchBetRow'
 import { GroupBetRow } from './GroupBetRow'
@@ -54,18 +55,19 @@ export default async function PalpitesPage({
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
+  const participantId = await getActiveParticipantId(supabase, user.id)
 
   const [{ data: matches }, { data: bets }, { data: groupBets }, { data: tBet }, { data: thirdBets }] = await Promise.all([
     supabase.from('matches').select('*').order('match_datetime', { ascending: true }),
-    supabase.from('bets').select('match_id, score_home, score_away, points').eq('user_id', user.id),
-    supabase.from('group_bets').select('group_name, first_place, second_place').eq('user_id', user.id),
+    supabase.from('bets').select('match_id, score_home, score_away, points').eq('participant_id', participantId),
+    supabase.from('group_bets').select('group_name, first_place, second_place').eq('participant_id', participantId),
     supabase.from('tournament_bets')
       .select('champion, runner_up, semi1, semi2, top_scorer')
-      .eq('user_id', user.id)
+      .eq('participant_id', participantId)
       .maybeSingle(),
     supabase.from('third_place_bets')
       .select('group_name, team')
-      .eq('user_id', user.id),
+      .eq('participant_id', participantId),
   ])
 
   const betMap      = new Map((bets ?? []).map(b => [b.match_id, b]))

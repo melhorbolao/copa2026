@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ExcelJS from 'exceljs'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getActiveParticipantId } from '@/lib/participant'
 
 export async function POST(req: NextRequest) {
   const supabase      = await createClient()
   const adminSupabase = await createAdminClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+
+  const participantId = await getActiveParticipantId(supabase, user.id)
 
   const form = await req.formData()
   const file = form.get('file') as File | null
@@ -51,7 +54,7 @@ export async function POST(req: NextRequest) {
   let updatedBonus   = 0
   let skipped        = 0
 
-  const matchUpserts: { user_id: string; match_id: string; score_home: number; score_away: number }[] = []
+  const matchUpserts: { participant_id: string; match_id: string; score_home: number; score_away: number }[] = []
   const groupBetMap:  Record<string, { first_place?: string; second_place?: string }> = {}
   const thirdBetMap:  Record<string, string> = {}
   const trnFields:    Record<string, string> = {}
@@ -76,7 +79,7 @@ export async function POST(req: NextRequest) {
       const scoreAway = parseNum(valB)
       if (scoreHome === null || scoreAway === null) return
 
-      matchUpserts.push({ user_id: user.id, match_id: matchId, score_home: scoreHome, score_away: scoreAway })
+      matchUpserts.push({ participant_id: participantId, match_id: matchId, score_home: scoreHome, score_away: scoreAway })
       updatedMatches++
       return
     }
@@ -90,7 +93,6 @@ export async function POST(req: NextRequest) {
       const first  = parseStr(valA)
       const second = parseStr(valB)
       if (!first && !second) return
-      // Valida nomes de times
       if (first  && !validTeams.has(first))  { skipped++; return }
       if (second && !validTeams.has(second)) { skipped++; return }
       if (!groupBetMap[g]) groupBetMap[g] = {}
@@ -116,7 +118,6 @@ export async function POST(req: NextRequest) {
       const field = key.replace('trn:', '')
       const val   = parseStr(valA)
       if (!val) return
-      // Artilheiro é nome livre; times G4 devem ser válidos
       const isTeamField = ['champion', 'runner_up', 'semi1', 'semi2'].includes(field)
       if (isTeamField && !validTeams.has(val)) { skipped++; return }
       trnFields[field] = val
@@ -127,7 +128,7 @@ export async function POST(req: NextRequest) {
 
   // Persiste jogos
   if (matchUpserts.length > 0) {
-    const { error } = await adminSupabase.from('bets').upsert(matchUpserts, { onConflict: 'user_id,match_id' })
+    const { error } = await adminSupabase.from('bets').upsert(matchUpserts, { onConflict: 'participant_id,match_id' })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
@@ -136,20 +137,20 @@ export async function POST(req: NextRequest) {
     const rows = Object.entries(groupBetMap)
       .filter(([, v]) => v.first_place && v.second_place)
       .map(([g, v]) => ({
-        user_id: user.id, group_name: g,
+        participant_id: participantId, group_name: g,
         first_place:  v.first_place  as string,
         second_place: v.second_place as string,
       }))
-    const { error } = await adminSupabase.from('group_bets').upsert(rows, { onConflict: 'user_id,group_name' })
+    const { error } = await adminSupabase.from('group_bets').upsert(rows, { onConflict: 'participant_id,group_name' })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
   // Persiste third_place_bets
   if (Object.keys(thirdBetMap).length > 0) {
     const rows = Object.entries(thirdBetMap).map(([g, team]) => ({
-      user_id: user.id, group_name: g, team,
+      participant_id: participantId, group_name: g, team,
     }))
-    const { error } = await adminSupabase.from('third_place_bets').upsert(rows, { onConflict: 'user_id,group_name' })
+    const { error } = await adminSupabase.from('third_place_bets').upsert(rows, { onConflict: 'participant_id,group_name' })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
@@ -170,7 +171,7 @@ export async function POST(req: NextRequest) {
     for (const [g] of thirdEntries.slice(8)) delete thirdBetMap[g]
   }
 
-  // Valida e remove duplicidades no G4 (não persiste campos conflitantes)
+  // Valida e remove duplicidades no G4
   const g4Labels: Record<string, string> = { champion: 'Campeão', runner_up: 'Vice', semi1: '3º Semi', semi2: '4º Semi' }
   const g4ValueToFields = new Map<string, string[]>()
   for (const field of Object.keys(g4Labels)) {
@@ -188,12 +189,12 @@ export async function POST(req: NextRequest) {
   }
 
   if (Object.keys(trnUpdate).length > 0) {
-    const { data: existing } = await supabase.from('tournament_bets').select('id').eq('user_id', user.id).maybeSingle()
+    const { data: existing } = await supabase.from('tournament_bets').select('id').eq('participant_id', participantId).maybeSingle()
     if (existing) {
-      await adminSupabase.from('tournament_bets').update(trnUpdate).eq('user_id', user.id)
+      await adminSupabase.from('tournament_bets').update(trnUpdate).eq('participant_id', participantId)
     } else {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await adminSupabase.from('tournament_bets').insert({ user_id: user.id, ...trnUpdate } as any)
+      await adminSupabase.from('tournament_bets').insert({ participant_id: participantId, ...trnUpdate } as any)
     }
   }
 

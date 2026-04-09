@@ -18,7 +18,17 @@ export async function GET(req: NextRequest) {
   if (!targetUserId) return NextResponse.json({ error: 'userId obrigatório' }, { status: 400 })
 
   const adminClient = createAuthAdminClient()
-  const { buffer, fileName } = await buildPalpitesBuffer(adminClient, targetUserId, { blank })
+
+  // Resolve o participante primário do usuário alvo
+  const { data: up } = await adminClient
+    .from('user_participants')
+    .select('participant_id')
+    .eq('user_id', targetUserId)
+    .eq('is_primary', true)
+    .maybeSingle()
+  if (!up?.participant_id) return NextResponse.json({ error: 'Participante não encontrado para este usuário.' }, { status: 404 })
+
+  const { buffer, fileName } = await buildPalpitesBuffer(adminClient, up.participant_id, { blank })
 
   return new NextResponse(buffer as unknown as BodyInit, {
     headers: {

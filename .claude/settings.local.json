@@ -20,7 +20,26 @@
       "Bash(npx --yes pdf-parse-cli FWC26_regulations_v15.pdf)",
       "Bash(pdftotext FWC26_regulations_v15.pdf -)",
       "Bash(grep -r \"createServerClient\" node_modules/@supabase/ssr/dist/*.cts)",
-      "Bash(npm show:*)"
+      "Bash(npm show:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(npx vercel:*)",
+      "Bash(pip install:*)",
+      "Bash(ls *.docx)",
+      "Bash(ls /c/projetos/bolao-copa/*.docx)",
+      "Bash(powershell:*)",
+      "Bash(npx next:*)",
+      "Bash(npx supabase:*)",
+      "Bash(ls \"C:/projetos/bolao-copa/\"*.pdf)",
+      "Bash(ls \"C:/projetos/bolao-copa/src/app/icon\"*)",
+      "Bash(sed -i \"s/title: 'Admin — Melhor Bolão'/title: 'Admin'/\" src/app/admin/layout.tsx)",
+      "Bash(sed -i \"s/title: 'Complete seu perfil — Melhor Bolão'/title: 'Complete seu perfil'/\" src/app/completar-perfil/page.tsx)",
+      "Bash(sed -i \"s/title: 'Pontuação — Melhor Bolão'/title: 'Pontuação'/\" src/app/pontuacao/page.tsx)",
+      "Bash(sed -i \"s/title: 'Política de Privacidade — Melhor Bolão'/title: 'Política de Privacidade'/\" src/app/privacidade/page.tsx)",
+      "Bash(sed -i \"s/title: 'Regulamento — Melhor Bolão'/title: 'Regulamento'/\" src/app/regulamento/page.tsx)",
+      "Bash(find:*)",
+      "Bash(grep -v \":0$\")"
     ]
   }
 }

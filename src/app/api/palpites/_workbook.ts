@@ -58,7 +58,7 @@ function makeFileName(apelido: string): string {
 
 export async function buildPalpitesBuffer(
   supabase: AnySupabase,
-  userId: string,
+  participantId: string,
   opts?: { blank?: boolean },
 ): Promise<{ buffer: Buffer; displayName: string; fileName: string }> {
   const [{ data: matches }, { data: profile }] = await Promise.all([
@@ -66,23 +66,23 @@ export async function buildPalpitesBuffer(
       .select('id, match_number, round, group_name, match_datetime, betting_deadline, team_home, team_away, city')
       .eq('phase', 'group')
       .order('match_datetime', { ascending: true }),
-    supabase.from('users').select('name, apelido').eq('id', userId).single(),
+    supabase.from('participants').select('apelido').eq('id', participantId).single(),
   ])
 
   const [bets, groupBets, thirdBets, tBet] = opts?.blank
     ? [null, null, null, null]
     : await Promise.all([
-        supabase.from('bets').select('match_id, score_home, score_away').eq('user_id', userId).then((r: any) => r.data),
-        supabase.from('group_bets').select('group_name, first_place, second_place').eq('user_id', userId).then((r: any) => r.data),
-        supabase.from('third_place_bets').select('group_name, team').eq('user_id', userId).then((r: any) => r.data),
-        supabase.from('tournament_bets').select('champion, runner_up, semi1, semi2, top_scorer').eq('user_id', userId).maybeSingle().then((r: any) => r.data),
+        supabase.from('bets').select('match_id, score_home, score_away').eq('participant_id', participantId).then((r: any) => r.data),
+        supabase.from('group_bets').select('group_name, first_place, second_place').eq('participant_id', participantId).then((r: any) => r.data),
+        supabase.from('third_place_bets').select('group_name, team').eq('participant_id', participantId).then((r: any) => r.data),
+        supabase.from('tournament_bets').select('champion, runner_up, semi1, semi2, top_scorer').eq('participant_id', participantId).maybeSingle().then((r: any) => r.data),
       ])
 
   const betMap      = new Map((bets      ?? []).map((b: any) => [b.match_id,   b]))
   const groupBetMap = new Map((groupBets ?? []).map((b: any) => [b.group_name, b]))
   const thirdBetMap = new Map((thirdBets ?? []).map((b: any) => [b.group_name, b]))
   const now         = new Date()
-  const apelido     = (profile as any)?.apelido || (profile as any)?.name || 'participante'
+  const apelido     = (profile as any)?.apelido || 'participante'
   const displayName = apelido
   const fileName    = makeFileName(apelido)
 

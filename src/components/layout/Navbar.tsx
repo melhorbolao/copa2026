@@ -1,20 +1,26 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { NavbarLinks } from './NavbarLinks'
+import { ParticipantSelector } from './ParticipantSelector'
 import { AlertBannerWrapper } from '@/components/AlertBannerWrapper'
+import { getActiveParticipantId, getUserParticipants } from '@/lib/participant'
 
 export async function Navbar() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   let profile = null
+  let participants: Awaited<ReturnType<typeof getUserParticipants>> = []
+
   if (user) {
-    const { data } = await supabase
-      .from('users')
-      .select('name, is_admin')
-      .eq('id', user.id)
-      .single()
+    const [{ data }, activeId] = await Promise.all([
+      supabase.from('users').select('name, is_admin').eq('id', user.id).single(),
+      getActiveParticipantId(supabase, user.id).catch(() => null),
+    ])
     profile = data
+    if (activeId) {
+      participants = await getUserParticipants(supabase, user.id, activeId)
+    }
   }
 
   // Prazo da Rodada 1 — abas extras só aparecem após ele vencer
@@ -58,8 +64,11 @@ export async function Navbar() {
           />
         )}
 
-        {/* Logout / Login */}
+        {/* Seletor de participante + Logout / Login */}
         <div className="flex items-center gap-2">
+          {participants.length > 1 && (
+            <ParticipantSelector participants={participants} />
+          )}
           {user ? (
             <form action="/auth/signout" method="post">
               <button
