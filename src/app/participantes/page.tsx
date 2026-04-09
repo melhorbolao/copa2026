@@ -32,13 +32,17 @@ export default async function ControlePage() {
     { data: matches },
     { data: allBets },
     { data: trnBets },
+    { data: groupBets },
+    { data: thirdBets },
   ] = await Promise.all([
     supabase.from('users')
       .select('id, name, apelido, paid')
       .eq('status', 'aprovado'),
     supabase.from('matches').select('id, phase, round, betting_deadline'),
     supabase.from('bets').select('user_id, match_id, updated_at'),
-    supabase.from('tournament_bets').select('user_id, champion, runner_up, semi1, semi2'),
+    supabase.from('tournament_bets').select('user_id, champion, runner_up, semi1, semi2, top_scorer'),
+    supabase.from('group_bets').select('user_id, group_name'),
+    supabase.from('third_place_bets').select('user_id, group_name'),
   ])
 
   // Valida duplicidade G4 por usuário
@@ -76,6 +80,22 @@ export default async function ControlePage() {
     // Guarda o prazo da etapa (todos os jogos da mesma etapa têm o mesmo prazo)
     if (!stageDeadlines[k]) stageDeadlines[k] = m.betting_deadline
   }
+  // R1 inclui bônus pré-torneio: G4+artilheiro (5) + classificados por grupo (12) + terceiros (8)
+  const R1_BONUS = 5 + 12 + 8   // 25 campos adicionais
+  stageTotals['r1'] += R1_BONUS
+
+  // Pré-processa bônus por usuário para R1
+  const trnBetSet = new Set((trnBets ?? []).map(t => t.user_id))
+
+  const groupBetCount = new Map<string, number>()
+  for (const g of (groupBets ?? [])) {
+    groupBetCount.set(g.user_id, (groupBetCount.get(g.user_id) ?? 0) + 1)
+  }
+
+  const thirdBetCount = new Map<string, number>()
+  for (const t of (thirdBets ?? [])) {
+    thirdBetCount.set(t.user_id, (thirdBetCount.get(t.user_id) ?? 0) + 1)
+  }
 
   // Palpites e último salvamento por usuário por etapa
   const betCount   = new Map<string, Record<StageKey, number>>()
@@ -92,6 +112,16 @@ export default async function ControlePage() {
 
     const prev = lastSavedMap.get(b.user_id)![k]
     if (!prev || b.updated_at > prev) lastSavedMap.get(b.user_id)![k] = b.updated_at
+  }
+
+  // Soma bônus de R1 por usuário
+  for (const user of (users ?? [])) {
+    const uid = user.id
+    if (!betCount.has(uid)) betCount.set(uid, { r1:0,r2:0,r3:0,r32:0,r16:0,qf:0,sf:0,final:0 })
+    const counts = betCount.get(uid)!
+    if (trnBetSet.has(uid))          counts.r1 += 5                                        // G4 + artilheiro
+    counts.r1 += Math.min(groupBetCount.get(uid) ?? 0, 12)                                 // classificados (0-12 grupos)
+    counts.r1 += Math.min(thirdBetCount.get(uid) ?? 0, 8)                                  // terceiros (0-8 picks)
   }
 
   const calcPct = (userId: string, k: StageKey) => {

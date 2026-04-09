@@ -29,9 +29,21 @@ export async function createManualUser(data: {
   observacao: string
 }) {
   await requireAdmin()
-  const supabase = await createAdminClient()
+  const db        = await createAdminClient()
+  const authAdmin = createAuthAdminClient()
 
-  const { error } = await supabase.from('users').insert({
+  // 1. Cria entrada no auth.users (e-mail confirmado, sem senha)
+  const { data: authData, error: authError } = await authAdmin.auth.admin.createUser({
+    email:         data.email.trim(),
+    email_confirm: true,
+  })
+  if (authError) throw new Error(authError.message)
+
+  const userId = authData.user.id
+
+  // 2. Upsert no public.users com o mesmo ID (trigger pode ter criado linha básica)
+  const { error: dbError } = await db.from('users').upsert({
+    id:         userId,
     name:       data.name.trim(),
     email:      data.email.trim(),
     whatsapp:   data.whatsapp.trim(),
@@ -46,7 +58,12 @@ export async function createManualUser(data: {
     is_manual: true,
   })
 
-  if (error) throw new Error(error.message)
+  if (dbError) {
+    // Rollback: remove auth se não conseguiu atualizar public
+    await authAdmin.auth.admin.deleteUser(userId)
+    throw new Error(dbError.message)
+  }
+
   revalidatePath('/admin/usuarios')
 }
 
@@ -80,13 +97,19 @@ export async function deleteUser(userId: string) {
   const db        = await createAdminClient()
   const authAdmin = createAuthAdminClient()
 
+  // Verifica se é usuário manual (sem entrada no auth.users)
+  const { data: target } = await db
+    .from('users').select('is_manual').eq('id', userId).single()
+
   // 1. Remove da tabela pública (cascata apaga bets, group_bets, etc.)
   const { error: dbError } = await db.from('users').delete().eq('id', userId)
   if (dbError) throw new Error(dbError.message)
 
-  // 2. Remove de auth.users usando o cliente puro (createServerClient não expõe auth.admin)
-  const { error: authError } = await authAdmin.auth.admin.deleteUser(userId)
-  if (authError) throw new Error(authError.message)
+  // 2. Remove de auth.users apenas para usuários não-manuais
+  if (!target?.is_manual) {
+    const { error: authError } = await authAdmin.auth.admin.deleteUser(userId)
+    if (authError) throw new Error(authError.message)
+  }
 
   revalidatePath('/admin/usuarios')
 }
