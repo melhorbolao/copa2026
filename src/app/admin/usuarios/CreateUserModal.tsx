@@ -38,13 +38,13 @@ export function CreateUserModal() {
     if (!padrinho)        { setError('Selecione o padrinho.'); return }
 
     start(async () => {
-      try {
-        await createManualUser({ name, email, whatsapp, padrinho, apelido, observacao })
+      const result = await createManualUser({ name, email, whatsapp, padrinho, apelido, observacao })
+      if (result.error) {
+        setError(result.error)
+      } else {
         setSuccess(true)
         router.refresh()
         setTimeout(handleClose, 1200)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Erro ao cadastrar.')
       }
     })
   }

@@ -27,9 +27,13 @@ export async function createManualUser(data: {
   padrinho: string
   apelido: string
   observacao: string
-}) {
-  await requireAdmin()
-  // Usa cliente puro com service role (sem cookies de sessão que sobrepõem o RLS bypass)
+}): Promise<{ error?: string }> {
+  try {
+    await requireAdmin()
+  } catch {
+    return { error: 'Acesso negado' }
+  }
+
   const admin = createAuthAdminClient()
 
   // 1. Cria entrada no auth.users (e-mail confirmado, sem senha)
@@ -37,7 +41,7 @@ export async function createManualUser(data: {
     email:         data.email.trim(),
     email_confirm: true,
   })
-  if (authError) throw new Error(authError.message)
+  if (authError) return { error: authError.message }
 
   const userId = authData.user.id
 
@@ -59,10 +63,11 @@ export async function createManualUser(data: {
   })
 
   if (dbError) {
-    // Rollback: remove auth se não conseguiu atualizar public
     await admin.auth.admin.deleteUser(userId)
-    throw new Error(dbError.message)
+    return { error: dbError.message }
   }
+
+  return {}
 }
 
 // ── Atualização de observação ────────────────────────────────
