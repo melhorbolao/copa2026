@@ -85,7 +85,12 @@ export default async function ControlePage() {
   stageTotals['r1'] += R1_BONUS
 
   // Pré-processa bônus por usuário para R1
-  const trnBetSet = new Set((trnBets ?? []).map(t => t.user_id))
+  // Conta campos preenchidos individualmente (champion, runner_up, semi1, semi2, top_scorer)
+  const trnBetCount = new Map<string, number>()
+  for (const t of (trnBets ?? [])) {
+    const filled = [t.champion, t.runner_up, t.semi1, t.semi2, t.top_scorer].filter(Boolean).length
+    trnBetCount.set(t.user_id, filled)
+  }
 
   const groupBetCount = new Map<string, number>()
   for (const g of (groupBets ?? [])) {
@@ -119,7 +124,7 @@ export default async function ControlePage() {
     const uid = user.id
     if (!betCount.has(uid)) betCount.set(uid, { r1:0,r2:0,r3:0,r32:0,r16:0,qf:0,sf:0,final:0 })
     const counts = betCount.get(uid)!
-    if (trnBetSet.has(uid))          counts.r1 += 5                                        // G4 + artilheiro
+    counts.r1 += trnBetCount.get(uid) ?? 0                                                  // G4 + artilheiro (campo a campo)
     counts.r1 += Math.min(groupBetCount.get(uid) ?? 0, 12)                                 // classificados (0-12 grupos)
     counts.r1 += Math.min(thirdBetCount.get(uid) ?? 0, 8)                                  // terceiros (0-8 picks)
   }

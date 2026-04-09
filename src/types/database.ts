@@ -307,6 +307,33 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_alerts: {
+        Row: {
+          id: string
+          message: string
+          start_at: string
+          end_at: string | null
+          is_active: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          message: string
+          start_at: string
+          end_at?: string | null
+          is_active?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          message?: string
+          start_at?: string
+          end_at?: string | null
+          is_active?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -339,3 +366,4 @@ export type MatchRow      = Tables<'matches'>
 export type BetRow        = Tables<'bets'>
 export type GroupBetRow   = Tables<'group_bets'>
 export type TournamentBetRow = Tables<'tournament_bets'>
+export type AdminAlertRow   = Tables<'admin_alerts'>
