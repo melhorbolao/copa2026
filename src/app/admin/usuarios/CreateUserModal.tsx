@@ -22,12 +22,35 @@ export function CreateUserModal() {
   const [apelido,    setApelido]    = useState('')
   const [observacao, setObservacao] = useState('')
 
+  // Estado de confirmação de e-mail duplicado
+  const [emailConfirm, setEmailConfirm] = useState<{ existingUserName: string } | null>(null)
+
   const reset = () => {
-    setName(''); setEmail(''); setWhatsapp(''); setPadrinho(''); setApelido(''); setObservacao('')
-    setError(''); setSuccess(false)
+    setName(''); setEmail(''); setWhatsapp(''); setPadrinho('')
+    setApelido(''); setObservacao(''); setError(''); setSuccess(false)
+    setEmailConfirm(null)
   }
 
   const handleClose = () => { setOpen(false); reset() }
+
+  const submit = (confirmDuplicateEmail = false) => {
+    start(async () => {
+      const result = await createManualUser({
+        name, email, whatsapp, padrinho, apelido, observacao,
+        confirmDuplicateEmail,
+      })
+      if (result.needsEmailConfirm) {
+        setEmailConfirm({ existingUserName: result.existingUserName! })
+      } else if (result.error) {
+        setError(result.error)
+        setEmailConfirm(null)
+      } else {
+        setSuccess(true)
+        router.refresh()
+        setTimeout(handleClose, 1200)
+      }
+    })
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -36,17 +59,7 @@ export function CreateUserModal() {
     if (!email.trim())    { setError('E-mail é obrigatório.'); return }
     if (!whatsapp.trim()) { setError('WhatsApp é obrigatório.'); return }
     if (!padrinho)        { setError('Selecione o padrinho.'); return }
-
-    start(async () => {
-      const result = await createManualUser({ name, email, whatsapp, padrinho, apelido, observacao })
-      if (result.error) {
-        setError(result.error)
-      } else {
-        setSuccess(true)
-        router.refresh()
-        setTimeout(handleClose, 1200)
-      }
-    })
+    submit(false)
   }
 
   return (
@@ -110,20 +123,57 @@ export function CreateUserModal() {
                 Participantes cadastrados manualmente entram direto como <strong>Aprovados</strong>.
               </p>
 
-              {error   && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>}
-              {success && <p className="rounded-lg bg-verde-50 px-3 py-2 text-xs text-verde-700 font-semibold">✓ Participante cadastrado!</p>}
+              {error && (
+                <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>
+              )}
+              {success && (
+                <p className="rounded-lg bg-verde-50 px-3 py-2 text-xs text-verde-700 font-semibold">
+                  ✓ Participante cadastrado!
+                </p>
+              )}
 
-              <div className="flex gap-2 pt-1">
-                <button type="submit" disabled={pending}
-                  className="flex-1 rounded-lg py-2.5 text-sm font-bold text-white disabled:opacity-50"
-                  style={{ backgroundColor: '#009c3b' }}>
-                  {pending ? 'Cadastrando…' : 'Cadastrar'}
-                </button>
-                <button type="button" onClick={handleClose}
-                  className="flex-1 rounded-lg py-2.5 text-sm font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200">
-                  Cancelar
-                </button>
-              </div>
+              {/* Confirmação de e-mail duplicado */}
+              {emailConfirm && (
+                <div className="rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-3 text-xs text-yellow-800">
+                  <p className="font-semibold mb-1">⚠️ E-mail já cadastrado</p>
+                  <p className="mb-3">
+                    O e-mail <strong>{email}</strong> já pertence a <strong>{emailConfirm.existingUserName}</strong>.
+                    Deseja cadastrar <strong>{name}</strong> com o mesmo e-mail?
+                    {' '}(Útil quando um pai inscreve um filho.)
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEmailConfirm(null)}
+                      className="flex-1 rounded py-1.5 text-xs font-semibold bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => submit(true)}
+                      className="flex-1 rounded py-1.5 text-xs font-bold bg-yellow-500 text-white hover:bg-yellow-600 disabled:opacity-50"
+                    >
+                      {pending ? 'Cadastrando…' : 'Sim, cadastrar mesmo assim'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {!emailConfirm && (
+                <div className="flex gap-2 pt-1">
+                  <button type="submit" disabled={pending}
+                    className="flex-1 rounded-lg py-2.5 text-sm font-bold text-white disabled:opacity-50"
+                    style={{ backgroundColor: '#009c3b' }}>
+                    {pending ? 'Cadastrando…' : 'Cadastrar'}
+                  </button>
+                  <button type="button" onClick={handleClose}
+                    className="flex-1 rounded-lg py-2.5 text-sm font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200">
+                    Cancelar
+                  </button>
+                </div>
+              )}
             </form>
           </div>
         </div>

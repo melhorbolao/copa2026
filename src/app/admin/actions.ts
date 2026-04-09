@@ -27,32 +27,78 @@ export async function createManualUser(data: {
   padrinho: string
   apelido: string
   observacao: string
-}): Promise<{ error?: string }> {
+  confirmDuplicateEmail?: boolean
+}): Promise<{ error?: string; needsEmailConfirm?: boolean; existingUserName?: string }> {
   try {
     await requireAdmin()
   } catch {
     return { error: 'Acesso negado' }
   }
 
-  const admin = createAuthAdminClient()
+  const admin          = createAuthAdminClient()
+  const emailTrimmed   = data.email.trim()
+  const nameTrimmed    = data.name.trim()
+  const apelidoTrimmed = data.apelido.trim()
 
-  // 1. Cria entrada no auth.users (e-mail confirmado, sem senha)
+  // 1. Apelido único (se preenchido)
+  if (apelidoTrimmed) {
+    const { data: existing } = await admin
+      .from('users').select('id').eq('apelido', apelidoTrimmed).maybeSingle()
+    if (existing) return { error: `O apelido "${apelidoTrimmed}" já está em uso por outro participante.` }
+  }
+
+  // 2. Combinação nome + e-mail já existe → bloqueio definitivo
+  const { data: existingCombo } = await admin
+    .from('users').select('id').eq('email', emailTrimmed).eq('name', nameTrimmed).maybeSingle()
+  if (existingCombo) return { error: 'Já existe um cadastro com este nome e e-mail.' }
+
+  // 3. E-mail já existe com nome diferente → pede confirmação
+  const { data: existingEmailRows } = await admin
+    .from('users').select('name').eq('email', emailTrimmed).limit(1)
+  const existingEmailUser = existingEmailRows?.[0] ?? null
+
+  if (existingEmailUser && !data.confirmDuplicateEmail) {
+    return { needsEmailConfirm: true, existingUserName: existingEmailUser.name }
+  }
+
+  // 4. E-mail duplicado confirmado → cria somente em public.users (sem auth entry)
+  if (existingEmailUser) {
+    const userId = crypto.randomUUID()
+    const { error: dbError } = await admin.from('users').insert({
+      id:         userId,
+      name:       nameTrimmed,
+      email:      emailTrimmed,
+      whatsapp:   data.whatsapp.trim(),
+      padrinho:   data.padrinho,
+      apelido:    apelidoTrimmed || null,
+      observacao: data.observacao.trim() || null,
+      provider:  'manual',
+      status:    'aprovado',
+      approved:  true,
+      paid:      false,
+      is_admin:  false,
+      is_manual: true,
+    })
+    if (dbError) return { error: dbError.message }
+    return {}
+  }
+
+  // 5. E-mail novo → fluxo normal: cria auth.users + public.users
   const { data: authData, error: authError } = await admin.auth.admin.createUser({
-    email:         data.email.trim(),
+    email:         emailTrimmed,
     email_confirm: true,
   })
   if (authError) return { error: authError.message }
 
   const userId = authData.user.id
 
-  // 2. Upsert no public.users com o mesmo ID (trigger pode ter criado linha básica)
   const { error: dbError } = await admin.from('users').upsert({
     id:         userId,
-    name:       data.name.trim(),
-    email:      data.email.trim(),
+    name:       nameTrimmed,
+    email:      emailTrimmed,
     whatsapp:   data.whatsapp.trim(),
     padrinho:   data.padrinho,
-    apelido:    data.apelido.trim() || null,
+    apelido:    apelidoTrimmed || null,
     observacao: data.observacao.trim() || null,
     provider:  'manual',
     status:    'aprovado',
