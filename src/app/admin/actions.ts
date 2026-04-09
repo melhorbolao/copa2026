@@ -29,11 +29,11 @@ export async function createManualUser(data: {
   observacao: string
 }) {
   await requireAdmin()
-  const db        = await createAdminClient()
-  const authAdmin = createAuthAdminClient()
+  // Usa cliente puro com service role (sem cookies de sessão que sobrepõem o RLS bypass)
+  const admin = createAuthAdminClient()
 
   // 1. Cria entrada no auth.users (e-mail confirmado, sem senha)
-  const { data: authData, error: authError } = await authAdmin.auth.admin.createUser({
+  const { data: authData, error: authError } = await admin.auth.admin.createUser({
     email:         data.email.trim(),
     email_confirm: true,
   })
@@ -42,7 +42,7 @@ export async function createManualUser(data: {
   const userId = authData.user.id
 
   // 2. Upsert no public.users com o mesmo ID (trigger pode ter criado linha básica)
-  const { error: dbError } = await db.from('users').upsert({
+  const { error: dbError } = await admin.from('users').upsert({
     id:         userId,
     name:       data.name.trim(),
     email:      data.email.trim(),
@@ -60,7 +60,7 @@ export async function createManualUser(data: {
 
   if (dbError) {
     // Rollback: remove auth se não conseguiu atualizar public
-    await authAdmin.auth.admin.deleteUser(userId)
+    await admin.auth.admin.deleteUser(userId)
     throw new Error(dbError.message)
   }
 
@@ -94,20 +94,20 @@ export async function updatePadrinho(userId: string, padrinho: string) {
 // ── Exclusão de usuário ───────────────────────────────────────
 export async function deleteUser(userId: string) {
   await requireAdmin()
-  const db        = await createAdminClient()
-  const authAdmin = createAuthAdminClient()
+  // Usa cliente puro com service role (sem cookies de sessão que sobrepõem o RLS bypass)
+  const admin = createAuthAdminClient()
 
   // Verifica se é usuário manual (sem entrada no auth.users)
-  const { data: target } = await db
+  const { data: target } = await admin
     .from('users').select('is_manual').eq('id', userId).single()
 
   // 1. Remove da tabela pública (cascata apaga bets, group_bets, etc.)
-  const { error: dbError } = await db.from('users').delete().eq('id', userId)
+  const { error: dbError } = await admin.from('users').delete().eq('id', userId)
   if (dbError) throw new Error(dbError.message)
 
   // 2. Remove de auth.users apenas para usuários não-manuais
   if (!target?.is_manual) {
-    const { error: authError } = await authAdmin.auth.admin.deleteUser(userId)
+    const { error: authError } = await admin.auth.admin.deleteUser(userId)
     if (authError) throw new Error(authError.message)
   }
 

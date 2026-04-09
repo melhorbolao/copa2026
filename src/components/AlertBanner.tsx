@@ -27,13 +27,15 @@ export function AlertBanner() {
         .from('admin_alerts')
         .select('*')
         .eq('is_active', true)
-        .then(({ data }) => { if (data) setAlerts(data) })
-        .catch(() => { /* tabela pode não existir ainda */ })
+        .then(
+          ({ data }) => { if (data) setAlerts(data) },
+          () => { /* tabela pode não existir ainda */ }
+        )
     }
 
-    supabase.auth.getUser()
-      .then(({ data }) => { if (data.user) setLoggedIn(true) })
-      .catch(() => {})
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user) setLoggedIn(true)
+    }, () => {})
 
     fetchAlerts()
 

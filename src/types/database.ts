@@ -307,6 +307,30 @@ export type Database = {
         }
         Relationships: []
       }
+      email_settings: {
+        Row: {
+          key: string
+          enabled: boolean
+          label: string | null
+          description: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          key: string
+          enabled?: boolean
+          label?: string | null
+          description?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          key?: string
+          enabled?: boolean
+          label?: string | null
+          description?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       admin_alerts: {
         Row: {
           id: string
