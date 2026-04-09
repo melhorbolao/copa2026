@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Plus_Jakarta_Sans } from 'next/font/google'
 import { Toaster } from 'react-hot-toast'
 import { AdminViewProvider } from '@/contexts/AdminViewContext'
-import { AlertBanner } from '@/components/AlertBanner'
+import { AlertBannerWrapper } from '@/components/AlertBannerWrapper'
 import './globals.css'
 
 const font = Plus_Jakarta_Sans({
@@ -35,7 +35,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" className={font.variable}>
       <body className="min-h-screen bg-gray-50 font-sans">
-        <AlertBanner />
+        <AlertBannerWrapper />
         <AdminViewProvider>
           {children}
         </AdminViewProvider>

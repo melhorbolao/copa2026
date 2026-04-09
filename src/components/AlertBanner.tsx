@@ -13,52 +13,49 @@ function isAlertActive(alert: AdminAlertRow): boolean {
 }
 
 export function AlertBanner() {
-  const [alerts, setAlerts]   = useState<AdminAlertRow[]>([])
-  const [loggedIn, setLoggedIn] = useState(false)
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set())
+  const [alerts,    setAlerts]    = useState<AdminAlertRow[]>([])
+  const [loggedIn,  setLoggedIn]  = useState(false)
+  const [dismissed, setDismissed] = useState<string[]>([])
 
   useEffect(() => {
     const supabase = createClient()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let channel: any
 
-    // Verifica sessão
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) setLoggedIn(true)
-    })
+    const fetchAlerts = () => {
+      supabase
+        .from('admin_alerts')
+        .select('*')
+        .eq('is_active', true)
+        .then(({ data }) => { if (data) setAlerts(data) })
+        .catch(() => { /* tabela pode não existir ainda */ })
+    }
 
-    // Busca alertas ativos
-    supabase
-      .from('admin_alerts')
-      .select('*')
-      .eq('is_active', true)
-      .then(({ data }) => {
-        if (data) setAlerts(data)
-      })
+    supabase.auth.getUser()
+      .then(({ data }) => { if (data.user) setLoggedIn(true) })
+      .catch(() => {})
 
-    // Realtime: escuta mudanças na tabela
-    const channel = supabase
-      .channel('admin_alerts_banner')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'admin_alerts' },
-        () => {
-          // Re-busca ao receber qualquer mudança
-          supabase
-            .from('admin_alerts')
-            .select('*')
-            .eq('is_active', true)
-            .then(({ data }) => {
-              if (data) setAlerts(data)
-            })
-        },
-      )
-      .subscribe()
+    fetchAlerts()
 
-    return () => { supabase.removeChannel(channel) }
+    try {
+      channel = supabase
+        .channel('admin_alerts_banner')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_alerts' }, fetchAlerts)
+        .subscribe()
+    } catch {
+      // realtime opcional — falha silenciosamente
+    }
+
+    return () => {
+      if (channel) {
+        try { supabase.removeChannel(channel) } catch { /* ignore */ }
+      }
+    }
   }, [])
 
   if (!loggedIn) return null
 
-  const visible = alerts.filter(a => isAlertActive(a) && !dismissed.has(a.id))
+  const visible = alerts.filter(a => isAlertActive(a) && !dismissed.includes(a.id))
   if (visible.length === 0) return null
 
   return (
@@ -70,7 +67,7 @@ export function AlertBanner() {
         >
           <span className="flex-1 text-center">{alert.message}</span>
           <button
-            onClick={() => setDismissed(prev => new Set([...prev, alert.id]))}
+            onClick={() => setDismissed(prev => [...prev, alert.id])}
             className="shrink-0 rounded p-0.5 hover:bg-yellow-500 transition"
             aria-label="Fechar aviso"
           >
