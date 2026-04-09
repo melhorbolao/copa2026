@@ -1,7 +1,7 @@
 import { Navbar } from '@/components/layout/Navbar'
 import { RegulamentoContent } from './RegulamentoContent'
 
-export const metadata = { title: 'Regulamento — Melhor Bolão' }
+export const metadata = { title: 'Regulamento' }
 
 const REGULAMENTO = `## Resumo Executivo
 

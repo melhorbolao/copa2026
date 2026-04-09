@@ -1,4 +1,4 @@
-export const metadata = { title: 'Política de Privacidade — Melhor Bolão' }
+export const metadata = { title: 'Política de Privacidade' }
 
 export default function PrivacidadePage() {
   return (

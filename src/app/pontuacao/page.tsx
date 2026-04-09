@@ -4,7 +4,7 @@ import { ScoringTable } from './ScoringTable'
 import { ScoreSimulator } from './ScoreSimulator'
 import { GroupSimulator } from './GroupSimulator'
 
-export const metadata = { title: 'Pontuação — Melhor Bolão' }
+export const metadata = { title: 'Pontuação' }
 
 export default async function PontuacaoPage() {
   const supabase = await createClient()

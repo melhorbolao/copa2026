@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Navbar } from '@/components/layout/Navbar'
 import { AdminTabs } from './AdminTabs'
 
-export const metadata = { title: 'Admin — Melhor Bolão' }
+export const metadata = { title: 'Admin' }
 
 export default async function AdminLayout({
   children,

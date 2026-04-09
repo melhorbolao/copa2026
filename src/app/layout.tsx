@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Plus_Jakarta_Sans } from 'next/font/google'
 import { Toaster } from 'react-hot-toast'
 import { AdminViewProvider } from '@/contexts/AdminViewContext'
@@ -11,7 +11,10 @@ const font = Plus_Jakarta_Sans({
 })
 
 export const metadata: Metadata = {
-  title: 'Melhor Bolão',
+  title: {
+    default:  'Melhor Bolão',
+    template: '%s | Melhor Bolão',
+  },
   description: 'Faça seus palpites para a Copa do Mundo FIFA 2026 e dispute com seus amigos!',
   keywords: ['bolão', 'copa do mundo', 'fifa 2026', 'palpites', 'futebol'],
   openGraph: {
@@ -20,6 +23,10 @@ export const metadata: Metadata = {
     locale: 'pt_BR',
     type: 'website',
   },
+}
+
+export const viewport: Viewport = {
+  themeColor: '#009c3b',
 }
 
 export default function RootLayout({

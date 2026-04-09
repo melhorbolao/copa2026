@@ -1,4 +1,4 @@
-export const metadata = { title: 'Termos de Uso — Melhor Bolão' }
+export const metadata = { title: 'Termos de Uso' }
 
 export default function TermosPage() {
   return (
