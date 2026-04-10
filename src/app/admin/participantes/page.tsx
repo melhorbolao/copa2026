@@ -1,9 +1,9 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAuthAdminClient } from '@/lib/supabase/server'
 import { ParticipantRow } from './ParticipantRow'
 import { CreateParticipantModal } from './CreateParticipantModal'
 
 export default async function AdminParticipantesPage() {
-  const supabase = await createClient()
+  const supabase = createAuthAdminClient()
 
   const [{ data: rawParticipants }, { data: approvedUsers }] = await Promise.all([
     supabase

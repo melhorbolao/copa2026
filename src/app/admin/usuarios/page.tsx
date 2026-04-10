@@ -1,10 +1,10 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAuthAdminClient } from '@/lib/supabase/server'
 import { UserRow } from './UserRow'
 import { ReminderSection } from './ReminderSection'
 import { CopyEmailsButton } from './CopyEmailsButton'
 
 export default async function AdminUsuariosPage() {
-  const supabase = await createClient()
+  const supabase = createAuthAdminClient()
 
   const { data: users } = await supabase.from('users')
     .select(`
