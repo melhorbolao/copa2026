@@ -17,7 +17,6 @@ export default async function AdminUsuariosPage() {
   const total     = users?.length ?? 0
   const aprovados = users?.filter(u => u.status === 'aprovado').length ?? 0
   const pendentes = users?.filter(u => u.status === 'aprovacao_pendente').length ?? 0
-  const pagos     = users?.filter(u => u.paid).length ?? 0
 
   const approvedEmails = (users ?? [])
     .filter(u => u.status === 'aprovado')
@@ -26,11 +25,10 @@ export default async function AdminUsuariosPage() {
   return (
     <div>
       {/* Resumo */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Cadastrados"       value={total}     color="gray"    />
-        <StatCard label="Aprovados"         value={aprovados} color="verde"   />
-        <StatCard label="Aguard. aprovação" value={pendentes} color="orange"  />
-        <StatCard label="Pagos"             value={pagos}     color="amarelo" />
+      <div className="mb-6 grid grid-cols-3 gap-3">
+        <StatCard label="Cadastrados"       value={total}     color="gray"   />
+        <StatCard label="Aprovados"         value={aprovados} color="verde"  />
+        <StatCard label="Aguard. aprovação" value={pendentes} color="orange" />
       </div>
 
       {/* Lembrete + Copiar e-mails */}
@@ -78,7 +76,7 @@ export default async function AdminUsuariosPage() {
       </div>
 
       <p className="mt-3 text-right text-xs text-gray-400">
-        {aprovados}/{total} aprovados · {pagos}/{total} pagos
+        {aprovados}/{total} aprovados
       </p>
     </div>
   )

@@ -59,7 +59,7 @@ export default async function AdminParticipantesPage() {
               </thead>
               <tbody>
                 {participants.map((p, i) => (
-                  <ParticipantRow key={p.id} participant={p} index={i} />
+                  <ParticipantRow key={p.id} participant={p} index={i} allUsers={users} />
                 ))}
               </tbody>
             </table>

@@ -3,7 +3,14 @@
 import { useTransition, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
-import { toggleParticipantPaid, deleteParticipant, updateParticipantApelido, updateParticipantBio } from './actions'
+import {
+  toggleParticipantPaid,
+  deleteParticipant,
+  updateParticipantApelido,
+  updateParticipantBio,
+  linkUserToParticipant,
+  unlinkUserFromParticipant,
+} from './actions'
 import { PalpitesModal } from '../usuarios/PalpitesModal'
 
 interface LinkedUser {
@@ -22,19 +29,22 @@ interface ParticipantRowProps {
     user_participants: LinkedUser[]
   }
   index: number
+  allUsers: { id: string; name: string; apelido: string | null }[]
 }
 
-export function ParticipantRow({ participant, index }: ParticipantRowProps) {
+export function ParticipantRow({ participant, index, allUsers }: ParticipantRowProps) {
   const router = useRouter()
 
   const [pendingPaid,    startPaid]    = useTransition()
   const [pendingDelete,  startDelete]  = useTransition()
   const [pendingApelido, startApelido] = useTransition()
   const [pendingBio,     startBio]     = useTransition()
+  const [pendingLink,    startLink]    = useTransition()
 
   const [confirming,     setConfirming]     = useState(false)
   const [editingApelido, setEditingApelido] = useState(false)
   const [editingBio,     setEditingBio]     = useState(false)
+  const [addingUser,     setAddingUser]     = useState(false)
 
   const apelidoRef = useRef<HTMLInputElement>(null)
   const bioRef     = useRef<HTMLInputElement>(null)
@@ -43,7 +53,12 @@ export function ParticipantRow({ participant, index }: ParticipantRowProps) {
 
   const primaryLink = participant.user_participants.find(up => up.is_primary)
   const primaryUser = primaryLink?.users
-  const allUsers    = participant.user_participants.map(up => up.users).filter(Boolean)
+
+  // Usuários já vinculados (IDs)
+  const linkedUserIds = new Set(participant.user_participants.map(up => up.user_id))
+
+  // Usuários aprovados que ainda não estão vinculados
+  const availableUsers = allUsers.filter(u => !linkedUserIds.has(u.id))
 
   const handleTogglePaid = () => {
     startPaid(() => {
@@ -80,6 +95,28 @@ export function ParticipantRow({ participant, index }: ParticipantRowProps) {
       void updateParticipantBio(participant.id, val)
         .then(() => router.refresh())
         .catch(() => toast.error('Erro ao salvar bio'))
+    })
+  }
+
+  const handleLinkUser = (userId: string) => {
+    if (!userId) return
+    setAddingUser(false)
+    startLink(() => {
+      void linkUserToParticipant(participant.id, userId)
+        .then(res => {
+          if (res.error) toast.error(res.error)
+          else router.refresh()
+        })
+    })
+  }
+
+  const handleUnlinkUser = (userId: string) => {
+    startLink(() => {
+      void unlinkUserFromParticipant(participant.id, userId)
+        .then(res => {
+          if (res.error) toast.error(res.error)
+          else router.refresh()
+        })
     })
   }
 
@@ -169,17 +206,54 @@ export function ParticipantRow({ participant, index }: ParticipantRowProps) {
       </td>
 
       {/* Usuários com acesso */}
-      <td className="px-3 py-2.5">
-        <div className="flex flex-col gap-0.5">
-          {allUsers.length === 0 && <span className="text-xs text-gray-300 italic">nenhum</span>}
-          {allUsers.map((u, i) => (
-            <span key={i} className="text-xs text-gray-600 whitespace-nowrap">
-              {u!.name}
-              {participant.user_participants[i]?.is_primary && (
-                <span className="ml-1 text-[10px] text-verde-600 font-bold">★</span>
+      <td className="px-3 py-2.5 min-w-[160px]">
+        <div className={`flex flex-col gap-0.5 ${pendingLink ? 'opacity-50' : ''}`}>
+          {participant.user_participants.length === 0 && (
+            <span className="text-xs text-gray-300 italic">nenhum</span>
+          )}
+          {participant.user_participants.map((up) => (
+            <div key={up.user_id} className="flex items-center gap-1 group">
+              <span className="text-xs text-gray-600 whitespace-nowrap">
+                {up.users?.name ?? '?'}
+                {up.is_primary && <span className="ml-1 text-[10px] text-verde-600 font-bold">★</span>}
+              </span>
+              {!up.is_primary && (
+                <button
+                  onClick={() => handleUnlinkUser(up.user_id)}
+                  title="Remover vínculo"
+                  className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition leading-none"
+                >
+                  ×
+                </button>
               )}
-            </span>
+            </div>
           ))}
+
+          {/* Adicionar usuário */}
+          {addingUser ? (
+            <select
+              autoFocus
+              defaultValue=""
+              onChange={e => handleLinkUser(e.target.value)}
+              onBlur={() => setAddingUser(false)}
+              className="mt-0.5 rounded border border-verde-300 px-1 py-0.5 text-xs focus:outline-none"
+            >
+              <option value="" disabled>— selecionar —</option>
+              {availableUsers.map(u => (
+                <option key={u.id} value={u.id}>{u.name}</option>
+              ))}
+            </select>
+          ) : (
+            availableUsers.length > 0 && (
+              <button
+                onClick={() => setAddingUser(true)}
+                className="mt-0.5 self-start text-xs text-gray-300 hover:text-verde-600 transition"
+                title="Adicionar usuário"
+              >
+                + adicionar
+              </button>
+            )
+          )}
         </div>
       </td>
 

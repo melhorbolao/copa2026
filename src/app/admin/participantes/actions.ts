@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createClient, createAuthAdminClient } from '@/lib/supabase/server'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -18,7 +18,7 @@ export async function createParticipant(data: {
 }): Promise<{ error?: string }> {
   try { await requireAdmin() } catch { return { error: 'Acesso negado' } }
 
-  const supabase = await createAdminClient()
+  const supabase = createAuthAdminClient()
   const apelidoTrimmed = data.apelido.trim()
   if (!apelidoTrimmed) return { error: 'Nome no Bolão é obrigatório.' }
 
@@ -52,7 +52,7 @@ export async function createParticipant(data: {
 
 export async function deleteParticipant(participantId: string): Promise<void> {
   await requireAdmin()
-  const supabase = await createAdminClient()
+  const supabase = createAuthAdminClient()
   const { error } = await supabase.from('participants').delete().eq('id', participantId)
   if (error) throw new Error(error.message)
   revalidatePath('/admin/participantes')
@@ -60,7 +60,7 @@ export async function deleteParticipant(participantId: string): Promise<void> {
 
 export async function updateParticipantApelido(participantId: string, apelido: string): Promise<void> {
   await requireAdmin()
-  const supabase = await createAdminClient()
+  const supabase = createAuthAdminClient()
   const trimmed = apelido.trim()
   if (!trimmed) return
 
@@ -75,14 +75,51 @@ export async function updateParticipantApelido(participantId: string, apelido: s
 
 export async function updateParticipantBio(participantId: string, bio: string): Promise<void> {
   await requireAdmin()
-  const supabase = await createAdminClient()
+  const supabase = createAuthAdminClient()
   await supabase.from('participants').update({ bio: bio.trim() || null }).eq('id', participantId)
   revalidatePath('/admin/participantes')
 }
 
 export async function toggleParticipantPaid(participantId: string, current: boolean): Promise<void> {
   await requireAdmin()
-  const supabase = await createAdminClient()
+  const supabase = createAuthAdminClient()
   await supabase.from('participants').update({ paid: !current }).eq('id', participantId)
   revalidatePath('/admin/participantes')
+}
+
+export async function linkUserToParticipant(participantId: string, userId: string): Promise<{ error?: string }> {
+  try { await requireAdmin() } catch { return { error: 'Acesso negado' } }
+  const supabase = createAuthAdminClient()
+
+  // Verifica se já está vinculado
+  const { data: existing } = await supabase
+    .from('user_participants').select('id').eq('participant_id', participantId).eq('user_id', userId).maybeSingle()
+  if (existing) return { error: 'Usuário já vinculado a este participante.' }
+
+  const { error } = await supabase.from('user_participants').insert({
+    participant_id: participantId,
+    user_id: userId,
+    is_primary: false,
+  })
+  if (error) return { error: error.message }
+
+  revalidatePath('/admin/participantes')
+  return {}
+}
+
+export async function unlinkUserFromParticipant(participantId: string, userId: string): Promise<{ error?: string }> {
+  try { await requireAdmin() } catch { return { error: 'Acesso negado' } }
+  const supabase = createAuthAdminClient()
+
+  // Não permite remover o usuário primário
+  const { data: link } = await supabase
+    .from('user_participants').select('is_primary').eq('participant_id', participantId).eq('user_id', userId).maybeSingle()
+  if (link?.is_primary) return { error: 'Não é possível remover o usuário principal.' }
+
+  const { error } = await supabase
+    .from('user_participants').delete().eq('participant_id', participantId).eq('user_id', userId)
+  if (error) return { error: error.message }
+
+  revalidatePath('/admin/participantes')
+  return {}
 }
