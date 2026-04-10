@@ -10,6 +10,7 @@ import {
   updateParticipantBio,
   linkUserToParticipant,
   unlinkUserFromParticipant,
+  setPrimaryUser,
 } from './actions'
 import { PalpitesModal } from '../usuarios/PalpitesModal'
 
@@ -40,6 +41,7 @@ export function ParticipantRow({ participant, index, allUsers }: ParticipantRowP
   const [pendingApelido, startApelido] = useTransition()
   const [pendingBio,     startBio]     = useTransition()
   const [pendingLink,    startLink]    = useTransition()
+  const [pendingPrimary, startPrimary] = useTransition()
 
   const [confirming,     setConfirming]     = useState(false)
   const [editingApelido, setEditingApelido] = useState(false)
@@ -51,8 +53,7 @@ export function ParticipantRow({ participant, index, allUsers }: ParticipantRowP
   const apelidoLatest = useRef(participant.apelido)
   const bioLatest     = useRef(participant.bio ?? '')
 
-  const primaryLink = participant.user_participants.find(up => up.is_primary)
-  const primaryUser = primaryLink?.users
+  const primaryUser = participant.user_participants.find(up => up.is_primary)?.users
 
   // Usuários já vinculados (IDs)
   const linkedUserIds = new Set(participant.user_participants.map(up => up.user_id))
@@ -98,6 +99,16 @@ export function ParticipantRow({ participant, index, allUsers }: ParticipantRowP
     })
   }
 
+  const handleSetPrimary = (userId: string) => {
+    startPrimary(() => {
+      void setPrimaryUser(participant.id, userId)
+        .then(res => {
+          if (res.error) toast.error(res.error)
+          else router.refresh()
+        })
+    })
+  }
+
   const handleLinkUser = (userId: string) => {
     if (!userId) return
     setAddingUser(false)
@@ -123,18 +134,6 @@ export function ParticipantRow({ participant, index, allUsers }: ParticipantRowP
   return (
     <tr className="border-b border-gray-100 last:border-0 hover:bg-gray-50 text-sm">
       <td className="px-3 py-2.5 text-gray-400 text-xs">{index + 1}</td>
-
-      {/* Nome do usuário principal */}
-      <td className="px-3 py-2.5">
-        {primaryUser ? (
-          <>
-            <p className="font-medium text-gray-900 whitespace-nowrap">{primaryUser.name}</p>
-            <p className="text-xs text-gray-400">{primaryUser.email}</p>
-          </>
-        ) : (
-          <span className="text-xs text-gray-300 italic">sem usuário</span>
-        )}
-      </td>
 
       {/* Nome no Bolão — editável inline */}
       <td className="px-3 py-2.5 min-w-[130px]">
@@ -206,16 +205,26 @@ export function ParticipantRow({ participant, index, allUsers }: ParticipantRowP
       </td>
 
       {/* Usuários com acesso */}
-      <td className="px-3 py-2.5 min-w-[160px]">
-        <div className={`flex flex-col gap-0.5 ${pendingLink ? 'opacity-50' : ''}`}>
+      <td className="px-3 py-2.5 min-w-[180px]">
+        <div className={`flex flex-col gap-0.5 ${pendingLink || pendingPrimary ? 'opacity-50' : ''}`}>
           {participant.user_participants.length === 0 && (
             <span className="text-xs text-gray-300 italic">nenhum</span>
           )}
           {participant.user_participants.map((up) => (
             <div key={up.user_id} className="flex items-center gap-1 group">
+              <button
+                onClick={() => !up.is_primary && handleSetPrimary(up.user_id)}
+                title={up.is_primary ? 'Usuário principal' : 'Tornar principal'}
+                className={`text-[11px] leading-none transition ${
+                  up.is_primary
+                    ? 'text-verde-500 cursor-default'
+                    : 'text-gray-200 hover:text-verde-400 cursor-pointer'
+                }`}
+              >
+                ★
+              </button>
               <span className="text-xs text-gray-600 whitespace-nowrap">
                 {up.users?.name ?? '?'}
-                {up.is_primary && <span className="ml-1 text-[10px] text-verde-600 font-bold">★</span>}
               </span>
               {!up.is_primary && (
                 <button

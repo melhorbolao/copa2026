@@ -55,6 +55,26 @@ export async function deleteParticipant(participantId: string): Promise<void> {
   revalidatePath('/admin/participantes')
 }
 
+export async function setPrimaryUser(participantId: string, userId: string): Promise<{ error?: string }> {
+  try { await requireAdmin() } catch { return { error: 'Acesso negado' } }
+  const supabase = createAuthAdminClient()
+
+  // Verifica que o usuário está vinculado ao participante
+  const { data: link } = await supabase
+    .from('user_participants').select('id').eq('participant_id', participantId).eq('user_id', userId).maybeSingle()
+  if (!link) return { error: 'Usuário não vinculado a este participante.' }
+
+  // Remove is_primary de todos os usuários deste participante
+  await supabase.from('user_participants').update({ is_primary: false }).eq('participant_id', participantId)
+  // Define o novo primário
+  const { error } = await supabase.from('user_participants').update({ is_primary: true })
+    .eq('participant_id', participantId).eq('user_id', userId)
+  if (error) return { error: error.message }
+
+  revalidatePath('/admin/participantes')
+  return {}
+}
+
 export async function updateParticipantApelido(participantId: string, apelido: string): Promise<void> {
   await requireAdmin()
   const supabase = createAuthAdminClient()

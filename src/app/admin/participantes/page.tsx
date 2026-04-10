@@ -49,7 +49,6 @@ export default async function AdminParticipantesPage() {
               <thead className="border-b border-gray-100 bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">
                 <tr>
                   <th className="px-3 py-3">#</th>
-                  <th className="px-3 py-3">Usuário principal</th>
                   <th className="px-3 py-3">Nome no Bolão</th>
                   <th className="px-3 py-3">Bio</th>
                   <th className="px-3 py-3">Pagamento</th>

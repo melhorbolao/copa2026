@@ -37,7 +37,7 @@ export function ParticipantSelector({ participants }: { participants: Participan
     >
       {participants.map(p => (
         <option key={p.id} value={p.id} className="bg-verde-800 text-white">
-          {p.apelido}{p.is_primary ? ' ★' : ''}
+          {p.apelido}
         </option>
       ))}
     </select>
