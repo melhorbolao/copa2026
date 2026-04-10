@@ -11,14 +11,21 @@ const MAX = 8
 interface Team  { team: string; flag: string }
 interface Bet   { group_name: string; team: string }
 
+const CONFLICT_TITLE = 'Palpite de classificado divergente da classificação decorrente dos placares dos jogos. Alerta apenas informativo, Você pode manter os palpites assim pela regra do Melhor Bolão.'
+
+function ConflictDot() {
+  return <span title={CONFLICT_TITLE} className="ml-0.5 cursor-help text-[11px] font-black text-red-500">!</span>
+}
+
 interface Props {
   groupTeams: Record<string, { teams: Team[]; deadline: string }>
   deadline: string
   existingBets: Bet[] | null
   groupBets?: Record<string, { first_place: string; second_place: string } | undefined>
+  calculatedThirds?: Record<string, string>
 }
 
-export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBets }: Props) {
+export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBets, calculatedThirds }: Props) {
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState('')
 
@@ -91,7 +98,10 @@ export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBet
             {existingBets.map(b => (
               <div key={b.group_name} className="px-4 py-3">
                 <div className="text-xs text-gray-400">Gr. {b.group_name}</div>
-                <div className="mt-0.5 font-bold text-gray-900 text-sm">{b.team}</div>
+                <div className="mt-0.5 flex items-center gap-0.5 font-bold text-gray-900 text-sm">
+                  {b.team}
+                  {b.team && calculatedThirds?.[b.group_name] && b.team !== calculatedThirds[b.group_name] && <ConflictDot />}
+                </div>
               </div>
             ))}
           </div>
@@ -184,6 +194,9 @@ export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBet
                     </select>
                     {teamValue && hasSavedBet && (
                       <span className="absolute -top-1 -right-1 text-[9px] text-verde-600 font-bold">✓</span>
+                    )}
+                    {teamValue && calculatedThirds?.[g] && teamValue !== calculatedThirds[g] && (
+                      <span className="absolute -top-1 -left-1"><ConflictDot /></span>
                     )}
                   </div>
                 )}

@@ -22,6 +22,12 @@ interface Props {
   onBetUpdate?:      (groupBet: { first_place: string; second_place: string } | null, thirdBet: { team: string } | null) => void
 }
 
+const CONFLICT_TITLE = 'Palpite de classificado divergente da classificação decorrente dos placares dos jogos. Alerta apenas informativo, Você pode manter os palpites assim pela regra do Melhor Bolão.'
+
+function ConflictDot() {
+  return <span title={CONFLICT_TITLE} className="ml-0.5 cursor-help text-[11px] font-black text-red-500">!</span>
+}
+
 const POS_COLORS = [
   'bg-verde-600 text-white',
   'bg-azul-escuro text-white',
@@ -325,6 +331,11 @@ export function GroupCard({
                     <span className={`font-medium ${i < 2 ? 'text-gray-900' : 'text-gray-600'}`}>
                       {team.team}
                     </span>
+                    {!hasDraft && (
+                      (i === 0 && localFormalBet && localFormalBet.first_place !== team.team) ||
+                      (i === 1 && localFormalBet && localFormalBet.second_place !== team.team) ||
+                      (i === 2 && localThirdPlaceBet && localThirdPlaceBet.team !== team.team)
+                    ) && <ConflictDot />}
                   </div>
                 </td>
                 <td className="px-2 py-2 text-center">

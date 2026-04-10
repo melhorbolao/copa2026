@@ -9,14 +9,21 @@ import { useThirdPlace } from './ThirdPlaceContext'
 
 interface Team { team: string; flag: string }
 
+const CONFLICT_TITLE = 'Palpite de classificado divergente da classificação decorrente dos placares dos jogos. Alerta apenas informativo, Você pode manter os palpites assim pela regra do Melhor Bolão.'
+
+function ConflictDot() {
+  return <span title={CONFLICT_TITLE} className="ml-0.5 cursor-help text-[11px] font-black text-red-500">!</span>
+}
+
 interface Props {
   groupName: string
   teams: Team[]
   deadline: string
   existingBet: { first_place: string; second_place: string } | null
+  calculatedTop?: { first: string; second: string; third: string }
 }
 
-export function GroupBetRow({ groupName, teams, deadline, existingBet }: Props) {
+export function GroupBetRow({ groupName, teams, deadline, existingBet, calculatedTop }: Props) {
   const [pending, startTransition] = useTransition()
   const [first,  setFirst]  = useState(existingBet?.first_place  ?? '')
   const [second, setSecond] = useState(existingBet?.second_place ?? '')
@@ -78,8 +85,14 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet }: Props) 
             <div className="flex shrink-0 items-center gap-3">
               {existingBet ? (
                 <>
-                  <span className="text-xs font-semibold text-gray-700">🥇 {existingBet.first_place}</span>
-                  <span className="text-xs font-semibold text-gray-700">🥈 {existingBet.second_place}</span>
+                  <span className="text-xs font-semibold text-gray-700">
+                    🥇 {existingBet.first_place}
+                    {calculatedTop?.first && existingBet.first_place !== calculatedTop.first && <ConflictDot />}
+                  </span>
+                  <span className="text-xs font-semibold text-gray-700">
+                    🥈 {existingBet.second_place}
+                    {calculatedTop?.second && existingBet.second_place !== calculatedTop.second && <ConflictDot />}
+                  </span>
                 </>
               ) : (
                 <span className="text-xs text-gray-300">—</span>
@@ -100,6 +113,7 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet }: Props) 
                   }))}
                   className="flex-1 min-w-0"
                 />
+                {first && calculatedTop?.first && first !== calculatedTop.first && <ConflictDot />}
                 {first && (
                   <button
                     type="button"
@@ -126,6 +140,7 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet }: Props) 
                   }))}
                   className="flex-1 min-w-0"
                 />
+                {second && calculatedTop?.second && second !== calculatedTop.second && <ConflictDot />}
                 {second && (
                   <button
                     type="button"

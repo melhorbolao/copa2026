@@ -17,6 +17,8 @@ import { StickyStats } from './StickyStats'
 import { AutoFillButton } from './AutoFillButton'
 import { formatBrasilia } from '@/utils/date'
 import type { MatchPhase } from '@/types/database'
+import { calcGroupStandings } from '@/lib/bracket/engine'
+import type { BetSlim, MatchSlim } from '@/lib/bracket/engine'
 
 const GROUP_ORDER = ['A','B','C','D','E','F','G','H','I','J','K','L']
 
@@ -73,6 +75,27 @@ export default async function PalpitesPage({
 
   const betMap      = new Map((bets ?? []).map(b => [b.match_id, b]))
   const groupBetMap = new Map((groupBets ?? []).map(b => [b.group_name, b]))
+
+  // Classificação calculada com base nos palpites de placar — usada para detectar divergências
+  const slimBetMap = new Map<string, BetSlim>(
+    (bets ?? []).map(b => [b.match_id, { match_id: b.match_id, score_home: b.score_home ?? 0, score_away: b.score_away ?? 0 }])
+  )
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const slimGroupMatches: MatchSlim[] = ((matches ?? []) as any[])
+    .filter((m: any) => m.phase === 'group')
+    .map((m: any) => ({
+      id: m.id, group_name: m.group_name, phase: m.phase,
+      team_home: m.team_home, team_away: m.team_away,
+      flag_home: m.flag_home, flag_away: m.flag_away,
+    }))
+  const calculatedStandings = calcGroupStandings(slimGroupMatches, slimBetMap)
+  const calculatedTopPerGroup: Record<string, { first: string; second: string; third: string }> =
+    Object.fromEntries(
+      calculatedStandings.map(s => [
+        s.group,
+        { first: s.teams[0]?.team ?? '', second: s.teams[1]?.team ?? '', third: s.teams[2]?.team ?? '' },
+      ])
+    )
 
   const groupMatches    = (matches ?? []).filter(m => m.phase === 'group')
   const knockoutMatches = (matches ?? []).filter(m => m.phase !== 'group')
@@ -319,6 +342,7 @@ export default async function PalpitesPage({
                         teams={data.teams}
                         deadline={data.deadline}
                         existingBet={groupBetMap.get(g) ?? null}
+                        calculatedTop={calculatedTopPerGroup[g]}
                       />
                     )
                   })}
@@ -362,6 +386,9 @@ export default async function PalpitesPage({
                 deadline={tournamentDeadline}
                 existingBets={thirdBets ?? null}
                 groupBets={Object.fromEntries(groupBetMap)}
+                calculatedThirds={Object.fromEntries(
+                  Object.entries(calculatedTopPerGroup).map(([g, t]) => [g, t.third])
+                )}
               />
             )}
 
