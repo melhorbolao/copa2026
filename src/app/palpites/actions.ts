@@ -1,6 +1,5 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { getActiveParticipantId } from '@/lib/participant'
 import { calcGroupStandings, rankThirds } from '@/lib/bracket/engine'
@@ -29,7 +28,6 @@ export async function saveBet(matchId: string, scoreHome: number, scoreAway: num
     { onConflict: 'participant_id,match_id' },
   )
   if (error) throw new Error(error.message)
-  revalidatePath('/palpites')
 }
 
 // ── Classificação de grupo ────────────────────────────────────
@@ -44,7 +42,6 @@ export async function saveGroupBet(groupName: string, firstPlace: string, second
     { onConflict: 'participant_id,group_name' },
   )
   if (error) throw new Error(error.message)
-  revalidatePath('/palpites')
 }
 
 // ── Terceiros classificados ───────────────────────────────────
@@ -76,7 +73,6 @@ export async function saveThirdPlaceBets(
     bets.map(b => ({ participant_id: participantId, group_name: b.group_name, team: b.team }))
   )
   if (error) throw new Error(error.message)
-  revalidatePath('/palpites')
 }
 
 // ── Terceiro classificado individual (autosave) ───────────────
@@ -95,7 +91,6 @@ export async function saveThirdPlaceBet(groupName: string, team: string) {
     { onConflict: 'participant_id,group_name' }
   )
   if (error) throw new Error(error.message)
-  revalidatePath('/palpites')
 }
 
 export async function deleteThirdPlaceBet(groupName: string) {
@@ -104,7 +99,6 @@ export async function deleteThirdPlaceBet(groupName: string) {
   const { error } = await supabase.from('third_place_bets')
     .delete().eq('participant_id', participantId).eq('group_name', groupName)
   if (error) throw new Error(error.message)
-  revalidatePath('/palpites')
 }
 
 // ── Auto-preenchimento de classificados ──────────────────────
@@ -153,8 +147,6 @@ export async function autoFillGroupBets() {
     )
     if (error) throw new Error(error.message)
   }
-
-  revalidatePath('/palpites')
 }
 
 // ── Preencher G4 a partir do chaveamento ─────────────────────
@@ -184,7 +176,6 @@ export async function fillG4FromBracket(data: {
     { onConflict: 'participant_id' },
   )
   if (error) throw new Error(error.message)
-  revalidatePath('/palpites')
 }
 
 // ── Aposta de torneio ─────────────────────────────────────────
@@ -204,5 +195,4 @@ export async function saveTournamentBet(data: {
     { onConflict: 'participant_id' },
   )
   if (error) throw new Error(error.message)
-  revalidatePath('/palpites')
 }
