@@ -73,6 +73,19 @@ export function TabelaClient({
   const thirds     = useMemo(() => rankThirds(effectiveStandings), [effectiveStandings])
   const thirdSlots = useMemo(() => resolveThirdSlots(thirds), [thirds])
 
+  // Aplica palpites de terceiro ao array de thirds — substitui o time calculado pelo apostado
+  const thirdsForBracket = useMemo(() => {
+    return thirds.map(t => {
+      const betTeam = localThirdBets[t.group]?.team
+      if (!betTeam || betTeam === t.team) return t
+      // Busca a flag do time apostado nas standings
+      const flag = effectiveStandings
+        .find(s => s.group === t.group)
+        ?.teams.find(tm => tm.team === betTeam)?.flag ?? t.flag
+      return { ...t, team: betTeam, flag }
+    })
+  }, [thirds, localThirdBets, effectiveStandings])
+
   // Monta o override completo: palpite formal > ordem efetiva
   const r32Slots = useMemo(() => {
     const merged = new Map<string, { first_place: string; second_place: string }>()
@@ -82,8 +95,8 @@ export function TabelaClient({
       const second = formal?.second_place || standing.teams[1]?.team || ''
       merged.set(standing.group, { first_place: first, second_place: second })
     }
-    return buildR32Teams(effectiveStandings, thirds, thirdSlots, merged)
-  }, [effectiveStandings, thirds, thirdSlots, localGroupBets])
+    return buildR32Teams(effectiveStandings, thirdsForBracket, thirdSlots, merged)
+  }, [effectiveStandings, thirdsForBracket, thirdSlots, localGroupBets])
 
   const advancingThirdGroups = useMemo(
     () => new Set(thirds.filter(t => t.advances).map(t => t.group)),
