@@ -14,7 +14,12 @@ interface Bet   { group_name: string; team: string }
 const CONFLICT_TITLE = 'Palpite de classificado divergente da classificação decorrente dos placares dos jogos. Alerta apenas informativo, Você pode manter os palpites assim pela regra do Melhor Bolão.'
 
 function ConflictDot() {
-  return <span title={CONFLICT_TITLE} className="ml-0.5 cursor-help text-[11px] font-black text-red-500">!</span>
+  return (
+    <span
+      title={CONFLICT_TITLE}
+      className="ml-1 inline-flex h-4 w-4 shrink-0 cursor-help items-center justify-center rounded-full bg-red-500 text-[10px] font-black text-white"
+    >!</span>
+  )
 }
 
 interface Props {

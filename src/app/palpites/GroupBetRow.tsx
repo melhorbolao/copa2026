@@ -12,7 +12,12 @@ interface Team { team: string; flag: string }
 const CONFLICT_TITLE = 'Palpite de classificado divergente da classificação decorrente dos placares dos jogos. Alerta apenas informativo, Você pode manter os palpites assim pela regra do Melhor Bolão.'
 
 function ConflictDot() {
-  return <span title={CONFLICT_TITLE} className="ml-0.5 cursor-help text-[11px] font-black text-red-500">!</span>
+  return (
+    <span
+      title={CONFLICT_TITLE}
+      className="ml-1 inline-flex h-4 w-4 shrink-0 cursor-help items-center justify-center rounded-full bg-red-500 text-[10px] font-black text-white"
+    >!</span>
+  )
 }
 
 interface Props {
@@ -60,6 +65,11 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
 
   const showCheck = justSaved || (!justSaved && existingBet !== null && !pending)
 
+  // Conflito: o time apostado não está entre os dois primeiros calculados (independe de posição — empate pode inverter a ordem)
+  const calcTop2 = new Set([calculatedTop?.first, calculatedTop?.second].filter(Boolean))
+  const firstConflict  = !!first  && calcTop2.size > 0 && !calcTop2.has(first)
+  const secondConflict = !!second && calcTop2.size > 0 && !calcTop2.has(second)
+
   return (
     <tr className="border-b border-gray-100 bg-blue-50/30 hover:bg-blue-50/50">
       <td colSpan={7} className="px-3 py-2">
@@ -85,13 +95,13 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
             <div className="flex shrink-0 items-center gap-3">
               {existingBet ? (
                 <>
-                  <span className="text-xs font-semibold text-gray-700">
+                  <span className="inline-flex items-center text-xs font-semibold text-gray-700">
                     🥇 {existingBet.first_place}
-                    {calculatedTop?.first && existingBet.first_place !== calculatedTop.first && <ConflictDot />}
+                    {calcTop2.size > 0 && !calcTop2.has(existingBet.first_place) && <ConflictDot />}
                   </span>
-                  <span className="text-xs font-semibold text-gray-700">
+                  <span className="inline-flex items-center text-xs font-semibold text-gray-700">
                     🥈 {existingBet.second_place}
-                    {calculatedTop?.second && existingBet.second_place !== calculatedTop.second && <ConflictDot />}
+                    {calcTop2.size > 0 && !calcTop2.has(existingBet.second_place) && <ConflictDot />}
                   </span>
                 </>
               ) : (
@@ -113,7 +123,7 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
                   }))}
                   className="flex-1 min-w-0"
                 />
-                {first && calculatedTop?.first && first !== calculatedTop.first && <ConflictDot />}
+                {firstConflict && <ConflictDot />}
                 {first && (
                   <button
                     type="button"
@@ -140,7 +150,7 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
                   }))}
                   className="flex-1 min-w-0"
                 />
-                {second && calculatedTop?.second && second !== calculatedTop.second && <ConflictDot />}
+                {secondConflict && <ConflictDot />}
                 {second && (
                   <button
                     type="button"
