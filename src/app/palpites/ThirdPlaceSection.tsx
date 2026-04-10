@@ -27,7 +27,7 @@ interface Props {
   deadline: string
   existingBets: Bet[] | null
   groupBets?: Record<string, { first_place: string; second_place: string } | undefined>
-  calculatedThirds?: Record<string, string>
+  calculatedThirds?: Record<string, { third: string; tiedTeams: string[] }>
 }
 
 export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBets, calculatedThirds }: Props) {
@@ -103,9 +103,11 @@ export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBet
             {existingBets.map(b => (
               <div key={b.group_name} className="px-4 py-3">
                 <div className="text-xs text-gray-400">Gr. {b.group_name}</div>
-                <div className="mt-0.5 flex items-center gap-0.5 font-bold text-gray-900 text-sm">
+                <div className="mt-0.5 flex items-center gap-1 font-bold text-gray-900 text-sm">
                   {b.team}
-                  {b.team && calculatedThirds?.[b.group_name] && b.team !== calculatedThirds[b.group_name] && <ConflictDot />}
+                  {b.team && calculatedThirds?.[b.group_name] &&
+                    b.team !== calculatedThirds[b.group_name].third &&
+                    !calculatedThirds[b.group_name].tiedTeams.includes(b.team) && <ConflictDot />}
                 </div>
               </div>
             ))}
@@ -186,22 +188,29 @@ export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBet
                 </button>
 
                 {isSelected && (
-                  <div className="mt-1.5 relative">
-                    <select
-                      value={teamValue}
-                      onChange={e => setTeam(g, e.target.value)}
-                      className="w-full rounded border border-gray-200 py-1 px-1 text-xs focus:border-verde-400 focus:outline-none"
-                    >
-                      <option value="">— time —</option>
-                      {teams.map(t => (
-                        <option key={t.team} value={t.team}>{t.team}</option>
-                      ))}
-                    </select>
-                    {teamValue && hasSavedBet && (
-                      <span className="absolute -top-1 -right-1 text-[9px] text-verde-600 font-bold">✓</span>
-                    )}
-                    {teamValue && calculatedThirds?.[g] && teamValue !== calculatedThirds[g] && (
-                      <span className="absolute -top-1 -left-1"><ConflictDot /></span>
+                  <div className="mt-1.5">
+                    <div className="relative">
+                      <select
+                        value={teamValue}
+                        onChange={e => setTeam(g, e.target.value)}
+                        className="w-full rounded border border-gray-200 py-1 px-1 text-xs focus:border-verde-400 focus:outline-none"
+                      >
+                        <option value="">— time —</option>
+                        {teams.map(t => (
+                          <option key={t.team} value={t.team}>{t.team}</option>
+                        ))}
+                      </select>
+                      {teamValue && hasSavedBet && (
+                        <span className="absolute -top-1 -right-1 text-[9px] text-verde-600 font-bold">✓</span>
+                      )}
+                    </div>
+                    {teamValue && calculatedThirds?.[g] &&
+                      teamValue !== calculatedThirds[g].third &&
+                      !calculatedThirds[g].tiedTeams.includes(teamValue) && (
+                      <div className="mt-0.5 flex items-center gap-1">
+                        <ConflictDot />
+                        <span className="text-[10px] text-red-500">divergente</span>
+                      </div>
                     )}
                   </div>
                 )}

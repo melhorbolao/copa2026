@@ -25,7 +25,7 @@ interface Props {
   teams: Team[]
   deadline: string
   existingBet: { first_place: string; second_place: string } | null
-  calculatedTop?: { first: string; second: string; third: string }
+  calculatedTop?: { first: string; second: string; third: string; tiedTeams: string[] }
 }
 
 export function GroupBetRow({ groupName, teams, deadline, existingBet, calculatedTop }: Props) {
@@ -65,10 +65,12 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
 
   const showCheck = justSaved || (!justSaved && existingBet !== null && !pending)
 
-  // Conflito: o time apostado não está entre os dois primeiros calculados (independe de posição — empate pode inverter a ordem)
+  // Conflito: o time apostado diverge do calculado E não é um dos times empatados
+  // (empate pode legitimar a inversão de 1º/2º sem ser conflito real)
+  const tiedSet = new Set(calculatedTop?.tiedTeams ?? [])
+  const firstConflict  = !!first  && !!calculatedTop?.first  && first  !== calculatedTop.first  && !tiedSet.has(first)
+  const secondConflict = !!second && !!calculatedTop?.second && second !== calculatedTop.second && !tiedSet.has(second)
   const calcTop2 = new Set([calculatedTop?.first, calculatedTop?.second].filter(Boolean))
-  const firstConflict  = !!first  && calcTop2.size > 0 && !calcTop2.has(first)
-  const secondConflict = !!second && calcTop2.size > 0 && !calcTop2.has(second)
 
   return (
     <tr className="border-b border-gray-100 bg-blue-50/30 hover:bg-blue-50/50">
@@ -97,11 +99,11 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
                 <>
                   <span className="inline-flex items-center text-xs font-semibold text-gray-700">
                     🥇 {existingBet.first_place}
-                    {calcTop2.size > 0 && !calcTop2.has(existingBet.first_place) && <ConflictDot />}
+                    {!!calculatedTop?.first && existingBet.first_place !== calculatedTop.first && !tiedSet.has(existingBet.first_place) && <ConflictDot />}
                   </span>
                   <span className="inline-flex items-center text-xs font-semibold text-gray-700">
                     🥈 {existingBet.second_place}
-                    {calcTop2.size > 0 && !calcTop2.has(existingBet.second_place) && <ConflictDot />}
+                    {!!calculatedTop?.second && existingBet.second_place !== calculatedTop.second && !tiedSet.has(existingBet.second_place) && <ConflictDot />}
                   </span>
                 </>
               ) : (

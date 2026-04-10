@@ -89,11 +89,16 @@ export default async function PalpitesPage({
       flag_home: m.flag_home, flag_away: m.flag_away,
     }))
   const calculatedStandings = calcGroupStandings(slimGroupMatches, slimBetMap)
-  const calculatedTopPerGroup: Record<string, { first: string; second: string; third: string }> =
+  const calculatedTopPerGroup: Record<string, { first: string; second: string; third: string; tiedTeams: string[] }> =
     Object.fromEntries(
       calculatedStandings.map(s => [
         s.group,
-        { first: s.teams[0]?.team ?? '', second: s.teams[1]?.team ?? '', third: s.teams[2]?.team ?? '' },
+        {
+          first: s.teams[0]?.team ?? '',
+          second: s.teams[1]?.team ?? '',
+          third: s.teams[2]?.team ?? '',
+          tiedTeams: s.tiedTeams ?? [],
+        },
       ])
     )
 
@@ -387,7 +392,7 @@ export default async function PalpitesPage({
                 existingBets={thirdBets ?? null}
                 groupBets={Object.fromEntries(groupBetMap)}
                 calculatedThirds={Object.fromEntries(
-                  Object.entries(calculatedTopPerGroup).map(([g, t]) => [g, t.third])
+                  Object.entries(calculatedTopPerGroup).map(([g, t]) => [g, { third: t.third, tiedTeams: t.tiedTeams }])
                 )}
               />
             )}
