@@ -1,7 +1,6 @@
 'use client'
 
 import { useTransition, useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import { saveBet } from './actions'
 import { Flag } from '@/components/ui/Flag'
 import { formatBrasilia, isDeadlinePassed } from '@/utils/date'
@@ -27,7 +26,6 @@ interface Props {
 }
 
 export function MatchBetRow({ match, bet }: Props) {
-  const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [home, setHome] = useState(bet?.score_home?.toString() ?? '')
   const [away, setAway] = useState(bet?.score_away?.toString() ?? '')
@@ -57,7 +55,6 @@ export function MatchBetRow({ match, bet }: Props) {
       try {
         await saveBet(match.id, hNum, aNum)
         setJustSaved(true)
-        router.refresh()
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Erro')
       }
