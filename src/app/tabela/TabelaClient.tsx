@@ -33,6 +33,10 @@ export function TabelaClient({
   const [manualOrders, setManualOrders] = useState<Record<string, string[]>>({})
   const [mounted, setMounted] = useState(false)
 
+  // Override local dos palpites — atualizado quando o usuário confirma "Atualizar palpites"
+  const [localGroupBets, setLocalGroupBets] = useState(groupBetsOverride)
+  const [localThirdBets, setLocalThirdBets] = useState(thirdBetsOverride)
+
   // Carrega todas as ordens manuais do localStorage num único efeito
   useEffect(() => {
     const loaded: Record<string, string[]> = {}
@@ -73,13 +77,13 @@ export function TabelaClient({
   const r32Slots = useMemo(() => {
     const merged = new Map<string, { first_place: string; second_place: string }>()
     for (const standing of effectiveStandings) {
-      const formal = groupBetsOverride[standing.group]
+      const formal = localGroupBets[standing.group]
       const first  = formal?.first_place  || standing.teams[0]?.team || ''
       const second = formal?.second_place || standing.teams[1]?.team || ''
       merged.set(standing.group, { first_place: first, second_place: second })
     }
     return buildR32Teams(effectiveStandings, thirds, thirdSlots, merged)
-  }, [effectiveStandings, thirds, thirdSlots, groupBetsOverride])
+  }, [effectiveStandings, thirds, thirdSlots, localGroupBets])
 
   const advancingThirdGroups = useMemo(
     () => new Set(thirds.filter(t => t.advances).map(t => t.group)),
@@ -96,6 +100,15 @@ export function TabelaClient({
       delete next[group]
       return next
     })
+  }
+
+  const handleBetUpdate = (
+    group: string,
+    groupBet: { first_place: string; second_place: string } | null,
+    thirdBet: { team: string } | null,
+  ) => {
+    if (groupBet) setLocalGroupBets(prev => ({ ...prev, [group]: groupBet }))
+    if (thirdBet) setLocalThirdBets(prev => ({ ...prev, [group]: thirdBet }))
   }
 
   const sortedStandings = GROUP_ORDER
@@ -115,11 +128,12 @@ export function TabelaClient({
             originalTiedTeams={
               standings.find(s => s.group === standing.group)?.tiedTeams ?? []
             }
-            formalBet={groupBetsOverride[standing.group] ?? null}
-            thirdPlaceBet={thirdBetsOverride[standing.group] ?? null}
+            formalBet={localGroupBets[standing.group] ?? null}
+            thirdPlaceBet={localThirdBets[standing.group] ?? null}
             manualOrder={mounted ? (manualOrders[standing.group] ?? null) : null}
             onOrderChange={order => handleOrderChange(standing.group, order)}
             onOrderReset={() => handleOrderReset(standing.group)}
+            onBetUpdate={(gb, tb) => handleBetUpdate(standing.group, gb, tb)}
           />
         ))}
       </div>

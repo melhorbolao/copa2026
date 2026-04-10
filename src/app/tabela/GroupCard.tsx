@@ -18,6 +18,8 @@ interface Props {
   manualOrder:       string[] | null
   onOrderChange:     (order: string[]) => void
   onOrderReset:      () => void
+  /** Chamado quando o usuário confirma "Atualizar palpites" com sucesso */
+  onBetUpdate?:      (groupBet: { first_place: string; second_place: string } | null, thirdBet: { team: string } | null) => void
 }
 
 const POS_COLORS = [
@@ -37,6 +39,7 @@ export function GroupCard({
   manualOrder,
   onOrderChange,
   onOrderReset,
+  onBetUpdate,
 }: Props) {
   const storageKey = `tie_order_${userId}_${standing.group}`
 
@@ -152,12 +155,19 @@ export function GroupCard({
           capturedThrdConf ? { team: capturedThird } : null,
         )
         // Atualiza estado local para refletir os novos palpites sem recarregar
-        if (capturedGrpConf) {
-          setLocalFormalBet({ first_place: capturedFirst, second_place: capturedSecond })
-        }
-        if (capturedThrdConf) {
-          setLocalThirdPlaceBet({ team: capturedThird })
-        }
+        const newGroupBet = capturedGrpConf
+          ? { first_place: capturedFirst, second_place: capturedSecond }
+          : localFormalBet
+        const newThirdBet = capturedThrdConf
+          ? { team: capturedThird }
+          : localThirdPlaceBet
+        if (capturedGrpConf)  setLocalFormalBet(newGroupBet)
+        if (capturedThrdConf) setLocalThirdPlaceBet(newThirdBet)
+        // Avisa o pai para atualizar o chaveamento
+        onBetUpdate?.(
+          capturedGrpConf  ? newGroupBet  : null,
+          capturedThrdConf ? newThirdBet  : null,
+        )
         doCommit(capturedDraft)
         setShowModal(false)
         setSaveSuccess(true)
