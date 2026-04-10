@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers'
+import { createAuthAdminClient } from '@/lib/supabase/server'
 
 const COOKIE = 'activeParticipantId'
 const COOKIE_OPTS = {
@@ -55,17 +56,32 @@ export async function getUserParticipants(
   userId: string,
   activeParticipantId: string,
 ): Promise<{ id: string; apelido: string; is_primary: boolean; is_active: boolean }[]> {
-  const { data } = await supabase
+  const { data: links } = await supabase
     .from('user_participants')
-    .select('participant_id, is_primary, participants(id, apelido)')
+    .select('participant_id, is_primary')
     .eq('user_id', userId)
 
-  return (data ?? []).map((row: AnySupabase) => ({
-    id:         row.participants.id as string,
-    apelido:    row.participants.apelido as string,
-    is_primary: row.is_primary as boolean,
-    is_active:  row.participants.id === activeParticipantId,
-  }))
+  if (!links?.length) return []
+
+  const ids = links.map((l: AnySupabase) => l.participant_id as string)
+
+  // Usa admin client para ignorar RLS na tabela participants
+  const admin = createAuthAdminClient()
+  const { data: parts } = await admin
+    .from('participants')
+    .select('id, apelido')
+    .in('id', ids)
+
+  const partMap = new Map((parts ?? []).map((p: AnySupabase) => [p.id as string, p.apelido as string]))
+
+  return links
+    .filter((l: AnySupabase) => partMap.has(l.participant_id))
+    .map((l: AnySupabase) => ({
+      id:         l.participant_id as string,
+      apelido:    partMap.get(l.participant_id) as string,
+      is_primary: l.is_primary as boolean,
+      is_active:  l.participant_id === activeParticipantId,
+    }))
 }
 
 /** Escreve o cookie de participante ativo. */

@@ -19,7 +19,7 @@ export async function Navbar() {
     ])
     profile = data
     if (activeId) {
-      participants = await getUserParticipants(supabase, user.id, activeId)
+      participants = await getUserParticipants(supabase, user.id, activeId).catch(() => [])
     }
   }
 
