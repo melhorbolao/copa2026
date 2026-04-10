@@ -1,17 +1,20 @@
 import { createClient } from '@/lib/supabase/server'
 import { UserRow } from './UserRow'
 import { ReminderSection } from './ReminderSection'
-import { CreateUserModal } from './CreateUserModal'
 import { CopyEmailsButton } from './CopyEmailsButton'
 
 export default async function AdminUsuariosPage() {
   const supabase = await createClient()
 
   const { data: users } = await supabase.from('users')
-    .select('id, name, email, whatsapp, padrinho, apelido, observacao, provider, approved, paid, status, is_manual, is_admin, created_at')
+    .select(`
+      id, name, email, whatsapp, padrinho, apelido, observacao,
+      provider, approved, paid, status, is_manual, is_admin, created_at,
+      user_participants(participant_id, is_primary, participants(id, apelido))
+    `)
     .order('created_at', { ascending: false })
 
-  const total    = users?.length ?? 0
+  const total     = users?.length ?? 0
   const aprovados = users?.filter(u => u.status === 'aprovado').length ?? 0
   const pendentes = users?.filter(u => u.status === 'aprovacao_pendente').length ?? 0
   const pagos     = users?.filter(u => u.paid).length ?? 0
@@ -30,13 +33,10 @@ export default async function AdminUsuariosPage() {
         <StatCard label="Pagos"             value={pagos}     color="amarelo" />
       </div>
 
-      {/* Lembrete + Cadastrar + Copiar e-mails */}
+      {/* Lembrete + Copiar e-mails */}
       <div className="mb-4 flex items-start justify-between gap-3 flex-wrap">
         <ReminderSection />
-        <div className="flex items-center gap-2 flex-wrap">
-          <CopyEmailsButton emails={approvedEmails} />
-          <CreateUserModal />
-        </div>
+        <CopyEmailsButton emails={approvedEmails} />
       </div>
 
       {/* Tabela */}
@@ -49,15 +49,16 @@ export default async function AdminUsuariosPage() {
               <thead className="border-b border-gray-100 bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">
                 <tr>
                   <th className="px-3 py-3">#</th>
-                  <th className="px-3 py-3">Participante</th>
+                  <th className="px-3 py-3">Nome</th>
                   <th className="px-3 py-3">WhatsApp</th>
-                  <th className="px-3 py-3">Padrinho</th>
+                  <th className="px-3 py-3">E-mail</th>
                   <th className="hidden px-3 py-3 sm:table-cell">Login</th>
                   <th className="hidden px-3 py-3 lg:table-cell">Cadastro</th>
+                  <th className="px-3 py-3">Padrinho</th>
                   <th className="px-3 py-3">Status</th>
-                  <th className="px-3 py-3">Pagamento</th>
-                  <th className="px-3 py-3">Apelido</th>
+                  <th className="px-3 py-3">Nome no Bolão</th>
                   <th className="px-3 py-3">Obs.</th>
+                  <th className="px-3 py-3">Participantes</th>
                   <th className="px-3 py-3">Ações</th>
                 </tr>
               </thead>
@@ -65,7 +66,8 @@ export default async function AdminUsuariosPage() {
                 {(users ?? []).map((user, i) => (
                   <UserRow
                     key={user.id}
-                    user={user as Parameters<typeof UserRow>[0]['user']}
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    user={user as any}
                     index={i}
                   />
                 ))}

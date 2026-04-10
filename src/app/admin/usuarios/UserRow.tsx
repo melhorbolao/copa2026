@@ -3,12 +3,16 @@
 import { useTransition, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
-import { toggleApproved, togglePaid, deleteUser, updateObservacao, updateApelido, updatePadrinho, toggleAdmin } from '../actions'
-import { PalpitesModal } from './PalpitesModal'
-import { getDisplayName } from '@/utils/display'
+import { toggleApproved, deleteUser, updateObservacao, updateApelido, updatePadrinho, toggleAdmin } from '../actions'
 import { formatBrasilia } from '@/utils/date'
 
 type Status = 'email_pendente' | 'aprovacao_pendente' | 'aprovado'
+
+interface LinkedParticipant {
+  participant_id: string
+  is_primary: boolean
+  participants: { id: string; apelido: string } | null
+}
 
 interface UserRowProps {
   user: {
@@ -26,6 +30,7 @@ interface UserRowProps {
     is_manual: boolean
     is_admin: boolean
     created_at: string
+    user_participants: LinkedParticipant[]
   }
   index: number
 }
@@ -34,7 +39,6 @@ export function UserRow({ user, index }: UserRowProps) {
   const router = useRouter()
 
   const [pendingApproved, startApproved] = useTransition()
-  const [pendingPaid,     startPaid]     = useTransition()
   const [pendingDelete,   startDelete]   = useTransition()
   const [pendingObs,      startObs]      = useTransition()
   const [pendingApelido,  startApelido]  = useTransition()
@@ -45,17 +49,13 @@ export function UserRow({ user, index }: UserRowProps) {
   const [editingObs,     setEditingObs]     = useState(false)
   const [editingApelido, setEditingApelido] = useState(false)
 
-  const [obsValue,      setObsValue]      = useState(user.observacao ?? '')      // eslint-disable-line @typescript-eslint/no-unused-vars
-  const [apelidoValue,  setApelidoValue]  = useState(user.apelido ?? '')         // eslint-disable-line @typescript-eslint/no-unused-vars
-  const [padrinhoValue, setPadrinhoValue] = useState(user.padrinho ?? '')
+  const obsRef     = useRef<HTMLInputElement>(null)
+  const apelidoRef = useRef<HTMLInputElement>(null)
 
-  const obsRef      = useRef<HTMLInputElement>(null)
-  const apelidoRef  = useRef<HTMLInputElement>(null)
-
-  // Refs para capturar o valor mais recente no onBlur (evita closure stale)
   const obsLatest     = useRef(user.observacao ?? '')
   const apelidoLatest = useRef(user.apelido ?? '')
 
+  const [padrinhoValue, setPadrinhoValue] = useState(user.padrinho ?? '')
   const canApprove = !!padrinhoValue
 
   const handleObsSave = () => {
@@ -76,7 +76,7 @@ export function UserRow({ user, index }: UserRowProps) {
     startApelido(() => {
       void updateApelido(user.id, val)
         .then(() => router.refresh())
-        .catch(() => toast.error('Erro ao salvar apelido'))
+        .catch(() => toast.error('Erro ao salvar nome no bolão'))
     })
   }
 
@@ -90,19 +90,11 @@ export function UserRow({ user, index }: UserRowProps) {
     })
   }
 
-  const handleToggleApproved = (current: boolean) => {
+  const handleToggleApproved = () => {
     startApproved(() => {
-      void toggleApproved(user.id, current)
+      void toggleApproved(user.id, user.approved)
         .then(() => router.refresh())
         .catch(() => toast.error('Erro ao alterar aprovação'))
-    })
-  }
-
-  const handleTogglePaid = () => {
-    startPaid(() => {
-      void togglePaid(user.id, user.paid)
-        .then(() => router.refresh())
-        .catch(() => toast.error('Erro ao alterar pagamento'))
     })
   }
 
@@ -114,50 +106,58 @@ export function UserRow({ user, index }: UserRowProps) {
     })
   }
 
-  const isMaster = user.email === 'gmousinho@gmail.com'
-
   const handleToggleAdmin = () => {
     startAdmin(() => {
       void toggleAdmin(user.id, user.is_admin)
         .then(() => router.refresh())
-        .catch(e => toast.error(e instanceof Error ? e.message : 'Erro ao alterar admin'))
+        .catch((e: unknown) => toast.error(e instanceof Error ? e.message : 'Erro ao alterar admin'))
     })
   }
 
+  const isMaster = user.email === 'gmousinho@gmail.com'
+
   return (
-    <>
     <tr className="border-b border-gray-100 last:border-0 hover:bg-gray-50 text-sm">
       <td className="px-3 py-2.5 text-gray-400 text-xs">{index + 1}</td>
 
-      {/* Nome / e-mail */}
+      {/* Nome */}
       <td className="px-3 py-2.5">
         <div className="flex items-center gap-1.5">
           <p className="font-medium text-gray-900 whitespace-nowrap">
-            {getDisplayName(user)}
+            {user.name}
             {user.is_manual && <span className="ml-1.5 rounded bg-gray-200 px-1 py-0.5 text-xs text-gray-500">manual</span>}
+            {user.is_admin  && <span className="ml-1.5 rounded bg-purple-100 px-1 py-0.5 text-xs text-purple-600">admin</span>}
           </p>
-          {user.whatsapp && (
-            <a
-              href={whatsappLink(user.whatsapp)}
-              target="_blank"
-              rel="noopener noreferrer"
-              title={`WhatsApp: ${user.whatsapp}`}
-              className="shrink-0 text-[#25D366] hover:opacity-70 transition"
-            >
-              <WhatsAppIcon />
-            </a>
-          )}
         </div>
-        <p className="text-xs text-gray-500">{user.email}</p>
-        {user.apelido && <p className="text-xs text-gray-400">{user.name}</p>}
       </td>
 
       {/* WhatsApp */}
       <td className="px-3 py-2.5 text-xs text-gray-600 whitespace-nowrap">
-        {user.whatsapp ?? <span className="text-gray-300">—</span>}
+        {user.whatsapp ? (
+          <a
+            href={whatsappLink(user.whatsapp)}
+            target="_blank" rel="noopener noreferrer"
+            className="text-[#25D366] hover:underline"
+          >
+            {user.whatsapp}
+          </a>
+        ) : <span className="text-gray-300">—</span>}
       </td>
 
-      {/* Padrinho — select inline */}
+      {/* E-mail */}
+      <td className="px-3 py-2.5 text-xs text-gray-600">{user.email}</td>
+
+      {/* Login */}
+      <td className="hidden px-3 py-2.5 sm:table-cell">
+        <ProviderBadge provider={user.provider} />
+      </td>
+
+      {/* Cadastro */}
+      <td className="hidden px-3 py-2.5 text-xs text-gray-500 lg:table-cell whitespace-nowrap">
+        {formatBrasilia(user.created_at, 'dd/MM/yy HH:mm')}
+      </td>
+
+      {/* Padrinho */}
       <td className="px-3 py-2.5">
         <select
           value={padrinhoValue}
@@ -172,102 +172,80 @@ export function UserRow({ user, index }: UserRowProps) {
         </select>
       </td>
 
-      {/* Provider */}
-      <td className="hidden px-3 py-2.5 sm:table-cell">
-        <ProviderBadge provider={user.provider} />
-      </td>
-
-      {/* Cadastro */}
-      <td className="hidden px-3 py-2.5 text-xs text-gray-500 lg:table-cell whitespace-nowrap">
-        {formatBrasilia(user.created_at, 'dd/MM/yy HH:mm')}
-      </td>
-
       {/* Status */}
       <td className="px-3 py-2.5">
         <StatusBadge status={user.status} />
       </td>
 
-      {/* Pago */}
-      <td className="px-3 py-2.5">
-        <button
-          onClick={handleTogglePaid}
-          disabled={pendingPaid}
-          className={`inline-flex min-w-[72px] items-center justify-center rounded-full px-2.5 py-1 text-xs font-semibold transition disabled:opacity-50 ${
-            user.paid
-              ? 'bg-verde-100 text-verde-700 hover:bg-verde-200'
-              : 'bg-red-100 text-red-700 hover:bg-red-200'
-          }`}
-        >
-          {pendingPaid ? '…' : user.paid ? '✓ Pago' : '✗ Não pago'}
-        </button>
-      </td>
-
-      {/* Apelido inline */}
+      {/* Nome no Bolão — editável inline */}
       <td className="px-3 py-2.5 min-w-[110px]">
         {editingApelido ? (
           <input
             ref={apelidoRef}
-            defaultValue={apelidoValue}
+            defaultValue={user.apelido ?? ''}
             onChange={e => { apelidoLatest.current = e.target.value }}
             onBlur={handleApelidoSave}
             onKeyDown={e => {
               if (e.key === 'Enter') apelidoRef.current?.blur()
-              if (e.key === 'Escape') {
-                apelidoLatest.current = user.apelido ?? ''
-                setEditingApelido(false)
-              }
+              if (e.key === 'Escape') { apelidoLatest.current = user.apelido ?? ''; setEditingApelido(false) }
             }}
             autoFocus
             className="w-full rounded border border-verde-300 px-1.5 py-1 text-xs focus:outline-none"
           />
         ) : (
           <button
-            onClick={() => {
-              apelidoLatest.current = apelidoValue
-              setEditingApelido(true)
-            }}
+            onClick={() => { apelidoLatest.current = user.apelido ?? ''; setEditingApelido(true) }}
             title="Clique para editar"
             className={`w-full text-left text-xs rounded px-1.5 py-1 hover:bg-gray-100 transition ${
               pendingApelido ? 'opacity-50' : ''
-            } ${apelidoValue ? 'text-gray-700' : 'text-gray-300 italic'}`}
+            } ${user.apelido ? 'text-gray-700' : 'text-gray-300 italic'}`}
           >
-            {apelidoValue || '(sem apelido)'}
+            {user.apelido || '(sem nome)'}
           </button>
         )}
       </td>
 
-      {/* Observação inline */}
+      {/* Obs — editável inline */}
       <td className="px-3 py-2.5 min-w-[120px]">
         {editingObs ? (
           <input
             ref={obsRef}
-            defaultValue={obsValue}
+            defaultValue={user.observacao ?? ''}
             onChange={e => { obsLatest.current = e.target.value }}
             onBlur={handleObsSave}
             onKeyDown={e => {
               if (e.key === 'Enter') obsRef.current?.blur()
-              if (e.key === 'Escape') {
-                obsLatest.current = user.observacao ?? ''
-                setEditingObs(false)
-              }
+              if (e.key === 'Escape') { obsLatest.current = user.observacao ?? ''; setEditingObs(false) }
             }}
             autoFocus
             className="w-full rounded border border-verde-300 px-1.5 py-1 text-xs focus:outline-none"
           />
         ) : (
           <button
-            onClick={() => {
-              obsLatest.current = obsValue
-              setEditingObs(true)
-            }}
+            onClick={() => { obsLatest.current = user.observacao ?? ''; setEditingObs(true) }}
             title="Clique para editar"
             className={`w-full text-left text-xs rounded px-1.5 py-1 hover:bg-gray-100 transition ${
               pendingObs ? 'opacity-50' : ''
-            } ${obsValue ? 'text-gray-700' : 'text-gray-300 italic'}`}
+            } ${user.observacao ? 'text-gray-700' : 'text-gray-300 italic'}`}
           >
-            {obsValue || 'adicionar…'}
+            {user.observacao || 'adicionar…'}
           </button>
         )}
+      </td>
+
+      {/* Participantes vinculados */}
+      <td className="px-3 py-2.5">
+        <div className="flex flex-col gap-0.5">
+          {user.user_participants.length === 0 && (
+            <span className="text-xs text-gray-300 italic">nenhum</span>
+          )}
+          {user.user_participants.map((up, i) => (
+            <span key={i} className="text-xs text-gray-600 whitespace-nowrap">
+              {up.participants?.apelido ?? '?'}
+              {up.is_primary && <span className="ml-1 text-[10px] text-verde-600 font-bold">★</span>}
+            </span>
+          ))}
+        </div>
       </td>
 
       {/* Ações */}
@@ -284,18 +262,17 @@ export function UserRow({ user, index }: UserRowProps) {
             </button>
             <button
               onClick={() => setConfirming(false)}
-              disabled={pendingDelete}
               className="rounded px-2 py-1 text-xs font-bold bg-gray-100 text-gray-600 hover:bg-gray-200"
             >
               Não
             </button>
           </div>
         ) : (
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             {user.status === 'aprovacao_pendente' && (
-              <span title={!canApprove ? 'Usuário não informou o padrinho' : undefined}>
+              <span title={!canApprove ? 'Selecione o padrinho primeiro' : undefined}>
                 <button
-                  onClick={() => canApprove && handleToggleApproved(user.approved)}
+                  onClick={() => canApprove && handleToggleApproved()}
                   disabled={pendingApproved || !canApprove}
                   className={`rounded-full px-3 py-1 text-xs font-semibold transition whitespace-nowrap ${
                     canApprove
@@ -309,7 +286,7 @@ export function UserRow({ user, index }: UserRowProps) {
             )}
             {user.status === 'aprovado' && (
               <button
-                onClick={() => handleToggleApproved(user.approved)}
+                onClick={handleToggleApproved}
                 disabled={pendingApproved}
                 className="rounded-full px-3 py-1 text-xs font-semibold bg-gray-100 text-gray-500 hover:bg-yellow-100 hover:text-yellow-700 disabled:opacity-50 transition whitespace-nowrap"
               >
@@ -330,10 +307,6 @@ export function UserRow({ user, index }: UserRowProps) {
                 <ShieldIcon />
               </button>
             )}
-            <PalpitesModal
-              userId={user.id}
-              userName={getDisplayName(user)}
-            />
             <button
               onClick={() => setConfirming(true)}
               title="Excluir"
@@ -345,7 +318,6 @@ export function UserRow({ user, index }: UserRowProps) {
         )}
       </td>
     </tr>
-    </>
   )
 }
 
@@ -366,7 +338,7 @@ function StatusBadge({ status }: { status: Status }) {
 }
 
 function ProviderBadge({ provider }: { provider: string }) {
-  const map: Record<string, string> = { google: 'Google', apple: 'Apple', facebook: 'Facebook', email: 'E-mail', manual: 'Manual' }
+  const map: Record<string, string> = { google: 'Google', apple: 'Apple', email: 'E-mail', manual: 'Manual' }
   return (
     <span className="inline-block rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
       {map[provider] ?? provider}
@@ -374,19 +346,9 @@ function ProviderBadge({ provider }: { provider: string }) {
   )
 }
 
-/** Gera link wa.me adicionando DDI 55 se o número não incluir código de país */
 function whatsappLink(phone: string): string {
   const digits = phone.replace(/\D/g, '')
-  const number = digits.length <= 11 ? `55${digits}` : digits
-  return `https://wa.me/${number}`
-}
-
-function WhatsAppIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-    </svg>
-  )
+  return `https://wa.me/${digits.length <= 11 ? '55' + digits : digits}`
 }
 
 function TrashIcon() {
