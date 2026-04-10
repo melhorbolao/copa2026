@@ -5,6 +5,11 @@ import type { Database } from '@/types/database'
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
+  // Server Actions são enviados como POST com o header 'next-action'.
+  // O middleware não deve redirecionar esses requests — a validação de auth
+  // é feita pela própria action. Um redirect aqui causa "Server Components render error".
+  const isServerAction = !!request.headers.get('next-action')
+
   const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -35,6 +40,9 @@ export async function updateSession(request: NextRequest) {
     publicPaths.includes(pathname) ||
     pathname.startsWith('/auth/') ||
     pathname.startsWith('/api/cron/')
+
+  // Server Actions não devem ser redirecionadas — a auth é validada pela action
+  if (isServerAction) return supabaseResponse
 
   // 1. Não autenticado → login
   if (!user && !isPublicPath) {
