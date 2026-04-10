@@ -55,12 +55,8 @@ export default async function PalpitesPage({
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
-  let participantId: string
-  try {
-    participantId = await getActiveParticipantId(supabase, user.id)
-  } catch {
-    redirect('/aguardando-aprovacao')
-  }
+  const participantId = await getActiveParticipantId(supabase, user.id).catch(() => null)
+  if (!participantId) redirect('/aguardando-aprovacao')
 
   const [{ data: matches }, { data: bets }, { data: groupBets }, { data: tBet }, { data: thirdBets }] = await Promise.all([
     supabase.from('matches').select('*').order('match_datetime', { ascending: true }),

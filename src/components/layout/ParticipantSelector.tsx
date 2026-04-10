@@ -1,7 +1,6 @@
 'use client'
 
 import { useTransition } from 'react'
-import { useRouter } from 'next/navigation'
 import { switchParticipant } from '@/app/actions/participant'
 
 interface Participant {
@@ -13,7 +12,6 @@ interface Participant {
 
 export function ParticipantSelector({ participants }: { participants: Participant[] }) {
   const [pending, start] = useTransition()
-  const router = useRouter()
 
   if (participants.length <= 1) return null
 
@@ -23,7 +21,7 @@ export function ParticipantSelector({ participants }: { participants: Participan
     const id = e.target.value
     start(async () => {
       await switchParticipant(id)
-      router.refresh()
+      window.location.reload()
     })
   }
 
