@@ -19,14 +19,17 @@ type AnySupabase = any
  * Lança erro se o usuário não tiver nenhum participante vinculado.
  */
 export async function getActiveParticipantId(
-  supabase: AnySupabase,
+  _supabase: AnySupabase,
   userId: string,
 ): Promise<string> {
-  const cookieStore   = await cookies()
-  const cookieId      = cookieStore.get(COOKIE)?.value
+  // Usa admin client para ignorar RLS em user_participants
+  // A segurança é garantida pelo filtro user_id = userId (vem de auth.getUser())
+  const admin = createAuthAdminClient()
+  const cookieStore = await cookies()
+  const cookieId    = cookieStore.get(COOKIE)?.value
 
   if (cookieId) {
-    const { data } = await supabase
+    const { data } = await admin
       .from('user_participants')
       .select('participant_id')
       .eq('user_id', userId)
@@ -36,7 +39,7 @@ export async function getActiveParticipantId(
   }
 
   // Fallback: primeiro participante vinculado (qualquer)
-  const { data: first } = await supabase
+  const { data: first } = await admin
     .from('user_participants')
     .select('participant_id')
     .eq('user_id', userId)
@@ -52,11 +55,12 @@ export async function getActiveParticipantId(
  * com flag indicando qual está ativo.
  */
 export async function getUserParticipants(
-  supabase: AnySupabase,
+  _supabase: AnySupabase,
   userId: string,
   activeParticipantId: string,
 ): Promise<{ id: string; apelido: string; is_primary: boolean; is_active: boolean }[]> {
-  const { data: links } = await supabase
+  const admin = createAuthAdminClient()
+  const { data: links } = await admin
     .from('user_participants')
     .select('participant_id, is_primary')
     .eq('user_id', userId)
@@ -65,8 +69,6 @@ export async function getUserParticipants(
 
   const ids = links.map((l: AnySupabase) => l.participant_id as string)
 
-  // Usa admin client para ignorar RLS na tabela participants
-  const admin = createAuthAdminClient()
   const { data: parts } = await admin
     .from('participants')
     .select('id, apelido')
