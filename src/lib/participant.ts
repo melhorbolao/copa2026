@@ -34,16 +34,16 @@ export async function getActiveParticipantId(
     if (data) return cookieId
   }
 
-  // Fallback: participante primário
-  const { data: primary } = await supabase
+  // Fallback: primeiro participante vinculado (qualquer)
+  const { data: first } = await supabase
     .from('user_participants')
     .select('participant_id')
     .eq('user_id', userId)
-    .eq('is_primary', true)
+    .limit(1)
     .maybeSingle()
 
-  if (!primary?.participant_id) throw new Error('Nenhum participante vinculado a este usuário.')
-  return primary.participant_id
+  if (!first?.participant_id) throw new Error('Nenhum participante vinculado a este usuário.')
+  return first.participant_id
 }
 
 /**

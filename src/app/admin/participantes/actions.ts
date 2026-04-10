@@ -35,14 +35,11 @@ export async function createParticipant(data: {
     .single()
   if (pErr || !p?.id) return { error: pErr?.message ?? 'Erro ao criar participante.' }
 
-  // Vincula ao usuário (não é primary se já tem um)
-  const { data: existingLink } = await supabase
-    .from('user_participants').select('id').eq('user_id', data.userId).eq('is_primary', true).maybeSingle()
-
+  // Usuário selecionado é sempre o dono/primário deste participante
   const { error: linkErr } = await supabase.from('user_participants').insert({
     user_id: data.userId,
     participant_id: p.id,
-    is_primary: !existingLink,
+    is_primary: true,
   })
   if (linkErr) return { error: linkErr.message }
 

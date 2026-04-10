@@ -392,11 +392,12 @@ export async function togglePaid(userId: string, current: boolean) {
   const newPaid  = !current
   await supabase.from('users').update({ paid: newPaid }).eq('id', userId)
 
-  // Sincroniza paid no participante primário
-  const { data: up } = await supabase
-    .from('user_participants').select('participant_id').eq('user_id', userId).eq('is_primary', true).maybeSingle()
-  if (up?.participant_id) {
-    await supabase.from('participants').update({ paid: newPaid }).eq('id', up.participant_id)
+  // Sincroniza paid em todos os participantes onde o usuário é primário
+  const { data: ups } = await supabase
+    .from('user_participants').select('participant_id').eq('user_id', userId).eq('is_primary', true)
+  if (ups?.length) {
+    await supabase.from('participants').update({ paid: newPaid })
+      .in('id', ups.map(u => u.participant_id))
   }
 
   revalidatePath('/admin/usuarios')
