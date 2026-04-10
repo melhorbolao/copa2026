@@ -47,6 +47,12 @@ export function GroupCard({
   const [showModal,      setShowModal]      = useState(false)
   const [confirmPending, startConfirm]      = useTransition()
   const [confirmError,   setConfirmError]   = useState('')
+  const [saveSuccess,    setSaveSuccess]    = useState(false)
+
+  // Estado local dos palpites — atualiza após "Atualizar palpites" sem precisar recarregar
+  const [localFormalBet,    setLocalFormalBet]    = useState(formalBet)
+  const [localThirdPlaceBet, setLocalThirdPlaceBet] = useState(thirdPlaceBet)
+
   const dragIdx = useRef<number | null>(null)
 
   // Prioridade de exibição: rascunho > ordem confirmada > calculada
@@ -64,10 +70,10 @@ export function GroupCard({
   const newSecond = draftOrder?.[1] ?? ''
   const newThird  = draftOrder?.[2] ?? ''
 
-  const groupBetConflict = !!draftOrder && !!formalBet && (
-    formalBet.first_place !== newFirst || formalBet.second_place !== newSecond
+  const groupBetConflict = !!draftOrder && !!localFormalBet && (
+    localFormalBet.first_place !== newFirst || localFormalBet.second_place !== newSecond
   )
-  const thirdBetConflict = !!draftOrder && !!thirdPlaceBet && thirdPlaceBet.team !== newThird
+  const thirdBetConflict = !!draftOrder && !!localThirdPlaceBet && localThirdPlaceBet.team !== newThird
 
   // ── Drag handlers ──────────────────────────────────────────────
   const handleDragStart = (i: number) => { dragIdx.current = i }
@@ -118,16 +124,31 @@ export function GroupCard({
   // Salva o desempate localmente E corrige os palpites conflitantes no banco.
   const handleUpdateBets = () => {
     if (!draftOrder) return
+    const capturedDraft   = draftOrder
+    const capturedFirst   = newFirst
+    const capturedSecond  = newSecond
+    const capturedThird   = newThird
+    const capturedGrpConf = groupBetConflict
+    const capturedThrdConf= thirdBetConflict
     setConfirmError('')
     startConfirm(async () => {
       try {
         await updateGroupBetFromReorder(
           standing.group,
-          groupBetConflict ? { firstPlace: newFirst, secondPlace: newSecond } : null,
-          thirdBetConflict ? { team: newThird } : null,
+          capturedGrpConf  ? { firstPlace: capturedFirst, secondPlace: capturedSecond } : null,
+          capturedThrdConf ? { team: capturedThird } : null,
         )
-        doCommit(draftOrder)
+        // Atualiza estado local para refletir os novos palpites sem recarregar
+        if (capturedGrpConf) {
+          setLocalFormalBet({ first_place: capturedFirst, second_place: capturedSecond })
+        }
+        if (capturedThrdConf) {
+          setLocalThirdPlaceBet({ team: capturedThird })
+        }
+        doCommit(capturedDraft)
         setShowModal(false)
+        setSaveSuccess(true)
+        setTimeout(() => setSaveSuccess(false), 3000)
       } catch (e) {
         setConfirmError(e instanceof Error ? e.message : 'Erro ao atualizar palpite')
       }
@@ -183,13 +204,19 @@ export function GroupCard({
           </div>
         )}
 
+
         {isManuallyOrdered && !hasDraft && (
-          <button
-            onClick={resetOrder}
-            className="ml-auto rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-white/30"
-          >
-            ↺ Resetar ordem
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            {saveSuccess && (
+              <span className="text-[10px] font-semibold text-green-300">✓ Palpites atualizados</span>
+            )}
+            <button
+              onClick={resetOrder}
+              className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-white/30"
+            >
+              ↺ Resetar ordem
+            </button>
+          </div>
         )}
       </div>
 
@@ -315,29 +342,29 @@ export function GroupCard({
             A nova classificação difere dos seus palpites:
           </p>
 
-          {groupBetConflict && formalBet && (
+          {groupBetConflict && localFormalBet && (
             <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm space-y-1">
               <p className="text-xs font-bold uppercase tracking-wide text-amber-700">Classificados do grupo</p>
               <div className="flex items-center gap-2">
                 <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-verde-600 text-[10px] font-black text-white">1</span>
-                <span className="text-gray-500 line-through">{formalBet.first_place}</span>
+                <span className="text-gray-500 line-through">{localFormalBet.first_place}</span>
                 <span className="text-gray-400">→</span>
                 <span className="font-semibold text-gray-800">{newFirst}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-azul-escuro text-[10px] font-black text-white">2</span>
-                <span className="text-gray-500 line-through">{formalBet.second_place}</span>
+                <span className="text-gray-500 line-through">{localFormalBet.second_place}</span>
                 <span className="text-gray-400">→</span>
                 <span className="font-semibold text-gray-800">{newSecond}</span>
               </div>
             </div>
           )}
 
-          {thirdBetConflict && thirdPlaceBet && (
+          {thirdBetConflict && localThirdPlaceBet && (
             <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm space-y-1">
               <p className="text-xs font-bold uppercase tracking-wide text-amber-700">3º classificado</p>
               <div className="flex items-center gap-2">
-                <span className="text-gray-500 line-through">{thirdPlaceBet.team}</span>
+                <span className="text-gray-500 line-through">{localThirdPlaceBet.team}</span>
                 <span className="text-gray-400">→</span>
                 <span className="font-semibold text-gray-800">{newThird}</span>
               </div>
