@@ -117,8 +117,9 @@ export function GroupCard({
   }
 
   const handleConfirmNo = () => {
-    // Descarta o rascunho sem alterar nada
-    setDraftOrder(null)
+    // Aplica a ordem do desempate localmente (localStorage + estado),
+    // mas mantém o palpite formal no banco sem alteração.
+    if (draftOrder) doCommit(draftOrder)
     setShowModal(false)
   }
 
