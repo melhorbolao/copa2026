@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useRef, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
 import { Flag } from '@/components/ui/Flag'
 import { updateGroupBetFromReorder } from './actions'
 import type { CalcGroupStanding, TeamRow } from '@/lib/bracket/engine'
@@ -37,7 +36,6 @@ export function GroupCard({
   onOrderReset,
 }: Props) {
   const storageKey = `tie_order_${userId}_${standing.group}`
-  const router     = useRouter()
 
   const hasTie = originalTiedTeams.length > 0
 
@@ -112,7 +110,6 @@ export function GroupCard({
         await updateGroupBetFromReorder(standing.group, draftOrder[0], draftOrder[1])
         doCommit(draftOrder)
         setShowModal(false)
-        router.refresh()
       } catch (e) {
         setConfirmError(e instanceof Error ? e.message : 'Erro ao atualizar palpite')
       }
