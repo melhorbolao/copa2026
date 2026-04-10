@@ -50,12 +50,16 @@ export async function saveGroupBet(groupName: string, firstPlace: string, second
   if (firstPlace === secondPlace) throw new Error('1º e 2º devem ser times diferentes.')
 
   const { supabase, participantId } = await resolveParticipant()
+  const admin = createAuthAdminClient()
 
-  const { error } = await supabase.from('group_bets').upsert(
+  const { error } = await admin.from('group_bets').upsert(
     { participant_id: participantId, group_name: groupName, first_place: firstPlace, second_place: secondPlace },
     { onConflict: 'participant_id,group_name' },
   )
-  if (error) throw new Error(error.message)
+  if (error) {
+    console.error('[saveGroupBet] erro no upsert:', error)
+    throw new Error(error.message)
+  }
 }
 
 // ── Terceiros classificados ───────────────────────────────────
@@ -70,6 +74,7 @@ export async function saveThirdPlaceBets(
     throw new Error('Selecione o time para cada grupo escolhido.')
 
   const { supabase, participantId } = await resolveParticipant()
+  const admin = createAuthAdminClient()
 
   const { data: deadline } = await supabase
     .from('matches')
@@ -82,8 +87,8 @@ export async function saveThirdPlaceBets(
   if (deadline && new Date() > new Date(deadline.betting_deadline))
     throw new Error('Prazo encerrado.')
 
-  await supabase.from('third_place_bets').delete().eq('participant_id', participantId)
-  const { error } = await supabase.from('third_place_bets').insert(
+  await admin.from('third_place_bets').delete().eq('participant_id', participantId)
+  const { error } = await admin.from('third_place_bets').insert(
     bets.map(b => ({ participant_id: participantId, group_name: b.group_name, team: b.team }))
   )
   if (error) throw new Error(error.message)
@@ -92,6 +97,7 @@ export async function saveThirdPlaceBets(
 // ── Terceiro classificado individual (autosave) ───────────────
 export async function saveThirdPlaceBet(groupName: string, team: string) {
   const { supabase, participantId } = await resolveParticipant()
+  const admin = createAuthAdminClient()
 
   const { data: dl } = await supabase
     .from('matches').select('betting_deadline')
@@ -100,7 +106,7 @@ export async function saveThirdPlaceBet(groupName: string, team: string) {
   if (dl && new Date() > new Date(dl.betting_deadline))
     throw new Error('Prazo encerrado.')
 
-  const { error } = await supabase.from('third_place_bets').upsert(
+  const { error } = await admin.from('third_place_bets').upsert(
     { participant_id: participantId, group_name: groupName, team },
     { onConflict: 'participant_id,group_name' }
   )
@@ -109,8 +115,9 @@ export async function saveThirdPlaceBet(groupName: string, team: string) {
 
 export async function deleteThirdPlaceBet(groupName: string) {
   const { supabase, participantId } = await resolveParticipant()
+  const admin = createAuthAdminClient()
 
-  const { error } = await supabase.from('third_place_bets')
+  const { error } = await admin.from('third_place_bets')
     .delete().eq('participant_id', participantId).eq('group_name', groupName)
   if (error) throw new Error(error.message)
 }
@@ -118,6 +125,7 @@ export async function deleteThirdPlaceBet(groupName: string) {
 // ── Auto-preenchimento de classificados ──────────────────────
 export async function autoFillGroupBets() {
   const { supabase, participantId } = await resolveParticipant()
+  const admin = createAuthAdminClient()
 
   const { data: dl } = await supabase
     .from('matches').select('betting_deadline')
@@ -146,7 +154,7 @@ export async function autoFillGroupBets() {
 
   for (const s of standings) {
     if (s.teams.length < 2) continue
-    const { error } = await supabase.from('group_bets').upsert(
+    const { error } = await admin.from('group_bets').upsert(
       { participant_id: participantId, group_name: s.group, first_place: s.teams[0].team, second_place: s.teams[1].team },
       { onConflict: 'participant_id,group_name' },
     )
@@ -154,9 +162,9 @@ export async function autoFillGroupBets() {
   }
 
   const advancingThirds = thirds.filter(t => t.advances)
-  await supabase.from('third_place_bets').delete().eq('participant_id', participantId)
+  await admin.from('third_place_bets').delete().eq('participant_id', participantId)
   if (advancingThirds.length > 0) {
-    const { error } = await supabase.from('third_place_bets').insert(
+    const { error } = await admin.from('third_place_bets').insert(
       advancingThirds.map(t => ({ participant_id: participantId, group_name: t.group, team: t.team })),
     )
     if (error) throw new Error(error.message)
@@ -171,6 +179,7 @@ export async function fillG4FromBracket(data: {
   semi2: string
 }) {
   const { supabase, participantId } = await resolveParticipant()
+  const admin = createAuthAdminClient()
 
   const { data: dl } = await supabase
     .from('matches').select('betting_deadline')
@@ -185,7 +194,7 @@ export async function fillG4FromBracket(data: {
   const { data: existing } = await supabase
     .from('tournament_bets').select('top_scorer').eq('participant_id', participantId).maybeSingle()
 
-  const { error } = await supabase.from('tournament_bets').upsert(
+  const { error } = await admin.from('tournament_bets').upsert(
     { participant_id: participantId, champion, runner_up, semi1, semi2, top_scorer: existing?.top_scorer ?? '' },
     { onConflict: 'participant_id' },
   )
@@ -203,8 +212,9 @@ export async function saveTournamentBet(data: {
     throw new Error('Os semifinalistas devem ser diferentes.')
 
   const { supabase, participantId } = await resolveParticipant()
+  const admin = createAuthAdminClient()
 
-  const { error } = await supabase.from('tournament_bets').upsert(
+  const { error } = await admin.from('tournament_bets').upsert(
     { participant_id: participantId, champion, runner_up, semi1, semi2, top_scorer },
     { onConflict: 'participant_id' },
   )
