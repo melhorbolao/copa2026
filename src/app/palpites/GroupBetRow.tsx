@@ -65,12 +65,12 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
 
   const showCheck = justSaved || (!justSaved && existingBet !== null && !pending)
 
-  // Conflito: o time apostado diverge do calculado E não é um dos times empatados
-  // (empate pode legitimar a inversão de 1º/2º sem ser conflito real)
-  const tiedSet = new Set(calculatedTop?.tiedTeams ?? [])
-  const firstConflict  = !!first  && !!calculatedTop?.first  && first  !== calculatedTop.first  && !tiedSet.has(first)
-  const secondConflict = !!second && !!calculatedTop?.second && second !== calculatedTop.second && !tiedSet.has(second)
+  // Conflito: time apostado não está entre os 2 primeiros calculados.
+  // Usar conjunto (não posição) já trata empate: A e B trocados continuam no top-2,
+  // mas C apostado quando {A,B} são top-2 é corretamente marcado.
   const calcTop2 = new Set([calculatedTop?.first, calculatedTop?.second].filter(Boolean))
+  const firstConflict  = !!first  && calcTop2.size > 0 && !calcTop2.has(first)
+  const secondConflict = !!second && calcTop2.size > 0 && !calcTop2.has(second)
 
   return (
     <tr className="border-b border-gray-100 bg-blue-50/30 hover:bg-blue-50/50">
@@ -99,11 +99,11 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
                 <>
                   <span className="inline-flex items-center text-xs font-semibold text-gray-700">
                     🥇 {existingBet.first_place}
-                    {!!calculatedTop?.first && existingBet.first_place !== calculatedTop.first && !tiedSet.has(existingBet.first_place) && <ConflictDot />}
+                    {calcTop2.size > 0 && !calcTop2.has(existingBet.first_place) && <ConflictDot />}
                   </span>
                   <span className="inline-flex items-center text-xs font-semibold text-gray-700">
                     🥈 {existingBet.second_place}
-                    {!!calculatedTop?.second && existingBet.second_place !== calculatedTop.second && !tiedSet.has(existingBet.second_place) && <ConflictDot />}
+                    {calcTop2.size > 0 && !calcTop2.has(existingBet.second_place) && <ConflictDot />}
                   </span>
                 </>
               ) : (
