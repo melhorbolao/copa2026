@@ -1,11 +1,9 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
 
 export function ExcelActions() {
-  const router      = useRouter()
   const fileRef     = useRef<HTMLInputElement>(null)
   const [importing,     setImporting]     = useState(false)
   const [emailing,      setEmailing]      = useState(false)
@@ -36,7 +34,7 @@ export function ExcelActions() {
       if (warnings?.length > 0) {
         toast.error(`⚠️ Conflito no G4: ${warnings.join('; ')}`, { duration: 6000 })
       }
-      if (updated > 0 || bonus > 0) router.refresh()
+      if (updated > 0 || bonus > 0) window.location.reload()
     } catch {
       toast.error('Erro ao enviar arquivo.')
     } finally {

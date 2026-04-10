@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useTransition, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { saveThirdPlaceBet, deleteThirdPlaceBet } from './actions'
 import { isDeadlinePassed, formatBrasilia } from '@/utils/date'
 import { useThirdPlace } from './ThirdPlaceContext'
@@ -20,7 +19,6 @@ interface Props {
 }
 
 export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBets }: Props) {
-  const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState('')
 
@@ -57,7 +55,6 @@ export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBet
       setSelections(prev => { const next = { ...prev }; delete next[g]; return next })
       startTransition(() =>
         deleteThirdPlaceBet(g)
-          .then(() => router.refresh())
           .catch(e => setError(e instanceof Error ? e.message : 'Erro ao remover.'))
       )
     } else {
@@ -72,7 +69,6 @@ export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBet
     if (team) {
       startTransition(() =>
         saveThirdPlaceBet(g, team)
-          .then(() => router.refresh())
           .catch(e => setError(e instanceof Error ? e.message : 'Erro ao salvar.'))
       )
     }

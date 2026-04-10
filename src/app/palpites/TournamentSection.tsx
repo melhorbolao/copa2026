@@ -1,7 +1,6 @@
 'use client'
 
 import { useTransition, useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import { saveTournamentBet } from './actions'
 import { Combobox } from '@/components/ui/Combobox'
 import { isDeadlinePassed, formatBrasilia } from '@/utils/date'
@@ -18,7 +17,6 @@ interface Props {
 }
 
 export function TournamentSection({ allTeams, deadline, existingBet }: Props) {
-  const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [form, setForm] = useState<TBet>(() => existingBet
     ? {
@@ -51,7 +49,6 @@ export function TournamentSection({ allTeams, deadline, existingBet }: Props) {
     timerRef.current = setTimeout(() => {
       startTransition(() =>
         saveTournamentBet(updated)
-          .then(() => router.refresh())
           .catch(e => setError(e instanceof Error ? e.message : 'Erro ao salvar.'))
       )
     }, delay)

@@ -1,7 +1,6 @@
 'use client'
 
 import { useTransition, useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { saveBet } from './actions'
 import { Countdown } from '@/components/ui/Countdown'
 
@@ -28,7 +27,6 @@ export function BetForm({
   resultHome,
   resultAway,
 }: Props) {
-  const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [home, setHome] = useState(bet?.score_home?.toString() ?? '')
   const [away, setAway] = useState(bet?.score_away?.toString() ?? '')
@@ -113,7 +111,6 @@ export function BetForm({
       try {
         await saveBet(matchId, h, a)
         setJustSaved(true)
-        router.refresh()
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Erro ao salvar palpite.')
       }

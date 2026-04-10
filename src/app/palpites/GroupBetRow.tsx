@@ -1,7 +1,6 @@
 'use client'
 
 import { useTransition, useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { saveGroupBet } from './actions'
 import { Flag } from '@/components/ui/Flag'
 import { Combobox } from '@/components/ui/Combobox'
@@ -18,7 +17,6 @@ interface Props {
 }
 
 export function GroupBetRow({ groupName, teams, deadline, existingBet }: Props) {
-  const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [first,  setFirst]  = useState(existingBet?.first_place  ?? '')
   const [second, setSecond] = useState(existingBet?.second_place ?? '')
@@ -38,7 +36,7 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet }: Props) 
     if (!f || !s || f === s) return
     setError(''); setJustSaved(false)
     startTransition(async () => {
-      try { await saveGroupBet(groupName, f, s); setJustSaved(true); router.refresh() }
+      try { await saveGroupBet(groupName, f, s); setJustSaved(true) }
       catch (err) { setError(err instanceof Error ? err.message : 'Erro') }
     })
   }
