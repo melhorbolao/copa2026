@@ -12,14 +12,10 @@ export default async function TabelaPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
-  let participantId: string
-  try {
-    participantId = await getActiveParticipantId(supabase, user.id)
-  } catch {
-    redirect('/aguardando-aprovacao')
-  }
+  const participantId = await getActiveParticipantId(supabase, user.id).catch(() => null)
+  if (!participantId) redirect('/aguardando-aprovacao')
 
-  const [{ data: rawMatches }, { data: rawBets }, { data: tBet }, { data: rawGroupBets }] = await Promise.all([
+  const [{ data: rawMatches }, { data: rawBets }, { data: tBet }, { data: rawGroupBets }, { data: rawThirdBets }] = await Promise.all([
     supabase
       .from('matches')
       .select('*')
@@ -37,6 +33,10 @@ export default async function TabelaPage() {
     supabase
       .from('group_bets')
       .select('group_name, first_place, second_place')
+      .eq('participant_id', participantId),
+    supabase
+      .from('third_place_bets')
+      .select('group_name, team')
       .eq('participant_id', participantId),
   ])
 
@@ -61,6 +61,14 @@ export default async function TabelaPage() {
     ((rawGroupBets ?? []) as any[]).map((gb: any) => [
       gb.group_name as string,
       { first_place: gb.first_place as string, second_place: gb.second_place as string },
+    ]),
+  )
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const thirdBetsOverride = Object.fromEntries(
+    ((rawThirdBets ?? []) as any[]).map((tb: any) => [
+      tb.group_name as string,
+      { team: tb.team as string },
     ]),
   )
 
@@ -118,6 +126,7 @@ export default async function TabelaPage() {
         <TabelaClient
           standings={standings}
           groupBetsOverride={groupBetsOverride}
+          thirdBetsOverride={thirdBetsOverride}
           userId={participantId}
           g4Deadline={g4Deadline}
           hasTournamentBet={hasTournamentBet}

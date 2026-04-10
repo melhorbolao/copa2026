@@ -16,6 +16,7 @@ const GROUP_ORDER = ['A','B','C','D','E','F','G','H','I','J','K','L']
 interface Props {
   standings:         CalcGroupStanding[]
   groupBetsOverride: Record<string, { first_place: string; second_place: string }>
+  thirdBetsOverride: Record<string, { team: string }>
   userId:            string
   g4Deadline:        string
   hasTournamentBet:  boolean
@@ -24,6 +25,7 @@ interface Props {
 export function TabelaClient({
   standings,
   groupBetsOverride,
+  thirdBetsOverride,
   userId,
   g4Deadline,
   hasTournamentBet,
@@ -114,6 +116,7 @@ export function TabelaClient({
               standings.find(s => s.group === standing.group)?.tiedTeams ?? []
             }
             formalBet={groupBetsOverride[standing.group] ?? null}
+            thirdPlaceBet={thirdBetsOverride[standing.group] ?? null}
             manualOrder={mounted ? (manualOrders[standing.group] ?? null) : null}
             onOrderChange={order => handleOrderChange(standing.group, order)}
             onOrderReset={() => handleOrderReset(standing.group)}

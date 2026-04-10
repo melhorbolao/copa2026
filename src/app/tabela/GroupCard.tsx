@@ -13,6 +13,8 @@ interface Props {
   originalTiedTeams: string[]
   /** Palpite formal de 1º/2º já salvo pelo usuário (null se não preenchido) */
   formalBet:         { first_place: string; second_place: string } | null
+  /** Palpite de terceiro classificado deste grupo (null se não apostou) */
+  thirdPlaceBet:     { team: string } | null
   manualOrder:       string[] | null
   onOrderChange:     (order: string[]) => void
   onOrderReset:      () => void
@@ -31,6 +33,7 @@ export function GroupCard({
   userId,
   originalTiedTeams,
   formalBet,
+  thirdPlaceBet,
   manualOrder,
   onOrderChange,
   onOrderReset,
@@ -39,11 +42,11 @@ export function GroupCard({
 
   const hasTie = originalTiedTeams.length > 0
 
-  const [draftOrder,       setDraftOrder]       = useState<string[] | null>(null)
-  const [dragOver,         setDragOver]         = useState<number | null>(null)
-  const [showModal,        setShowModal]        = useState(false)
-  const [confirmPending,   startConfirm]        = useTransition()
-  const [confirmError,     setConfirmError]     = useState('')
+  const [draftOrder,     setDraftOrder]     = useState<string[] | null>(null)
+  const [dragOver,       setDragOver]       = useState<number | null>(null)
+  const [showModal,      setShowModal]      = useState(false)
+  const [confirmPending, startConfirm]      = useTransition()
+  const [confirmError,   setConfirmError]   = useState('')
   const dragIdx = useRef<number | null>(null)
 
   // Prioridade de exibição: rascunho > ordem confirmada > calculada
@@ -55,6 +58,16 @@ export function GroupCard({
     if (ordered.length !== standing.teams.length) return standing.teams
     return ordered
   })()
+
+  // ── Detecção de conflitos ─────────────────────────────────────
+  const newFirst  = draftOrder?.[0] ?? ''
+  const newSecond = draftOrder?.[1] ?? ''
+  const newThird  = draftOrder?.[2] ?? ''
+
+  const groupBetConflict = !!draftOrder && !!formalBet && (
+    formalBet.first_place !== newFirst || formalBet.second_place !== newSecond
+  )
+  const thirdBetConflict = !!draftOrder && !!thirdPlaceBet && thirdPlaceBet.team !== newThird
 
   // ── Drag handlers ──────────────────────────────────────────────
   const handleDragStart = (i: number) => { dragIdx.current = i }
@@ -73,54 +86,52 @@ export function GroupCard({
     setDragOver(null)
   }
 
-  // ── Lógica de commit com verificação de palpite formal ─────────
+  // ── Commit: aplica a ordem no estado/localStorage sem tocar no banco ──
   const doCommit = (order: string[]) => {
     onOrderChange(order)
     try { localStorage.setItem(storageKey, JSON.stringify(order)) } catch { /* ignore */ }
     setDraftOrder(null)
   }
 
+  // ── Salvar: verifica conflitos antes de commitar ───────────────
   const handleSaveClick = () => {
     if (!draftOrder) return
-    const newFirst  = draftOrder[0]
-    const newSecond = draftOrder[1]
 
-    // Sem palpite formal → commita direto
-    if (!formalBet) {
+    // Sem conflitos → salva direto, sem modal
+    if (!groupBetConflict && !thirdBetConflict) {
       doCommit(draftOrder)
       return
     }
 
-    // Palpite formal igual à nova ordem → commita direto
-    if (formalBet.first_place === newFirst && formalBet.second_place === newSecond) {
-      doCommit(draftOrder)
-      return
-    }
-
-    // Palpite formal diferente → abre modal de confirmação
     setConfirmError('')
     setShowModal(true)
   }
 
-  const handleConfirmYes = () => {
+  // ── Modal: Manter palpites ─────────────────────────────────────
+  // Salva o desempate localmente; não altera palpites no banco.
+  const handleKeepBets = () => {
+    if (draftOrder) doCommit(draftOrder)
+    setShowModal(false)
+  }
+
+  // ── Modal: Atualizar palpites ──────────────────────────────────
+  // Salva o desempate localmente E corrige os palpites conflitantes no banco.
+  const handleUpdateBets = () => {
     if (!draftOrder) return
     setConfirmError('')
     startConfirm(async () => {
       try {
-        await updateGroupBetFromReorder(standing.group, draftOrder[0], draftOrder[1])
+        await updateGroupBetFromReorder(
+          standing.group,
+          groupBetConflict ? { firstPlace: newFirst, secondPlace: newSecond } : null,
+          thirdBetConflict ? { team: newThird } : null,
+        )
         doCommit(draftOrder)
         setShowModal(false)
       } catch (e) {
         setConfirmError(e instanceof Error ? e.message : 'Erro ao atualizar palpite')
       }
     })
-  }
-
-  const handleConfirmNo = () => {
-    // Aplica a ordem do desempate localmente (localStorage + estado),
-    // mas mantém o palpite formal no banco sem alteração.
-    if (draftOrder) doCommit(draftOrder)
-    setShowModal(false)
   }
 
   const discardDraft = () => setDraftOrder(null)
@@ -293,58 +304,64 @@ export function GroupCard({
       </div>
     </div>
 
-    {/* Modal de confirmação de atualização do palpite formal */}
+    {/* Modal de conflito de palpites */}
     {showModal && draftOrder && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
         <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
           <h3 className="text-base font-bold text-gray-900">
-            Atualizar palpite do Grupo {standing.group}?
+            Conflito nos palpites — Grupo {standing.group}
           </h3>
           <p className="mt-2 text-sm text-gray-600">
-            Você já tem um palpite de classificados preenchido:
+            A nova classificação difere dos seus palpites:
           </p>
-          <div className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-sm">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-verde-600 text-[10px] font-black text-white">1</span>
-              <span className="font-medium text-gray-700">{formalBet!.first_place}</span>
-            </div>
-            <div className="mt-1 flex items-center gap-2">
-              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-azul-escuro text-[10px] font-black text-white">2</span>
-              <span className="font-medium text-gray-700">{formalBet!.second_place}</span>
-            </div>
-          </div>
-          <p className="mt-3 text-sm text-gray-600">
-            Deseja substituir pelo nova ordem?
-          </p>
-          <div className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-sm">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-verde-600 text-[10px] font-black text-white">1</span>
-              <span className="font-medium text-gray-700">{draftOrder[0]}</span>
-            </div>
-            <div className="mt-1 flex items-center gap-2">
-              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-azul-escuro text-[10px] font-black text-white">2</span>
-              <span className="font-medium text-gray-700">{draftOrder[1]}</span>
-            </div>
-          </div>
 
-          {confirmError && (
-            <p className="mt-2 text-xs text-red-600">{confirmError}</p>
+          {groupBetConflict && formalBet && (
+            <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm space-y-1">
+              <p className="text-xs font-bold uppercase tracking-wide text-amber-700">Classificados do grupo</p>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-verde-600 text-[10px] font-black text-white">1</span>
+                <span className="text-gray-500 line-through">{formalBet.first_place}</span>
+                <span className="text-gray-400">→</span>
+                <span className="font-semibold text-gray-800">{newFirst}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-azul-escuro text-[10px] font-black text-white">2</span>
+                <span className="text-gray-500 line-through">{formalBet.second_place}</span>
+                <span className="text-gray-400">→</span>
+                <span className="font-semibold text-gray-800">{newSecond}</span>
+              </div>
+            </div>
           )}
 
-          <div className="mt-5 flex justify-end gap-3">
+          {thirdBetConflict && thirdPlaceBet && (
+            <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm space-y-1">
+              <p className="text-xs font-bold uppercase tracking-wide text-amber-700">3º classificado</p>
+              <div className="flex items-center gap-2">
+                <span className="text-gray-500 line-through">{thirdPlaceBet.team}</span>
+                <span className="text-gray-400">→</span>
+                <span className="font-semibold text-gray-800">{newThird}</span>
+              </div>
+            </div>
+          )}
+
+          {confirmError && (
+            <p className="mt-3 text-xs text-red-600">{confirmError}</p>
+          )}
+
+          <div className="mt-5 flex flex-col gap-2">
             <button
-              onClick={handleConfirmNo}
+              onClick={handleUpdateBets}
               disabled={confirmPending}
-              className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              className="w-full rounded-lg bg-azul-escuro px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
             >
-              Manter palpite atual
+              {confirmPending ? 'Salvando…' : 'Atualizar palpites conflitantes'}
             </button>
             <button
-              onClick={handleConfirmYes}
+              onClick={handleKeepBets}
               disabled={confirmPending}
-              className="rounded-lg bg-azul-escuro px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+              className="w-full rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             >
-              {confirmPending ? 'Salvando…' : 'Atualizar palpite'}
+              Manter palpites atuais
             </button>
           </div>
         </div>
