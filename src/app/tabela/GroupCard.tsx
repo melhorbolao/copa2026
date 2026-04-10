@@ -2,7 +2,7 @@
 
 import { useState, useRef, useTransition } from 'react'
 import { Flag } from '@/components/ui/Flag'
-import { updateGroupBetFromReorder } from './actions'
+import { updateGroupBetFromReorder, getGroupBets } from './actions'
 import type { CalcGroupStanding, TeamRow } from '@/lib/bracket/engine'
 
 interface Props {
@@ -46,6 +46,7 @@ export function GroupCard({
   const [dragOver,       setDragOver]       = useState<number | null>(null)
   const [showModal,      setShowModal]      = useState(false)
   const [confirmPending, startConfirm]      = useTransition()
+  const [checkPending,   startCheck]        = useTransition()
   const [confirmError,   setConfirmError]   = useState('')
   const [saveSuccess,    setSaveSuccess]    = useState(false)
 
@@ -99,18 +100,30 @@ export function GroupCard({
     setDraftOrder(null)
   }
 
-  // ── Salvar: verifica conflitos antes de commitar ───────────────
+  // ── Salvar: busca palpites frescos do servidor antes de checar conflito ──
   const handleSaveClick = () => {
     if (!draftOrder) return
+    const capturedDraft = draftOrder
+    startCheck(async () => {
+      const { groupBet, thirdBet } = await getGroupBets(standing.group)
+      // Atualiza estado local com dados frescos
+      setLocalFormalBet(groupBet)
+      setLocalThirdPlaceBet(thirdBet)
 
-    // Sem conflitos → salva direto, sem modal
-    if (!groupBetConflict && !thirdBetConflict) {
-      doCommit(draftOrder)
-      return
-    }
+      const first  = capturedDraft[0] ?? ''
+      const second = capturedDraft[1] ?? ''
+      const third  = capturedDraft[2] ?? ''
 
-    setConfirmError('')
-    setShowModal(true)
+      const grpConflict  = !!groupBet && (groupBet.first_place !== first || groupBet.second_place !== second)
+      const thrdConflict = !!thirdBet  && thirdBet.team !== third
+
+      if (!grpConflict && !thrdConflict) {
+        doCommit(capturedDraft)
+        return
+      }
+      setConfirmError('')
+      setShowModal(true)
+    })
   }
 
   // ── Modal: Manter palpites ─────────────────────────────────────
@@ -197,9 +210,10 @@ export function GroupCard({
             </button>
             <button
               onClick={handleSaveClick}
-              className="rounded-full bg-verde-500 px-2.5 py-0.5 text-[10px] font-bold text-white hover:bg-verde-600"
+              disabled={checkPending}
+              className="rounded-full bg-verde-500 px-2.5 py-0.5 text-[10px] font-bold text-white hover:bg-verde-600 disabled:opacity-60"
             >
-              💾 Salvar ordem
+              {checkPending ? '…' : '💾 Salvar ordem'}
             </button>
           </div>
         )}
