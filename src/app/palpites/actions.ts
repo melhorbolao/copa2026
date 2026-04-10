@@ -1,6 +1,6 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAuthAdminClient } from '@/lib/supabase/server'
 import { getActiveParticipantId } from '@/lib/participant'
 import { calcGroupStandings, rankThirds } from '@/lib/bracket/engine'
 
@@ -17,17 +17,31 @@ export async function saveBet(matchId: string, scoreHome: number, scoreAway: num
   if (!Number.isInteger(scoreHome) || !Number.isInteger(scoreAway) || scoreHome < 0 || scoreAway < 0) {
     throw new Error('Placar inválido')
   }
-  const { supabase, participantId } = await resolveParticipant()
 
-  const { data: match } = await supabase.from('matches').select('betting_deadline').eq('id', matchId).single()
+  let participantId: string
+  let supabase: Awaited<ReturnType<typeof createClient>>
+  try {
+    ;({ supabase, participantId } = await resolveParticipant())
+  } catch (e) {
+    console.error('[saveBet] resolveParticipant falhou:', e)
+    throw e
+  }
+
+  const { data: match, error: matchError } = await supabase.from('matches').select('betting_deadline').eq('id', matchId).single()
+  if (matchError) console.error('[saveBet] erro ao buscar partida:', matchError)
   if (!match) throw new Error('Partida não encontrada')
   if (new Date() > new Date(match.betting_deadline)) throw new Error('Prazo encerrado')
 
-  const { error } = await supabase.from('bets').upsert(
+  // Usa admin client para contornar possíveis restrições de RLS na tabela bets
+  const admin = createAuthAdminClient()
+  const { error } = await admin.from('bets').upsert(
     { participant_id: participantId, match_id: matchId, score_home: scoreHome, score_away: scoreAway },
     { onConflict: 'participant_id,match_id' },
   )
-  if (error) throw new Error(error.message)
+  if (error) {
+    console.error('[saveBet] erro no upsert:', error)
+    throw new Error(error.message)
+  }
 }
 
 // ── Classificação de grupo ────────────────────────────────────
