@@ -12,9 +12,11 @@ const font = Plus_Jakarta_Sans({
 
 export const metadata: Metadata = {
   title: 'Melhor Bolão',
+  description: '',
   keywords: ['bolão', 'copa do mundo', 'fifa 2026', 'palpites', 'futebol'],
   openGraph: {
     title: 'Melhor Bolão',
+    description: '',
     locale: 'pt_BR',
     type: 'website',
   },
