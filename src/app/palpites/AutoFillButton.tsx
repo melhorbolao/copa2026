@@ -23,7 +23,7 @@ export function AutoFillButton({ enabled, alreadyFilled }: Props) {
   function doFill() {
     startTransition(async () => {
       await autoFillGroupBets()
-      setShowConfirm(false)
+      window.location.reload()
     })
   }
 
