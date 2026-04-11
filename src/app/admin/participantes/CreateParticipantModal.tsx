@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createParticipant } from './actions'
 
@@ -15,12 +15,29 @@ export function CreateParticipantModal({ users }: { users: User[] }) {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
 
-  const [userId,  setUserId]  = useState('')
-  const [apelido, setApelido] = useState('')
-  const [bio,     setBio]     = useState('')
+  const [userId,       setUserId]       = useState('')
+  const [userQuery,    setUserQuery]    = useState('')
+  const [showDropdown, setShowDropdown] = useState(false)
+  const [apelido,      setApelido]      = useState('')
+  const [bio,          setBio]          = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
 
-  const reset = () => { setUserId(''); setApelido(''); setBio(''); setError(''); setSuccess(false) }
+  const reset = () => { setUserId(''); setUserQuery(''); setApelido(''); setBio(''); setError(''); setSuccess(false); setShowDropdown(false) }
   const handleClose = () => { setOpen(false); reset() }
+
+  const filteredUsers = userQuery.trim()
+    ? users.filter(u =>
+        u.name.toLowerCase().includes(userQuery.toLowerCase()) ||
+        (u.apelido ?? '').toLowerCase().includes(userQuery.toLowerCase())
+      )
+    : users
+
+  const selectUser = (u: User) => {
+    setUserId(u.id)
+    setUserQuery(u.name + (u.apelido ? ` (${u.apelido})` : ''))
+    setShowDropdown(false)
+    if (!apelido) setApelido(u.apelido || u.name)
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -38,6 +55,7 @@ export function CreateParticipantModal({ users }: { users: User[] }) {
   }
 
   const selectedUser = users.find(u => u.id === userId)
+
 
   return (
     <>
@@ -59,25 +77,41 @@ export function CreateParticipantModal({ users }: { users: User[] }) {
             </div>
 
             <form onSubmit={handleSubmit} className="p-5 flex flex-col gap-3">
-              <div>
+              <div className="relative">
                 <label className="mb-1 block text-xs font-semibold text-gray-500">Usuário *</label>
-                <select
-                  required
-                  value={userId}
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={userQuery}
                   onChange={e => {
-                    const u = users.find(u => u.id === e.target.value)
-                    setUserId(e.target.value)
-                    if (u && !apelido) setApelido(u.apelido || u.name)
+                    setUserQuery(e.target.value)
+                    setUserId('')
+                    setShowDropdown(true)
                   }}
-                  className={inputCls}
-                >
-                  <option value="">— selecione —</option>
-                  {users.map(u => (
-                    <option key={u.id} value={u.id}>
-                      {u.name}{u.apelido ? ` (${u.apelido})` : ''}
-                    </option>
-                  ))}
-                </select>
+                  onFocus={() => setShowDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
+                  placeholder="Digite para filtrar usuários…"
+                  autoComplete="off"
+                  className={inputCls + (userId ? ' border-verde-400' : '')}
+                />
+                {showDropdown && filteredUsers.length > 0 && (
+                  <ul className="absolute z-20 mt-1 max-h-52 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg text-sm">
+                    {filteredUsers.map(u => (
+                      <li
+                        key={u.id}
+                        onMouseDown={() => selectUser(u)}
+                        className="cursor-pointer px-3 py-2 hover:bg-verde-50 hover:text-verde-800"
+                      >
+                        {u.name}{u.apelido ? <span className="ml-1 text-gray-400">({u.apelido})</span> : null}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {showDropdown && filteredUsers.length === 0 && userQuery.trim() && (
+                  <div className="absolute z-20 mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-400 shadow-lg">
+                    Nenhum usuário encontrado.
+                  </div>
+                )}
               </div>
 
               <div>
