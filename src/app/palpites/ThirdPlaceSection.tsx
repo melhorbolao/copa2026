@@ -11,7 +11,7 @@ const MAX = 8
 interface Team  { team: string; flag: string }
 interface Bet   { group_name: string; team: string }
 
-const CONFLICT_TITLE = 'Palpite de classificado divergente da classificação decorrente dos placares dos jogos. Alerta apenas informativo, Você pode manter os palpites assim pela regra do Melhor Bolão.'
+const CONFLICT_TITLE = 'Palpite de classificado divergente da classificação decorrente dos placares dos jogos. Alerta apenas informativo, você pode manter os palpites assim, conforme regra do Melhor Bolão.'
 
 function ConflictDot() {
   return (

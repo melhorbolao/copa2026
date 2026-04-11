@@ -22,7 +22,7 @@ interface Props {
   onBetUpdate?:      (groupBet: { first_place: string; second_place: string } | null, thirdBet: { team: string } | null) => void
 }
 
-const CONFLICT_TITLE = 'Palpite de classificado divergente da classificação decorrente dos placares dos jogos. Alerta apenas informativo, Você pode manter os palpites assim pela regra do Melhor Bolão.'
+const CONFLICT_TITLE = 'Palpite de classificado divergente da classificação decorrente dos placares dos jogos. Alerta apenas informativo, você pode manter os palpites assim, conforme regra do Melhor Bolão.'
 
 function ConflictDot() {
   return (
