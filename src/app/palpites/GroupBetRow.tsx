@@ -9,7 +9,7 @@ import { useThirdPlace } from './ThirdPlaceContext'
 
 interface Team { team: string; flag: string }
 
-const CONFLICT_TITLE = 'Palpite de classificado divergente da classificação decorrente dos placares dos jogos. Alerta apenas informativo, você pode manter os palpites assim, conforme regra do Melhor Bolão.'
+const CONFLICT_TITLE = 'Alerta informativo: o palpite de classificado(s) está divergente da classificação decorrente dos palpites dos jogos. A regra do Melhor Bolão permite essa "incoerência".'
 
 function ConflictDot() {
   return (
