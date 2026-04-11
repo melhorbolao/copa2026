@@ -185,9 +185,11 @@ export default async function PalpitesPage({
   const activeRoundTotal = activeRoundIds.size
   const activeRoundBets  = (bets ?? []).filter(b => activeRoundIds.has(b.match_id)).length
 
-  // Auto-fill flags
+  // Auto-fill flags — só habilita se todos os placares (score_home e score_away) estiverem preenchidos
   const groupMatchIds = new Set(groupMatches.map(m => m.id))
-  const groupBetCount = (bets ?? []).filter(b => groupMatchIds.has(b.match_id)).length
+  const groupBetCount = (bets ?? []).filter(b =>
+    groupMatchIds.has(b.match_id) && b.score_home !== null && b.score_away !== null
+  ).length
   const allGroupsFilled = groupMatches.length > 0 && groupBetCount >= groupMatches.length
   const alreadyFilled = (groupBets ?? []).filter(b => b.first_place && b.second_place).length > 0
     || (thirdBets ?? []).length > 0

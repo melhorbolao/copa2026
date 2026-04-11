@@ -132,6 +132,8 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
   const [g4Error, setG4Error] = useState('')
 
   const canFillG4 =
+    picks.r32.every(p => p !== null) &&
+    picks.r16.every(p => p !== null) &&
     picks.qf.every(p => p !== null) &&
     picks.sf.every(p => p !== null) &&
     picks.final !== null
@@ -329,7 +331,7 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
             </p>
             {!canFillG4 && (
               <p className="mt-0.5 text-xs text-gray-500">
-                Complete o chaveamento até a final para habilitar.
+                Complete todo o chaveamento (16avos até a final) para habilitar.
               </p>
             )}
             {g4Error && <p className="mt-0.5 text-xs text-red-500">{g4Error}</p>}
