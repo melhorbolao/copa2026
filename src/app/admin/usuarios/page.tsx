@@ -1,7 +1,5 @@
 import { createAuthAdminClient } from '@/lib/supabase/server'
 import { UserRow } from './UserRow'
-import { ReminderSection } from './ReminderSection'
-import { CopyEmailsButton } from './CopyEmailsButton'
 
 export default async function AdminUsuariosPage() {
   const supabase = createAuthAdminClient()
@@ -18,10 +16,6 @@ export default async function AdminUsuariosPage() {
   const aprovados = users?.filter(u => u.status === 'aprovado').length ?? 0
   const pendentes = users?.filter(u => u.status === 'aprovacao_pendente').length ?? 0
 
-  const approvedEmails = (users ?? [])
-    .filter(u => u.status === 'aprovado')
-    .map(u => u.email)
-
   return (
     <div>
       {/* Resumo */}
@@ -29,12 +23,6 @@ export default async function AdminUsuariosPage() {
         <StatCard label="Cadastrados"       value={total}     color="gray"   />
         <StatCard label="Aprovados"         value={aprovados} color="verde"  />
         <StatCard label="Aguard. aprovação" value={pendentes} color="orange" />
-      </div>
-
-      {/* Lembrete + Copiar e-mails */}
-      <div className="mb-4 flex items-start justify-between gap-3 flex-wrap">
-        <ReminderSection />
-        <CopyEmailsButton emails={approvedEmails} />
       </div>
 
       {/* Tabela */}

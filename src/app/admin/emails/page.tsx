@@ -1,5 +1,7 @@
-import { createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient, createAuthAdminClient } from '@/lib/supabase/server'
 import { EmailSettingCard } from './EmailSettingsClient'
+import { ReminderSection } from '../usuarios/ReminderSection'
+import { CopyEmailsButton } from '../usuarios/CopyEmailsButton'
 
 const CRON_KEYS  = new Set(['alert_24h', 'alert_6h', 'receipt'])
 const KEY_ORDER  = ['alert_24h', 'alert_6h', 'receipt', 'notify_approved', 'notify_new_user']
@@ -14,13 +16,15 @@ const DEFAULTS: Record<string, { label: string; description: string }> = {
 
 export default async function AdminEmailsPage() {
   const supabase = await createAdminClient()
+  const authAdmin = createAuthAdminClient()
 
-  const [{ data: settingsRows }, { data: logRows }] = await Promise.all([
+  const [{ data: settingsRows }, { data: logRows }, { data: approvedUsers }] = await Promise.all([
     supabase.from('email_settings').select('key, enabled, label, description, updated_at'),
     supabase.from('email_logs')
       .select('job_type, status, sent_at')
       .gte('sent_at', new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString())
       .order('sent_at', { ascending: false }),
+    authAdmin.from('users').select('email').eq('status', 'aprovado'),
   ])
 
   // Monta mapa de settings (com fallback nos defaults)
@@ -52,11 +56,21 @@ export default async function AdminEmailsPage() {
   const cronSettings  = settings.filter(s => CRON_KEYS.has(s.key))
   const eventSettings = settings.filter(s => !CRON_KEYS.has(s.key))
 
+  const approvedEmails = (approvedUsers ?? []).map(u => u.email)
+
   // Últimos 20 logs para o historial
   const recentLogs = (logRows ?? []).slice(0, 20)
 
   return (
     <div className="space-y-8">
+
+      {/* ── Envio manual ── */}
+      <section>
+        <div className="mb-3 flex items-center justify-between gap-3 flex-wrap">
+          <ReminderSection />
+          <CopyEmailsButton emails={approvedEmails} />
+        </div>
+      </section>
 
       {/* ── Automáticos (cron) ── */}
       <section>

@@ -30,18 +30,19 @@ melhorbolao.app.br
 Boa sorte! 🏆`
 
 export function ReminderSection() {
-  const [open,        setOpen]       = useState(false)
-  const [recipients,  setRecipients] = useState<'all' | 'pending' | 'cut1' | 'cut2'>('all')
-  const [stage,       setStage]      = useState('r1')
-  const [body,        setBody]       = useState(DEFAULT_BODY)
-  const [result,      setResult]     = useState<string | null>(null)
-  const [pending,     startTransition] = useTransition()
+  const [open,           setOpen]       = useState(false)
+  const [recipients,     setRecipients] = useState<'all' | 'pending' | 'cut1' | 'cut2'>('all')
+  const [stage,          setStage]      = useState('r1')
+  const [body,           setBody]       = useState(DEFAULT_BODY)
+  const [attachPalpites, setAttachPalpites] = useState(false)
+  const [result,         setResult]     = useState<string | null>(null)
+  const [pending,        startTransition] = useTransition()
 
   const handleSend = () => {
     setResult(null)
     startTransition(async () => {
       try {
-        const { sent } = await sendReminderEmails(recipients, stage, body)
+        const { sent } = await sendReminderEmails(recipients, stage, body, attachPalpites)
         setResult(`✓ ${sent} e-mail${sent !== 1 ? 's' : ''} enviado${sent !== 1 ? 's' : ''} com sucesso.`)
       } catch (err) {
         setResult(`Erro: ${err instanceof Error ? err.message : 'Falha ao enviar.'}`)
@@ -51,22 +52,20 @@ export function ReminderSection() {
 
   if (!open) {
     return (
-      <div className="mb-6 flex justify-end">
-        <button
-          onClick={() => setOpen(true)}
-          className="rounded-lg px-4 py-2 text-sm font-semibold text-white transition"
-          style={{ backgroundColor: '#002776' }}
-        >
-          📨 Enviar Lembrete
-        </button>
-      </div>
+      <button
+        onClick={() => setOpen(true)}
+        className="rounded-lg px-4 py-2 text-sm font-semibold text-white transition"
+        style={{ backgroundColor: '#002776' }}
+      >
+        📨 Enviar e-mail
+      </button>
     )
   }
 
   return (
-    <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4">
+    <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-bold text-gray-800">📨 Enviar Lembrete por E-mail</h3>
+        <h3 className="text-sm font-bold text-gray-800">📨 Enviar e-mail</h3>
         <button onClick={() => { setOpen(false); setResult(null) }} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
       </div>
 
@@ -118,8 +117,24 @@ export function ReminderSection() {
         />
       </div>
 
+      {/* Checkbox anexo */}
+      <label className="mt-3 flex cursor-pointer items-start gap-2.5">
+        <input
+          type="checkbox"
+          checked={attachPalpites}
+          onChange={e => setAttachPalpites(e.target.checked)}
+          className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-blue-600"
+        />
+        <span className="text-xs text-gray-700">
+          Anexar planilha de palpites de cada participante
+          <span className="block text-gray-400">
+            Se o usuário tiver mais de um participante, todas as planilhas são anexadas.
+          </span>
+        </span>
+      </label>
+
       {/* Ações */}
-      <div className="mt-3 flex items-center gap-3">
+      <div className="mt-4 flex items-center gap-3">
         <button
           onClick={handleSend}
           disabled={pending || !body.trim()}

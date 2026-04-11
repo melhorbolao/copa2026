@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient, createAdminClient, createAuthAdminClient } from '@/lib/supabase/server'
 import { notifyUserApproved, sendReminderEmail } from '@/lib/email'
+import { buildPalpitesBuffer } from '@/app/api/palpites/_workbook'
 import { isEmailEnabled } from '@/lib/email-settings'
 import type { MatchPhase } from '@/types/database'
 
@@ -246,11 +247,12 @@ export async function toggleApproved(userId: string, current: boolean) {
   revalidatePath('/admin/usuarios')
 }
 
-// ── Lembrete em massa ─────────────────────────────────────────
+// ── E-mail em massa ───────────────────────────────────────────
 export async function sendReminderEmails(
   recipients: 'all' | 'pending' | 'cut1' | 'cut2',
   stage: string,
   body: string,
+  attachPalpites: boolean = false,
 ) {
   await requireAdmin()
   const supabase = await createAdminClient()
@@ -337,7 +339,25 @@ export async function sendReminderEmails(
   let sent = 0
   for (const u of targets) {
     try {
-      await sendReminderEmail({ name: u.name, email: u.email, body })
+      let attachments: Array<{ filename: string; content: Buffer; contentType: string }> | undefined
+      if (attachPalpites) {
+        const participantIds = userToParticipants.get(u.id) ?? []
+        if (participantIds.length > 0) {
+          attachments = []
+          for (const pid of participantIds) {
+            try {
+              const { buffer, fileName } = await buildPalpitesBuffer(supabase, pid)
+              attachments.push({
+                filename: fileName,
+                content: buffer,
+                contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              })
+            } catch { /* ignora falha individual de planilha */ }
+          }
+          if (attachments.length === 0) attachments = undefined
+        }
+      }
+      await sendReminderEmail({ name: u.name, email: u.email, body, attachments })
       sent++
     } catch { /* continua mesmo se um falhar */ }
   }

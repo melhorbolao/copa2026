@@ -86,15 +86,17 @@ export async function notifyUserApproved({ name, email }: { name: string; email:
   })
 }
 
-// ── 3. Lembrete em massa ──────────────────────────────────────
+// ── 3. E-mail em massa (com anexo opcional) ───────────────────
 export async function sendReminderEmail({
   name,
   email,
   body,
+  attachments,
 }: {
   name: string
   email: string
   body: string
+  attachments?: Array<{ filename: string; content: Buffer; contentType?: string }>
 }) {
   const personalizedBody = body.replace(/\{nome\}/gi, name)
   await resend.emails.send({
@@ -112,5 +114,6 @@ export async function sendReminderEmail({
         </a>
       </div>
     `),
+    attachments,
   })
 }
