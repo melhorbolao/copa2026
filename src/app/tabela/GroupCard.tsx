@@ -206,6 +206,14 @@ export function GroupCard({
   const third    = displayTeams[2]
   const thirdAdv = third && advancingGroups.has(standing.group)
 
+  const hasConflict = !hasDraft && (
+    (!!localFormalBet && (
+      localFormalBet.first_place  !== displayTeams[0]?.team ||
+      localFormalBet.second_place !== displayTeams[1]?.team
+    )) ||
+    (!!localThirdPlaceBet && localThirdPlaceBet.team !== displayTeams[2]?.team)
+  )
+
   return (
     <>
     <div className="overflow-hidden rounded-2xl border border-gray-200 shadow-sm">
@@ -368,6 +376,12 @@ export function GroupCard({
         <LegendItem color="bg-verde-600"   label="Classificado (1º)" />
         <LegendItem color="bg-azul-escuro" label="Classificado (2º)" />
         {thirdAdv && <LegendItem color="bg-amber-400" label="Melhor 3º" />}
+        {hasConflict && (
+          <div className="mt-1 flex w-full items-start gap-1.5 border-t border-gray-100 pt-1.5">
+            <span className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-500 text-[10px] font-black text-white">!</span>
+            <span className="text-[10px] leading-snug text-gray-500">{CONFLICT_TITLE}</span>
+          </div>
+        )}
       </div>
     </div>
 
