@@ -33,7 +33,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR" className={font.variable}>
-      <body className="min-h-screen bg-gray-50 font-sans">
+      <body className="min-h-screen overflow-x-hidden bg-gray-50 font-sans">
         <AdminViewProvider>
           {children}
         </AdminViewProvider>
