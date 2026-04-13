@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Impede scroll horizontal no nível da página sem quebrar position:sticky */
+html {
+  overflow-x: clip;
+}
+
 /* Scrollbar sutil para containers com overflow-x */
 .scrollbar-thin {
   scrollbar-width: thin;
