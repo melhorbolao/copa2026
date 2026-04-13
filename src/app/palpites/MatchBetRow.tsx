@@ -94,7 +94,7 @@ export function MatchBetRow({ match, bet }: Props) {
     <tr className={`border-b border-gray-100 last:border-0 ${rowBg} hover:bg-gray-50/60`}>
       {/* # */}
       <td className="py-2.5 text-xs text-gray-400 whitespace-nowrap">
-        <div className={`flex items-center gap-1.5 pl-3 ${match.is_brazil ? 'border-l-4 border-verde-500' : 'border-l-4 border-transparent'}`}>
+        <div className={`flex items-center gap-1 pl-1.5 sm:gap-1.5 sm:pl-3 ${match.is_brazil ? 'border-l-4 border-verde-500' : 'border-l-4 border-transparent'}`}>
           <span className="font-mono">{match.match_number}</span>
           {match.is_brazil && (
             <span
@@ -108,15 +108,15 @@ export function MatchBetRow({ match, bet }: Props) {
       </td>
 
       {/* Time da Casa */}
-      <td className="px-3 py-2.5 text-right">
-        <div className="flex items-center justify-end gap-1.5 text-sm font-semibold text-gray-900 whitespace-nowrap">
-          <span>{match.team_home}</span>
-          <Flag code={match.flag_home} size="sm" />
+      <td className="px-1.5 py-2.5 text-right sm:px-3">
+        <div className="flex items-center justify-end gap-1 text-sm font-semibold text-gray-900 sm:gap-1.5">
+          <span className="hidden sm:inline sm:whitespace-nowrap">{match.team_home}</span>
+          <Flag code={match.flag_home} size="sm" className="shrink-0" />
         </div>
       </td>
 
       {/* Palpite */}
-      <td className="px-3 py-2.5 text-center">
+      <td className="px-1 py-2.5 text-center sm:px-3">
         {deadlinePassed ? (
           bet ? (
             <span className="inline-flex items-center gap-1 text-sm font-bold text-gray-600">
@@ -127,13 +127,13 @@ export function MatchBetRow({ match, bet }: Props) {
             <span className="text-xs text-gray-300">—</span>
           )
         ) : (
-          <div className="inline-flex items-center gap-1">
+          <div className="inline-flex items-center gap-0.5 sm:gap-1">
             <input
               type="text" inputMode="numeric" pattern="[0-9]*"
               value={home}
               onChange={e => handleHomeChange(e.target.value.replace(/\D/g, '').slice(0, 2))}
               placeholder="–"
-              className="w-10 rounded border border-gray-200 py-1 text-center text-sm font-bold focus:border-verde-400 focus:outline-none"
+              className="w-8 rounded border border-gray-200 py-1 text-center text-sm font-bold focus:border-verde-400 focus:outline-none sm:w-10"
             />
             <span className="text-gray-300 text-xs">×</span>
             <input
@@ -141,7 +141,7 @@ export function MatchBetRow({ match, bet }: Props) {
               value={away}
               onChange={e => handleAwayChange(e.target.value.replace(/\D/g, '').slice(0, 2))}
               placeholder="–"
-              className="w-10 rounded border border-gray-200 py-1 text-center text-sm font-bold focus:border-verde-400 focus:outline-none"
+              className="w-8 rounded border border-gray-200 py-1 text-center text-sm font-bold focus:border-verde-400 focus:outline-none sm:w-10"
             />
           </div>
         )}
@@ -170,10 +170,10 @@ export function MatchBetRow({ match, bet }: Props) {
       </td>
 
       {/* Time Visitante */}
-      <td className="px-3 py-2.5">
-        <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-900 whitespace-nowrap">
-          <Flag code={match.flag_away} size="sm" />
-          <span>{match.team_away}</span>
+      <td className="px-1.5 py-2.5 sm:px-3">
+        <div className="flex items-center gap-1 text-sm font-semibold text-gray-900 sm:gap-1.5">
+          <Flag code={match.flag_away} size="sm" className="shrink-0" />
+          <span className="hidden sm:inline sm:whitespace-nowrap">{match.team_away}</span>
         </div>
       </td>
 
@@ -189,7 +189,7 @@ export function MatchBetRow({ match, bet }: Props) {
       </td>
 
       {/* Status */}
-      <td className="px-3 py-2.5 text-right">
+      <td className="px-1.5 py-2.5 text-right sm:px-3">
         {hasResult && bet ? (
           <PointsBadge points={bet.points} />
         ) : hasResult && !bet ? (

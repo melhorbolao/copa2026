@@ -229,13 +229,13 @@ export default async function PalpitesPage({
   const tableHead = (
     <thead className="sticky top-0 z-10 border-b border-gray-200 bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-400">
       <tr>
-        <th className="px-3 py-2 text-left w-12">#</th>
-        <th className="px-3 py-2 text-right">Seleção A</th>
-        <th className="px-3 py-2 text-center w-32">Palpite</th>
-        <th className="px-3 py-2 text-left">Seleção B</th>
+        <th className="px-1.5 py-2 text-left w-8 sm:px-3 sm:w-12">#</th>
+        <th className="px-1.5 py-2 text-right sm:px-3">Sel. A</th>
+        <th className="px-1 py-2 text-center w-[4.5rem] sm:px-3 sm:w-32">Palpite</th>
+        <th className="px-1.5 py-2 text-left sm:px-3">Sel. B</th>
         <th className="hidden px-3 py-2 text-left sm:table-cell">Data · Cidade</th>
         <th className="hidden px-3 py-2 text-left sm:table-cell">Prazo</th>
-        <th className="px-3 py-2 text-right w-16">Pts</th>
+        <th className="px-1.5 py-2 text-right w-10 sm:px-3 sm:w-16">Pts</th>
       </tr>
     </thead>
   )
