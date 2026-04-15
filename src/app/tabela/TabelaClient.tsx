@@ -14,12 +14,13 @@ import type { CalcGroupStanding } from '@/lib/bracket/engine'
 const GROUP_ORDER = ['A','B','C','D','E','F','G','H','I','J','K','L']
 
 interface Props {
-  standings:         CalcGroupStanding[]
-  groupBetsOverride: Record<string, { first_place: string; second_place: string }>
-  thirdBetsOverride: Record<string, { team: string }>
-  userId:            string
-  g4Deadline:        string
-  hasTournamentBet:  boolean
+  standings:           CalcGroupStanding[]
+  groupBetsOverride:   Record<string, { first_place: string; second_place: string }>
+  thirdBetsOverride:   Record<string, { team: string }>
+  userId:              string
+  g4Deadline:          string
+  hasTournamentBet:    boolean
+  groupAllBetsFilled:  Record<string, boolean>
 }
 
 export function TabelaClient({
@@ -29,6 +30,7 @@ export function TabelaClient({
   userId,
   g4Deadline,
   hasTournamentBet,
+  groupAllBetsFilled,
 }: Props) {
   const [manualOrders, setManualOrders] = useState<Record<string, string[]>>({})
   const [mounted, setMounted] = useState(false)
@@ -141,6 +143,7 @@ export function TabelaClient({
             originalTiedTeams={
               standings.find(s => s.group === standing.group)?.tiedTeams ?? []
             }
+            allMatchesBet={groupAllBetsFilled[standing.group] ?? false}
             formalBet={localGroupBets[standing.group] ?? null}
             thirdPlaceBet={localThirdBets[standing.group] ?? null}
             manualOrder={mounted ? (manualOrders[standing.group] ?? null) : null}

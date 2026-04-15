@@ -74,6 +74,14 @@ export default async function TabelaPage() {
 
   const standings = calcGroupStandings(matches, betMap)
 
+  // Por grupo: todos os jogos têm palpite preenchido?
+  const groupAllBetsFilled: Record<string, boolean> = {}
+  for (const m of matches) {
+    if (!m.group_name) continue
+    if (!(m.group_name in groupAllBetsFilled)) groupAllBetsFilled[m.group_name] = true
+    if (!betMap.has(m.id)) groupAllBetsFilled[m.group_name] = false
+  }
+
   // Prazo do G4 = menor betting_deadline dos jogos de grupo
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const g4Deadline = ((rawMatches ?? []) as any[])
@@ -130,6 +138,7 @@ export default async function TabelaPage() {
           userId={participantId}
           g4Deadline={g4Deadline}
           hasTournamentBet={hasTournamentBet}
+          groupAllBetsFilled={groupAllBetsFilled}
         />
 
         <div className="mt-4 text-center">
