@@ -26,11 +26,9 @@ interface Props {
   deadline: string
   existingBet: { first_place: string; second_place: string } | null
   calculatedTop?: { first: string; second: string; third: string; tiedTeams: string[] }
-  /** Conflito só é exibido quando todos os jogos do grupo têm palpite preenchido */
-  allMatchesBet: boolean
 }
 
-export function GroupBetRow({ groupName, teams, deadline, existingBet, calculatedTop, allMatchesBet }: Props) {
+export function GroupBetRow({ groupName, teams, deadline, existingBet, calculatedTop }: Props) {
   const [pending, startTransition] = useTransition()
   const [first,  setFirst]  = useState(existingBet?.first_place  ?? '')
   const [second, setSecond] = useState(existingBet?.second_place ?? '')
@@ -68,10 +66,10 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
   const calcSecond = calculatedTop?.second ?? ''
 
   // Conflito: palpite formal diverge da classificação calculada pelos placares.
-  // Exibido apenas quando todos os jogos do grupo têm palpite (standings determinísticos).
-  // Não suprimimos por empate — o alerta é informativo e a regra permite incoerência.
-  const firstConflict  = allMatchesBet && !!first  && !!calcFirst  && first  !== calcFirst
-  const secondConflict = allMatchesBet && !!second && !!calcSecond && second !== calcSecond
+  // Exibido sempre que o cálculo estiver disponível — não suprimimos por empate nem
+  // por quantidade de palpites preenchidos (o alerta é apenas informativo).
+  const firstConflict  = !!first  && !!calcFirst  && first  !== calcFirst
+  const secondConflict = !!second && !!calcSecond && second !== calcSecond
 
   return (
     <tr className="border-b border-gray-100 bg-blue-50/30 hover:bg-blue-50/50">
@@ -111,11 +109,11 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
                 <>
                   <span className="inline-flex items-center text-xs font-semibold text-gray-700">
                     🥇 {existingBet.first_place}
-                    {allMatchesBet && !!calcFirst && existingBet.first_place !== calcFirst && <ConflictDot />}
+                    {!!calcFirst && existingBet.first_place !== calcFirst && <ConflictDot />}
                   </span>
                   <span className="inline-flex items-center text-xs font-semibold text-gray-700">
                     🥈 {existingBet.second_place}
-                    {allMatchesBet && !!calcSecond && existingBet.second_place !== calcSecond && <ConflictDot />}
+                    {!!calcSecond && existingBet.second_place !== calcSecond && <ConflictDot />}
                   </span>
                 </>
               ) : (

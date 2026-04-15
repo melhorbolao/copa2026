@@ -192,14 +192,6 @@ export default async function PalpitesPage({
   ).length
   const allGroupsFilled = groupMatches.length > 0 && groupBetCount >= groupMatches.length
 
-  // Por grupo: todos os 6 jogos têm palpite preenchido? (para exibir alerta de divergência)
-  const groupAllMatchesBet: Record<string, boolean> = {}
-  for (const m of groupMatches) {
-    if (!m.group_name) continue
-    const g = m.group_name as string
-    if (!(g in groupAllMatchesBet)) groupAllMatchesBet[g] = true
-    if (!betMap.has(m.id)) groupAllMatchesBet[g] = false
-  }
   const alreadyFilled = (groupBets ?? []).filter(b => b.first_place && b.second_place).length > 0
     || (thirdBets ?? []).length > 0
 
@@ -359,7 +351,6 @@ export default async function PalpitesPage({
                         deadline={data.deadline}
                         existingBet={groupBetMap.get(g) ?? null}
                         calculatedTop={calculatedTopPerGroup[g]}
-                        allMatchesBet={groupAllMatchesBet[g] ?? false}
                       />
                     )
                   })}
