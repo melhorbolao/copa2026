@@ -80,7 +80,7 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
         <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
 
           {/* Linha superior: rótulo + times */}
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2 sm:flex-1">
             <span className="w-8 shrink-0 text-xs font-bold text-gray-500">
               Gr. {groupName}
             </span>
@@ -120,7 +120,7 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
               )}
             </div>
           ) : (
-            <div className="flex items-center gap-1.5 sm:gap-3">
+            <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
               {/* 1º lugar */}
               <div className="flex flex-1 sm:w-36 sm:flex-none items-center gap-1">
                 <Combobox
