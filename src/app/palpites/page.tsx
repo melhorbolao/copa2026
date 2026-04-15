@@ -351,6 +351,7 @@ export default async function PalpitesPage({
                         deadline={data.deadline}
                         existingBet={groupBetMap.get(g) ?? null}
                         calculatedTop={calculatedTopPerGroup[g]}
+                        userId={participantId}
                       />
                     )
                   })}
