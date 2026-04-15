@@ -32,7 +32,6 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
   const [pending, startTransition] = useTransition()
   const [first,  setFirst]  = useState(existingBet?.first_place  ?? '')
   const [second, setSecond] = useState(existingBet?.second_place ?? '')
-  const [justSaved, setJustSaved] = useState(false)
   const [error,  setError]  = useState('')
 
   const { thirdSelections } = useThirdPlace()
@@ -46,9 +45,9 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
 
   const doSave = (f: string, s: string) => {
     if (!f || !s || f === s) return
-    setError(''); setJustSaved(false)
+    setError('')
     startTransition(async () => {
-      try { await saveGroupBet(groupName, f, s); setJustSaved(true) }
+      try { await saveGroupBet(groupName, f, s) }
       catch (err) { setError(err instanceof Error ? err.message : 'Erro') }
     })
   }
@@ -62,8 +61,6 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
     setSecond(val)
     if (first && val && first !== val) doSave(first, val)
   }
-
-  const showCheck = justSaved || (!justSaved && existingBet !== null && !pending)
 
   // Conflito: posição apostada diverge da calculada.
   // Suprime o ! quando os dois times estão genuinamente empatados entre si
@@ -79,25 +76,32 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
 
   return (
     <tr className="border-b border-gray-100 bg-blue-50/30 hover:bg-blue-50/50">
-      <td colSpan={7} className="px-3 py-2">
-        <div className="flex min-w-0 items-center gap-3">
+      <td colSpan={7} className="px-2 py-2 sm:px-3">
+        <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
 
-          {/* Rótulo do grupo */}
-          <span className="w-8 shrink-0 text-xs font-bold text-gray-500">
-            Gr. {groupName}
-          </span>
-
-          {/* Times com bandeira + nome */}
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
-            {teams.map(t => (
-              <span key={t.team} className="flex items-center gap-1 whitespace-nowrap text-xs text-gray-600">
-                <Flag code={t.flag} size="sm" className="!h-3 !w-4 shrink-0" />
-                <span>{t.team}</span>
-              </span>
-            ))}
+          {/* Linha superior: rótulo + times */}
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="w-8 shrink-0 text-xs font-bold text-gray-500">
+              Gr. {groupName}
+            </span>
+            {/* Times com bandeira + nome — visível apenas em sm+ */}
+            <div className="hidden sm:flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
+              {teams.map(t => (
+                <span key={t.team} className="flex items-center gap-1 whitespace-nowrap text-xs text-gray-600">
+                  <Flag code={t.flag} size="sm" className="!h-3 !w-4 shrink-0" />
+                  <span>{t.team}</span>
+                </span>
+              ))}
+            </div>
+            {/* Times em mobile: só bandeiras */}
+            <div className="flex sm:hidden min-w-0 flex-1 flex-wrap items-center gap-1">
+              {teams.map(t => (
+                <Flag key={t.team} code={t.flag} size="sm" className="!h-3 !w-4 shrink-0" title={t.team} />
+              ))}
+            </div>
           </div>
 
-          {/* Seletores ou leitura após prazo */}
+          {/* Linha inferior (mobile) / continuação (sm+): seletores */}
           {deadlinePassed ? (
             <div className="flex shrink-0 items-center gap-3">
               {existingBet ? (
@@ -116,9 +120,9 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
               )}
             </div>
           ) : (
-            <>
+            <div className="flex items-center gap-1.5 sm:gap-3">
               {/* 1º lugar */}
-              <div className="flex w-36 shrink-0 items-center gap-1">
+              <div className="flex flex-1 sm:w-36 sm:flex-none items-center gap-1">
                 <Combobox
                   value={first}
                   onChange={handleFirst}
@@ -145,7 +149,7 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
               </div>
 
               {/* 2º lugar */}
-              <div className="flex w-36 shrink-0 items-center gap-1">
+              <div className="flex flex-1 sm:w-36 sm:flex-none items-center gap-1">
                 <Combobox
                   value={second}
                   onChange={handleSecond}
@@ -170,20 +174,18 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
                   </button>
                 )}
               </div>
-            </>
+
+              {/* Status / erro */}
+              <div className="w-5 shrink-0 text-right">
+                {pending && (
+                  <span className="text-xs text-gray-400">…</span>
+                )}
+              </div>
+            </div>
           )}
 
-          {/* Status / erro */}
-          <div className="w-5 shrink-0 text-right">
-            {pending ? (
-              <span className="text-xs text-gray-400">…</span>
-            ) : !deadlinePassed && showCheck ? (
-              <span className="text-xs font-medium text-verde-600">✓</span>
-            ) : null}
-          </div>
-
         </div>
-        {error && <p className="mt-0.5 pl-11 text-xs text-red-400">{error}</p>}
+        {error && <p className="mt-0.5 pl-10 text-xs text-red-400">{error}</p>}
       </td>
     </tr>
   )
