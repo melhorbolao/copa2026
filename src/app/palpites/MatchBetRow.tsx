@@ -29,7 +29,6 @@ export function MatchBetRow({ match, bet }: Props) {
   const [pending, startTransition] = useTransition()
   const [home, setHome] = useState(bet?.score_home?.toString() ?? '')
   const [away, setAway] = useState(bet?.score_away?.toString() ?? '')
-  const [justSaved, setJustSaved] = useState(false)
   const [error, setError] = useState('')
   const [confirmScore, setConfirmScore] = useState<{ h: number; a: number } | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -54,7 +53,6 @@ export function MatchBetRow({ match, bet }: Props) {
     startTransition(async () => {
       try {
         await saveBet(match.id, hNum, aNum)
-        setJustSaved(true)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Erro')
       }
@@ -63,7 +61,6 @@ export function MatchBetRow({ match, bet }: Props) {
 
   const triggerSave = (h: string, a: string) => {
     clearTimeout(timerRef.current)
-    setJustSaved(false)
     const hNum = parseInt(h, 10)
     const aNum = parseInt(a, 10)
     if (isNaN(hNum) || isNaN(aNum) || hNum < 0 || aNum < 0) return
@@ -87,8 +84,6 @@ export function MatchBetRow({ match, bet }: Props) {
     setConfirmScore(null)
     triggerSave(homeRef.current, val)
   }
-
-  const showCheck = justSaved || (!justSaved && bet !== null && !pending)
 
   return (
     <tr className={`border-b border-gray-100 last:border-0 ${rowBg} hover:bg-gray-50/60`}>

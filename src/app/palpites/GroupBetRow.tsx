@@ -32,7 +32,6 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
   const [pending, startTransition] = useTransition()
   const [first,  setFirst]  = useState(existingBet?.first_place  ?? '')
   const [second, setSecond] = useState(existingBet?.second_place ?? '')
-  const [justSaved, setJustSaved] = useState(false)
   const [error,  setError]  = useState('')
 
   const { thirdSelections } = useThirdPlace()
@@ -46,9 +45,9 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
 
   const doSave = (f: string, s: string) => {
     if (!f || !s || f === s) return
-    setError(''); setJustSaved(false)
+    setError('')
     startTransition(async () => {
-      try { await saveGroupBet(groupName, f, s); setJustSaved(true) }
+      try { await saveGroupBet(groupName, f, s) }
       catch (err) { setError(err instanceof Error ? err.message : 'Erro') }
     })
   }
@@ -62,8 +61,6 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
     setSecond(val)
     if (first && val && first !== val) doSave(first, val)
   }
-
-  const showCheck = justSaved || (!justSaved && existingBet !== null && !pending)
 
   // Conflito: posição apostada diverge da calculada.
   // Suprime o ! quando os dois times estão genuinamente empatados entre si
