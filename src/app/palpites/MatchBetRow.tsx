@@ -196,8 +196,6 @@ export function MatchBetRow({ match, bet }: Props) {
           <span className="text-xs text-gray-300">—</span>
         ) : pending ? (
           <span className="text-xs text-gray-400">…</span>
-        ) : !deadlinePassed && showCheck ? (
-          <span className="text-xs font-medium text-verde-600">✓</span>
         ) : null}
       </td>
     </tr>

@@ -200,9 +200,6 @@ export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBet
                           <option key={t.team} value={t.team}>{t.team}</option>
                         ))}
                       </select>
-                      {teamValue && hasSavedBet && (
-                        <span className="absolute -top-1 -right-1 text-[9px] text-verde-600 font-bold">✓</span>
-                      )}
                     </div>
                     {teamValue && calculatedThirds?.[g] &&
                       teamValue !== calculatedThirds[g].third &&
