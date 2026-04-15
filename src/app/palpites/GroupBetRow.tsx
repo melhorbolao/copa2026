@@ -73,24 +73,35 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
   return (
     <tr className="border-b border-gray-100 bg-blue-50/30 hover:bg-blue-50/50">
       <td colSpan={7} className="px-2 py-2 sm:px-3">
-        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+        {/*
+          Mobile (< sm): duas linhas — rótulo+bandeiras em cima, seletores embaixo.
+          Desktop (sm+): uma linha — rótulo+times (flex-1) e seletores (shrink-0) à direita.
+        */}
+        <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
 
-          {/* Rótulo do grupo */}
-          <span className="w-8 shrink-0 text-xs font-bold text-gray-500">
-            Gr. {groupName}
-          </span>
-
-          {/* Times: nomes visíveis apenas em sm+; no mobile o div age como espaçador flex-1 */}
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
-            {teams.map(t => (
-              <span key={t.team} className="hidden sm:flex items-center gap-1 whitespace-nowrap text-xs text-gray-600">
-                <Flag code={t.flag} size="sm" className="!h-3 !w-4 shrink-0" />
-                <span>{t.team}</span>
-              </span>
-            ))}
+          {/* Linha 1 / início desktop: rótulo + times */}
+          <div className="flex min-w-0 items-center gap-2 sm:flex-1">
+            <span className="w-8 shrink-0 text-xs font-bold text-gray-500">
+              Gr. {groupName}
+            </span>
+            {/* Desktop: bandeira + nome */}
+            <div className="hidden sm:flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
+              {teams.map(t => (
+                <span key={t.team} className="flex items-center gap-1 whitespace-nowrap text-xs text-gray-600">
+                  <Flag code={t.flag} size="sm" className="!h-3 !w-4 shrink-0" />
+                  <span>{t.team}</span>
+                </span>
+              ))}
+            </div>
+            {/* Mobile: só bandeiras */}
+            <div className="flex sm:hidden min-w-0 flex-1 flex-wrap items-center gap-1">
+              {teams.map(t => (
+                <Flag key={t.team} code={t.flag} size="sm" className="!h-3 !w-4 shrink-0" title={t.team} />
+              ))}
+            </div>
           </div>
 
-          {/* Seletores ou leitura após prazo */}
+          {/* Linha 2 / fim desktop: seletores ou leitura */}
           {deadlinePassed ? (
             <div className="flex shrink-0 items-center gap-3">
               {existingBet ? (
@@ -109,9 +120,9 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
               )}
             </div>
           ) : (
-            <>
-              {/* 1º lugar */}
-              <div className="flex w-28 sm:w-36 shrink-0 items-center gap-1">
+            <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
+              {/* 1º lugar — flex-1 no mobile, w-36 fixo no desktop */}
+              <div className="flex flex-1 sm:w-36 sm:flex-none items-center gap-1">
                 <Combobox
                   value={first}
                   onChange={handleFirst}
@@ -137,8 +148,8 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
                 )}
               </div>
 
-              {/* 2º lugar */}
-              <div className="flex w-28 sm:w-36 shrink-0 items-center gap-1">
+              {/* 2º lugar — flex-1 no mobile, w-36 fixo no desktop */}
+              <div className="flex flex-1 sm:w-36 sm:flex-none items-center gap-1">
                 <Combobox
                   value={second}
                   onChange={handleSecond}
@@ -163,15 +174,13 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
                   </button>
                 )}
               </div>
-            </>
-          )}
 
-          {/* Status */}
-          <div className="w-5 shrink-0 text-right">
-            {pending && (
-              <span className="text-xs text-gray-400">…</span>
-            )}
-          </div>
+              {/* Status */}
+              <div className="w-5 shrink-0 text-right">
+                {pending && <span className="text-xs text-gray-400">…</span>}
+              </div>
+            </div>
+          )}
 
         </div>
         {error && <p className="mt-0.5 pl-10 text-xs text-red-400">{error}</p>}
