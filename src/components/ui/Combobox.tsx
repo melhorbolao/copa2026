@@ -39,6 +39,21 @@ export function Combobox({ value, onChange, options, placeholder = '— selecion
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
+  // Re-verifica direção quando o viewport muda de tamanho (teclado mobile aparece/some)
+  useEffect(() => {
+    if (!open) return
+    const vv = window.visualViewport
+    if (!vv) return
+    const handler = () => checkDropDirection()
+    vv.addEventListener('resize', handler)
+    vv.addEventListener('scroll', handler)
+    return () => {
+      vv.removeEventListener('resize', handler)
+      vv.removeEventListener('scroll', handler)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
   const filtered = query.trim()
     ? options.filter(o => o.label.toLowerCase().includes(query.toLowerCase()))
     : options
@@ -46,7 +61,9 @@ export function Combobox({ value, onChange, options, placeholder = '— selecion
   const checkDropDirection = () => {
     if (!containerRef.current) return
     const rect = containerRef.current.getBoundingClientRect()
-    const spaceBelow = window.innerHeight - rect.bottom
+    // visualViewport reflete o viewport real após o teclado mobile aparecer
+    const viewportBottom = window.visualViewport?.height ?? window.innerHeight
+    const spaceBelow = viewportBottom - rect.bottom
     setDropUp(spaceBelow < DROPDOWN_HEIGHT)
   }
 
