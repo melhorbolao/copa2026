@@ -66,11 +66,12 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
 
   const calcFirst  = calculatedTop?.first  ?? ''
   const calcSecond = calculatedTop?.second ?? ''
-  const tiedArr    = calculatedTop?.tiedTeams ?? []
-  const areTied    = (a: string, b: string) => tiedArr.includes(a) && tiedArr.includes(b)
 
-  const firstConflict  = allMatchesBet && !!first  && !!calcFirst  && first  !== calcFirst  && !areTied(first,  calcFirst)
-  const secondConflict = allMatchesBet && !!second && !!calcSecond && second !== calcSecond && !areTied(second, calcSecond)
+  // Conflito: palpite formal diverge da classificação calculada pelos placares.
+  // Exibido apenas quando todos os jogos do grupo têm palpite (standings determinísticos).
+  // Não suprimimos por empate — o alerta é informativo e a regra permite incoerência.
+  const firstConflict  = allMatchesBet && !!first  && !!calcFirst  && first  !== calcFirst
+  const secondConflict = allMatchesBet && !!second && !!calcSecond && second !== calcSecond
 
   return (
     <tr className="border-b border-gray-100 bg-blue-50/30 hover:bg-blue-50/50">
@@ -110,11 +111,11 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
                 <>
                   <span className="inline-flex items-center text-xs font-semibold text-gray-700">
                     🥇 {existingBet.first_place}
-                    {allMatchesBet && !!calcFirst && existingBet.first_place !== calcFirst && !areTied(existingBet.first_place, calcFirst) && <ConflictDot />}
+                    {allMatchesBet && !!calcFirst && existingBet.first_place !== calcFirst && <ConflictDot />}
                   </span>
                   <span className="inline-flex items-center text-xs font-semibold text-gray-700">
                     🥈 {existingBet.second_place}
-                    {allMatchesBet && !!calcSecond && existingBet.second_place !== calcSecond && !areTied(existingBet.second_place, calcSecond) && <ConflictDot />}
+                    {allMatchesBet && !!calcSecond && existingBet.second_place !== calcSecond && <ConflictDot />}
                   </span>
                 </>
               ) : (
