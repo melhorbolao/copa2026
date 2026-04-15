@@ -210,7 +210,7 @@ export function GroupCard({
   const third    = displayTeams[2]
   const thirdAdv = third && advancingGroups.has(standing.group)
 
-  const hasConflict = !hasDraft && (
+  const hasConflict = !hasDraft && allMatchesBet && (
     (!!localFormalBet && (
       localFormalBet.first_place  !== displayTeams[0]?.team ||
       localFormalBet.second_place !== displayTeams[1]?.team
@@ -348,7 +348,7 @@ export function GroupCard({
                     <span className={`font-medium ${i < 2 ? 'text-gray-900' : 'text-gray-600'}`}>
                       {team.team}
                     </span>
-                    {!hasDraft && (
+                    {!hasDraft && allMatchesBet && (
                       (i === 0 && localFormalBet && localFormalBet.first_place !== team.team) ||
                       (i === 1 && localFormalBet && localFormalBet.second_place !== team.team) ||
                       (i === 2 && localThirdPlaceBet && localThirdPlaceBet.team !== team.team)
