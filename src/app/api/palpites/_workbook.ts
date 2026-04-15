@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import ExcelJS from 'exceljs'
+import { toZonedTime } from 'date-fns-tz'
 type AnySupabase = any
 
 // Colunas
@@ -24,9 +25,12 @@ const C_RED_FG    = 'FFDC2626'
 const C_RED_VIVID = 'FFFF0000'
 
 const GROUP_ORDER = ['A','B','C','D','E','F','G','H','I','J','K','L']
+const BRASILIA_TZ = 'America/Sao_Paulo'
 
-// Converte Date UTC para horário de Brasília (UTC-3) para exibição correta no Excel
-function toBR(d: Date): Date { return new Date(d.getTime() - 3 * 60 * 60 * 1000) }
+// Converte Date UTC para horário de Brasília usando IANA timezone database.
+// O objeto retornado tem UTC fields iguais ao horário local de Brasília,
+// que é o que o Excel usa para exibir datas com numFmt.
+function toBR(d: Date): Date { return toZonedTime(d, BRASILIA_TZ) }
 
 const colToLetter = (n: number): string => {
   let s = ''
@@ -41,8 +45,8 @@ function genPassword(): string {
 
 function makeFileName(apelido: string): string {
   const now = new Date()
-  // Selo no horário de Brasília (UTC-3)
-  const brNow = new Date(now.getTime() - 3 * 60 * 60 * 1000)
+  // Selo no horário de Brasília via IANA timezone
+  const brNow = toZonedTime(now, BRASILIA_TZ)
   const mm   = String(brNow.getUTCMonth() + 1).padStart(2, '0')
   const dd   = String(brNow.getUTCDate()).padStart(2, '0')
   const hh   = String(brNow.getUTCHours()).padStart(2, '0')

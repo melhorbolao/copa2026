@@ -13,6 +13,32 @@ async function resolveParticipant() {
 }
 
 // ── Palpite de placar ─────────────────────────────────────────
+export async function deleteBet(matchId: string) {
+  let participantId: string
+  let supabase: Awaited<ReturnType<typeof createClient>>
+  try {
+    ;({ supabase, participantId } = await resolveParticipant())
+  } catch (e) {
+    console.error('[deleteBet] resolveParticipant falhou:', e)
+    throw e
+  }
+
+  const { data: match, error: matchError } = await supabase.from('matches').select('betting_deadline').eq('id', matchId).single()
+  if (matchError) console.error('[deleteBet] erro ao buscar partida:', matchError)
+  if (!match) throw new Error('Partida não encontrada')
+  if (new Date() > new Date(match.betting_deadline)) throw new Error('Prazo encerrado')
+
+  const admin = createAuthAdminClient()
+  const { error } = await admin.from('bets')
+    .delete()
+    .eq('participant_id', participantId)
+    .eq('match_id', matchId)
+  if (error) {
+    console.error('[deleteBet] erro no delete:', error)
+    throw new Error(error.message)
+  }
+}
+
 export async function saveBet(matchId: string, scoreHome: number, scoreAway: number) {
   if (!Number.isInteger(scoreHome) || !Number.isInteger(scoreAway) || scoreHome < 0 || scoreAway < 0) {
     throw new Error('Placar inválido')
