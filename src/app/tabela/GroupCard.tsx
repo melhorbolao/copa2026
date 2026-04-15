@@ -11,6 +11,8 @@ interface Props {
   userId:            string
   /** Times em empate real segundo critérios FIFA (antes de qualquer override) */
   originalTiedTeams: string[]
+  /** Desempate manual só fica habilitado quando todos os jogos do grupo têm palpite */
+  allMatchesBet:     boolean
   /** Palpite formal de 1º/2º já salvo pelo usuário (null se não preenchido) */
   formalBet:         { first_place: string; second_place: string } | null
   /** Palpite de terceiro classificado deste grupo (null se não apostou) */
@@ -45,6 +47,7 @@ export function GroupCard({
   advancingGroups,
   userId,
   originalTiedTeams,
+  allMatchesBet,
   formalBet,
   thirdPlaceBet,
   manualOrder,
@@ -54,7 +57,8 @@ export function GroupCard({
 }: Props) {
   const storageKey = `tie_order_${userId}_${standing.group}`
 
-  const hasTie = originalTiedTeams.length > 0
+  // Só habilita desempate manual quando todos os 6 jogos do grupo foram preenchidos
+  const hasTie = originalTiedTeams.length > 0 && allMatchesBet
 
   const [draftOrder,     setDraftOrder]     = useState<string[] | null>(null)
   const [dragOver,       setDragOver]       = useState<number | null>(null)
