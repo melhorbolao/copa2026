@@ -174,7 +174,7 @@ Os prazos são sempre às **23:59 (horário de Brasília)**. Na fase de grupos h
 ## 10. Disposições Gerais
 
 - Os organizadores são os árbitros finais em caso de dúvidas ou interpretações do regulamento.
-- Resultados oficiais são os divulgados pela FIFA.
+- Resultados oficiais são os divulgados pela FIFA até 23h59 do dia da final da Copa. Eventuais alterações posteriores não mudam o resultado do bolão. Exemplo: artilheiro da Copa é punido por doping 2 dias após a final e perde a artilharia. Para o bolão, ele foi o artilheiro.
 - Jogos cancelados ou suspensos não pontuam.
 - O participante é responsável por enviar seus palpites dentro do prazo.
 `
