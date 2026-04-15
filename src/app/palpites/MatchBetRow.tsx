@@ -205,6 +205,6 @@ export function MatchBetRow({ match, bet }: Props) {
 function PointsBadge({ points }: { points: number | null }) {
   if (points === null) return <span className="text-xs text-gray-300">⌛</span>
   if (points === 10) return <span className="text-xs font-black text-amarelo-600">🎯 10</span>
-  if (points >= 5)   return <span className="text-xs font-bold text-verde-600">✓ {points}</span>
+  if (points >= 5)   return <span className="text-xs font-bold text-verde-600">{points}</span>
   return <span className="text-xs text-gray-400">✗ 0</span>
 }

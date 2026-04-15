@@ -131,9 +131,6 @@ export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBet
           {pending && (
             <span className="text-xs text-gray-400 animate-pulse">Salvando…</span>
           )}
-          {!pending && selectedCount > 0 && !error && (
-            <span className="text-xs text-verde-400">✓ salvo automaticamente</span>
-          )}
         </div>
         <span className="text-xs text-gray-400">
           prazo: {formatBrasilia(deadline, 'dd/MM HH:mm')}
