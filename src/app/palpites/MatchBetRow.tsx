@@ -1,7 +1,7 @@
 'use client'
 
 import { useTransition, useState, useEffect, useRef } from 'react'
-import { saveBet } from './actions'
+import { saveBet, deleteBet } from './actions'
 import { Flag } from '@/components/ui/Flag'
 import { formatBrasilia, isDeadlinePassed } from '@/utils/date'
 
@@ -41,6 +41,10 @@ export function MatchBetRow({ match, bet }: Props) {
       const a = bet.score_away.toString()
       setHome(h); setAway(a)
       homeRef.current = h; awayRef.current = a
+    } else {
+      // Palpite removido — limpa os campos
+      setHome(''); setAway('')
+      homeRef.current = ''; awayRef.current = ''
     }
   }, [bet?.score_home, bet?.score_away])
 
@@ -59,8 +63,31 @@ export function MatchBetRow({ match, bet }: Props) {
     })
   }
 
+  const doDelete = () => {
+    setError('')
+    startTransition(async () => {
+      try {
+        await deleteBet(match.id)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Erro ao apagar')
+        // Restaura valores anteriores se falhar
+        if (bet) {
+          const h = bet.score_home.toString()
+          const a = bet.score_away.toString()
+          setHome(h); setAway(a)
+          homeRef.current = h; awayRef.current = a
+        }
+      }
+    })
+  }
+
   const triggerSave = (h: string, a: string) => {
     clearTimeout(timerRef.current)
+    // Ambos vazios com palpite existente → apagar
+    if (h === '' && a === '' && bet !== null) {
+      timerRef.current = setTimeout(() => doDelete(), 800)
+      return
+    }
     const hNum = parseInt(h, 10)
     const aNum = parseInt(a, 10)
     if (isNaN(hNum) || isNaN(aNum) || hNum < 0 || aNum < 0) return

@@ -26,9 +26,11 @@ interface Props {
   deadline: string
   existingBet: { first_place: string; second_place: string } | null
   calculatedTop?: { first: string; second: string; third: string; tiedTeams: string[] }
+  /** Conflito só é exibido quando todos os jogos do grupo têm palpite preenchido */
+  allMatchesBet: boolean
 }
 
-export function GroupBetRow({ groupName, teams, deadline, existingBet, calculatedTop }: Props) {
+export function GroupBetRow({ groupName, teams, deadline, existingBet, calculatedTop, allMatchesBet }: Props) {
   const [pending, startTransition] = useTransition()
   const [first,  setFirst]  = useState(existingBet?.first_place  ?? '')
   const [second, setSecond] = useState(existingBet?.second_place ?? '')
@@ -67,8 +69,8 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
   const tiedArr    = calculatedTop?.tiedTeams ?? []
   const areTied    = (a: string, b: string) => tiedArr.includes(a) && tiedArr.includes(b)
 
-  const firstConflict  = !!first  && !!calcFirst  && first  !== calcFirst  && !areTied(first,  calcFirst)
-  const secondConflict = !!second && !!calcSecond && second !== calcSecond && !areTied(second, calcSecond)
+  const firstConflict  = allMatchesBet && !!first  && !!calcFirst  && first  !== calcFirst  && !areTied(first,  calcFirst)
+  const secondConflict = allMatchesBet && !!second && !!calcSecond && second !== calcSecond && !areTied(second, calcSecond)
 
   return (
     <tr className="border-b border-gray-100 bg-blue-50/30 hover:bg-blue-50/50">
@@ -108,11 +110,11 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
                 <>
                   <span className="inline-flex items-center text-xs font-semibold text-gray-700">
                     🥇 {existingBet.first_place}
-                    {!!calcFirst && existingBet.first_place !== calcFirst && !areTied(existingBet.first_place, calcFirst) && <ConflictDot />}
+                    {allMatchesBet && !!calcFirst && existingBet.first_place !== calcFirst && !areTied(existingBet.first_place, calcFirst) && <ConflictDot />}
                   </span>
                   <span className="inline-flex items-center text-xs font-semibold text-gray-700">
                     🥈 {existingBet.second_place}
-                    {!!calcSecond && existingBet.second_place !== calcSecond && !areTied(existingBet.second_place, calcSecond) && <ConflictDot />}
+                    {allMatchesBet && !!calcSecond && existingBet.second_place !== calcSecond && !areTied(existingBet.second_place, calcSecond) && <ConflictDot />}
                   </span>
                 </>
               ) : (
