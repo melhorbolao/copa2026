@@ -103,9 +103,9 @@ export function MatchBetRow({ match, bet }: Props) {
       </td>
 
       {/* Time da Casa */}
-      <td className="px-1.5 py-2.5 text-right sm:px-3">
-        <div className="flex items-center justify-end gap-1 text-sm font-semibold text-gray-900 sm:gap-1.5">
-          <span className="hidden sm:inline sm:whitespace-nowrap">{match.team_home}</span>
+      <td className="w-20 px-1.5 py-2.5 text-right sm:w-auto sm:px-3">
+        <div className="flex min-w-0 items-center justify-end gap-1 text-gray-900 sm:gap-1.5">
+          <span className="min-w-0 truncate text-[10px] font-semibold sm:text-sm sm:whitespace-nowrap">{match.team_home}</span>
           <Flag code={match.flag_home} size="sm" className="shrink-0" />
         </div>
       </td>
@@ -165,10 +165,10 @@ export function MatchBetRow({ match, bet }: Props) {
       </td>
 
       {/* Time Visitante */}
-      <td className="px-1.5 py-2.5 sm:px-3">
-        <div className="flex items-center gap-1 text-sm font-semibold text-gray-900 sm:gap-1.5">
+      <td className="w-20 px-1.5 py-2.5 sm:w-auto sm:px-3">
+        <div className="flex min-w-0 items-center gap-1 text-gray-900 sm:gap-1.5">
           <Flag code={match.flag_away} size="sm" className="shrink-0" />
-          <span className="hidden sm:inline sm:whitespace-nowrap">{match.team_away}</span>
+          <span className="min-w-0 truncate text-[10px] font-semibold sm:text-sm sm:whitespace-nowrap">{match.team_away}</span>
         </div>
       </td>
 
