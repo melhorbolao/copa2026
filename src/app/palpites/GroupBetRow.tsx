@@ -26,20 +26,29 @@ interface Props {
   deadline: string
   existingBet: { first_place: string; second_place: string } | null
   calculatedTop?: { first: string; second: string; third: string; tiedTeams: string[] }
-  /** Conflito só é exibido quando todos os jogos do grupo têm palpite preenchido */
-  allMatchesBet: boolean
+  /** participantId — usado para ler a ordem manual salva no localStorage (mesma chave do GroupCard) */
+  userId: string
 }
 
-export function GroupBetRow({ groupName, teams, deadline, existingBet, calculatedTop, allMatchesBet }: Props) {
+export function GroupBetRow({ groupName, teams, deadline, existingBet, calculatedTop, userId }: Props) {
   const [pending, startTransition] = useTransition()
   const [first,  setFirst]  = useState(existingBet?.first_place  ?? '')
   const [second, setSecond] = useState(existingBet?.second_place ?? '')
   const [error,  setError]  = useState('')
+  const [manualOrder, setManualOrder] = useState<string[] | null>(null)
 
   const { thirdSelections } = useThirdPlace()
   const thirdTeam = thirdSelections[groupName] ?? ''
 
   const deadlinePassed = isDeadlinePassed(deadline)
+
+  // Lê a ordem manual do localStorage (mesma chave usada pelo GroupCard em Minha Tabela)
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(`tie_order_${userId}_${groupName}`)
+      if (stored) setManualOrder(JSON.parse(stored) as string[])
+    } catch { /* ignore */ }
+  }, [userId, groupName])
 
   useEffect(() => {
     if (existingBet) { setFirst(existingBet.first_place); setSecond(existingBet.second_place) }
@@ -66,12 +75,20 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
 
   const calcFirst  = calculatedTop?.first  ?? ''
   const calcSecond = calculatedTop?.second ?? ''
+  const manualFirst  = manualOrder?.[0] ?? ''
+  const manualSecond = manualOrder?.[1] ?? ''
 
-  // Conflito: palpite formal diverge da classificação calculada pelos placares.
-  // Exibido apenas quando todos os jogos do grupo têm palpite (standings determinísticos).
-  // Não suprimimos por empate — o alerta é informativo e a regra permite incoerência.
-  const firstConflict  = allMatchesBet && !!first  && !!calcFirst  && first  !== calcFirst
-  const secondConflict = allMatchesBet && !!second && !!calcSecond && second !== calcSecond
+  // Conflito: palpite formal diverge da classificação calculada pelos placares
+  // OU da ordem manual salva em Minha Tabela (drag-and-drop no GroupCard).
+  // O alerta é apenas informativo — a regra do bolão permite a incoerência.
+  const firstConflict  = !!first  && (
+    (!!calcFirst  && first  !== calcFirst)  ||
+    (!!manualFirst  && first  !== manualFirst)
+  )
+  const secondConflict = !!second && (
+    (!!calcSecond && second !== calcSecond) ||
+    (!!manualSecond && second !== manualSecond)
+  )
 
   return (
     <tr className="border-b border-gray-100 bg-blue-50/30 hover:bg-blue-50/50">
@@ -111,11 +128,11 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
                 <>
                   <span className="inline-flex items-center text-xs font-semibold text-gray-700">
                     🥇 {existingBet.first_place}
-                    {allMatchesBet && !!calcFirst && existingBet.first_place !== calcFirst && <ConflictDot />}
+                    {((!!calcFirst && existingBet.first_place !== calcFirst) || (!!manualFirst && existingBet.first_place !== manualFirst)) && <ConflictDot />}
                   </span>
                   <span className="inline-flex items-center text-xs font-semibold text-gray-700">
                     🥈 {existingBet.second_place}
-                    {allMatchesBet && !!calcSecond && existingBet.second_place !== calcSecond && <ConflictDot />}
+                    {((!!calcSecond && existingBet.second_place !== calcSecond) || (!!manualSecond && existingBet.second_place !== manualSecond)) && <ConflictDot />}
                   </span>
                 </>
               ) : (
