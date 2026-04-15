@@ -74,7 +74,7 @@ export function NavbarLinks({ isAdmin, firstDeadlinePassed }: Props) {
               onClick={() => setOpen(false)}
             />
             {/* Dropdown */}
-            <div className="absolute right-0 top-11 z-50 w-52 overflow-hidden rounded-xl border border-white/10 bg-verde-800 shadow-xl">
+            <div className="fixed right-4 top-14 z-50 w-52 overflow-hidden rounded-xl border border-white/10 bg-verde-800 shadow-xl">
               {links.map(l => (
                 <Link
                   key={l.href}
