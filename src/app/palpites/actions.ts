@@ -276,17 +276,6 @@ export async function saveTournamentBet(data: {
     const { participantId } = await resolveParticipant()
     const admin = createAuthAdminClient()
 
-    // Se G4 incompleto, apenas atualiza top_scorer na linha existente
-    // (evita violar constraint champion <> runner_up com strings vazias)
-    if (!champion || !runner_up) {
-      const { error } = await admin
-        .from('tournament_bets')
-        .update({ top_scorer })
-        .eq('participant_id', participantId)
-      if (error) return { error: error.message }
-      return {}
-    }
-
     const { error } = await admin.from('tournament_bets').upsert(
       { participant_id: participantId, champion, runner_up, semi1, semi2, top_scorer },
       { onConflict: 'participant_id' },
