@@ -82,15 +82,21 @@ function computeCanEdit(match: MatchFull, isAdmin: boolean): boolean {
 // ── Componente principal ──────────────────────────────────────────────────────
 
 export function ACopaClient({ initialMatches, isAdmin, initialOfficialTopScorer, standardizedNames, r1Deadline }: Props) {
-  const [matches, setMatches]         = useState<MatchFull[]>(initialMatches as MatchFull[])
-  const [groupFilter, setGroup]       = useState('')
-  const [stageFilter, setStage]       = useState('')
-  const [now, setNow]                 = useState(Date.now())
-  const [officialTopScorer, setOffTS] = useState(initialOfficialTopScorer ?? '')
+  const [matches, setMatches]          = useState<MatchFull[]>(initialMatches as MatchFull[])
+  const [groupFilter, setGroup]        = useState('')
+  const [stageFilter, setStage]        = useState('')
+  const [now, setNow]                  = useState(Date.now())
+
+  // Artilheiros oficiais — armazenados como JSON array no banco
+  const parseNames = (raw: string | null): string[] => {
+    if (!raw) return []
+    try { return JSON.parse(raw) } catch { return raw ? [raw] : [] }
+  }
+  const [officialScorers, setScorers]  = useState<string[]>(() => parseNames(initialOfficialTopScorer))
   const [tsPending, startTsTransition] = useTransition()
-  const [tsError, setTsError]         = useState('')
-  const tsSaved                       = useRef(initialOfficialTopScorer ?? '')
-  const tsTimer                       = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const [tsError, setTsError]          = useState('')
+  const tsSavedRef                     = useRef(initialOfficialTopScorer ?? '')
+  const tsTimer                        = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   // Atualiza relógio a cada 30s para recalcular canEdit sem reload
   useEffect(() => {
@@ -337,7 +343,7 @@ export function ACopaClient({ initialMatches, isAdmin, initialOfficialTopScorer,
         </div>
       )}
 
-      {/* ── Chaveamento Oficial ───────────────────────────────────────────────── */}
+      {/* ── Chaveamento Oficial + Artilheiro ─────────────────────────────────── */}
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="flex items-center gap-2 px-4 py-3" style={{ backgroundColor: '#002776' }}>
           <span className="text-sm font-black uppercase tracking-widest text-white">
@@ -356,95 +362,128 @@ export function ACopaClient({ initialMatches, isAdmin, initialOfficialTopScorer,
             </p>
           )}
         </div>
-      </div>
 
-      {/* ── Artilheiro Oficial ────────────────────────────────────────────────── */}
-      <OfficialTopScorerCard
-        isAdmin={isAdmin}
-        r1Deadline={r1Deadline}
-        standardizedNames={standardizedNames}
-        value={officialTopScorer}
-        pending={tsPending}
-        error={tsError}
-        onChange={(val) => {
-          setOffTS(val)
-          setTsError('')
-          clearTimeout(tsTimer.current)
-          if (!val.trim() || val === tsSaved.current) return
-          tsTimer.current = setTimeout(() => {
-            startTsTransition(async () => {
-              const r = await saveOfficialTopScorer(val)
-              if (r.error) setTsError(r.error)
-              else tsSaved.current = val
-            })
-          }, 400)
-        }}
-      />
+        {/* ── Artilheiro Oficial — entre a Final e o chaveamento ── */}
+        <div className="border-t border-gray-100 px-4 py-4">
+          <OfficialTopScorerCard
+            isAdmin={isAdmin}
+            r1Deadline={r1Deadline}
+            standardizedNames={standardizedNames}
+            names={officialScorers}
+            pending={tsPending}
+            error={tsError}
+            onSave={(names) => {
+              setScorers(names)
+              setTsError('')
+              clearTimeout(tsTimer.current)
+              const json = JSON.stringify(names)
+              if (json === tsSavedRef.current) return
+              tsTimer.current = setTimeout(() => {
+                startTsTransition(async () => {
+                  const r = await saveOfficialTopScorer(json)
+                  if (r.error) setTsError(r.error)
+                  else tsSavedRef.current = json
+                })
+              }, 300)
+            }}
+          />
+        </div>
+      </div>
     </div>
   )
 }
 
-// ── Campo de artilheiro oficial ───────────────────────────────────────────────
+// ── Campo de artilheiro oficial (múltiplos, para empates) ────────────────────
 
 function OfficialTopScorerCard({
-  isAdmin, r1Deadline, standardizedNames, value, pending, error, onChange,
+  isAdmin, r1Deadline, standardizedNames, names, pending, error, onSave,
 }: {
   isAdmin: boolean
   r1Deadline: string
   standardizedNames: string[]
-  value: string
+  names: string[]
   pending: boolean
   error: string
-  onChange: (val: string) => void
+  onSave: (names: string[]) => void
 }) {
-  const r1Passed  = isDeadlinePassed(r1Deadline)
+  const [inputVal, setInputVal] = useState('')
+  const r1Passed    = isDeadlinePassed(r1Deadline)
   const useDropdown = r1Passed && standardizedNames.length > 0
+  const available   = standardizedNames.filter(n => !names.includes(n))
+
+  const add = (name: string) => {
+    const trimmed = name.trim()
+    if (!trimmed || names.includes(trimmed)) return
+    onSave([...names, trimmed])
+    setInputVal('')
+  }
+
+  const remove = (name: string) => onSave(names.filter(n => n !== name))
 
   return (
-    <div className="mt-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-      <div className="flex items-center gap-2 px-4 py-3" style={{ backgroundColor: '#002776' }}>
-        <span className="text-sm font-black uppercase tracking-widest text-white">
-          ⚽ Artilheiro Oficial
-        </span>
-        {pending && <span className="ml-auto text-[11px] text-white/60 animate-pulse">Salvando…</span>}
+    <div>
+      <div className="mb-3 flex items-center gap-2">
+        <span className="text-sm font-black uppercase tracking-widest text-gray-700">⚽ Artilheiro Oficial</span>
+        {pending && <span className="text-xs text-gray-400 animate-pulse">Salvando…</span>}
       </div>
-      <div className="px-4 py-4">
-        {isAdmin ? (
-          <div className="flex items-center gap-3">
-            {useDropdown ? (
-              <select
-                value={value}
-                onChange={e => onChange(e.target.value)}
-                className="w-72 rounded border border-gray-200 px-2 py-1.5 text-sm focus:border-verde-400 focus:outline-none"
-              >
-                <option value="">— selecione —</option>
-                {standardizedNames.map(n => (
-                  <option key={n} value={n}>{n}</option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type="text"
-                value={value}
-                onChange={e => onChange(e.target.value)}
-                placeholder="Nome do artilheiro…"
-                className="w-72 rounded border border-gray-200 px-2 py-1.5 text-sm focus:border-verde-400 focus:outline-none"
-              />
-            )}
-            {value && !pending && !error && (
-              <span className="text-sm font-bold text-gray-800">{value}</span>
-            )}
-          </div>
-        ) : (
-          <p className="text-sm font-bold text-gray-800">
-            {value || <span className="font-normal text-gray-400">Ainda não registrado</span>}
-          </p>
-        )}
-        {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
-        {!isAdmin && !r1Passed && (
-          <p className="mt-1 text-xs text-gray-400">Será divulgado após o prazo da Rodada 1.</p>
-        )}
-      </div>
+
+      {/* Lista dos artilheiros registrados */}
+      {names.length > 0 ? (
+        <div className="mb-3 flex flex-wrap gap-2">
+          {names.map(n => (
+            <span key={n} className="inline-flex items-center gap-1.5 rounded-full bg-amarelo-100 px-3 py-1 text-sm font-bold text-amarelo-800">
+              {n}
+              {isAdmin && (
+                <button
+                  onClick={() => remove(n)}
+                  className="text-amarelo-500 hover:text-red-500 transition leading-none"
+                  title="Remover"
+                >×</button>
+              )}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="mb-3 text-sm text-gray-400 italic">
+          {isAdmin || r1Passed ? 'Nenhum registrado ainda.' : 'Será divulgado após o prazo da Rodada 1.'}
+        </p>
+      )}
+
+      {/* Controles de adição — somente admin */}
+      {isAdmin && (
+        <div className="flex items-center gap-2">
+          {useDropdown ? (
+            <select
+              value={inputVal}
+              onChange={e => setInputVal(e.target.value)}
+              className="rounded border border-gray-200 px-2 py-1.5 text-sm focus:border-verde-400 focus:outline-none"
+            >
+              <option value="">+ adicionar artilheiro…</option>
+              {available.map(n => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="text"
+              value={inputVal}
+              onChange={e => setInputVal(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && add(inputVal)}
+              placeholder="Nome do artilheiro…"
+              className="rounded border border-gray-200 px-2 py-1.5 text-sm focus:border-verde-400 focus:outline-none w-56"
+            />
+          )}
+          <button
+            onClick={() => add(inputVal)}
+            disabled={!inputVal}
+            className="rounded bg-verde-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-verde-700 disabled:opacity-40 transition"
+          >
+            Adicionar
+          </button>
+        </div>
+      )}
+
+      {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
     </div>
   )
 }
