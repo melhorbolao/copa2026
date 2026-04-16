@@ -79,6 +79,7 @@ export type Database = {
           city: string
           score_home: number | null
           score_away: number | null
+          penalty_winner: string | null
           is_brazil: boolean
           betting_deadline: string
         }
@@ -96,6 +97,7 @@ export type Database = {
           city: string
           score_home?: number | null
           score_away?: number | null
+          penalty_winner?: string | null
           is_brazil?: boolean
           betting_deadline: string
         }
@@ -113,6 +115,7 @@ export type Database = {
           city?: string
           score_home?: number | null
           score_away?: number | null
+          penalty_winner?: string | null
           is_brazil?: boolean
           betting_deadline?: string
         }
