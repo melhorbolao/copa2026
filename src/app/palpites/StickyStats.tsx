@@ -21,7 +21,7 @@ export function StickyStats({
   const barColor  = complete ? '#009c3b' : roundPct > 0 ? '#f59e0b' : '#374151'
 
   return (
-    <div className="sticky top-14 z-40 border-b border-white/10 bg-gray-950/90 backdrop-blur-md">
+    <div className="sticky top-14 sm:top-0 z-40 border-b border-white/10 bg-gray-950/90 backdrop-blur-md">
       {/* ── Stats row ─────────────────────────────────────────── */}
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-1 overflow-x-auto px-4 py-2 scrollbar-thin">
 

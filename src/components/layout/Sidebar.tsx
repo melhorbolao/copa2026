@@ -38,15 +38,26 @@ export async function Sidebar() {
   return (
     <aside className="fixed left-0 top-0 hidden h-screen w-56 flex-col bg-verde-600 sm:flex">
       {/* Logo */}
-      <div className="flex items-center border-b border-white/10 px-4 py-4">
+      <div className="flex items-center gap-2 border-b border-white/10 px-4 py-4">
         <Link href="/">
           <img
             src="/logo.png"
             alt="Melhor Bolão"
-            className="h-10 w-auto"
+            className="h-10 w-auto shrink-0"
             style={{ mixBlendMode: 'screen' }}
           />
         </Link>
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold leading-tight text-white/70">
+            Copa do Mundo
+          </p>
+          <p className="text-[10px] leading-tight text-white/50">
+            EUA · Canadá · México
+          </p>
+          <p className="text-[10px] font-black leading-tight text-amarelo-300">
+            2026
+          </p>
+        </div>
       </div>
 
       {/* Links de navegação */}
