@@ -265,19 +265,25 @@ export async function fillG4FromBracket(data: {
 // ── Aposta de torneio ─────────────────────────────────────────
 export async function saveTournamentBet(data: {
   champion: string; runner_up: string; semi1: string; semi2: string; top_scorer: string
-}) {
-  const { champion, runner_up, semi1, semi2, top_scorer } = data
+}): Promise<{ error?: string }> {
+  try {
+    const { champion, runner_up, semi1, semi2, top_scorer } = data
 
-  const filled = [champion, runner_up, semi1, semi2].filter(Boolean)
-  if (new Set(filled).size < filled.length)
-    throw new Error('Os semifinalistas devem ser diferentes.')
+    const filled = [champion, runner_up, semi1, semi2].filter(Boolean)
+    if (new Set(filled).size < filled.length)
+      return { error: 'Os semifinalistas devem ser diferentes.' }
 
-  const { supabase, participantId } = await resolveParticipant()
-  const admin = createAuthAdminClient()
+    const { supabase, participantId } = await resolveParticipant()
+    void supabase
 
-  const { error } = await admin.from('tournament_bets').upsert(
-    { participant_id: participantId, champion, runner_up, semi1, semi2, top_scorer },
-    { onConflict: 'participant_id' },
-  )
-  if (error) throw new Error(error.message)
+    const admin = createAuthAdminClient()
+    const { error } = await admin.from('tournament_bets').upsert(
+      { participant_id: participantId, champion, runner_up, semi1, semi2, top_scorer },
+      { onConflict: 'participant_id' },
+    )
+    if (error) return { error: error.message }
+    return {}
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Erro ao salvar.' }
+  }
 }

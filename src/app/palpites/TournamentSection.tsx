@@ -48,10 +48,10 @@ export function TournamentSection({ allTeams, deadline, existingBet, scorerMappi
     clearTimeout(timerRef.current)
     setError('')
     timerRef.current = setTimeout(() => {
-      startTransition(() =>
-        saveTournamentBet(updated)
-          .catch(e => setError(e instanceof Error ? e.message : 'Erro ao salvar.'))
-      )
+      startTransition(async () => {
+        const r = await saveTournamentBet(updated)
+        if (r.error) setError(r.error)
+      })
     }, delay)
   }
 
