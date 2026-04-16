@@ -153,6 +153,28 @@ export function ACopaClient({ initialMatches, isAdmin }: Props) {
 
   const hasAnyScore = officialBetMap.size > 0
 
+  // Grupos cujos jogos estão TODOS com placar registrado
+  const completeGroups = useMemo(() => {
+    const byGroup = new Map<string, { total: number; scored: number }>()
+    for (const m of groupMatches) {
+      if (!m.group_name) continue
+      const e = byGroup.get(m.group_name) ?? { total: 0, scored: 0 }
+      e.total++
+      if (m.score_home !== null && m.score_away !== null) e.scored++
+      byGroup.set(m.group_name, e)
+    }
+    const complete = new Set<string>()
+    for (const [group, { total, scored }] of byGroup) {
+      if (total > 0 && scored === total) complete.add(group)
+    }
+    return complete
+  }, [groupMatches])
+
+  const allGroupsComplete = useMemo(() => {
+    const totalGroups = new Set(groupMatches.map(m => m.group_name).filter(Boolean)).size
+    return totalGroups > 0 && completeGroups.size === totalGroups
+  }, [completeGroups, groupMatches])
+
   const standings = useMemo(
     () => calcGroupStandings(slimMatches, officialBetMap),
     [slimMatches, officialBetMap],
@@ -161,8 +183,8 @@ export function ACopaClient({ initialMatches, isAdmin }: Props) {
   const thirds     = useMemo(() => rankThirds(standings), [standings])
   const thirdSlots = useMemo(() => resolveThirdSlots(thirds), [thirds])
   const r32Slots   = useMemo(
-    () => buildR32Teams(standings, thirds, thirdSlots),
-    [standings, thirds, thirdSlots],
+    () => buildR32Teams(standings, thirds, thirdSlots, undefined, completeGroups, allGroupsComplete),
+    [standings, thirds, thirdSlots, completeGroups, allGroupsComplete],
   )
 
   const sortedStandings = useMemo(

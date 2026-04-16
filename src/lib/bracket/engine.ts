@@ -390,6 +390,8 @@ export function buildR32Teams(
   thirds: ThirdTeam[],
   thirdSlots: Record<string, string> | null,
   groupBetsOverride?: Map<string, { first_place: string; second_place: string }>,
+  completeGroups?: Set<string>,
+  allGroupsComplete?: boolean,
 ): { matchNum: string; teamA: { team: string; flag: string } | null; teamB: { team: string; flag: string } | null; labelA: string; labelB: string }[] {
   const standMap = new Map(standings.map(s => [s.group, s]))
   const thirdMap = new Map(thirds.filter(t => t.advances).map(t => [t.group, t]))
@@ -406,6 +408,8 @@ export function buildR32Teams(
   const resolveSlot = (slot: string, matchNum: string): { team: string; flag: string } | null => {
     if (slot.startsWith('1')) {
       const group = slot[1]
+      // Só preenche quando todos os jogos do grupo estiverem completos
+      if (completeGroups && !completeGroups.has(group)) return null
       // Respeita ranking manual do usuário se disponível
       if (groupBetsOverride?.has(group)) {
         const name = groupBetsOverride.get(group)!.first_place
@@ -416,6 +420,8 @@ export function buildR32Teams(
     }
     if (slot.startsWith('2')) {
       const group = slot[1]
+      // Só preenche quando todos os jogos do grupo estiverem completos
+      if (completeGroups && !completeGroups.has(group)) return null
       // Respeita ranking manual do usuário se disponível
       if (groupBetsOverride?.has(group)) {
         const name = groupBetsOverride.get(group)!.second_place
@@ -425,6 +431,8 @@ export function buildR32Teams(
       return t ? { team: t.team, flag: t.flag } : null
     }
     if (slot.startsWith('3rd:') && thirdSlots) {
+      // Só preenche 3ºs quando TODOS os jogos da fase de grupos estiverem completos
+      if (completeGroups && !allGroupsComplete) return null
       const ref = resolveR32ThirdSlot(matchNum, thirdSlots) // e.g. "3E"
       if (!ref) return null
       const t = thirdMap.get(ref[1])
