@@ -383,9 +383,23 @@ export function ACopaClient({ initialMatches, isAdmin, initialOfficialTopScorer,
           <span className="text-sm font-black uppercase tracking-widest text-white">
             🏆 Chaveamento Oficial
           </span>
-          <span className="ml-auto text-[11px] font-medium text-white/60">
+          <span className="text-[11px] font-medium text-white/60">
             baseado nos resultados oficiais
           </span>
+          <button
+            onClick={async () => {
+              const supabase = createClient()
+              const { data } = await supabase
+                .from('matches')
+                .select('id, match_number, phase, group_name, round, team_home, team_away, flag_home, flag_away, match_datetime, city, betting_deadline, score_home, score_away, penalty_winner, is_brazil')
+                .order('match_datetime', { ascending: true })
+              if (data) setMatches(data as MatchFull[])
+            }}
+            title="Atualizar chaveamento"
+            className="ml-auto flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-white/70 transition hover:bg-white/10 hover:text-white"
+          >
+            <RefreshIcon /> Atualizar
+          </button>
         </div>
         <div className="p-4">
           {hasAnyScore ? (
@@ -489,5 +503,15 @@ function OfficialTopScorerCard({
 
       {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
     </div>
+  )
+}
+
+function RefreshIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M23 4v6h-6" />
+      <path d="M1 20v-6h6" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+    </svg>
   )
 }
