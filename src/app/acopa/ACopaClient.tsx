@@ -343,28 +343,15 @@ export function ACopaClient({ initialMatches, isAdmin, initialOfficialTopScorer,
         </div>
       )}
 
-      {/* ── Chaveamento Oficial + Artilheiro ─────────────────────────────────── */}
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      {/* ── Artilheiro Oficial ───────────────────────────────────────────────── */}
+      <div className="mb-8 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="flex items-center gap-2 px-4 py-3" style={{ backgroundColor: '#002776' }}>
           <span className="text-sm font-black uppercase tracking-widest text-white">
-            🏆 Chaveamento Oficial
+            ⚽ Artilheiro Oficial
           </span>
-          <span className="ml-auto text-[11px] font-medium text-white/60">
-            baseado nos resultados oficiais
-          </span>
+          {tsPending && <span className="ml-auto text-[11px] text-white/60 animate-pulse">Salvando…</span>}
         </div>
-        <div className="p-4">
-          {hasAnyScore ? (
-            <OfficialBracketView r32Slots={r32Slots} knockoutMatches={knockoutMatches} />
-          ) : (
-            <p className="py-8 text-center text-sm text-gray-400">
-              O chaveamento será exibido assim que os primeiros resultados forem registrados.
-            </p>
-          )}
-        </div>
-
-        {/* ── Artilheiro Oficial — entre a Final e o chaveamento ── */}
-        <div className="border-t border-gray-100 px-4 py-4">
+        <div className="px-4 py-4">
           <OfficialTopScorerCard
             isAdmin={isAdmin}
             r1Deadline={r1Deadline}
@@ -387,6 +374,27 @@ export function ACopaClient({ initialMatches, isAdmin, initialOfficialTopScorer,
               }, 300)
             }}
           />
+        </div>
+      </div>
+
+      {/* ── Chaveamento Oficial ───────────────────────────────────────────────── */}
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="flex items-center gap-2 px-4 py-3" style={{ backgroundColor: '#002776' }}>
+          <span className="text-sm font-black uppercase tracking-widest text-white">
+            🏆 Chaveamento Oficial
+          </span>
+          <span className="ml-auto text-[11px] font-medium text-white/60">
+            baseado nos resultados oficiais
+          </span>
+        </div>
+        <div className="p-4">
+          {hasAnyScore ? (
+            <OfficialBracketView r32Slots={r32Slots} knockoutMatches={knockoutMatches} />
+          ) : (
+            <p className="py-8 text-center text-sm text-gray-400">
+              O chaveamento será exibido assim que os primeiros resultados forem registrados.
+            </p>
+          )}
         </div>
       </div>
     </div>
@@ -422,10 +430,6 @@ function OfficialTopScorerCard({
 
   return (
     <div>
-      <div className="mb-3 flex items-center gap-2">
-        <span className="text-sm font-black uppercase tracking-widest text-gray-700">⚽ Artilheiro Oficial</span>
-        {pending && <span className="text-xs text-gray-400 animate-pulse">Salvando…</span>}
-      </div>
 
       {/* Lista dos artilheiros registrados */}
       {names.length > 0 ? (
