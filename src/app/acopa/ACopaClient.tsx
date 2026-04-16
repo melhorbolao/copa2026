@@ -293,6 +293,11 @@ export function ACopaClient({ initialMatches, isAdmin }: Props) {
                   key={match.id}
                   match={match}
                   canEdit={computeCanEdit(match, isAdmin)}
+                  onPenaltyUpdate={(matchId, winner) =>
+                    setMatches(prev =>
+                      prev.map(m => m.id === matchId ? { ...m, penalty_winner: winner } : m)
+                    )
+                  }
                 />
               ))}
               {filteredMatches.length === 0 && (

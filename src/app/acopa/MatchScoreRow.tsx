@@ -25,11 +25,12 @@ interface MatchRow {
 interface Props {
   match: MatchRow
   canEdit: boolean
+  onPenaltyUpdate?: (matchId: string, winner: string | null) => void
 }
 
 const KNOCKOUT_PHASES = new Set(['round_of_32', 'round_of_16', 'quarterfinal', 'semifinal', 'third_place', 'final'])
 
-export function MatchScoreRow({ match, canEdit }: Props) {
+export function MatchScoreRow({ match, canEdit, onPenaltyUpdate }: Props) {
   const [pending, startTransition]  = useTransition()
   const [home, setHome]             = useState(match.score_home?.toString() ?? '')
   const [away, setAway]             = useState(match.score_away?.toString() ?? '')
@@ -86,6 +87,7 @@ export function MatchScoreRow({ match, canEdit }: Props) {
     startTransition(async () => {
       const r = await savePenaltyWinner(match.id, winner)
       if (r.error) setError(r.error)
+      else onPenaltyUpdate?.(match.id, winner)
     })
   }
 
