@@ -63,7 +63,7 @@ export default async function PalpitesPage({
   if (!participantId) redirect('/aguardando-aprovacao')
 
   const [{ data: matches }, { data: bets }, { data: groupBets }, { data: tBet }, { data: thirdBets }] = await Promise.all([
-    supabase.from('matches').select('*').order('match_datetime', { ascending: true }),
+    supabase.from('matches').select('id, match_number, phase, group_name, round, team_home, team_away, flag_home, flag_away, match_datetime, city, betting_deadline, score_home, score_away, is_brazil').order('match_datetime', { ascending: true }),
     supabase.from('bets').select('match_id, score_home, score_away, points').eq('participant_id', participantId),
     supabase.from('group_bets').select('group_name, first_place, second_place').eq('participant_id', participantId),
     supabase.from('tournament_bets')

@@ -1,3 +1,4 @@
+import { cache }  from 'react'
 import { cookies } from 'next/headers'
 import { createAuthAdminClient } from '@/lib/supabase/server'
 
@@ -13,17 +14,10 @@ const COOKIE_OPTS = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnySupabase = any
 
-/**
- * Resolve o participante ativo para um usuário.
- * Prioridade: cookie → participante primário.
- * Lança erro se o usuário não tiver nenhum participante vinculado.
- */
-export async function getActiveParticipantId(
-  _supabase: AnySupabase,
-  userId: string,
-): Promise<string> {
-  // Usa admin client para ignorar RLS em user_participants
-  // A segurança é garantida pelo filtro user_id = userId (vem de auth.getUser())
+// Cache interno por request: a chave é userId (o argumento _supabase é ignorado).
+// React.cache() deduplicata chamadas com o mesmo userId dentro da mesma árvore
+// de render — Navbar e page.tsx não fazem mais 2 round-trips separados.
+const _resolveParticipantId = cache(async (userId: string): Promise<string> => {
   const admin = createAuthAdminClient()
   const cookieStore = await cookies()
   const cookieId    = cookieStore.get(COOKIE)?.value
@@ -38,7 +32,7 @@ export async function getActiveParticipantId(
     if (data) return cookieId
   }
 
-  // Fallback: primeiro participante vinculado (qualquer)
+  // Fallback: primeiro participante vinculado
   const { data: first } = await admin
     .from('user_participants')
     .select('participant_id')
@@ -48,7 +42,45 @@ export async function getActiveParticipantId(
 
   if (!first?.participant_id) throw new Error('Nenhum participante vinculado a este usuário.')
   return first.participant_id
+})
+
+/**
+ * Resolve o participante ativo para um usuário.
+ * Prioridade: cookie → participante primário.
+ * Lança erro se o usuário não tiver nenhum participante vinculado.
+ */
+export async function getActiveParticipantId(
+  _supabase: AnySupabase,
+  userId: string,
+): Promise<string> {
+  return _resolveParticipantId(userId)
 }
+
+// Cache interno para a lista de participantes do usuário
+const _resolveUserParticipants = cache(async (
+  userId: string,
+  activeParticipantId: string,
+): Promise<{ id: string; apelido: string; is_primary: boolean; is_active: boolean }[]> => {
+  const admin = createAuthAdminClient()
+
+  // Uma única query com join via FK (user_participants.participant_id → participants.id)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = await admin
+    .from('user_participants')
+    .select('participant_id, is_primary, participants(id, apelido)')
+    .eq('user_id', userId) as { data: any[] | null }
+
+  return (data ?? [])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .filter((l: any) => l.participants)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .map((l: any) => ({
+      id:         l.participant_id as string,
+      apelido:    l.participants.apelido as string,
+      is_primary: l.is_primary as boolean,
+      is_active:  l.participant_id === activeParticipantId,
+    }))
+})
 
 /**
  * Retorna todos os participantes vinculados ao usuário,
@@ -59,31 +91,7 @@ export async function getUserParticipants(
   userId: string,
   activeParticipantId: string,
 ): Promise<{ id: string; apelido: string; is_primary: boolean; is_active: boolean }[]> {
-  const admin = createAuthAdminClient()
-  const { data: links } = await admin
-    .from('user_participants')
-    .select('participant_id, is_primary')
-    .eq('user_id', userId)
-
-  if (!links?.length) return []
-
-  const ids = links.map((l: AnySupabase) => l.participant_id as string)
-
-  const { data: parts } = await admin
-    .from('participants')
-    .select('id, apelido')
-    .in('id', ids)
-
-  const partMap = new Map((parts ?? []).map((p: AnySupabase) => [p.id as string, p.apelido as string]))
-
-  return links
-    .filter((l: AnySupabase) => partMap.has(l.participant_id))
-    .map((l: AnySupabase) => ({
-      id:         l.participant_id as string,
-      apelido:    partMap.get(l.participant_id) as string,
-      is_primary: l.is_primary as boolean,
-      is_active:  l.participant_id === activeParticipantId,
-    }))
+  return _resolveUserParticipants(userId, activeParticipantId)
 }
 
 /** Escreve o cookie de participante ativo. */

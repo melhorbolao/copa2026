@@ -128,52 +128,44 @@ export function ACopaClient({ initialMatches, isAdmin }: Props) {
     [matches],
   )
 
-  const officialBetMap = useMemo<Map<string, BetSlim>>(() => {
-    const map = new Map<string, BetSlim>()
+  // Uma única passagem sobre groupMatches computa slimMatches, officialBetMap,
+  // completeGroups e allGroupsComplete em vez de 5 useMemo separados.
+  const { slimMatches, officialBetMap, completeGroups, allGroupsComplete } = useMemo(() => {
+    const slim: MatchSlim[]           = []
+    const betMap = new Map<string, BetSlim>()
+    const byGroup = new Map<string, { total: number; scored: number }>()
+
     for (const m of groupMatches) {
+      slim.push({
+        id: m.id, group_name: m.group_name, phase: m.phase,
+        team_home: m.team_home, team_away: m.team_away,
+        flag_home: m.flag_home, flag_away: m.flag_away,
+      })
       if (m.score_home !== null && m.score_away !== null) {
-        map.set(m.id, { match_id: m.id, score_home: m.score_home, score_away: m.score_away })
+        betMap.set(m.id, { match_id: m.id, score_home: m.score_home, score_away: m.score_away })
+      }
+      if (m.group_name) {
+        const e = byGroup.get(m.group_name) ?? { total: 0, scored: 0 }
+        e.total++
+        if (m.score_home !== null && m.score_away !== null) e.scored++
+        byGroup.set(m.group_name, e)
       }
     }
-    return map
-  }, [groupMatches])
 
-  const slimMatches = useMemo<MatchSlim[]>(
-    () => groupMatches.map(m => ({
-      id: m.id,
-      group_name: m.group_name,
-      phase: m.phase,
-      team_home: m.team_home,
-      team_away: m.team_away,
-      flag_home: m.flag_home,
-      flag_away: m.flag_away,
-    })),
-    [groupMatches],
-  )
+    const complete = new Set<string>()
+    for (const [g, { total, scored }] of byGroup) {
+      if (total > 0 && scored === total) complete.add(g)
+    }
+
+    return {
+      slimMatches:      slim,
+      officialBetMap:   betMap,
+      completeGroups:   complete,
+      allGroupsComplete: byGroup.size > 0 && complete.size === byGroup.size,
+    }
+  }, [groupMatches])
 
   const hasAnyScore = officialBetMap.size > 0
-
-  // Grupos cujos jogos estão TODOS com placar registrado
-  const completeGroups = useMemo(() => {
-    const byGroup = new Map<string, { total: number; scored: number }>()
-    for (const m of groupMatches) {
-      if (!m.group_name) continue
-      const e = byGroup.get(m.group_name) ?? { total: 0, scored: 0 }
-      e.total++
-      if (m.score_home !== null && m.score_away !== null) e.scored++
-      byGroup.set(m.group_name, e)
-    }
-    const complete = new Set<string>()
-    for (const [group, { total, scored }] of byGroup) {
-      if (total > 0 && scored === total) complete.add(group)
-    }
-    return complete
-  }, [groupMatches])
-
-  const allGroupsComplete = useMemo(() => {
-    const totalGroups = new Set(groupMatches.map(m => m.group_name).filter(Boolean)).size
-    return totalGroups > 0 && completeGroups.size === totalGroups
-  }, [completeGroups, groupMatches])
 
   const standings = useMemo(
     () => calcGroupStandings(slimMatches, officialBetMap),

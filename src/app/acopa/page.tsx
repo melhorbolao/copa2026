@@ -15,20 +15,20 @@ export default async function ACopaPage() {
   const participantId = await getActiveParticipantId(supabase, user.id).catch(() => null)
   if (!participantId) redirect('/aguardando-aprovacao')
 
-  const [{ data: rawMatches }, { data: profile }] = await Promise.all([
-    supabase
-      .from('matches')
-      .select('*')
-      .order('match_datetime', { ascending: true }),
-    supabase
-      .from('users')
-      .select('is_admin')
-      .eq('id', user.id)
-      .single(),
-  ])
+  // Verifica admin antes de buscar partidas (evita query cara para não-admins)
+  const { data: profile } = await supabase
+    .from('users')
+    .select('is_admin')
+    .eq('id', user.id)
+    .single()
 
   const isAdmin = profile?.is_admin ?? false
   if (!isAdmin) redirect('/')
+
+  const { data: rawMatches } = await supabase
+    .from('matches')
+    .select('id, match_number, phase, group_name, round, team_home, team_away, flag_home, flag_away, match_datetime, city, betting_deadline, score_home, score_away, penalty_winner, is_brazil')
+    .order('match_datetime', { ascending: true })
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const matches = (rawMatches ?? []) as any[]

@@ -1,6 +1,6 @@
 'use client'
 
-import { useTransition, useState, useEffect, useRef } from 'react'
+import { useTransition, useState, useEffect, useRef, memo } from 'react'
 import { saveOfficialScore, savePenaltyWinner } from './actions'
 import { Flag } from '@/components/ui/Flag'
 import { formatBrasilia } from '@/utils/date'
@@ -30,7 +30,7 @@ interface Props {
 
 const KNOCKOUT_PHASES = new Set(['round_of_32', 'round_of_16', 'quarterfinal', 'semifinal', 'third_place', 'final'])
 
-export function MatchScoreRow({ match, canEdit, onPenaltyUpdate }: Props) {
+export const MatchScoreRow = memo(function MatchScoreRow({ match, canEdit, onPenaltyUpdate }: Props) {
   const [pending, startTransition]  = useTransition()
   const [home, setHome]             = useState(match.score_home?.toString() ?? '')
   const [away, setAway]             = useState(match.score_away?.toString() ?? '')
@@ -258,4 +258,4 @@ export function MatchScoreRow({ match, canEdit, onPenaltyUpdate }: Props) {
       )}
     </>
   )
-}
+})

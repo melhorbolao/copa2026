@@ -18,7 +18,7 @@ export default async function TabelaPage() {
   const [{ data: rawMatches }, { data: rawBets }, { data: tBet }, { data: rawGroupBets }, { data: rawThirdBets }] = await Promise.all([
     supabase
       .from('matches')
-      .select('*')
+      .select('id, group_name, phase, team_home, team_away, flag_home, flag_away, betting_deadline')
       .eq('phase', 'group')
       .order('match_datetime', { ascending: true }),
     supabase
