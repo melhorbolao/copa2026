@@ -51,9 +51,6 @@ export async function Navbar() {
               style={{ mixBlendMode: 'screen' }}
             />
           </Link>
-          <span className="hidden sm:block text-xs font-medium text-white/70 leading-tight">
-            Copa do Mundo<br />EUA · Canadá · México<br />2026
-          </span>
         </div>
 
         {/* Nav Links — client component com toggle de visão */}
