@@ -62,7 +62,7 @@ export default async function PalpitesPage({
   const participantId = await getActiveParticipantId(supabase, user.id).catch(() => null)
   if (!participantId) redirect('/aguardando-aprovacao')
 
-  const [{ data: matches }, { data: bets }, { data: groupBets }, { data: tBet }, { data: thirdBets }] = await Promise.all([
+  const [{ data: matches }, { data: bets }, { data: groupBets }, { data: tBet }, { data: thirdBets }, { data: scorerMappingsRaw }] = await Promise.all([
     supabase.from('matches').select('id, match_number, phase, group_name, round, team_home, team_away, flag_home, flag_away, match_datetime, city, betting_deadline, score_home, score_away, is_brazil').order('match_datetime', { ascending: true }),
     supabase.from('bets').select('match_id, score_home, score_away, points').eq('participant_id', participantId),
     supabase.from('group_bets').select('group_name, first_place, second_place').eq('participant_id', participantId),
@@ -73,7 +73,12 @@ export default async function PalpitesPage({
     supabase.from('third_place_bets')
       .select('group_name, team')
       .eq('participant_id', participantId),
+    supabase.from('top_scorer_mapping').select('raw_name, standardized_name'),
   ])
+
+  const scorerMapping: Record<string, string> = Object.fromEntries(
+    (scorerMappingsRaw ?? []).map((m: { raw_name: string; standardized_name: string }) => [m.raw_name, m.standardized_name])
+  )
 
   const betMap      = new Map((bets ?? []).map(b => [b.match_id, b]))
   const groupBetMap = new Map((groupBets ?? []).map(b => [b.group_name, b]))
@@ -409,6 +414,7 @@ export default async function PalpitesPage({
                 allTeams={allTeams}
                 deadline={tournamentDeadline}
                 existingBet={tBet ?? null}
+                scorerMapping={scorerMapping}
               />
             )}
 

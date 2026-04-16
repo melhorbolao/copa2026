@@ -14,9 +14,10 @@ interface Props {
   allTeams: Team[]
   deadline: string
   existingBet: TBet | null
+  scorerMapping?: Record<string, string>
 }
 
-export function TournamentSection({ allTeams, deadline, existingBet }: Props) {
+export function TournamentSection({ allTeams, deadline, existingBet, scorerMapping }: Props) {
   const [pending, startTransition] = useTransition()
   const [form, setForm] = useState<TBet>(() => existingBet
     ? {
@@ -93,11 +94,11 @@ export function TournamentSection({ allTeams, deadline, existingBet }: Props) {
         {existingBet ? (
           <div className="grid grid-cols-2 gap-0 divide-x divide-y divide-gray-100 sm:grid-cols-3 lg:grid-cols-5">
             {([
-              ['🥇 Campeão',        existingBet.champion],
-              ['🥈 Vice',           existingBet.runner_up],
-              ['3º Lugar',  existingBet.semi1],
-              ['4º Lugar',  existingBet.semi2],
-              ['⚽ Artilheiro',     existingBet.top_scorer],
+              ['🥇 Campeão',    existingBet.champion],
+              ['🥈 Vice',       existingBet.runner_up],
+              ['3º Lugar',      existingBet.semi1],
+              ['4º Lugar',      existingBet.semi2],
+              ['⚽ Artilheiro', scorerMapping?.[existingBet.top_scorer] ?? existingBet.top_scorer],
             ] as [string, string][]).map(([label, val]) => (
               <div key={label} className="px-4 py-3">
                 <div className="text-xs text-gray-400">{label}</div>

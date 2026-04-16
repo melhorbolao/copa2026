@@ -1,11 +1,13 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useTransition, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { MatchScoreRow } from './MatchScoreRow'
 import { OfficialGroupCard } from './OfficialGroupCard'
 import { OfficialBracketView } from './OfficialBracketView'
 import { ThirdsTable } from '@/app/tabela/ThirdsTable'
+import { saveOfficialTopScorer } from './actions'
+import { isDeadlinePassed } from '@/utils/date'
 import {
   calcGroupStandings,
   rankThirds,
@@ -39,6 +41,9 @@ interface Props {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   initialMatches: any[]
   isAdmin: boolean
+  initialOfficialTopScorer: string | null
+  standardizedNames: string[]
+  r1Deadline: string
 }
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -76,11 +81,16 @@ function computeCanEdit(match: MatchFull, isAdmin: boolean): boolean {
 
 // ── Componente principal ──────────────────────────────────────────────────────
 
-export function ACopaClient({ initialMatches, isAdmin }: Props) {
-  const [matches, setMatches]     = useState<MatchFull[]>(initialMatches as MatchFull[])
-  const [groupFilter, setGroup]   = useState('')   // '' = todos os grupos
-  const [stageFilter, setStage]   = useState('')   // '' = fase de grupos
-  const [now, setNow]             = useState(Date.now())
+export function ACopaClient({ initialMatches, isAdmin, initialOfficialTopScorer, standardizedNames, r1Deadline }: Props) {
+  const [matches, setMatches]         = useState<MatchFull[]>(initialMatches as MatchFull[])
+  const [groupFilter, setGroup]       = useState('')
+  const [stageFilter, setStage]       = useState('')
+  const [now, setNow]                 = useState(Date.now())
+  const [officialTopScorer, setOffTS] = useState(initialOfficialTopScorer ?? '')
+  const [tsPending, startTsTransition] = useTransition()
+  const [tsError, setTsError]         = useState('')
+  const tsSaved                       = useRef(initialOfficialTopScorer ?? '')
+  const tsTimer                       = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   // Atualiza relógio a cada 30s para recalcular canEdit sem reload
   useEffect(() => {
@@ -346,6 +356,94 @@ export function ACopaClient({ initialMatches, isAdmin }: Props) {
             </p>
           )}
         </div>
+      </div>
+
+      {/* ── Artilheiro Oficial ────────────────────────────────────────────────── */}
+      <OfficialTopScorerCard
+        isAdmin={isAdmin}
+        r1Deadline={r1Deadline}
+        standardizedNames={standardizedNames}
+        value={officialTopScorer}
+        pending={tsPending}
+        error={tsError}
+        onChange={(val) => {
+          setOffTS(val)
+          setTsError('')
+          clearTimeout(tsTimer.current)
+          if (!val.trim() || val === tsSaved.current) return
+          tsTimer.current = setTimeout(() => {
+            startTsTransition(async () => {
+              const r = await saveOfficialTopScorer(val)
+              if (r.error) setTsError(r.error)
+              else tsSaved.current = val
+            })
+          }, 400)
+        }}
+      />
+    </div>
+  )
+}
+
+// ── Campo de artilheiro oficial ───────────────────────────────────────────────
+
+function OfficialTopScorerCard({
+  isAdmin, r1Deadline, standardizedNames, value, pending, error, onChange,
+}: {
+  isAdmin: boolean
+  r1Deadline: string
+  standardizedNames: string[]
+  value: string
+  pending: boolean
+  error: string
+  onChange: (val: string) => void
+}) {
+  const r1Passed  = isDeadlinePassed(r1Deadline)
+  const useDropdown = r1Passed && standardizedNames.length > 0
+
+  return (
+    <div className="mt-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="flex items-center gap-2 px-4 py-3" style={{ backgroundColor: '#002776' }}>
+        <span className="text-sm font-black uppercase tracking-widest text-white">
+          ⚽ Artilheiro Oficial
+        </span>
+        {pending && <span className="ml-auto text-[11px] text-white/60 animate-pulse">Salvando…</span>}
+      </div>
+      <div className="px-4 py-4">
+        {isAdmin ? (
+          <div className="flex items-center gap-3">
+            {useDropdown ? (
+              <select
+                value={value}
+                onChange={e => onChange(e.target.value)}
+                className="w-72 rounded border border-gray-200 px-2 py-1.5 text-sm focus:border-verde-400 focus:outline-none"
+              >
+                <option value="">— selecione —</option>
+                {standardizedNames.map(n => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={value}
+                onChange={e => onChange(e.target.value)}
+                placeholder="Nome do artilheiro…"
+                className="w-72 rounded border border-gray-200 px-2 py-1.5 text-sm focus:border-verde-400 focus:outline-none"
+              />
+            )}
+            {value && !pending && !error && (
+              <span className="text-sm font-bold text-gray-800">{value}</span>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm font-bold text-gray-800">
+            {value || <span className="font-normal text-gray-400">Ainda não registrado</span>}
+          </p>
+        )}
+        {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+        {!isAdmin && !r1Passed && (
+          <p className="mt-1 text-xs text-gray-400">Será divulgado após o prazo da Rodada 1.</p>
+        )}
       </div>
     </div>
   )

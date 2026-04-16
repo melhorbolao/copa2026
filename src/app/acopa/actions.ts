@@ -2,6 +2,24 @@
 
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 
+export async function saveOfficialTopScorer(name: string): Promise<{ error?: string }> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'Não autenticado' }
+    const { data: profile } = await supabase.from('users').select('is_admin').eq('id', user.id).single()
+    if (!profile?.is_admin) return { error: 'Sem permissão' }
+    const admin = await createAdminClient()
+    const { error } = await admin
+      .from('tournament_settings')
+      .upsert({ key: 'official_top_scorer', value: name.trim() }, { onConflict: 'key' })
+    if (error) return { error: error.message }
+    return {}
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Erro inesperado' }
+  }
+}
+
 const EDIT_WINDOW_MS = 4 * 60 * 60 * 1000  // 4 horas em ms
 
 function isWithinEditWindow(matchDatetime: string): boolean {
