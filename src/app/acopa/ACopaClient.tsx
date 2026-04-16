@@ -343,8 +343,8 @@ export function ACopaClient({ initialMatches, isAdmin, initialOfficialTopScorer,
         </div>
       )}
 
-      {/* ── Artilheiro Oficial ───────────────────────────────────────────────── */}
-      <div className="mb-8 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      {/* ── Artilheiro Oficial — só no filtro "Final" ───────────────────────── */}
+      {stageFilter === 'final' && <div className="mb-8 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="flex items-center gap-2 px-4 py-3" style={{ backgroundColor: '#002776' }}>
           <span className="text-sm font-black uppercase tracking-widest text-white">
             ⚽ Artilheiro Oficial
@@ -375,7 +375,7 @@ export function ACopaClient({ initialMatches, isAdmin, initialOfficialTopScorer,
             }}
           />
         </div>
-      </div>
+      </div>}
 
       {/* ── Chaveamento Oficial ───────────────────────────────────────────────── */}
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
