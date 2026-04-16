@@ -60,11 +60,11 @@ export function MatchScoreRow({ match, canEdit }: Props) {
   const doSave = (h: number, a: number) => {
     setError('')
     startTransition(async () => {
-      try {
-        await saveOfficialScore(match.id, h, a)
-        if (h !== a && isKnockout) await savePenaltyWinner(match.id, null)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Erro')
+      const r1 = await saveOfficialScore(match.id, h, a)
+      if (r1.error) { setError(r1.error); return }
+      if (h !== a && isKnockout) {
+        const r2 = await savePenaltyWinner(match.id, null)
+        if (r2.error) setError(r2.error)
       }
     })
   }
@@ -72,11 +72,11 @@ export function MatchScoreRow({ match, canEdit }: Props) {
   const doClear = () => {
     setError('')
     startTransition(async () => {
-      try {
-        await saveOfficialScore(match.id, null, null)
-        if (isKnockout) await savePenaltyWinner(match.id, null)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Erro')
+      const r1 = await saveOfficialScore(match.id, null, null)
+      if (r1.error) { setError(r1.error); return }
+      if (isKnockout) {
+        const r2 = await savePenaltyWinner(match.id, null)
+        if (r2.error) setError(r2.error)
       }
     })
   }
@@ -84,8 +84,8 @@ export function MatchScoreRow({ match, canEdit }: Props) {
   const doPenalty = (winner: string | null) => {
     setError('')
     startTransition(async () => {
-      try { await savePenaltyWinner(match.id, winner) }
-      catch (err) { setError(err instanceof Error ? err.message : 'Erro') }
+      const r = await savePenaltyWinner(match.id, winner)
+      if (r.error) setError(r.error)
     })
   }
 

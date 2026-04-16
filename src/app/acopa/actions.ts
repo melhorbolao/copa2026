@@ -13,7 +13,7 @@ function isWithinEditWindow(matchDatetime: string): boolean {
 async function getCallerPermissions() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Não autenticado')
+  if (!user) return null
 
   const { data: profile } = await supabase
     .from('users')
@@ -31,59 +31,71 @@ export async function saveOfficialScore(
   matchId: string,
   scoreHome: number | null,
   scoreAway: number | null,
-) {
-  const { isAdmin, isParticipant } = await getCallerPermissions()
-  if (!isAdmin && !isParticipant) throw new Error('Sem permissão')
+): Promise<{ error?: string }> {
+  try {
+    const perms = await getCallerPermissions()
+    if (!perms) return { error: 'Não autenticado' }
+    const { isAdmin, isParticipant } = perms
+    if (!isAdmin && !isParticipant) return { error: 'Sem permissão' }
 
-  // Busca o jogo para validar janela de edição
-  const supabase = await createClient()
-  const { data: match } = await supabase
-    .from('matches')
-    .select('match_datetime')
-    .eq('id', matchId)
-    .single()
-  if (!match) throw new Error('Jogo não encontrado')
+    const supabase = await createClient()
+    const { data: match } = await supabase
+      .from('matches')
+      .select('match_datetime')
+      .eq('id', matchId)
+      .single()
+    if (!match) return { error: 'Jogo não encontrado' }
 
-  if (!isAdmin && !isWithinEditWindow(match.match_datetime)) {
-    throw new Error('Fora da janela de edição (início do jogo + 4h)')
+    if (!isAdmin && !isWithinEditWindow(match.match_datetime)) {
+      return { error: 'Fora da janela de edição (início do jogo + 4h)' }
+    }
+
+    const admin = await createAdminClient()
+    const { error } = await admin
+      .from('matches')
+      .update({ score_home: scoreHome, score_away: scoreAway })
+      .eq('id', matchId)
+
+    if (error) return { error: error.message }
+    return {}
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Erro inesperado' }
   }
-
-  // Usa admin client para contornar RLS (permissão validada acima)
-  const admin = await createAdminClient()
-  const { error } = await admin
-    .from('matches')
-    .update({ score_home: scoreHome, score_away: scoreAway })
-    .eq('id', matchId)
-
-  if (error) throw new Error(error.message)
 }
 
 export async function savePenaltyWinner(
   matchId: string,
   winner: string | null,
-) {
-  const { isAdmin, isParticipant } = await getCallerPermissions()
-  if (!isAdmin && !isParticipant) throw new Error('Sem permissão')
+): Promise<{ error?: string }> {
+  try {
+    const perms = await getCallerPermissions()
+    if (!perms) return { error: 'Não autenticado' }
+    const { isAdmin, isParticipant } = perms
+    if (!isAdmin && !isParticipant) return { error: 'Sem permissão' }
 
-  const supabase = await createClient()
-  const { data: match } = await supabase
-    .from('matches')
-    .select('match_datetime, score_home, score_away, phase')
-    .eq('id', matchId)
-    .single()
-  if (!match) throw new Error('Jogo não encontrado')
+    const supabase = await createClient()
+    const { data: match } = await supabase
+      .from('matches')
+      .select('match_datetime, phase')
+      .eq('id', matchId)
+      .single()
+    if (!match) return { error: 'Jogo não encontrado' }
 
-  if (match.phase === 'group') throw new Error('Pênaltis não se aplicam à fase de grupos')
+    if (match.phase === 'group') return { error: 'Pênaltis não se aplicam à fase de grupos' }
 
-  if (!isAdmin && !isWithinEditWindow(match.match_datetime)) {
-    throw new Error('Fora da janela de edição (início do jogo + 4h)')
+    if (!isAdmin && !isWithinEditWindow(match.match_datetime)) {
+      return { error: 'Fora da janela de edição (início do jogo + 4h)' }
+    }
+
+    const admin = await createAdminClient()
+    const { error } = await admin
+      .from('matches')
+      .update({ penalty_winner: winner })
+      .eq('id', matchId)
+
+    if (error) return { error: error.message }
+    return {}
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Erro inesperado' }
   }
-
-  const admin = await createAdminClient()
-  const { error } = await admin
-    .from('matches')
-    .update({ penalty_winner: winner })
-    .eq('id', matchId)
-
-  if (error) throw new Error(error.message)
 }
