@@ -71,6 +71,22 @@ export async function saveBet(matchId: string, scoreHome: number, scoreAway: num
 }
 
 // ── Classificação de grupo ────────────────────────────────────
+export async function deleteGroupBet(groupName: string): Promise<{ error?: string }> {
+  try {
+    const { participantId } = await resolveParticipant()
+    const admin = createAuthAdminClient()
+    const { error } = await admin
+      .from('group_bets')
+      .delete()
+      .eq('participant_id', participantId)
+      .eq('group_name', groupName)
+    if (error) return { error: error.message }
+    return {}
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Erro inesperado' }
+  }
+}
+
 export async function saveGroupBet(groupName: string, firstPlace: string, secondPlace: string) {
   if (!firstPlace || !secondPlace) throw new Error('Selecione os dois times.')
   if (firstPlace === secondPlace) throw new Error('1º e 2º devem ser times diferentes.')

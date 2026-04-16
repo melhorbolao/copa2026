@@ -1,7 +1,7 @@
 'use client'
 
 import { useTransition, useState, useEffect } from 'react'
-import { saveGroupBet } from './actions'
+import { saveGroupBet, deleteGroupBet } from './actions'
 import { Flag } from '@/components/ui/Flag'
 import { Combobox } from '@/components/ui/Combobox'
 import { formatBrasilia, isDeadlinePassed } from '@/utils/date'
@@ -61,6 +61,19 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
       try { await saveGroupBet(groupName, f, s) }
       catch (err) { setError(err instanceof Error ? err.message : 'Erro') }
     })
+  }
+
+  const doClear = (clearFirst: boolean) => {
+    setError('')
+    if (clearFirst) setFirst('')
+    else setSecond('')
+    // Se havia um palpite salvo, remove do banco
+    if (existingBet) {
+      startTransition(async () => {
+        const r = await deleteGroupBet(groupName)
+        if (r.error) setError(r.error)
+      })
+    }
   }
 
   const handleFirst = (val: string) => {
@@ -158,7 +171,7 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
                 {first && (
                   <button
                     type="button"
-                    onClick={() => setFirst('')}
+                    onClick={() => doClear(true)}
                     className="shrink-0 text-sm leading-none text-gray-300 hover:text-gray-500"
                     tabIndex={-1}
                     title="Limpar"
@@ -185,7 +198,7 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
                 {second && (
                   <button
                     type="button"
-                    onClick={() => setSecond('')}
+                    onClick={() => doClear(false)}
                     className="shrink-0 text-sm leading-none text-gray-300 hover:text-gray-500"
                     tabIndex={-1}
                     title="Limpar"
