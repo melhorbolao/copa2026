@@ -27,9 +27,11 @@ export default async function ACopaPage() {
       .single(),
   ])
 
+  const isAdmin = profile?.is_admin ?? false
+  if (!isAdmin) redirect('/')
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const matches = (rawMatches ?? []) as any[]
-  const isAdmin = profile?.is_admin ?? false
 
   return (
     <>
