@@ -54,8 +54,10 @@ export function MatchScoreRow({ match, canEdit }: Props) {
     startTransition(async () => {
       try {
         await saveOfficialScore(match.id, h, a)
-        // Se o placar deixou de ser empate, limpa penalty_winner
-        if (h !== a) await savePenaltyWinner(match.id, null)
+        // Limpa penalty_winner apenas em mata-mata (não em jogos de grupos)
+        if (h !== a && KNOCKOUT_PHASES.has(match.phase)) {
+          await savePenaltyWinner(match.id, null)
+        }
         setEditing(false)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Erro')

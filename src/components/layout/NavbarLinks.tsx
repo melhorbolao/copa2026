@@ -21,7 +21,7 @@ export function NavbarLinks({ isAdmin, firstDeadlinePassed }: Props) {
   const links = [
     { href: '/palpites',      label: 'Meus Palpites' },
     { href: '/tabela',        label: 'Minha Tabela'  },
-    { href: '/acopa',         label: 'A Copa'        },
+    ...(effectiveAdmin ? [{ href: '/acopa', label: 'A Copa' }] : []),
     ...(showAll ? [{ href: '/classificacao', label: 'Ranking' }] : []),
     { href: '/participantes', label: 'Participantes' },
     { href: '/pontuacao',     label: 'Pontuação'     },
