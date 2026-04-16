@@ -65,15 +65,13 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
 
   const doClear = (clearFirst: boolean) => {
     setError('')
+    const otherValue = clearFirst ? second : first
     if (clearFirst) setFirst('')
     else setSecond('')
-    // Se havia um palpite salvo, remove do banco
-    if (existingBet) {
-      startTransition(async () => {
-        const r = await deleteGroupBet(groupName)
-        if (r.error) setError(r.error)
-      })
-    }
+    startTransition(async () => {
+      const r = await deleteGroupBet(groupName, clearFirst ? 'first' : 'second', otherValue)
+      if (r.error) setError(r.error)
+    })
   }
 
   const handleFirst = (val: string) => {

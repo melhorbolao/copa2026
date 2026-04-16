@@ -71,16 +71,35 @@ export async function saveBet(matchId: string, scoreHome: number, scoreAway: num
 }
 
 // ── Classificação de grupo ────────────────────────────────────
-export async function deleteGroupBet(groupName: string): Promise<{ error?: string }> {
+export async function deleteGroupBet(
+  groupName: string,
+  field: 'first' | 'second',
+  otherValue: string,
+): Promise<{ error?: string }> {
   try {
     const { participantId } = await resolveParticipant()
     const admin = createAuthAdminClient()
-    const { error } = await admin
-      .from('group_bets')
-      .delete()
-      .eq('participant_id', participantId)
-      .eq('group_name', groupName)
-    if (error) return { error: error.message }
+
+    if (!otherValue) {
+      // Outro campo também vazio — apaga a linha inteira
+      const { error } = await admin
+        .from('group_bets')
+        .delete()
+        .eq('participant_id', participantId)
+        .eq('group_name', groupName)
+      if (error) return { error: error.message }
+    } else {
+      // Mantém o outro campo, limpa apenas o removido
+      const updateData = field === 'first'
+        ? { first_place: '', second_place: otherValue }
+        : { first_place: otherValue, second_place: '' }
+      const { error } = await admin
+        .from('group_bets')
+        .update(updateData)
+        .eq('participant_id', participantId)
+        .eq('group_name', groupName)
+      if (error) return { error: error.message }
+    }
     return {}
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Erro inesperado' }
