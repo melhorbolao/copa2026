@@ -286,7 +286,7 @@ export function ACopaClient({ initialMatches, isAdmin }: Props) {
       </div>
 
       {/* ── Classificação dos Grupos ──────────────────────────────────────────── */}
-      {hasAnyScore && (
+      {hasAnyScore && isGroupStage && (
         <div className="mb-8">
           <h2 className="mb-4 text-lg font-black text-gray-900">Classificação dos Grupos</h2>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -302,7 +302,7 @@ export function ACopaClient({ initialMatches, isAdmin }: Props) {
       )}
 
       {/* ── Melhores Terceiros ────────────────────────────────────────────────── */}
-      {hasAnyScore && thirds.length > 0 && (
+      {hasAnyScore && isGroupStage && thirds.length > 0 && (
         <div className="mb-8">
           <ThirdsTable thirds={thirds} />
         </div>
