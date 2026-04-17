@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { SidebarLinks } from './SidebarLinks'
+import { AdminModeToggle } from './AdminModeToggle'
 import { ParticipantSelector } from './ParticipantSelector'
 import { getActiveParticipantId, getUserParticipants } from '@/lib/participant'
 import { getPageVisibility } from '@/lib/page-visibility'
@@ -66,6 +67,7 @@ export async function Sidebar() {
             <ParticipantSelector participants={participants} />
           </div>
         )}
+        {profile?.is_admin && <AdminModeToggle />}
         <form action="/auth/signout" method="post">
           <button
             type="submit"
