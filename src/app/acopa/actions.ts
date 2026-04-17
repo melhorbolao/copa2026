@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { recalculateAfterMatchScore, recalculateTournamentBets } from '@/lib/scoring/recalculate'
 
 export async function saveOfficialTopScorer(name: string): Promise<{ error?: string }> {
   try {
@@ -14,6 +15,7 @@ export async function saveOfficialTopScorer(name: string): Promise<{ error?: str
       .from('tournament_settings')
       .upsert({ key: 'official_top_scorer', value: name.trim() }, { onConflict: 'key' })
     if (error) return { error: error.message }
+    recalculateTournamentBets().catch(e => console.error('[scoring/top-scorer]', e))
     return {}
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Erro inesperado' }
@@ -75,6 +77,7 @@ export async function saveOfficialScore(
       .eq('id', matchId)
 
     if (error) return { error: error.message }
+    recalculateAfterMatchScore(matchId).catch(e => console.error('[scoring/match]', e))
     return {}
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Erro inesperado' }

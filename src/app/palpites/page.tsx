@@ -65,13 +65,13 @@ export default async function PalpitesPage({
   const [{ data: matches }, { data: bets }, { data: groupBets }, { data: tBet }, { data: thirdBets }, scorerMappingsRaw] = await Promise.all([
     supabase.from('matches').select('id, match_number, phase, group_name, round, team_home, team_away, flag_home, flag_away, match_datetime, city, betting_deadline, score_home, score_away, is_brazil').order('match_datetime', { ascending: true }),
     supabase.from('bets').select('match_id, score_home, score_away, points').eq('participant_id', participantId),
-    supabase.from('group_bets').select('group_name, first_place, second_place').eq('participant_id', participantId),
+    supabase.from('group_bets').select('group_name, first_place, second_place, points').eq('participant_id', participantId),
     supabase.from('tournament_bets')
-      .select('champion, runner_up, semi1, semi2, top_scorer')
+      .select('champion, runner_up, semi1, semi2, top_scorer, points')
       .eq('participant_id', participantId)
       .maybeSingle(),
     supabase.from('third_place_bets')
-      .select('group_name, team')
+      .select('group_name, team, points')
       .eq('participant_id', participantId),
     supabase.from('top_scorer_mapping').select('raw_name, standardized_name').then(r => r.data ?? []).catch(() => []),
   ])
