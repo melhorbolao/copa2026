@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getActiveParticipantId } from '@/lib/participant'
 import { Navbar } from '@/components/layout/Navbar'
 import { ACopaClient } from './ACopaClient'
-import { RecalcButton } from './RecalcButton'
+import { RecalcButton } from '@/components/admin/RecalcButton'
 
 export const metadata = { title: 'A Copa · Melhor Bolão' }
 

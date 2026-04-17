@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatBrasilia } from '@/utils/date'
 import { MatchScoreForm } from './MatchScoreForm'
+import { RecalcButton } from '@/components/admin/RecalcButton'
 import type { MatchPhase } from '@/types/database'
 
 // Ordem de exibição das fases
@@ -56,6 +57,8 @@ export default async function AdminJogosPage() {
 
   return (
     <div className="space-y-8">
+      <RecalcButton />
+
       {/* Resumo */}
       <div className="grid grid-cols-3 gap-4">
         <StatCard label="Total de jogos"      value={total}    color="gray"  />
