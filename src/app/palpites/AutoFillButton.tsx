@@ -8,8 +8,10 @@ interface Props {
   alreadyFilled: boolean
 }
 
+
 export function AutoFillButton({ enabled, alreadyFilled }: Props) {
   const [showConfirm, setShowConfirm] = useState(false)
+  const [fillError, setFillError] = useState('')
   const [pending, startTransition] = useTransition()
 
   function handleClick() {
@@ -21,9 +23,15 @@ export function AutoFillButton({ enabled, alreadyFilled }: Props) {
   }
 
   function doFill() {
+    setShowConfirm(false)
+    setFillError('')
     startTransition(async () => {
-      await autoFillGroupBets()
-      window.location.reload()
+      try {
+        await autoFillGroupBets()
+        window.location.reload()
+      } catch (e) {
+        setFillError(e instanceof Error ? e.message : 'Erro ao preencher.')
+      }
     })
   }
 
@@ -49,6 +57,9 @@ export function AutoFillButton({ enabled, alreadyFilled }: Props) {
             {pending ? 'Preenchendo…' : 'Preencher automaticamente'}
           </button>
         </div>
+        {fillError && (
+          <p className="mt-2 text-xs text-red-600 font-medium">{fillError}</p>
+        )}
 
         {showConfirm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">

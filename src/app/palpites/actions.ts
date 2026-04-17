@@ -184,7 +184,7 @@ export async function deleteThirdPlaceBet(groupName: string) {
 }
 
 // ── Auto-preenchimento de classificados ──────────────────────
-export async function autoFillGroupBets() {
+export async function autoFillGroupBets(): Promise<{ thirdsCount: number }> {
   const { supabase, participantId } = await resolveParticipant()
   const admin = createAuthAdminClient()
 
@@ -223,13 +223,23 @@ export async function autoFillGroupBets() {
   }
 
   const advancingThirds = thirds.filter(t => t.advances)
-  await admin.from('third_place_bets').delete().eq('participant_id', participantId)
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: deleteError } = await (admin as any)
+    .from('third_place_bets')
+    .delete()
+    .eq('participant_id', participantId)
+  if (deleteError) throw new Error(`Erro ao limpar terceiros: ${deleteError.message}`)
+
   if (advancingThirds.length > 0) {
-    const { error } = await admin.from('third_place_bets').insert(
-      advancingThirds.map(t => ({ participant_id: participantId, group_name: t.group, team: t.team })),
-    )
-    if (error) throw new Error(error.message)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (admin as any)
+      .from('third_place_bets')
+      .insert(advancingThirds.map(t => ({ participant_id: participantId, group_name: t.group, team: t.team })))
+    if (error) throw new Error(`Erro ao inserir terceiros: ${error.message}`)
   }
+
+  return { thirdsCount: advancingThirds.length }
 }
 
 // ── Preencher G4 a partir do chaveamento ─────────────────────
