@@ -10,11 +10,17 @@ export function RecalcButton() {
     setStatus('loading')
     try {
       const res = await fetch('/api/scoring/recalculate', { method: 'POST' })
-      setStatus(res.ok ? 'ok' : 'error')
+      if (res.ok) {
+        setStatus('ok')
+        setTimeout(() => window.location.reload(), 1500)
+      } else {
+        setStatus('error')
+        setTimeout(() => setStatus('idle'), 4000)
+      }
     } catch {
       setStatus('error')
+      setTimeout(() => setStatus('idle'), 4000)
     }
-    setTimeout(() => setStatus('idle'), 4000)
   }
 
   return (
@@ -26,7 +32,7 @@ export function RecalcButton() {
       >
         {status === 'loading' ? '⏳ Recalculando…' : '⚙️ Recalcular pontuações'}
       </button>
-      {status === 'ok'    && <span className="text-xs font-medium text-green-600">✓ Recálculo iniciado</span>}
+      {status === 'ok'    && <span className="text-xs font-medium text-green-600">✓ Recalculado — recarregando…</span>}
       {status === 'error' && <span className="text-xs font-medium text-red-500">Erro ao iniciar</span>}
     </div>
   )

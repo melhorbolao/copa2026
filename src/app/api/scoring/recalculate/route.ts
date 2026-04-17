@@ -24,12 +24,16 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
   const matchId: string | undefined = body?.matchId
 
-  // Run async without blocking the response
-  const work = matchId
-    ? recalculateAfterMatchScore(matchId)
-    : recalculateAll()
+  try {
+    if (matchId) {
+      await recalculateAfterMatchScore(matchId)
+    } else {
+      await recalculateAll()
+    }
+  } catch (err) {
+    console.error('[scoring/recalculate]', err)
+    return NextResponse.json({ error: String(err) }, { status: 500 })
+  }
 
-  work.catch(err => console.error('[scoring/recalculate]', err))
-
-  return NextResponse.json({ ok: true, queued: matchId ?? 'all' })
+  return NextResponse.json({ ok: true, recalculated: matchId ?? 'all' })
 }
