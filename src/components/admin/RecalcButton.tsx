@@ -26,7 +26,7 @@ export function RecalcButton() {
       >
         {status === 'loading' ? '⏳ Recalculando…' : '⚙️ Recalcular pontuações'}
       </button>
-      {status === 'ok'    && <span className="text-xs font-medium text-green-600">✓ Recalculação iniciada</span>}
+      {status === 'ok'    && <span className="text-xs font-medium text-green-600">✓ Recálculo iniciado</span>}
       {status === 'error' && <span className="text-xs font-medium text-red-500">Erro ao iniciar</span>}
     </div>
   )
