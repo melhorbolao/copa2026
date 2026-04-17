@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useTransition, useRef } from 'react'
+import { useState, useEffect, useMemo, useTransition, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { MatchScoreRow } from './MatchScoreRow'
 import { OfficialGroupCard } from './OfficialGroupCard'
@@ -306,6 +306,10 @@ export function ACopaClient({ initialMatches, isAdmin, initialOfficialTopScorer,
     [r32Slots, knockoutMatches],
   )
 
+  const handlePenaltyUpdate = useCallback((matchId: string, winner: string | null) => {
+    setMatches(prev => prev.map(m => m.id === matchId ? { ...m, penalty_winner: winner } : m))
+  }, [])
+
   // ── Grupos disponíveis para filtro (apenas os que têm jogos no estágio atual) ──
 
   const availableGroups = useMemo(() => {
@@ -392,20 +396,15 @@ export function ACopaClient({ initialMatches, isAdmin, initialOfficialTopScorer,
               </tr>
             </thead>
             <tbody>
-              {filteredMatches.map(match => {
-                const derived = derivedTeamMap.get(match.id)
-                const enriched = derived ? { ...match, ...derived } : match
-                return <MatchScoreRow
+              {filteredMatches.map(match => (
+                <MatchScoreRow
                   key={match.id}
-                  match={enriched}
+                  match={match}
+                  teamOverride={derivedTeamMap.get(match.id)}
                   canEdit={computeCanEdit(match, isAdmin)}
-                  onPenaltyUpdate={(matchId, winner) =>
-                    setMatches(prev =>
-                      prev.map(m => m.id === matchId ? { ...m, penalty_winner: winner } : m)
-                    )
-                  }
+                  onPenaltyUpdate={handlePenaltyUpdate}
                 />
-              })}
+              ))}
               {filteredMatches.length === 0 && (
                 <tr>
                   <td colSpan={5} className="py-8 text-center text-sm text-gray-400">

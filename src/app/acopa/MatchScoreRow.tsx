@@ -22,15 +22,27 @@ interface MatchRow {
   is_brazil: boolean
 }
 
+interface TeamOverride {
+  team_home: string
+  flag_home: string
+  team_away: string
+  flag_away: string
+}
+
 interface Props {
   match: MatchRow
   canEdit: boolean
+  teamOverride?: TeamOverride
   onPenaltyUpdate?: (matchId: string, winner: string | null) => void
 }
 
 const KNOCKOUT_PHASES = new Set(['round_of_32', 'round_of_16', 'quarterfinal', 'semifinal', 'third_place', 'final'])
 
-export const MatchScoreRow = memo(function MatchScoreRow({ match, canEdit, onPenaltyUpdate }: Props) {
+export const MatchScoreRow = memo(function MatchScoreRow({ match, canEdit, teamOverride, onPenaltyUpdate }: Props) {
+  const teamHome = teamOverride?.team_home ?? match.team_home
+  const flagHome = teamOverride?.flag_home ?? match.flag_home
+  const teamAway = teamOverride?.team_away ?? match.team_away
+  const flagAway = teamOverride?.flag_away ?? match.flag_away
   const [pending, startTransition]  = useTransition()
   const [home, setHome]             = useState(match.score_home?.toString() ?? '')
   const [away, setAway]             = useState(match.score_away?.toString() ?? '')
@@ -142,8 +154,8 @@ export const MatchScoreRow = memo(function MatchScoreRow({ match, canEdit, onPen
         {/* Time da Casa */}
         <td className="w-20 px-1.5 py-2.5 text-right sm:w-auto sm:px-3">
           <div className="flex min-w-0 items-center justify-end gap-1 text-gray-900 sm:gap-1.5">
-            <span className="min-w-0 truncate text-[10px] font-semibold sm:text-sm sm:whitespace-nowrap">{match.team_home}</span>
-            <Flag code={match.flag_home} size="sm" className="shrink-0" />
+            <span className="min-w-0 truncate text-[10px] font-semibold sm:text-sm sm:whitespace-nowrap">{teamHome}</span>
+            <Flag code={flagHome} size="sm" className="shrink-0" />
           </div>
         </td>
 
@@ -212,8 +224,8 @@ export const MatchScoreRow = memo(function MatchScoreRow({ match, canEdit, onPen
         {/* Time Visitante */}
         <td className="w-20 px-1.5 py-2.5 sm:w-auto sm:px-3">
           <div className="flex min-w-0 items-center gap-1 text-gray-900 sm:gap-1.5">
-            <Flag code={match.flag_away} size="sm" className="shrink-0" />
-            <span className="min-w-0 truncate text-[10px] font-semibold sm:text-sm sm:whitespace-nowrap">{match.team_away}</span>
+            <Flag code={flagAway} size="sm" className="shrink-0" />
+            <span className="min-w-0 truncate text-[10px] font-semibold sm:text-sm sm:whitespace-nowrap">{teamAway}</span>
           </div>
         </td>
 
@@ -230,7 +242,7 @@ export const MatchScoreRow = memo(function MatchScoreRow({ match, canEdit, onPen
           <td colSpan={5} className="pb-2 pt-0 pl-4 sm:pl-6">
             <div className="flex items-center gap-3 text-xs">
               <span className="font-semibold text-amber-700">🥅 Pênaltis:</span>
-              {[match.team_home, match.team_away].map(team => {
+              {[teamHome, teamAway].map(team => {
                 const isWinner = match.penalty_winner === team
                 return (
                   <button
