@@ -95,7 +95,7 @@ export function ThirdsTable({ thirds }: Props) {
       {/* Nota */}
       <div className="border-t border-gray-100 bg-gray-50 px-4 py-2.5">
         <p className="text-[11px] text-gray-400">
-          Critérios de desempate: Pts → DG → GP → Vitórias → Alfabético.
+          Critérios de desempate: Pts → SG → GP → Vitórias.
           Conduta (cartões) e Ranking FIFA não são simulados nos palpites.
         </p>
       </div>
