@@ -8,18 +8,37 @@ interface Props {
   rows: PageVisibilityRow[]
 }
 
+type RowState = Record<string, { show_for_admin: boolean; show_for_users: boolean }>
+
 export function PageVisibilityClient({ rows }: Props) {
   const [pending, startTransition] = useTransition()
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [state, setState] = useState<RowState>(() =>
+    Object.fromEntries(rows.map(r => [r.page_name, {
+      show_for_admin: r.show_for_admin,
+      show_for_users: r.show_for_users,
+    }]))
+  )
 
   function handleChange(
     pageName: string,
     field: 'show_for_admin' | 'show_for_users',
     value: boolean,
   ) {
+    // Optimistic update
+    setState(prev => ({
+      ...prev,
+      [pageName]: { ...prev[pageName], [field]: value },
+    }))
+
     startTransition(async () => {
       const result = await updatePageVisibility(pageName, field, value)
       if (result.error) {
+        // Rollback
+        setState(prev => ({
+          ...prev,
+          [pageName]: { ...prev[pageName], [field]: !value },
+        }))
         setErrors(prev => ({ ...prev, [`${pageName}-${field}`]: result.error! }))
       } else {
         setErrors(prev => {
@@ -42,27 +61,30 @@ export function PageVisibilityClient({ rows }: Props) {
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
-          {rows.map(row => (
-            <tr key={row.page_name} className="hover:bg-gray-50 transition">
-              <td className="px-4 py-3 font-medium text-gray-800">{row.label}</td>
-              <td className="px-4 py-3 text-center">
-                <Checkbox
-                  checked={row.show_for_admin}
-                  disabled={pending}
-                  onChange={v => handleChange(row.page_name, 'show_for_admin', v)}
-                  error={errors[`${row.page_name}-show_for_admin`]}
-                />
-              </td>
-              <td className="px-4 py-3 text-center">
-                <Checkbox
-                  checked={row.show_for_users}
-                  disabled={pending}
-                  onChange={v => handleChange(row.page_name, 'show_for_users', v)}
-                  error={errors[`${row.page_name}-show_for_users`]}
-                />
-              </td>
-            </tr>
-          ))}
+          {rows.map(row => {
+            const cur = state[row.page_name] ?? { show_for_admin: row.show_for_admin, show_for_users: row.show_for_users }
+            return (
+              <tr key={row.page_name} className="hover:bg-gray-50 transition">
+                <td className="px-4 py-3 font-medium text-gray-800">{row.label}</td>
+                <td className="px-4 py-3 text-center">
+                  <Checkbox
+                    checked={cur.show_for_admin}
+                    disabled={pending}
+                    onChange={v => handleChange(row.page_name, 'show_for_admin', v)}
+                    error={errors[`${row.page_name}-show_for_admin`]}
+                  />
+                </td>
+                <td className="px-4 py-3 text-center">
+                  <Checkbox
+                    checked={cur.show_for_users}
+                    disabled={pending}
+                    onChange={v => handleChange(row.page_name, 'show_for_users', v)}
+                    error={errors[`${row.page_name}-show_for_users`]}
+                  />
+                </td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
       {pending && (
