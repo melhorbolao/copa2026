@@ -59,7 +59,7 @@ export function SidebarLinks({ isAdmin, firstDeadlinePassed }: Props) {
           }`}
         >
           {viewMode === 'admin' ? <ShieldIcon /> : <UserIcon />}
-          {viewMode === 'admin' ? 'Visão admin' : 'Modo usuário'}
+          {viewMode === 'admin' ? 'Modo admin' : 'Modo usuário'}
         </button>
       )}
     </div>
