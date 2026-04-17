@@ -239,9 +239,10 @@ export const MatchScoreRow = memo(function MatchScoreRow({ match, canEdit, teamO
       {/* Linha de pênaltis — empate em mata-mata */}
       {showPenalty && (
         <tr className={`border-b border-gray-100 ${rowBg}`}>
-          <td colSpan={5} className="pb-2 pt-0 pl-4 sm:pl-6">
-            <div className="flex items-center gap-3 text-xs">
-              <span className="font-semibold text-amber-700">🥅 Pênaltis:</span>
+          <td />
+          <td colSpan={3} className="pb-2 pt-0 px-1">
+            <div className="flex items-center justify-center gap-2 text-xs">
+              <span className="font-semibold text-amber-700">🥅</span>
               {[teamHome, teamAway].map(team => {
                 const isWinner = match.penalty_winner === team
                 return (
@@ -266,6 +267,7 @@ export const MatchScoreRow = memo(function MatchScoreRow({ match, canEdit, teamO
               )}
             </div>
           </td>
+          <td className="hidden sm:table-cell" />
         </tr>
       )}
     </>
