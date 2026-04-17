@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createClient, createAuthAdminClient } from '@/lib/supabase/server'
 
 export async function updatePageVisibility(
   pageName: string,
@@ -16,9 +16,8 @@ export async function updatePageVisibility(
     .from('users').select('is_admin').eq('id', user.id).single()
   if (!profile?.is_admin) return { error: 'Sem permissão' }
 
-  const admin = await createAdminClient()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (admin as any)
+  const { error } = await (createAuthAdminClient() as any)
     .from('page_visibility')
     .update({ [field]: value })
     .eq('page_name', pageName)
