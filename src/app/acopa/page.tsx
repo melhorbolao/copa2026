@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getActiveParticipantId } from '@/lib/participant'
 import { Navbar } from '@/components/layout/Navbar'
 import { ACopaClient } from './ACopaClient'
+import { RecalcButton } from './RecalcButton'
 
 export const metadata = { title: 'A Copa · Melhor Bolão' }
 
@@ -61,6 +62,8 @@ export default async function ACopaPage() {
             Fora desse intervalo, apenas administradores podem corrigir.
           </p>
         </div>
+
+        <RecalcButton />
 
         <ACopaClient
           initialMatches={matches}
