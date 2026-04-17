@@ -24,7 +24,7 @@ interface Props {
   groupName: string
   teams: Team[]
   deadline: string
-  existingBet: { first_place: string; second_place: string } | null
+  existingBet: { first_place: string; second_place: string; points?: number | null } | null
   calculatedTop?: { first: string; second: string; third: string; tiedTeams: string[] }
   /** participantId — usado para ler a ordem manual salva no localStorage (mesma chave do GroupCard) */
   userId: string
@@ -145,6 +145,7 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
                     🥈 {existingBet.second_place}
                     {((!!calcSecond && existingBet.second_place !== calcSecond) || (!!manualSecond && existingBet.second_place !== manualSecond)) && <ConflictDot />}
                   </span>
+                  <GroupPointsBadge points={existingBet.points} />
                 </>
               ) : (
                 <span className="text-xs text-gray-300">—</span>
@@ -218,4 +219,11 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
       </td>
     </tr>
   )
+}
+
+function GroupPointsBadge({ points }: { points: number | null | undefined }) {
+  if (points === undefined) return null
+  if (points === null) return <span className="text-xs text-gray-300">⌛</span>
+  if (points > 0) return <span className="text-xs font-bold text-verde-600">+{points} pts</span>
+  return <span className="text-xs text-gray-400">0 pts</span>
 }

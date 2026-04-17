@@ -6,7 +6,7 @@ import { Combobox } from '@/components/ui/Combobox'
 import { isDeadlinePassed, formatBrasilia } from '@/utils/date'
 
 interface Team { team: string; flag: string }
-interface TBet { champion: string; runner_up: string; semi1: string; semi2: string; top_scorer: string }
+interface TBet { champion: string; runner_up: string; semi1: string; semi2: string; top_scorer: string; points?: number | null }
 
 const EMPTY: TBet = { champion: '', runner_up: '', semi1: '', semi2: '', top_scorer: '' }
 
@@ -87,9 +87,18 @@ export function TournamentSection({ allTeams, deadline, existingBet, scorerMappi
   if (deadlinePassed) {
     return (
       <div className="border-t-4 border-azul-escuro bg-white">
-        <div className="flex items-center gap-3 bg-gray-900 px-4 py-2.5">
-          <span className="text-sm font-black uppercase tracking-widest text-white">🏆 Bônus G4 e Artilheiro</span>
-          <span className="rounded-full bg-gray-700 px-2 py-0.5 text-xs text-gray-300">🔒 encerrado</span>
+        <div className="flex items-center justify-between gap-3 bg-gray-900 px-4 py-2.5">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-black uppercase tracking-widest text-white">🏆 Bônus G4 e Artilheiro</span>
+            <span className="rounded-full bg-gray-700 px-2 py-0.5 text-xs text-gray-300">🔒 encerrado</span>
+          </div>
+          {existingBet && existingBet.points !== undefined && (
+            existingBet.points === null
+              ? <span className="text-xs text-gray-400">⌛</span>
+              : existingBet.points > 0
+                ? <span className="text-xs font-bold text-verde-400">+{existingBet.points} pts</span>
+                : <span className="text-xs text-gray-500">0 pts</span>
+          )}
         </div>
         {existingBet ? (
           <div className="grid grid-cols-2 gap-0 divide-x divide-y divide-gray-100 sm:grid-cols-3 lg:grid-cols-5">

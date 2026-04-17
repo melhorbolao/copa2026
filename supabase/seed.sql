@@ -25,9 +25,9 @@ VALUES
 ( 1,'group','A',1,'México',          'África do Sul',  'mx','za', '2026-06-11 20:00+00','Cidade do México', '2026-06-11 19:30+00',false),
 ( 2,'group','A',1,'Coreia do Sul',   'Rep. Tcheca',    'kr','cz', '2026-06-11 23:00+00','Guadalajara',      '2026-06-11 22:30+00',false),
 
--- ── Grupo B  (Canadá · Qatar · Suíça · Bósnia-Herzegovina)
+-- ── Grupo B  (Canadá · Qatar · Suíça · Bósnia)
 ( 3,'group','B',1,'Canadá',          'Qatar',          'ca','qa', '2026-06-12 17:00+00','Toronto',          '2026-06-12 16:30+00',false),
-( 4,'group','B',1,'Suíça',           'Bósnia-Herz.',   'ch','ba', '2026-06-12 20:00+00','São Francisco',    '2026-06-12 19:30+00',false),
+( 4,'group','B',1,'Suíça',           'Bósnia',   'ch','ba', '2026-06-12 20:00+00','São Francisco',    '2026-06-12 19:30+00',false),
 
 -- ── Grupo C  (Brasil · Marrocos · Haiti · Escócia)
 ( 5,'group','C',1,'Brasil',          'Marrocos',       'br','ma', '2026-06-13 20:00+00','Nova York',        '2026-06-13 19:30+00',true ),
@@ -79,7 +79,7 @@ VALUES
 
 -- ── Grupo B
 (27,'group','B',2,'Canadá',          'Suíça',          'ca','ch', '2026-06-18 17:00+00','Vancouver',        '2026-06-18 16:30+00',false),
-(28,'group','B',2,'Qatar',           'Bósnia-Herz.',   'qa','ba', '2026-06-18 20:00+00','Los Angeles',      '2026-06-18 19:30+00',false),
+(28,'group','B',2,'Qatar',           'Bósnia',   'qa','ba', '2026-06-18 20:00+00','Los Angeles',      '2026-06-18 19:30+00',false),
 
 -- ── Grupo C
 (29,'group','C',2,'Brasil',          'Haiti',          'br','ht', '2026-06-18 23:00+00','Filadélfia',       '2026-06-18 22:30+00',true ),
@@ -131,7 +131,7 @@ VALUES
 (50,'group','A',3,'África do Sul',   'Coreia do Sul',  'za','kr', '2026-06-23 20:00+00','Monterrey',        '2026-06-23 19:30+00',false),
 
 -- ── Grupo B (23 jun, 23:00 UTC)
-(51,'group','B',3,'Canadá',          'Bósnia-Herz.',   'ca','ba', '2026-06-23 23:00+00','Toronto',          '2026-06-23 22:30+00',false),
+(51,'group','B',3,'Canadá',          'Bósnia',   'ca','ba', '2026-06-23 23:00+00','Toronto',          '2026-06-23 22:30+00',false),
 (52,'group','B',3,'Qatar',           'Suíça',          'qa','ch', '2026-06-23 23:00+00','Vancouver',        '2026-06-23 22:30+00',false),
 
 -- ── Grupo C (24 jun, 20:00 UTC) ★ Brasil
