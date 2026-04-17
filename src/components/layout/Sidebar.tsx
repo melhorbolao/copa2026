@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { SidebarLinks } from './SidebarLinks'
 import { ParticipantSelector } from './ParticipantSelector'
 import { getActiveParticipantId, getUserParticipants } from '@/lib/participant'
+import { getPageVisibility } from '@/lib/page-visibility'
 
 export async function Sidebar() {
   const supabase = await createClient()
@@ -13,27 +14,17 @@ export async function Sidebar() {
   let profile = null
   let participants: Awaited<ReturnType<typeof getUserParticipants>> = []
 
-  const [{ data }, activeId] = await Promise.all([
-    supabase.from('users').select('name, is_admin').eq('id', user.id).single(),
-    getActiveParticipantId(supabase, user.id).catch(() => null),
+  const [[{ data }, activeId], visibility] = await Promise.all([
+    Promise.all([
+      supabase.from('users').select('name, is_admin').eq('id', user.id).single(),
+      getActiveParticipantId(supabase, user.id).catch(() => null),
+    ]),
+    getPageVisibility(),
   ])
   profile = data
   if (activeId) {
     participants = await getUserParticipants(supabase, user.id, activeId).catch(() => [])
   }
-
-  const { data: r1Match } = await supabase
-    .from('matches')
-    .select('betting_deadline')
-    .eq('phase', 'group')
-    .eq('round', 1)
-    .order('betting_deadline', { ascending: true })
-    .limit(1)
-    .single()
-
-  const firstDeadlinePassed = r1Match
-    ? new Date() > new Date(r1Match.betting_deadline)
-    : false
 
   return (
     <aside className="fixed left-0 top-0 hidden h-screen w-56 flex-col bg-verde-600 sm:flex">
@@ -64,7 +55,7 @@ export async function Sidebar() {
       <nav className="flex-1 overflow-y-auto py-2">
         <SidebarLinks
           isAdmin={profile?.is_admin ?? false}
-          firstDeadlinePassed={firstDeadlinePassed}
+          visibility={visibility}
         />
       </nav>
 

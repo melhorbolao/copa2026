@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { formatBrasilia } from '@/utils/date'
 import { Countdown } from '@/app/palpites/Countdown'
@@ -25,6 +26,13 @@ const STAGE_LABELS: Record<StageKey, string> = {
 
 export default async function ControlePage() {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  let isAdmin = false
+  if (user) {
+    const { data: p } = await supabase.from('users').select('is_admin').eq('id', user.id).single()
+    isAdmin = p?.is_admin ?? false
+  }
+  await requirePageAccess('participantes', isAdmin)
 
   const [
     { data: participants },

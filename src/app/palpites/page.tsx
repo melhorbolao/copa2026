@@ -4,6 +4,7 @@ import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getActiveParticipantId } from '@/lib/participant'
+import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { MatchBetRow } from './MatchBetRow'
 import { GroupBetRow } from './GroupBetRow'
@@ -61,6 +62,9 @@ export default async function PalpitesPage({
   if (!user) redirect('/login')
   const participantId = await getActiveParticipantId(supabase, user.id).catch(() => null)
   if (!participantId) redirect('/aguardando-aprovacao')
+
+  const { data: userProfile } = await supabase.from('users').select('is_admin').eq('id', user.id).single()
+  await requirePageAccess('palpites', userProfile?.is_admin ?? false)
 
   const [{ data: matches }, { data: bets }, { data: groupBets }, { data: tBet }, { data: thirdBets }, scorerMappingsRaw] = await Promise.all([
     supabase.from('matches').select('id, match_number, phase, group_name, round, team_home, team_away, flag_home, flag_away, match_datetime, city, betting_deadline, score_home, score_away, is_brazil').order('match_datetime', { ascending: true }),

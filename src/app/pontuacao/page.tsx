@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { ScoringTable } from './ScoringTable'
 import { ScoreSimulator } from './ScoreSimulator'
@@ -23,6 +24,7 @@ export default async function PontuacaoPage() {
       .from('users').select('is_admin').eq('id', user.id).single()
     isAdmin = profile?.is_admin ?? false
   }
+  await requirePageAccess('pontuacao', isAdmin)
 
   return (
     <>

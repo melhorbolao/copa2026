@@ -3,29 +3,25 @@
 import Link from 'next/link'
 import { useState } from 'react'
 import { useAdminView } from '@/contexts/AdminViewContext'
+import type { PageVisibilityRow } from '@/lib/page-visibility'
 
 interface Props {
   isAdmin: boolean
-  firstDeadlinePassed: boolean
+  visibility: PageVisibilityRow[]
 }
 
-export function NavbarLinks({ isAdmin, firstDeadlinePassed }: Props) {
+export function NavbarLinks({ isAdmin, visibility }: Props) {
   const { viewMode, toggle } = useAdminView()
   const [open, setOpen] = useState(false)
 
-  // Admin efetivo: é admin E está no modo admin
   const effectiveAdmin = isAdmin && viewMode === 'admin'
-  // Ranking: libera após prazo R1 ou se admin em modo admin
-  const showAll = effectiveAdmin || firstDeadlinePassed
+
+  const visiblePages = visibility.filter(row =>
+    effectiveAdmin ? row.show_for_admin : row.show_for_users
+  )
 
   const links = [
-    { href: '/palpites',      label: 'Meus Palpites' },
-    { href: '/tabela',        label: 'Minha Tabela'  },
-    ...(effectiveAdmin ? [{ href: '/acopa', label: 'A Copa' }] : []),
-    ...(showAll ? [{ href: '/classificacao', label: 'Ranking' }] : []),
-    { href: '/participantes', label: 'Participantes' },
-    { href: '/pontuacao',     label: 'Pontuação'     },
-    { href: '/regulamento',   label: 'Regulamento'   },
+    ...visiblePages.map(row => ({ href: `/${row.page_name}`, label: row.label })),
     ...(effectiveAdmin ? [{ href: '/admin', label: 'Admin', highlight: true }] : []),
   ]
 
@@ -34,7 +30,7 @@ export function NavbarLinks({ isAdmin, firstDeadlinePassed }: Props) {
       {/* ── Desktop: links em linha ── */}
       <div className="hidden items-center gap-1 text-sm sm:flex">
         {links.map(l => (
-          <NavLink key={l.href} href={l.href} highlight={l.highlight}>
+          <NavLink key={l.href} href={l.href} highlight={(l as { highlight?: boolean }).highlight}>
             {l.label}
           </NavLink>
         ))}
@@ -82,7 +78,7 @@ export function NavbarLinks({ isAdmin, firstDeadlinePassed }: Props) {
                   href={l.href}
                   onClick={() => setOpen(false)}
                   className={`block px-4 py-3 text-sm font-medium transition hover:bg-white/10 ${
-                    l.highlight ? 'font-bold text-amarelo-300' : 'text-white/90'
+                    (l as { highlight?: boolean }).highlight ? 'font-bold text-amarelo-300' : 'text-white/90'
                   }`}
                 >
                   {l.label}

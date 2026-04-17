@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getActiveParticipantId } from '@/lib/participant'
+import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { ACopaClient } from './ACopaClient'
 import { RecalcButton } from '@/components/admin/RecalcButton'
@@ -24,7 +25,7 @@ export default async function ACopaPage() {
     .single()
 
   const isAdmin = profile?.is_admin ?? false
-  if (!isAdmin) redirect('/')
+  await requirePageAccess('acopa', isAdmin)
 
   const [{ data: rawMatches }, settingRow, mappings] = await Promise.all([
     supabase

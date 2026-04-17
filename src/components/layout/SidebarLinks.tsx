@@ -3,27 +3,25 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAdminView } from '@/contexts/AdminViewContext'
+import type { PageVisibilityRow } from '@/lib/page-visibility'
 
 interface Props {
   isAdmin: boolean
-  firstDeadlinePassed: boolean
+  visibility: PageVisibilityRow[]
 }
 
-export function SidebarLinks({ isAdmin, firstDeadlinePassed }: Props) {
+export function SidebarLinks({ isAdmin, visibility }: Props) {
   const pathname = usePathname()
   const { viewMode, toggle } = useAdminView()
 
   const effectiveAdmin = isAdmin && viewMode === 'admin'
-  const showAll = effectiveAdmin || firstDeadlinePassed
+
+  const visiblePages = visibility.filter(row =>
+    effectiveAdmin ? row.show_for_admin : row.show_for_users
+  )
 
   const links = [
-    { href: '/palpites',      label: 'Meus Palpites' },
-    { href: '/tabela',        label: 'Minha Tabela'  },
-    ...(effectiveAdmin ? [{ href: '/acopa',          label: 'A Copa'       }] : []),
-    ...(showAll         ? [{ href: '/classificacao',  label: 'Ranking'      }] : []),
-    { href: '/participantes', label: 'Participantes' },
-    { href: '/pontuacao',     label: 'Pontuação'     },
-    { href: '/regulamento',   label: 'Regulamento'   },
+    ...visiblePages.map(row => ({ href: `/${row.page_name}`, label: row.label })),
     ...(effectiveAdmin ? [{ href: '/admin', label: 'Admin', highlight: true }] : []),
   ]
 
@@ -38,7 +36,7 @@ export function SidebarLinks({ isAdmin, firstDeadlinePassed }: Props) {
             className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
               active
                 ? 'bg-white/20 text-white'
-                : l.highlight
+                : (l as { highlight?: boolean }).highlight
                   ? 'font-bold text-amarelo-300 hover:bg-white/10'
                   : 'text-white/80 hover:bg-white/10 hover:text-white'
             }`}

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getActiveParticipantId } from '@/lib/participant'
+import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { TabelaClient } from './TabelaClient'
 import { calcGroupStandings } from '@/lib/bracket/engine'
@@ -14,6 +15,9 @@ export default async function TabelaPage() {
   if (!user) redirect('/login')
   const participantId = await getActiveParticipantId(supabase, user.id).catch(() => null)
   if (!participantId) redirect('/aguardando-aprovacao')
+
+  const { data: userProfile } = await supabase.from('users').select('is_admin').eq('id', user.id).single()
+  await requirePageAccess('tabela', userProfile?.is_admin ?? false)
 
   const [{ data: rawMatches }, { data: rawBets }, { data: tBet }, { data: rawGroupBets }, { data: rawThirdBets }] = await Promise.all([
     supabase

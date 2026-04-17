@@ -1,3 +1,5 @@
+import { createClient } from '@/lib/supabase/server'
+import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { RegulamentoContent } from './RegulamentoContent'
 
@@ -179,7 +181,16 @@ Os prazos são sempre às **23:59 (horário de Brasília)**. Na fase de grupos h
 - O participante é responsável por enviar seus palpites dentro do prazo.
 `
 
-export default function RegulamentoPage() {
+export default async function RegulamentoPage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  let isAdmin = false
+  if (user) {
+    const { data: p } = await supabase.from('users').select('is_admin').eq('id', user.id).single()
+    isAdmin = p?.is_admin ?? false
+  }
+  await requirePageAccess('regulamento', isAdmin)
+
   return (
     <>
       <Navbar />

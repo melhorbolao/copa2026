@@ -4,6 +4,7 @@ import { NavbarLinks } from './NavbarLinks'
 import { ParticipantSelector } from './ParticipantSelector'
 import { AlertBannerWrapper } from '@/components/AlertBannerWrapper'
 import { getActiveParticipantId, getUserParticipants } from '@/lib/participant'
+import { getPageVisibility } from '@/lib/page-visibility'
 
 export async function Navbar() {
   const supabase = await createClient()
@@ -11,6 +12,7 @@ export async function Navbar() {
 
   let profile = null
   let participants: Awaited<ReturnType<typeof getUserParticipants>> = []
+  let visibility = await getPageVisibility()
 
   if (user) {
     const [{ data }, activeId] = await Promise.all([
@@ -22,20 +24,6 @@ export async function Navbar() {
       participants = await getUserParticipants(supabase, user.id, activeId).catch(() => [])
     }
   }
-
-  // Prazo da Rodada 1 — abas extras só aparecem após ele vencer
-  const { data: r1Match } = await supabase
-    .from('matches')
-    .select('betting_deadline')
-    .eq('phase', 'group')
-    .eq('round', 1)
-    .order('betting_deadline', { ascending: true })
-    .limit(1)
-    .single()
-
-  const firstDeadlinePassed = r1Match
-    ? new Date() > new Date(r1Match.betting_deadline)
-    : false
 
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-verde-600 shadow-sm sm:hidden">
@@ -57,7 +45,7 @@ export async function Navbar() {
         {user && (
           <NavbarLinks
             isAdmin={profile?.is_admin ?? false}
-            firstDeadlinePassed={firstDeadlinePassed}
+            visibility={visibility}
           />
         )}
 
