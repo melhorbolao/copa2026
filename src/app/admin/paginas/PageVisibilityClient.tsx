@@ -1,14 +1,14 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { updatePageVisibility } from './actions'
+import { useState, useTransition, useRef } from 'react'
+import { updatePageVisibility, updatePageLabel } from './actions'
 import type { PageVisibilityRow } from '@/lib/page-visibility'
 
 interface Props {
   rows: PageVisibilityRow[]
 }
 
-type RowState = Record<string, { show_for_admin: boolean; show_for_users: boolean }>
+type RowState = Record<string, { show_for_admin: boolean; show_for_users: boolean; label: string }>
 
 export function PageVisibilityClient({ rows }: Props) {
   const [pending, startTransition] = useTransition()
@@ -17,8 +17,25 @@ export function PageVisibilityClient({ rows }: Props) {
     Object.fromEntries(rows.map(r => [r.page_name, {
       show_for_admin: r.show_for_admin,
       show_for_users: r.show_for_users,
+      label: r.label,
     }]))
   )
+  const labelTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  function handleLabelChange(pageName: string, value: string) {
+    setState(prev => ({ ...prev, [pageName]: { ...prev[pageName], label: value } }))
+    clearTimeout(labelTimers.current[pageName])
+    labelTimers.current[pageName] = setTimeout(() => {
+      startTransition(async () => {
+        const result = await updatePageLabel(pageName, value)
+        if (result.error) {
+          setErrors(prev => ({ ...prev, [`${pageName}-label`]: result.error! }))
+        } else {
+          setErrors(prev => { const next = { ...prev }; delete next[`${pageName}-label`]; return next })
+        }
+      })
+    }, 600)
+  }
 
   function handleChange(
     pageName: string,
@@ -62,10 +79,20 @@ export function PageVisibilityClient({ rows }: Props) {
         </thead>
         <tbody className="divide-y divide-gray-100">
           {rows.map(row => {
-            const cur = state[row.page_name] ?? { show_for_admin: row.show_for_admin, show_for_users: row.show_for_users }
+            const cur = state[row.page_name] ?? { show_for_admin: row.show_for_admin, show_for_users: row.show_for_users, label: row.label }
             return (
               <tr key={row.page_name} className="hover:bg-gray-50 transition">
-                <td className="px-4 py-3 font-medium text-gray-800">{row.label}</td>
+                <td className="px-4 py-3">
+                  <input
+                    type="text"
+                    value={cur.label}
+                    onChange={e => handleLabelChange(row.page_name, e.target.value)}
+                    className="rounded border border-gray-200 px-2 py-1 text-sm font-medium text-gray-800 focus:border-verde-400 focus:outline-none w-full max-w-[160px]"
+                  />
+                  {errors[`${row.page_name}-label`] && (
+                    <p className="mt-0.5 text-xs text-red-500">{errors[`${row.page_name}-label`]}</p>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-center">
                   <Checkbox
                     checked={cur.show_for_admin}

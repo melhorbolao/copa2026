@@ -1,13 +1,14 @@
 export const dynamic = 'force-dynamic'
 
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAuthAdminClient } from '@/lib/supabase/server'
 import { getActiveParticipantId } from '@/lib/participant'
 import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
-import { RankingTable } from './RankingTable'
+import { TabelaMBClient } from './TabelaMBClient'
+import type { MatchFull, Participant, BetRaw } from './TabelaMBClient'
 
-export const metadata = { title: 'Classificação' }
+export const metadata = { title: 'Tabela MB' }
 
 export default async function ClassificacaoPage() {
   const supabase = await createClient()
@@ -22,46 +23,34 @@ export default async function ClassificacaoPage() {
   const activeParticipantId = await getActiveParticipantId(supabase, user.id).catch(() => null)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: rows } = await (supabase as any)
-    .from('participant_scores')
-    .select('participant_id, pts_matches, pts_groups, pts_thirds, pts_tournament, pts_total, participants(apelido)')
-    .order('pts_total', { ascending: false })
+  const admin = createAuthAdminClient() as any
 
-  type RawRow = {
-    participant_id: string
-    pts_matches: number
-    pts_groups: number
-    pts_thirds: number
-    pts_tournament: number
-    pts_total: number
-    participants: { apelido: string } | null
-  }
+  const [matchesRes, participantsRes, betsRes, rulesRes] = await Promise.all([
+    supabase.from('matches')
+      .select('id, match_number, phase, group_name, round, team_home, team_away, flag_home, flag_away, match_datetime, city, score_home, score_away, penalty_winner, is_brazil, betting_deadline')
+      .order('match_number', { ascending: true }),
+    supabase.from('participants')
+      .select('id, apelido')
+      .order('apelido', { ascending: true }),
+    admin.from('bets').select('participant_id, match_id, score_home, score_away, points'),
+    supabase.from('scoring_rules').select('key, points'),
+  ])
 
-  const entries = ((rows ?? []) as RawRow[]).map((r, i, arr) => ({
-    participant_id: r.participant_id,
-    apelido: r.participants?.apelido ?? '—',
-    pts_total: r.pts_total ?? 0,
-    pts_matches: r.pts_matches ?? 0,
-    pts_groups: r.pts_groups ?? 0,
-    pts_thirds: r.pts_thirds ?? 0,
-    pts_tournament: r.pts_tournament ?? 0,
-    position: i + 1,
-    tied: i > 0 && (arr[i - 1].pts_total ?? 0) === (r.pts_total ?? 0),
-  }))
+  const rulesMap: Record<string, number> = Object.fromEntries(
+    (rulesRes.data ?? []).map((r: { key: string; points: number }) => [r.key, r.points])
+  )
 
   return (
     <>
       <Navbar />
-      <div className="mx-auto max-w-3xl px-4 py-8">
-        <div className="mb-6">
-          <h1 className="text-2xl font-black text-gray-900">Classificação</h1>
-          <p className="mt-0.5 text-sm text-gray-500">
-            {entries.length} participante{entries.length !== 1 ? 's' : ''} · pontuação acumulada
-          </p>
-        </div>
-
-        <RankingTable entries={entries} activeParticipantId={activeParticipantId ?? ''} />
-      </div>
+      <TabelaMBClient
+        initialMatches={(matchesRes.data ?? []) as MatchFull[]}
+        participants={(participantsRes.data ?? []) as Participant[]}
+        initialBets={(betsRes.data ?? []) as BetRaw[]}
+        rules={rulesMap}
+        isAdmin={isAdmin}
+        activeParticipantId={activeParticipantId ?? ''}
+      />
     </>
   )
 }
