@@ -7,9 +7,10 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { createClient } from '@/lib/supabase/client'
 import { saveOfficialScore } from '@/app/acopa/actions'
 import { scoreMatchBet, detectMatchZebra, getMatchResult } from '@/lib/scoring/engine'
-import { calcGroupStandings, rankThirds } from '@/lib/bracket/engine'
+import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, R32_MATCHES } from '@/lib/bracket/engine'
 import type { RuleMap } from '@/lib/scoring/engine'
 import type { MatchSlim, BetSlim } from '@/lib/bracket/engine'
+import type { R32Slot } from '@/app/tabela/BracketView'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -152,6 +153,92 @@ function thirdCellKind(
 
 const abbr = (name: string, max = 7) =>
   name.length <= max ? name : name.slice(0, max - 1) + '…'
+
+// ── Knockout team resolution ───────────────────────────────────────────────────
+
+type TeamOverride = { team_home: string; flag_home: string; team_away: string; flag_away: string }
+
+function buildKnockoutTeamMap(r32Slots: R32Slot[], knockoutMatches: MatchFull[]): Map<string, TeamOverride> {
+  const map = new Map<string, TeamOverride>()
+  const byPhase = (phase: string) =>
+    knockoutMatches.filter(m => m.phase === phase).sort((a, b) => a.match_number - b.match_number)
+
+  const flagMap = new Map<string, string>()
+  for (const m of knockoutMatches) {
+    if (m.team_home && m.flag_home) flagMap.set(m.team_home, m.flag_home)
+    if (m.team_away && m.flag_away) flagMap.set(m.team_away, m.flag_away)
+  }
+  for (const s of r32Slots) {
+    if (s.teamA) flagMap.set(s.teamA.team, s.teamA.flag)
+    if (s.teamB) flagMap.set(s.teamB.team, s.teamB.flag)
+  }
+  const flag = (t: string | null) => (t ? (flagMap.get(t) ?? '') : '')
+
+  const winner = (m: MatchFull | undefined, a: string | null, b: string | null): string | null => {
+    if (!m || m.score_home === null || m.score_away === null) return null
+    if (m.score_home > m.score_away) return a
+    if (m.score_away > m.score_home) return b
+    return m.penalty_winner ?? null
+  }
+
+  const set = (m: MatchFull, a: string | null, b: string | null) => {
+    if (!a && !b) return
+    map.set(m.id, {
+      team_home: a ?? m.team_home, flag_home: flag(a) || m.flag_home,
+      team_away: b ?? m.team_away, flag_away: flag(b) || m.flag_away,
+    })
+  }
+
+  // R32
+  const r32DB = new Map(knockoutMatches.filter(m => m.phase === 'round_of_32').map(m => [m.match_number, m]))
+  const r32W: (string | null)[] = r32Slots.map((s, i) => {
+    const num = parseInt(R32_MATCHES[i]?.matchNum.slice(1) ?? '0', 10)
+    const db  = r32DB.get(num)
+    if (db) set(db, s.teamA?.team ?? null, s.teamB?.team ?? null)
+    return winner(db, s.teamA?.team ?? null, s.teamB?.team ?? null)
+  })
+
+  // R16
+  const r16DB = byPhase('round_of_16')
+  const r16W: (string | null)[] = r16DB.map((m, i) => {
+    const a = r32W[i * 2] ?? null, b = r32W[i * 2 + 1] ?? null
+    set(m, a, b)
+    return winner(m, a, b)
+  })
+
+  // QF
+  const qfDB = byPhase('quarterfinal')
+  const qfW: (string | null)[] = qfDB.map((m, i) => {
+    const a = r16W[i * 2] ?? null, b = r16W[i * 2 + 1] ?? null
+    set(m, a, b)
+    return winner(m, a, b)
+  })
+
+  // SF
+  const sfDB = byPhase('semifinal')
+  const sfW: (string | null)[] = sfDB.map((m, i) => {
+    const a = qfW[i * 2] ?? null, b = qfW[i * 2 + 1] ?? null
+    set(m, a, b)
+    return winner(m, a, b)
+  })
+
+  // Final
+  const finalM = knockoutMatches.find(m => m.phase === 'final')
+  if (finalM) set(finalM, sfW[0] ?? null, sfW[1] ?? null)
+
+  // 3º Lugar
+  const thirdM = knockoutMatches.find(m => m.phase === 'third_place')
+  if (thirdM) {
+    const loser = (i: number) => {
+      const w = sfW[i]; if (!w) return null
+      const a = qfW[i * 2] ?? null, b = qfW[i * 2 + 1] ?? null
+      return w === a ? b : a
+    }
+    set(thirdM, loser(0), loser(1))
+  }
+
+  return map
+}
 
 // ── ScoreInput ─────────────────────────────────────────────────────────────────
 
@@ -321,6 +408,14 @@ export function TabelaMBClient({
   }, [matches])
 
   const officialThirds = useMemo(() => rankThirds(officialStandings), [officialStandings])
+
+  const knockoutTeamMap = useMemo(() => {
+    const thirdSlots = resolveThirdSlots(officialThirds)
+    if (!thirdSlots) return new Map<string, TeamOverride>()
+    const r32Slots = buildR32Teams(officialStandings, officialThirds, thirdSlots) as R32Slot[]
+    const knockoutMatches = matches.filter(m => m.phase !== 'group')
+    return buildKnockoutTeamMap(r32Slots, knockoutMatches)
+  }, [officialStandings, officialThirds, matches])
 
   const offFirst  = useCallback((g: string) => officialStandings.find(s => s.group === g)?.teams[0]?.team ?? '', [officialStandings])
   const offSecond = useCallback((g: string) => officialStandings.find(s => s.group === g)?.teams[1]?.team ?? '', [officialStandings])
@@ -544,6 +639,9 @@ export function TabelaMBClient({
 
               // ── Match row ───────────────────────────────────────────────────
               const match = row.match
+              const ktOverride = knockoutTeamMap.get(match.id)
+              const teamHome = ktOverride?.team_home ?? match.team_home
+              const teamAway = ktOverride?.team_away ?? match.team_away
               return (
                 <tr key={match.id} style={{ height: ROW_H }}>
                   <td style={{ position: 'sticky', left: 0, zIndex: 30, background: bg, borderRight: '1px solid #f3f4f6' }}
@@ -556,9 +654,9 @@ export function TabelaMBClient({
                   <td style={{ position: 'sticky', left: COL_TEAMS_LEFT, zIndex: 30, background: bg, borderRight: '1px solid #f3f4f6' }}
                     className="px-1.5">
                     <div className="flex flex-col leading-none gap-px">
-                      <span className="truncate font-semibold text-gray-800" style={{ maxWidth: COL_TEAMS_W - 8 }}>{match.team_home}</span>
+                      <span className="truncate font-semibold text-gray-800" style={{ maxWidth: COL_TEAMS_W - 8 }}>{teamHome}</span>
                       <span className="text-[8px] text-gray-300">vs</span>
-                      <span className="truncate font-semibold text-gray-800" style={{ maxWidth: COL_TEAMS_W - 8 }}>{match.team_away}</span>
+                      <span className="truncate font-semibold text-gray-800" style={{ maxWidth: COL_TEAMS_W - 8 }}>{teamAway}</span>
                     </div>
                   </td>
                   <td style={{ position: 'sticky', left: COL_SCORE_LEFT, zIndex: 30, background: bg, borderRight: '2px solid #d1d5db' }}
