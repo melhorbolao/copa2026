@@ -6,7 +6,7 @@ import { getActiveParticipantId } from '@/lib/participant'
 import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { TabelaMBClient } from './TabelaMBClient'
-import type { MatchFull, Participant, BetRaw } from './TabelaMBClient'
+import type { MatchFull, Participant, BetRaw, GroupBetRaw, ThirdBetRaw } from './TabelaMBClient'
 
 export const metadata = { title: 'Tabela MB' }
 
@@ -25,7 +25,7 @@ export default async function ClassificacaoPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAuthAdminClient() as any
 
-  const [matchesRes, participantsRes, betsRes, rulesRes] = await Promise.all([
+  const [matchesRes, participantsRes, betsRes, rulesRes, groupBetsRes, thirdBetsRes, totalsRes] = await Promise.all([
     supabase.from('matches')
       .select('id, match_number, phase, group_name, round, team_home, team_away, flag_home, flag_away, match_datetime, city, score_home, score_away, penalty_winner, is_brazil, betting_deadline')
       .order('match_number', { ascending: true }),
@@ -34,10 +34,17 @@ export default async function ClassificacaoPage() {
       .order('apelido', { ascending: true }),
     admin.from('bets').select('participant_id, match_id, score_home, score_away, points'),
     supabase.from('scoring_rules').select('key, points'),
+    admin.from('group_bets').select('participant_id, group_name, first_place, second_place, points'),
+    admin.from('third_place_bets').select('participant_id, group_name, team, points'),
+    admin.from('participant_scores').select('participant_id, pts_total'),
   ])
 
   const rulesMap: Record<string, number> = Object.fromEntries(
     (rulesRes.data ?? []).map((r: { key: string; points: number }) => [r.key, r.points])
+  )
+
+  const participantTotals: Record<string, number> = Object.fromEntries(
+    (totalsRes.data ?? []).map((r: { participant_id: string; pts_total: number }) => [r.participant_id, r.pts_total])
   )
 
   return (
@@ -47,6 +54,9 @@ export default async function ClassificacaoPage() {
         initialMatches={(matchesRes.data ?? []) as MatchFull[]}
         participants={(participantsRes.data ?? []) as Participant[]}
         initialBets={(betsRes.data ?? []) as BetRaw[]}
+        initialGroupBets={(groupBetsRes.data ?? []) as GroupBetRaw[]}
+        initialThirdBets={(thirdBetsRes.data ?? []) as ThirdBetRaw[]}
+        participantTotals={participantTotals}
         rules={rulesMap}
         isAdmin={isAdmin}
         activeParticipantId={activeParticipantId ?? ''}
