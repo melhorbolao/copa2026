@@ -184,7 +184,7 @@ export async function deleteThirdPlaceBet(groupName: string) {
 }
 
 // ── Auto-preenchimento de classificados ──────────────────────
-export async function autoFillGroupBets(): Promise<{ thirdsCount: number }> {
+export async function autoFillGroupBets(): Promise<{ thirdsCount: number; tiedGroups: string[] }> {
   const { supabase, participantId } = await resolveParticipant()
   const admin = createAuthAdminClient()
 
@@ -220,6 +220,11 @@ export async function autoFillGroupBets(): Promise<{ thirdsCount: number }> {
   const standings = calcGroupStandings(matchRows as any, betMap)
   const thirds = rankThirds(standings)
 
+  // Grupos com empate na 3ª posição (time escolhido é arbitrário)
+  const tiedGroups: string[] = standings
+    .filter(s => s.tiedTeams.length > 0 && s.teams[2] && s.tiedTeams.includes(s.teams[2].team))
+    .map(s => s.group)
+
   for (const s of standings) {
     if (s.teams.length < 2) continue
     const { error } = await admin.from('group_bets').upsert(
@@ -249,7 +254,7 @@ export async function autoFillGroupBets(): Promise<{ thirdsCount: number }> {
     .insert(advancingThirds.map(t => ({ participant_id: participantId, group_name: t.group, team: t.team })))
   if (insertError) throw new Error(`Erro ao inserir terceiros: ${insertError.message}`)
 
-  return { thirdsCount: advancingThirds.length }
+  return { thirdsCount: advancingThirds.length, tiedGroups }
 }
 
 // ── Preencher G4 a partir do chaveamento ─────────────────────
