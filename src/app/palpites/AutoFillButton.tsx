@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { autoFillGroupBets } from './actions'
 
 interface Props {
@@ -9,9 +10,10 @@ interface Props {
 }
 
 export function AutoFillButton({ enabled, alreadyFilled }: Props) {
+  const router = useRouter()
   const [showConfirm, setShowConfirm] = useState(false)
   const [fillError, setFillError] = useState('')
-  const [result, setResult] = useState<{ thirdsCount: number; tiedGroups: string[] } | null>(null)
+  const [tiedGroups, setTiedGroups] = useState<string[]>([])
   const [pending, startTransition] = useTransition()
 
   function handleClick() {
@@ -25,13 +27,14 @@ export function AutoFillButton({ enabled, alreadyFilled }: Props) {
   function doFill() {
     setShowConfirm(false)
     setFillError('')
-    setResult(null)
+    setTiedGroups([])
     startTransition(async () => {
       try {
         const res = await autoFillGroupBets()
-        setResult(res)
-        // Reload para atualizar a página com os novos dados do servidor
-        window.location.reload()
+        if (res.tiedGroups.length > 0) {
+          setTiedGroups(res.tiedGroups)
+        }
+        router.refresh()
       } catch (e) {
         setFillError(e instanceof Error ? e.message : 'Erro ao preencher.')
       }
@@ -107,10 +110,10 @@ export function AutoFillButton({ enabled, alreadyFilled }: Props) {
           </div>
         )}
 
-        {/* Aviso de empate (mostrado brevemente antes do reload) */}
-        {result?.tiedGroups && result.tiedGroups.length > 0 && (
+        {/* Aviso de empate */}
+        {tiedGroups.length > 0 && (
           <p className="mt-2 text-xs text-amber-700 font-medium">
-            Atenção: empate na 3ª posição nos grupos {result.tiedGroups.join(', ')} — o time
+            Atenção: empate na 3ª posição nos grupos {tiedGroups.join(', ')} — o time
             escolhido foi arbitrário. Revise sua seleção de terceiros.
           </p>
         )}
