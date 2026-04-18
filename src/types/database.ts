@@ -415,6 +415,27 @@ export type Database = {
         }
         Relationships: []
       }
+      teams: {
+        Row: {
+          name: string
+          abbr_br: string
+          abbr_fifa: string
+          group_name: string
+        }
+        Insert: {
+          name: string
+          abbr_br?: string
+          abbr_fifa?: string
+          group_name: string
+        }
+        Update: {
+          name?: string
+          abbr_br?: string
+          abbr_fifa?: string
+          group_name?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -449,4 +470,5 @@ export type GroupBetRow      = Tables<'group_bets'>
 export type TournamentBetRow = Tables<'tournament_bets'>
 export type AdminAlertRow    = Tables<'admin_alerts'>
 export type ParticipantRow   = Tables<'participants'>
+export type TeamRow          = Tables<'teams'>
 export type UserParticipantRow = Tables<'user_participants'>

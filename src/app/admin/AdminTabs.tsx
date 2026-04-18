@@ -10,6 +10,7 @@ const tabs = [
   { href: '/admin/emails',        label: 'E-mails'       },
   { href: '/admin/avisos',        label: 'Avisos'        },
   { href: '/admin/artilheiros',   label: 'Artilheiros'   },
+  { href: '/admin/equipes',       label: 'Equipes'       },
   { href: '/admin/paginas',       label: 'Páginas'       },
 ]
 
