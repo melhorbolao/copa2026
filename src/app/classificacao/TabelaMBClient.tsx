@@ -591,8 +591,8 @@ export function TabelaMBClient({
                     <td style={{ position: 'sticky', left: colTeamsLeft, zIndex: 30, background: '#eff6ff', borderRight: '1px solid #bfdbfe' }}
                       className="px-1.5 text-[10px] font-semibold text-blue-600">
                       <div className="leading-none">
-                        <span className="block">🥇 {of1 ? abbr(of1) : '–'}</span>
-                        <span className="block">🥈 {of2 ? abbr(of2) : '–'}</span>
+                        <span className="block truncate" style={{ maxWidth: colTeamsW - 8 }}>🥇 {of1 || '–'}</span>
+                        <span className="block truncate" style={{ maxWidth: colTeamsW - 8 }}>🥈 {of2 || '–'}</span>
                       </div>
                     </td>
                     <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: '#eff6ff', borderRight: '2px solid #93c5fd' }}
@@ -608,7 +608,7 @@ export function TabelaMBClient({
                           {bet?.first_place ? (
                             <div className="flex flex-col items-center leading-none gap-px">
                               <span className="text-[9px] text-gray-600 truncate font-medium" style={{ maxWidth: PART_COL_W - 4 }}>
-                                {abbr(bet.first_place, 5)}/{abbr(bet.second_place, 5)}
+                                {(teamAbbrs[bet.first_place] ?? abbr(bet.first_place, 5))}/{(teamAbbrs[bet.second_place] ?? abbr(bet.second_place, 5))}
                               </span>
                               {bet.points !== null && (
                                 <span className={`text-[10px] font-bold ${bet.points > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>
@@ -634,7 +634,9 @@ export function TabelaMBClient({
                       className="text-center text-[9px] font-bold text-violet-600">3º<br/><span className="text-violet-400">{g}</span></td>
                     <td style={{ position: 'sticky', left: colTeamsLeft, zIndex: 30, background: '#faf5ff', borderRight: '1px solid #e9d5ff' }}
                       className="px-1.5 text-[10px] font-semibold text-violet-700">
-                      {ot ? abbr(ot) : <span className="text-gray-300">–</span>}
+                      <span className="block truncate" style={{ maxWidth: colTeamsW - 8 }}>
+                        {ot || <span className="text-gray-300">–</span>}
+                      </span>
                     </td>
                     <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: '#faf5ff', borderRight: '2px solid #c4b5fd' }}
                       className="text-center text-[10px] text-violet-600 font-semibold">
@@ -649,7 +651,7 @@ export function TabelaMBClient({
                           {bet?.team ? (
                             <div className="flex flex-col items-center leading-none gap-px">
                               <span className="text-[9px] text-gray-600 truncate font-medium" style={{ maxWidth: PART_COL_W - 4 }}>
-                                {abbr(bet.team)}
+                                {teamAbbrs[bet.team] ?? abbr(bet.team)}
                               </span>
                               {bet.points !== null && (
                                 <span className={`text-[10px] font-bold ${bet.points > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>
