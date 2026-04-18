@@ -6,7 +6,7 @@ import { getActiveParticipantId } from '@/lib/participant'
 import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { TabelaMBClient } from './TabelaMBClient'
-import type { MatchFull, Participant, BetRaw, GroupBetRaw, ThirdBetRaw } from './TabelaMBClient'
+import type { MatchFull, Participant, BetRaw, GroupBetRaw, ThirdBetRaw, TournamentBetRaw } from './TabelaMBClient'
 
 export const metadata = {}
 
@@ -25,7 +25,7 @@ export default async function ClassificacaoPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAuthAdminClient() as any
 
-  const [matchesRes, participantsRes, betsRes, rulesRes, groupBetsRes, thirdBetsRes, totalsRes] = await Promise.all([
+  const [matchesRes, participantsRes, betsRes, rulesRes, groupBetsRes, thirdBetsRes, totalsRes, tournamentBetsRes] = await Promise.all([
     supabase.from('matches')
       .select('id, match_number, phase, group_name, round, team_home, team_away, flag_home, flag_away, match_datetime, city, score_home, score_away, penalty_winner, is_brazil, betting_deadline')
       .order('match_number', { ascending: true }),
@@ -37,6 +37,7 @@ export default async function ClassificacaoPage() {
     admin.from('group_bets').select('participant_id, group_name, first_place, second_place, points'),
     admin.from('third_place_bets').select('participant_id, group_name, team'),
     admin.from('participant_scores').select('participant_id, pts_total'),
+    admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer, points'),
   ])
 
   const rulesMap: Record<string, number> = Object.fromEntries(
@@ -46,6 +47,24 @@ export default async function ClassificacaoPage() {
   const participantTotals: Record<string, number> = Object.fromEntries(
     (totalsRes.data ?? []).map((r: { participant_id: string; pts_total: number }) => [r.participant_id, r.pts_total])
   )
+
+  // Artilheiro oficial e mapeamento de nomes — tabelas opcionais
+  let officialTopScorers: string[] = []
+  let scorerMapping: Record<string, string> = {}
+  try {
+    const [scorerSetting, mappingRows] = await Promise.all([
+      admin.from('tournament_settings').select('value').eq('key', 'official_top_scorer').maybeSingle(),
+      admin.from('top_scorer_mapping').select('raw_name, standardized_name'),
+    ])
+    if (scorerSetting.data?.value) {
+      try { officialTopScorers = JSON.parse(scorerSetting.data.value) }
+      catch { officialTopScorers = [scorerSetting.data.value] }
+    }
+    if (mappingRows.data) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      scorerMapping = Object.fromEntries(mappingRows.data.map((m: any) => [m.raw_name, m.standardized_name]))
+    }
+  } catch { /* tabelas ainda não criadas */ }
 
   // Query separada para evitar crash se a tabela teams ainda não existir
   let teamAbbrs: Record<string, string> = {}
@@ -68,11 +87,14 @@ export default async function ClassificacaoPage() {
         initialBets={(betsRes.data ?? []) as BetRaw[]}
         initialGroupBets={(groupBetsRes.data ?? []) as GroupBetRaw[]}
         initialThirdBets={(thirdBetsRes.data ?? []) as ThirdBetRaw[]}
+        initialTournamentBets={(tournamentBetsRes.data ?? []) as TournamentBetRaw[]}
         participantTotals={participantTotals}
         rules={rulesMap}
         isAdmin={isAdmin}
         activeParticipantId={activeParticipantId ?? ''}
         teamAbbrs={teamAbbrs}
+        officialTopScorers={officialTopScorers}
+        scorerMapping={scorerMapping}
       />
     </>
   )
