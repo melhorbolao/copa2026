@@ -440,6 +440,15 @@ export function TabelaMBClient({
   const offSecond = useCallback((g: string) => officialStandings.find(s => s.group === g)?.teams[1]?.team ?? '', [officialStandings])
   const offThird  = useCallback((g: string) => officialThirds.find(t => t.group === g && t.advances)?.team ?? '', [officialThirds])
 
+  const teamFlagMap = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const match of matches) {
+      if (match.flag_home) m.set(match.team_home, match.flag_home)
+      if (match.flag_away) m.set(match.team_away, match.flag_away)
+    }
+    return m
+  }, [matches])
+
   const { viewMode } = useAdminView()
   const effectiveIsAdmin = isAdmin && viewMode === 'admin'
 
@@ -590,10 +599,27 @@ export function TabelaMBClient({
                       className="text-center font-bold text-blue-700 text-xs">{g}</td>
                     <td style={{ position: 'sticky', left: colTeamsLeft, zIndex: 30, background: '#eff6ff', borderRight: '1px solid #bfdbfe' }}
                       className="px-1.5 text-[10px] font-semibold text-blue-600">
-                      <div className="leading-none">
-                        <span className="block truncate" style={{ maxWidth: colTeamsW - 8 }}>🥇 {of1 || '–'}</span>
-                        <span className="block truncate" style={{ maxWidth: colTeamsW - 8 }}>🥈 {of2 || '–'}</span>
-                      </div>
+                      {isMobile ? (
+                        <div className="leading-none flex flex-col gap-0.5">
+                          {of1 ? (
+                            <div className="flex items-center gap-1">
+                              <Flag code={teamFlagMap.get(of1) ?? ''} size="sm" className="shrink-0 w-4 h-3 rounded-[1px]" />
+                              <span className="font-bold text-[10px]">{teamAbbrs[of1] ?? abbr(of1, 4)}</span>
+                            </div>
+                          ) : <span className="text-gray-300">–</span>}
+                          {of2 ? (
+                            <div className="flex items-center gap-1">
+                              <Flag code={teamFlagMap.get(of2) ?? ''} size="sm" className="shrink-0 w-4 h-3 rounded-[1px]" />
+                              <span className="font-bold text-[10px]">{teamAbbrs[of2] ?? abbr(of2, 4)}</span>
+                            </div>
+                          ) : <span className="text-gray-300">–</span>}
+                        </div>
+                      ) : (
+                        <div className="leading-none">
+                          <span className="block truncate" style={{ maxWidth: colTeamsW - 8 }}>🥇 {of1 || '–'}</span>
+                          <span className="block truncate" style={{ maxWidth: colTeamsW - 8 }}>🥈 {of2 || '–'}</span>
+                        </div>
+                      )}
                     </td>
                     <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: '#eff6ff', borderRight: '2px solid #93c5fd' }}
                       className="text-center text-[10px] font-semibold text-blue-800">
@@ -634,9 +660,18 @@ export function TabelaMBClient({
                       className="text-center text-[9px] font-bold text-violet-600">3º<br/><span className="text-violet-400">{g}</span></td>
                     <td style={{ position: 'sticky', left: colTeamsLeft, zIndex: 30, background: '#faf5ff', borderRight: '1px solid #e9d5ff' }}
                       className="px-1.5 text-[10px] font-semibold text-violet-700">
-                      <span className="block truncate" style={{ maxWidth: colTeamsW - 8 }}>
-                        {ot || <span className="text-gray-300">–</span>}
-                      </span>
+                      {isMobile ? (
+                        ot ? (
+                          <div className="flex items-center gap-1">
+                            <Flag code={teamFlagMap.get(ot) ?? ''} size="sm" className="shrink-0 w-4 h-3 rounded-[1px]" />
+                            <span className="font-bold text-[10px]">{teamAbbrs[ot] ?? abbr(ot, 4)}</span>
+                          </div>
+                        ) : <span className="text-gray-300">–</span>
+                      ) : (
+                        <span className="block truncate" style={{ maxWidth: colTeamsW - 8 }}>
+                          {ot || <span className="text-gray-300">–</span>}
+                        </span>
+                      )}
                     </td>
                     <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: '#faf5ff', borderRight: '2px solid #c4b5fd' }}
                       className="text-center text-[10px] text-violet-600 font-semibold">
