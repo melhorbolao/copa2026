@@ -8,7 +8,7 @@ import { Navbar } from '@/components/layout/Navbar'
 import { TabelaMBClient } from './TabelaMBClient'
 import type { MatchFull, Participant, BetRaw, GroupBetRaw, ThirdBetRaw } from './TabelaMBClient'
 
-export const metadata = { title: 'Tabela MB' }
+export const metadata = {}
 
 export default async function ClassificacaoPage() {
   const supabase = await createClient()

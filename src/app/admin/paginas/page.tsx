@@ -1,7 +1,7 @@
 import { getPageVisibility } from '@/lib/page-visibility'
 import { PageVisibilityClient } from './PageVisibilityClient'
 
-export const metadata = { title: 'Páginas — Admin' }
+export const metadata = {}
 
 export default async function PaginasAdminPage() {
   const rows = await getPageVisibility()

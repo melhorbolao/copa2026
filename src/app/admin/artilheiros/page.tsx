@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { ArtilheirosClient } from './ArtilheirosClient'
 
-export const metadata = { title: 'Artilheiros · Admin · Melhor Bolão' }
+export const metadata = {}
 
 export default async function ArtilheirosPage() {
   const admin = await createAdminClient()
