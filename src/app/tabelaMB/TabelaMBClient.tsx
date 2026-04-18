@@ -118,6 +118,15 @@ const CELL_BG: Record<CellKind, string> = {
   no_bet:  '',
 }
 
+// Hex equivalents used for sticky (frozen) cells that need an opaque inline background
+const CELL_KIND_BG_HEX: Record<CellKind, string> = {
+  exact:   '#d1fae5',
+  winner:  '#e0f2fe',
+  wrong:   '#fff1f2',
+  pending: '#ffffff',
+  no_bet:  '',      // caller must supply fallback row colour
+}
+
 function matchCellKind(
   bet: { score_home: number; score_away: number } | undefined,
   sh: number | null, sa: number | null,
@@ -494,6 +503,12 @@ export function TabelaMBClient({
   const colScoreLeft = colTeamsLeft + colTeamsW
   const frozenTotal  = colScoreLeft + COL_SCORE_W
 
+  // On desktop, the active participant's column is frozen right after Oficial
+  const activePart   = participants.find(p => p.id === activeParticipantId)
+  const otherParts   = participants.filter(p => p.id !== activeParticipantId)
+  const orderedParts = activePart ? [activePart, ...otherParts] : participants
+  const frozenPartLeft = !isMobile && activePart ? frozenTotal : null
+
   // Compute totals client-side so match livePoints + group + third bets are all included.
   // Third-place points are computed live (DB only stores them after all 72 group matches finish).
   const computedTotals = useMemo(() => {
@@ -561,7 +576,7 @@ export function TabelaMBClient({
             <col style={{ width: colDateW }} />
             <col style={{ width: colTeamsW }} />
             <col style={{ width: COL_SCORE_W }} />
-            {participants.map(p => <col key={p.id} style={{ width: PART_COL_W }} />)}
+            {orderedParts.map(p => <col key={p.id} style={{ width: PART_COL_W }} />)}
           </colgroup>
 
           {/* Header */}
@@ -573,12 +588,19 @@ export function TabelaMBClient({
                 className="text-left px-1.5 text-gray-300 font-semibold">Jogo</th>
               <th style={{ position: 'sticky', top: 0, left: colScoreLeft, zIndex: 50, background: '#1f2937', borderRight: '2px solid #6b7280' }}
                 className="text-center text-gray-200 font-semibold">Oficial</th>
-              {participants.map(p => {
+              {orderedParts.map((p, idx) => {
                 const isMe = p.id === activeParticipantId
+                const isFrozen = frozenPartLeft !== null && idx === 0
                 const total = computedTotals[p.id] ?? 0
                 return (
                   <th key={p.id} title={p.apelido}
-                    style={{ position: 'sticky', top: 0, zIndex: 40, background: isMe ? '#14532d' : '#1f2937', borderRight: '1px solid #374151' }}
+                    style={{
+                      position: 'sticky', top: 0,
+                      ...(isFrozen ? { left: frozenPartLeft, borderLeft: '2px solid #6b7280' } : {}),
+                      zIndex: isFrozen ? 50 : 40,
+                      background: isMe ? '#14532d' : '#1f2937',
+                      borderRight: '1px solid #374151',
+                    }}
                     className={`text-center px-0.5 ${isMe ? 'text-verde-200' : 'text-gray-300'}`}
                   >
                     <span className="block truncate font-semibold" style={{ maxWidth: PART_COL_W - 4 }}>{p.apelido}</span>
@@ -652,12 +674,16 @@ export function TabelaMBClient({
                       className="text-center text-[10px] font-semibold text-blue-800">
                       {of1 ? `Gr. ${g}` : <span className="text-gray-300">–</span>}
                     </td>
-                    {participants.map(p => {
+                    {orderedParts.map((p, idx) => {
                       const bet  = groupBetMap.get(`${p.id}:${g}`)
                       const kind = groupCellKind(bet, of1, of2)
                       const isMe = p.id === activeParticipantId
+                      const isFrozen = frozenPartLeft !== null && idx === 0
+                      const frozenBg = isFrozen ? (CELL_KIND_BG_HEX[kind] || '#eff6ff') : undefined
                       return (
-                        <td key={p.id} className={`border-r border-blue-50 text-center ${CELL_BG[kind]} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
+                        <td key={p.id}
+                          style={isFrozen ? { position: 'sticky', left: frozenPartLeft!, zIndex: 20, background: frozenBg, borderLeft: '2px solid #bfdbfe' } : undefined}
+                          className={`border-r border-blue-50 text-center ${!isFrozen ? CELL_BG[kind] : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                           {bet?.first_place ? (
                             <div className="flex flex-col items-center leading-none gap-px">
                               <span className="text-[9px] text-gray-600 truncate font-medium" style={{ maxWidth: PART_COL_W - 4 }}>
@@ -704,12 +730,16 @@ export function TabelaMBClient({
                       className="text-center text-[10px] text-violet-600 font-semibold">
                       {ot ? `Gr. ${g}` : <span className="text-gray-300">–</span>}
                     </td>
-                    {participants.map(p => {
+                    {orderedParts.map((p, idx) => {
                       const bet  = thirdBetMap.get(`${p.id}:${g}`)
                       const kind = thirdCellKind(bet?.team, ot)
                       const isMe = p.id === activeParticipantId
+                      const isFrozen = frozenPartLeft !== null && idx === 0
+                      const frozenBg = isFrozen ? (CELL_KIND_BG_HEX[kind] || '#faf5ff') : undefined
                       return (
-                        <td key={p.id} className={`border-r border-violet-50 text-center ${CELL_BG[kind]} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
+                        <td key={p.id}
+                          style={isFrozen ? { position: 'sticky', left: frozenPartLeft!, zIndex: 20, background: frozenBg, borderLeft: '2px solid #e9d5ff' } : undefined}
+                          className={`border-r border-violet-50 text-center ${!isFrozen ? CELL_BG[kind] : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                           {bet?.team ? (
                             <div className="flex flex-col items-center leading-none gap-px">
                               <span className="text-[9px] text-gray-600 truncate font-medium" style={{ maxWidth: PART_COL_W - 4 }}>
@@ -784,14 +814,18 @@ export function TabelaMBClient({
                       }}
                     />
                   </td>
-                  {participants.map(p => {
+                  {orderedParts.map((p, idx) => {
                     const key  = `${p.id}:${match.id}`
                     const bet  = betMap.get(key)
                     const kind = matchCellKind(bet, match.score_home, match.score_away)
                     const pts  = getMatchPts(p.id, match.id)
                     const isMe = p.id === activeParticipantId
+                    const isFrozen = frozenPartLeft !== null && idx === 0
+                    const frozenBg = isFrozen ? (CELL_KIND_BG_HEX[kind] || bg) : undefined
                     return (
-                      <td key={p.id} className={`border-r border-gray-100 text-center ${CELL_BG[kind]} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
+                      <td key={p.id}
+                        style={isFrozen ? { position: 'sticky', left: frozenPartLeft!, zIndex: 20, background: frozenBg, borderLeft: '2px solid #d1d5db' } : undefined}
+                        className={`border-r border-gray-100 text-center ${!isFrozen ? CELL_BG[kind] : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                         {bet ? (
                           <div className="flex flex-col items-center leading-none gap-px">
                             <span className="tabular-nums font-semibold text-gray-700">{bet.score_home}–{bet.score_away}</span>
