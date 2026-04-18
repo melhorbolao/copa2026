@@ -35,7 +35,7 @@ export default async function ClassificacaoPage() {
     admin.from('bets').select('participant_id, match_id, score_home, score_away, points'),
     supabase.from('scoring_rules').select('key, points'),
     admin.from('group_bets').select('participant_id, group_name, first_place, second_place, points'),
-    admin.from('third_place_bets').select('participant_id, group_name, team, points'),
+    admin.from('third_place_bets').select('participant_id, group_name, team'),
     admin.from('participant_scores').select('participant_id, pts_total'),
   ])
 

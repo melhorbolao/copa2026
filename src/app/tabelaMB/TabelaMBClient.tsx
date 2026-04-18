@@ -57,7 +57,6 @@ export interface ThirdBetRaw {
   participant_id: string
   group_name: string
   team: string
-  points: number | null
 }
 
 interface Props {
@@ -353,7 +352,7 @@ export function TabelaMBClient({
   }, [initialGroupBets])
 
   const thirdBetMap = useMemo(() => {
-    const m = new Map<string, { team: string; points: number | null }>()
+    const m = new Map<string, { team: string }>()
     for (const b of initialThirdBets) {
       m.set(`${b.participant_id}:${b.group_name}`, { team: b.team, points: b.points })
     }
