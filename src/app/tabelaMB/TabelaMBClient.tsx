@@ -495,8 +495,10 @@ export function TabelaMBClient({
   const colScoreLeft = colTeamsLeft + colTeamsW
   const frozenTotal  = colScoreLeft + COL_SCORE_W
 
-  // Compute totals client-side so match livePoints + group + third bets are all included
+  // Compute totals client-side so match livePoints + group + third bets are all included.
+  // Third-place points are computed live (DB only stores them after all 72 group matches finish).
   const computedTotals = useMemo(() => {
+    const thirdPts = rules['terceiro_classificado'] ?? 3
     const totals: Record<string, number> = {}
     for (const p of participants) {
       let sum = 0
@@ -511,12 +513,15 @@ export function TabelaMBClient({
         const gb = groupBetMap.get(`${p.id}:${g}`)
         if (gb?.points) sum += gb.points
         const tb = thirdBetMap.get(`${p.id}:${g}`)
-        if (tb?.points) sum += tb.points
+        if (tb?.team) {
+          const actualThird = officialThirds.find(t => t.group === g && t.advances)?.team ?? ''
+          if (actualThird && tb.team === actualThird) sum += thirdPts
+        }
       })
       totals[p.id] = sum
     }
     return totals
-  }, [participants, matches, betMap, groupBetMap, thirdBetMap])
+  }, [participants, matches, betMap, groupBetMap, thirdBetMap, officialThirds, rules])
 
   const vItems    = rowVirtualizer.getVirtualItems()
   const totalSize = rowVirtualizer.getTotalSize()
@@ -578,8 +583,8 @@ export function TabelaMBClient({
                     className={`text-center px-0.5 ${isMe ? 'text-verde-200' : 'text-gray-300'}`}
                   >
                     <span className="block truncate font-semibold" style={{ maxWidth: PART_COL_W - 4 }}>{p.apelido}</span>
-                    <span className={`block text-[9px] font-normal ${isMe ? 'text-verde-300' : 'text-gray-500'}`}>
-                      {total > 0 ? `${total}pts` : '–'}
+                    <span className={`block text-[11px] font-semibold ${isMe ? 'text-verde-300' : 'text-gray-500'}`}>
+                      {total > 0 ? total : '–'}
                     </span>
                   </th>
                 )
@@ -711,9 +716,9 @@ export function TabelaMBClient({
                               <span className="text-[9px] text-gray-600 truncate font-medium" style={{ maxWidth: PART_COL_W - 4 }}>
                                 {teamAbbrs[bet.team] ?? abbr(bet.team)}
                               </span>
-                              {bet.points !== null && (
-                                <span className={`text-[10px] font-bold ${bet.points > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>
-                                  {bet.points > 0 ? `+${bet.points}` : '0'}
+                              {kind !== 'pending' && kind !== 'no_bet' && (
+                                <span className={`text-[10px] font-bold ${kind === 'exact' ? 'text-emerald-600' : 'text-gray-300'}`}>
+                                  {kind === 'exact' ? `+${rules['terceiro_classificado'] ?? 3}` : '0'}
                                 </span>
                               )}
                             </div>
