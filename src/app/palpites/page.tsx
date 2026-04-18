@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAuthAdminClient } from '@/lib/supabase/server'
 import { getActiveParticipantId } from '@/lib/participant'
 import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
@@ -66,7 +66,9 @@ export default async function PalpitesPage({
   const { data: userProfile } = await supabase.from('users').select('is_admin').eq('id', user.id).single()
   await requirePageAccess('palpites', userProfile?.is_admin ?? false)
 
-  const [{ data: matches }, { data: bets }, { data: groupBets }, { data: tBet }, { data: thirdBets }, scorerMappingsRaw] = await Promise.all([
+  const admin = createAuthAdminClient()
+
+  const [{ data: matches }, { data: bets }, { data: groupBets }, { data: tBet }, thirdBetsRes, scorerMappingsRaw] = await Promise.all([
     supabase.from('matches').select('id, match_number, phase, group_name, round, team_home, team_away, flag_home, flag_away, match_datetime, city, betting_deadline, score_home, score_away, is_brazil').order('match_datetime', { ascending: true }),
     supabase.from('bets').select('match_id, score_home, score_away, points').eq('participant_id', participantId),
     supabase.from('group_bets').select('group_name, first_place, second_place, points').eq('participant_id', participantId),
@@ -74,11 +76,13 @@ export default async function PalpitesPage({
       .select('champion, runner_up, semi1, semi2, top_scorer, points')
       .eq('participant_id', participantId)
       .maybeSingle(),
-    supabase.from('third_place_bets')
+    // Admin client evita restrições de RLS em third_place_bets (tabela sem políticas SELECT explícitas)
+    admin.from('third_place_bets')
       .select('group_name, team, points')
       .eq('participant_id', participantId),
     supabase.from('top_scorer_mapping').select('raw_name, standardized_name').then(r => r.data ?? []).catch(() => []),
   ])
+  const thirdBets = thirdBetsRes.data as { group_name: string; team: string; points: number | null }[] | null
 
   const scorerMapping: Record<string, string> = Object.fromEntries(
     (scorerMappingsRaw as { raw_name: string; standardized_name: string }[]).map(m => [m.raw_name, m.standardized_name])

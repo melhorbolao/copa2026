@@ -195,22 +195,29 @@ export async function autoFillGroupBets(): Promise<{ thirdsCount: number }> {
   if (dl && new Date() > new Date(dl.betting_deadline))
     throw new Error('Prazo encerrado.')
 
-  const { data: matchRows } = await supabase
+  // Usa admin para garantir acesso sem restrições de RLS
+  const { data: matchRows, error: matchErr } = await admin
     .from('matches')
     .select('id, group_name, phase, team_home, team_away, flag_home, flag_away')
     .eq('phase', 'group')
+  if (matchErr) throw new Error(`Erro ao carregar partidas: ${matchErr.message}`)
+  if (!matchRows || matchRows.length === 0) throw new Error('Nenhuma partida de grupo encontrada.')
 
-  const matchIds = (matchRows ?? []).map(m => m.id)
+  const matchIds = matchRows.map(m => m.id)
 
-  const { data: betRows } = await supabase
+  const { data: betRows, error: betErr } = await admin
     .from('bets')
     .select('match_id, score_home, score_away')
     .eq('participant_id', participantId)
     .in('match_id', matchIds)
+  if (betErr) throw new Error(`Erro ao carregar palpites: ${betErr.message}`)
 
-  const betMap = new Map((betRows ?? []).map(b => [b.match_id, b as { match_id: string; score_home: number; score_away: number }]))
+  const betMap = new Map(
+    (betRows ?? []).map(b => [b.match_id, { match_id: b.match_id, score_home: b.score_home ?? 0, score_away: b.score_away ?? 0 }])
+  )
 
-  const standings = calcGroupStandings(matchRows ?? [], betMap)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const standings = calcGroupStandings(matchRows as any, betMap)
   const thirds = rankThirds(standings)
 
   for (const s of standings) {
@@ -219,25 +226,28 @@ export async function autoFillGroupBets(): Promise<{ thirdsCount: number }> {
       { participant_id: participantId, group_name: s.group, first_place: s.teams[0].team, second_place: s.teams[1].team },
       { onConflict: 'participant_id,group_name' },
     )
-    if (error) throw new Error(error.message)
+    if (error) throw new Error(`Erro ao salvar 1º/2º do grupo ${s.group}: ${error.message}`)
   }
 
   const advancingThirds = thirds.filter(t => t.advances)
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: deleteError } = await (admin as any)
+  const { error: deleteError } = await admin
     .from('third_place_bets')
     .delete()
     .eq('participant_id', participantId)
   if (deleteError) throw new Error(`Erro ao limpar terceiros: ${deleteError.message}`)
 
-  if (advancingThirds.length > 0) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (admin as any)
-      .from('third_place_bets')
-      .insert(advancingThirds.map(t => ({ participant_id: participantId, group_name: t.group, team: t.team })))
-    if (error) throw new Error(`Erro ao inserir terceiros: ${error.message}`)
+  if (advancingThirds.length === 0) {
+    throw new Error(
+      `Nenhum terceiro classificado calculado (grupos=${standings.length}, terceiros=${thirds.length}). ` +
+      `Verifique se todos os palpites da fase de grupos estão preenchidos.`
+    )
   }
+
+  const { error: insertError } = await admin
+    .from('third_place_bets')
+    .insert(advancingThirds.map(t => ({ participant_id: participantId, group_name: t.group, team: t.team })))
+  if (insertError) throw new Error(`Erro ao inserir terceiros: ${insertError.message}`)
 
   return { thirdsCount: advancingThirds.length }
 }
