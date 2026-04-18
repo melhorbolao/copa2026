@@ -28,6 +28,28 @@ export async function updatePageVisibility(
   return {}
 }
 
+export async function updatePageOrders(
+  orders: { page_name: string; sort_order: number }[],
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado' }
+  const { data: profile } = await supabase
+    .from('users').select('is_admin').eq('id', user.id).single()
+  if (!profile?.is_admin) return { error: 'Sem permissão' }
+
+  const admin = createAuthAdminClient() as any // eslint-disable-line @typescript-eslint/no-explicit-any
+  for (const { page_name, sort_order } of orders) {
+    const { error } = await admin
+      .from('page_visibility')
+      .update({ sort_order })
+      .eq('page_name', page_name)
+    if (error) return { error: error.message }
+  }
+  revalidatePath('/admin/paginas')
+  return {}
+}
+
 export async function updatePageLabel(
   pageName: string,
   label: string,

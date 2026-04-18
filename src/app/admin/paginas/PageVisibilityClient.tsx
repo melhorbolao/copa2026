@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition, useRef } from 'react'
-import { updatePageVisibility, updatePageLabel } from './actions'
+import { updatePageVisibility, updatePageLabel, updatePageOrders } from './actions'
 import type { PageVisibilityRow } from '@/lib/page-visibility'
 
 interface Props {
@@ -13,6 +13,7 @@ type RowState = Record<string, { show_for_admin: boolean; show_for_users: boolea
 export function PageVisibilityClient({ rows }: Props) {
   const [pending, startTransition] = useTransition()
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [ordered, setOrdered] = useState<PageVisibilityRow[]>(rows)
   const [state, setState] = useState<RowState>(() =>
     Object.fromEntries(rows.map(r => [r.page_name, {
       show_for_admin: r.show_for_admin,
@@ -20,7 +21,9 @@ export function PageVisibilityClient({ rows }: Props) {
       label: r.label,
     }]))
   )
-  const labelTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const labelTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+  const dragIndex = useRef<number | null>(null)
+  const [dragOver, setDragOver] = useState<number | null>(null)
 
   function handleLabelChange(pageName: string, value: string) {
     setState(prev => ({ ...prev, [pageName]: { ...prev[pageName], label: value } }))
@@ -42,46 +45,91 @@ export function PageVisibilityClient({ rows }: Props) {
     field: 'show_for_admin' | 'show_for_users',
     value: boolean,
   ) {
-    // Optimistic update
-    setState(prev => ({
-      ...prev,
-      [pageName]: { ...prev[pageName], [field]: value },
-    }))
-
+    setState(prev => ({ ...prev, [pageName]: { ...prev[pageName], [field]: value } }))
     startTransition(async () => {
       const result = await updatePageVisibility(pageName, field, value)
       if (result.error) {
-        // Rollback
-        setState(prev => ({
-          ...prev,
-          [pageName]: { ...prev[pageName], [field]: !value },
-        }))
+        setState(prev => ({ ...prev, [pageName]: { ...prev[pageName], [field]: !value } }))
         setErrors(prev => ({ ...prev, [`${pageName}-${field}`]: result.error! }))
       } else {
-        setErrors(prev => {
-          const next = { ...prev }
-          delete next[`${pageName}-${field}`]
-          return next
-        })
+        setErrors(prev => { const next = { ...prev }; delete next[`${pageName}-${field}`]; return next })
       }
     })
   }
 
+  function onDragStart(index: number) {
+    dragIndex.current = index
+  }
+
+  function onDragOver(e: React.DragEvent, index: number) {
+    e.preventDefault()
+    setDragOver(index)
+  }
+
+  function onDrop(e: React.DragEvent, dropIndex: number) {
+    e.preventDefault()
+    const from = dragIndex.current
+    if (from === null || from === dropIndex) { setDragOver(null); return }
+
+    const next = [...ordered]
+    const [moved] = next.splice(from, 1)
+    next.splice(dropIndex, 0, moved)
+    setOrdered(next)
+    setDragOver(null)
+    dragIndex.current = null
+
+    startTransition(async () => {
+      const orders = next.map((r, i) => ({ page_name: r.page_name, sort_order: i + 1 }))
+      const result = await updatePageOrders(orders)
+      if (result.error) {
+        setOrdered(ordered) // rollback
+        setErrors(prev => ({ ...prev, order: result.error! }))
+      } else {
+        setErrors(prev => { const next = { ...prev }; delete next.order; return next })
+      }
+    })
+  }
+
+  function onDragEnd() {
+    setDragOver(null)
+    dragIndex.current = null
+  }
+
   return (
     <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+      {errors.order && (
+        <p className="px-4 py-2 text-xs text-red-500">{errors.order}</p>
+      )}
       <table className="min-w-full text-sm">
         <thead>
           <tr className="border-b border-gray-100 bg-gray-50 text-left">
+            <th className="px-3 py-3 w-8"></th>
             <th className="px-4 py-3 font-semibold text-gray-700">Página</th>
             <th className="px-4 py-3 text-center font-semibold text-gray-700">Admin</th>
             <th className="px-4 py-3 text-center font-semibold text-gray-700">Usuários</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
-          {rows.map(row => {
-            const cur = state[row.page_name] ?? { show_for_admin: row.show_for_admin, show_for_users: row.show_for_users, label: row.label }
+          {ordered.map((row, index) => {
+            const cur = state[row.page_name] ?? {
+              show_for_admin: row.show_for_admin,
+              show_for_users: row.show_for_users,
+              label: row.label,
+            }
+            const isOver = dragOver === index
             return (
-              <tr key={row.page_name} className="hover:bg-gray-50 transition">
+              <tr
+                key={row.page_name}
+                draggable
+                onDragStart={() => onDragStart(index)}
+                onDragOver={e => onDragOver(e, index)}
+                onDrop={e => onDrop(e, index)}
+                onDragEnd={onDragEnd}
+                className={`transition ${isOver ? 'bg-verde-50 border-t-2 border-t-verde-400' : 'hover:bg-gray-50'}`}
+              >
+                <td className="px-3 py-3 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 select-none text-center">
+                  ⠿
+                </td>
                 <td className="px-4 py-3">
                   <input
                     type="text"

@@ -8,6 +8,7 @@ export interface PageVisibilityRow {
   label: string
   show_for_admin: boolean
   show_for_users: boolean
+  sort_order: number
 }
 
 const PAGE_ORDER = [
@@ -22,9 +23,10 @@ export const getPageVisibility = cache(async (): Promise<PageVisibilityRow[]> =>
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data } = await (supabase as any)
       .from('page_visibility')
-      .select('id, page_name, label, show_for_admin, show_for_users')
+      .select('id, page_name, label, show_for_admin, show_for_users, sort_order')
     const rows = (data ?? []) as PageVisibilityRow[]
     return rows.sort((a, b) => {
+      if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order
       const ai = PAGE_ORDER.indexOf(a.page_name)
       const bi = PAGE_ORDER.indexOf(b.page_name)
       return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
