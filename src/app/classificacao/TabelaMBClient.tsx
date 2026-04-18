@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { saveOfficialScore } from '@/app/acopa/actions'
 import { scoreMatchBet, detectMatchZebra, getMatchResult } from '@/lib/scoring/engine'
 import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, R32_MATCHES } from '@/lib/bracket/engine'
+import { useAdminView } from '@/contexts/AdminViewContext'
 import type { RuleMap } from '@/lib/scoring/engine'
 import type { MatchSlim, BetSlim } from '@/lib/bracket/engine'
 import type { R32Slot } from '@/app/tabela/BracketView'
@@ -421,11 +422,14 @@ export function TabelaMBClient({
   const offSecond = useCallback((g: string) => officialStandings.find(s => s.group === g)?.teams[1]?.team ?? '', [officialStandings])
   const offThird  = useCallback((g: string) => officialThirds.find(t => t.group === g && t.advances)?.team ?? '', [officialThirds])
 
+  const { viewMode } = useAdminView()
+  const effectiveIsAdmin = isAdmin && viewMode === 'admin'
+
   const canEdit = useCallback((match: MatchFull) => {
-    if (isAdmin) return true
+    if (effectiveIsAdmin) return true
     const start = new Date(match.match_datetime).getTime()
     return now >= start && now <= start + EDIT_WINDOW_MS
-  }, [isAdmin, now])
+  }, [effectiveIsAdmin, now])
 
   const phaseConfig = PHASE_FILTERS.find(f => f.value === phase) ?? PHASE_FILTERS[0]
   const filteredMatches = useMemo(
