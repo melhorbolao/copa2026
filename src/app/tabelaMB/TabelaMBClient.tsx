@@ -495,6 +495,29 @@ export function TabelaMBClient({
   const colScoreLeft = colTeamsLeft + colTeamsW
   const frozenTotal  = colScoreLeft + COL_SCORE_W
 
+  // Compute totals client-side so match livePoints + group + third bets are all included
+  const computedTotals = useMemo(() => {
+    const totals: Record<string, number> = {}
+    for (const p of participants) {
+      let sum = 0
+      for (const m of matches) {
+        const e = betMap.get(`${p.id}:${m.id}`)
+        if (e) {
+          const pts = e.livePoints !== undefined ? e.livePoints : e.storedPoints
+          if (pts) sum += pts
+        }
+      }
+      GROUP_ORDER.forEach(g => {
+        const gb = groupBetMap.get(`${p.id}:${g}`)
+        if (gb?.points) sum += gb.points
+        const tb = thirdBetMap.get(`${p.id}:${g}`)
+        if (tb?.points) sum += tb.points
+      })
+      totals[p.id] = sum
+    }
+    return totals
+  }, [participants, matches, betMap, groupBetMap, thirdBetMap])
+
   const vItems    = rowVirtualizer.getVirtualItems()
   const totalSize = rowVirtualizer.getTotalSize()
   const padTop    = vItems.length > 0 ? vItems[0].start : 0
@@ -548,7 +571,7 @@ export function TabelaMBClient({
                 className="text-center text-gray-200 font-semibold">Oficial</th>
               {participants.map(p => {
                 const isMe = p.id === activeParticipantId
-                const total = participantTotals[p.id] ?? 0
+                const total = computedTotals[p.id] ?? 0
                 return (
                   <th key={p.id} title={p.apelido}
                     style={{ position: 'sticky', top: 0, zIndex: 40, background: isMe ? '#14532d' : '#1f2937', borderRight: '1px solid #374151' }}
