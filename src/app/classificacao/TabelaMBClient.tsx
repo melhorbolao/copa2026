@@ -9,6 +9,7 @@ import { saveOfficialScore } from '@/app/acopa/actions'
 import { scoreMatchBet, detectMatchZebra, getMatchResult } from '@/lib/scoring/engine'
 import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, R32_MATCHES } from '@/lib/bracket/engine'
 import { useAdminView } from '@/contexts/AdminViewContext'
+import { Flag } from '@/components/ui/Flag'
 import type { RuleMap } from '@/lib/scoring/engine'
 import type { MatchSlim, BetSlim } from '@/lib/bracket/engine'
 import type { R32Slot } from '@/app/tabela/BracketView'
@@ -69,6 +70,7 @@ interface Props {
   rules: RuleMap
   isAdmin: boolean
   activeParticipantId: string
+  teamAbbrs: Record<string, string>
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -90,14 +92,12 @@ const ROW_H      = 44
 const ROW_H_BONUS = 38
 const ROW_H_SEC   = 26
 
-// Frozen column pixel offsets
-const COL_DATE_W     = 48
-const COL_TEAMS_LEFT = COL_DATE_W
-const COL_TEAMS_W    = 148
-const COL_SCORE_LEFT = COL_TEAMS_LEFT + COL_TEAMS_W   // 196
-const COL_SCORE_W    = 96
-const FROZEN_TOTAL   = COL_SCORE_LEFT + COL_SCORE_W   // 292
-const PART_COL_W     = 64
+// Frozen column pixel offsets (desktop)
+const COL_DATE_DESKTOP  = 48
+const COL_TEAMS_DESKTOP = 148
+const COL_TEAMS_MOBILE  = 60
+const COL_SCORE_W       = 96
+const PART_COL_W        = 64
 
 // ── Row types ──────────────────────────────────────────────────────────────────
 
@@ -333,12 +333,13 @@ function buildBetMap(bets: BetRaw[]): BetMap {
 
 export function TabelaMBClient({
   initialMatches, participants, initialBets, initialGroupBets, initialThirdBets,
-  participantTotals, rules, isAdmin, activeParticipantId,
+  participantTotals, rules, isAdmin, activeParticipantId, teamAbbrs,
 }: Props) {
   const [matches, setMatches] = useState<MatchFull[]>(initialMatches)
   const [betMap,  setBetMap]  = useState<BetMap>(() => buildBetMap(initialBets))
   const [phase,   setPhase]   = useState('group')
   const [now,     setNow]     = useState(Date.now())
+  const [isMobile, setIsMobile] = useState(false)
 
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -363,6 +364,14 @@ export function TabelaMBClient({
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30_000)
     return () => clearInterval(t)
+  }, [])
+
+  // Mobile breakpoint (< 640px)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
   }, [])
 
   // Supabase Realtime
@@ -471,11 +480,17 @@ export function TabelaMBClient({
     overscan: 8,
   })
 
+  const colDateW     = isMobile ? 0 : COL_DATE_DESKTOP
+  const colTeamsW    = isMobile ? COL_TEAMS_MOBILE : COL_TEAMS_DESKTOP
+  const colTeamsLeft = colDateW
+  const colScoreLeft = colTeamsLeft + colTeamsW
+  const frozenTotal  = colScoreLeft + COL_SCORE_W
+
   const vItems    = rowVirtualizer.getVirtualItems()
   const totalSize = rowVirtualizer.getTotalSize()
   const padTop    = vItems.length > 0 ? vItems[0].start : 0
   const padBot    = vItems.length > 0 ? totalSize - vItems[vItems.length - 1].end : 0
-  const tableW    = FROZEN_TOTAL + participants.length * PART_COL_W
+  const tableW    = frozenTotal + participants.length * PART_COL_W
 
   const getMatchPts = (pid: string, mid: string) => {
     const e = betMap.get(`${pid}:${mid}`)
@@ -507,8 +522,8 @@ export function TabelaMBClient({
       <div ref={containerRef} className="flex-1 overflow-auto" style={{ WebkitOverflowScrolling: 'touch' as const }}>
         <table className="border-collapse" style={{ width: tableW, tableLayout: 'fixed', fontSize: 11 }}>
           <colgroup>
-            <col style={{ width: COL_DATE_W }} />
-            <col style={{ width: COL_TEAMS_W }} />
+            <col style={{ width: colDateW }} />
+            <col style={{ width: colTeamsW }} />
             <col style={{ width: COL_SCORE_W }} />
             {participants.map(p => <col key={p.id} style={{ width: PART_COL_W }} />)}
           </colgroup>
@@ -518,9 +533,9 @@ export function TabelaMBClient({
             <tr style={{ height: 48, background: '#1f2937' }}>
               <th style={{ position: 'sticky', top: 0, left: 0, zIndex: 50, background: '#1f2937', borderRight: '1px solid #374151' }}
                 className="text-center text-gray-300 font-semibold text-[10px]">Data</th>
-              <th style={{ position: 'sticky', top: 0, left: COL_TEAMS_LEFT, zIndex: 50, background: '#1f2937', borderRight: '1px solid #374151' }}
+              <th style={{ position: 'sticky', top: 0, left: colTeamsLeft, zIndex: 50, background: '#1f2937', borderRight: '1px solid #374151' }}
                 className="text-left px-1.5 text-gray-300 font-semibold">Jogo</th>
-              <th style={{ position: 'sticky', top: 0, left: COL_SCORE_LEFT, zIndex: 50, background: '#1f2937', borderRight: '2px solid #6b7280' }}
+              <th style={{ position: 'sticky', top: 0, left: colScoreLeft, zIndex: 50, background: '#1f2937', borderRight: '2px solid #6b7280' }}
                 className="text-center text-gray-200 font-semibold">Oficial</th>
               {participants.map(p => {
                 const isMe = p.id === activeParticipantId
@@ -573,14 +588,14 @@ export function TabelaMBClient({
                   <tr key={`gb-${g}`} style={{ height: ROW_H_BONUS, background: '#eff6ff' }}>
                     <td style={{ position: 'sticky', left: 0, zIndex: 30, background: '#eff6ff', borderRight: '1px solid #bfdbfe' }}
                       className="text-center font-bold text-blue-700 text-xs">{g}</td>
-                    <td style={{ position: 'sticky', left: COL_TEAMS_LEFT, zIndex: 30, background: '#eff6ff', borderRight: '1px solid #bfdbfe' }}
+                    <td style={{ position: 'sticky', left: colTeamsLeft, zIndex: 30, background: '#eff6ff', borderRight: '1px solid #bfdbfe' }}
                       className="px-1.5 text-[10px] font-semibold text-blue-600">
                       <div className="leading-none">
                         <span className="block">🥇 {of1 ? abbr(of1) : '–'}</span>
                         <span className="block">🥈 {of2 ? abbr(of2) : '–'}</span>
                       </div>
                     </td>
-                    <td style={{ position: 'sticky', left: COL_SCORE_LEFT, zIndex: 30, background: '#eff6ff', borderRight: '2px solid #93c5fd' }}
+                    <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: '#eff6ff', borderRight: '2px solid #93c5fd' }}
                       className="text-center text-[10px] font-semibold text-blue-800">
                       {of1 ? `Gr. ${g}` : <span className="text-gray-300">–</span>}
                     </td>
@@ -617,11 +632,11 @@ export function TabelaMBClient({
                   <tr key={`tb-${g}`} style={{ height: ROW_H_BONUS, background: '#faf5ff' }}>
                     <td style={{ position: 'sticky', left: 0, zIndex: 30, background: '#faf5ff', borderRight: '1px solid #e9d5ff' }}
                       className="text-center text-[9px] font-bold text-violet-600">3º<br/><span className="text-violet-400">{g}</span></td>
-                    <td style={{ position: 'sticky', left: COL_TEAMS_LEFT, zIndex: 30, background: '#faf5ff', borderRight: '1px solid #e9d5ff' }}
+                    <td style={{ position: 'sticky', left: colTeamsLeft, zIndex: 30, background: '#faf5ff', borderRight: '1px solid #e9d5ff' }}
                       className="px-1.5 text-[10px] font-semibold text-violet-700">
                       {ot ? abbr(ot) : <span className="text-gray-300">–</span>}
                     </td>
-                    <td style={{ position: 'sticky', left: COL_SCORE_LEFT, zIndex: 30, background: '#faf5ff', borderRight: '2px solid #c4b5fd' }}
+                    <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: '#faf5ff', borderRight: '2px solid #c4b5fd' }}
                       className="text-center text-[10px] text-violet-600 font-semibold">
                       {ot ? `Gr. ${g}` : <span className="text-gray-300">–</span>}
                     </td>
@@ -655,28 +670,48 @@ export function TabelaMBClient({
               const ktOverride = knockoutTeamMap.get(match.id)
               const teamHome = ktOverride?.team_home ?? match.team_home
               const teamAway = ktOverride?.team_away ?? match.team_away
+              const flagHome = ktOverride?.flag_home ?? match.flag_home
+              const flagAway = ktOverride?.flag_away ?? match.flag_away
+              const abbrHome = teamAbbrs[teamHome] ?? teamHome.slice(0, 3).toUpperCase()
+              const abbrAway = teamAbbrs[teamAway] ?? teamAway.slice(0, 3).toUpperCase()
               const { date: mDate, time: mTime } = fmtMatchDate(match.match_datetime)
               return (
                 <tr key={match.id} style={{ height: ROW_H }}>
-                  <td style={{ position: 'sticky', left: 0, zIndex: 30, background: bg, borderRight: '1px solid #f3f4f6' }}
+                  <td style={{ position: 'sticky', left: 0, zIndex: 30, background: bg, borderRight: '1px solid #f3f4f6', overflow: 'hidden' }}
                     className="text-center text-gray-500">
-                    <div className="flex flex-col items-center leading-none gap-0.5">
-                      <span className="text-[9px] text-gray-600">{mDate}</span>
-                      <span className="text-[9px] font-semibold text-gray-800">{mTime}</span>
-                    </div>
-                  </td>
-                  <td style={{ position: 'sticky', left: COL_TEAMS_LEFT, zIndex: 30, background: bg, borderRight: '1px solid #f3f4f6' }}
-                    className="px-1.5">
-                    <div className="flex flex-col leading-none gap-px">
-                      <div className="flex items-center gap-0.5">
-                        <span className="truncate font-semibold text-gray-800" style={{ maxWidth: COL_TEAMS_W - 16 }}>{teamHome}</span>
-                        {match.is_brazil && <span className="shrink-0 text-[7px] font-black text-verde-700 bg-verde-100 rounded-sm px-0.5">×2</span>}
+                    {!isMobile && (
+                      <div className="flex flex-col items-center leading-none gap-0.5">
+                        <span className="text-[9px] text-gray-600">{mDate}</span>
+                        <span className="text-[9px] font-semibold text-gray-800">{mTime}</span>
                       </div>
-                      <span className="text-[8px] text-gray-300">vs</span>
-                      <span className="truncate font-semibold text-gray-800" style={{ maxWidth: COL_TEAMS_W - 8 }}>{teamAway}</span>
-                    </div>
+                    )}
                   </td>
-                  <td style={{ position: 'sticky', left: COL_SCORE_LEFT, zIndex: 30, background: bg, borderRight: '2px solid #d1d5db' }}
+                  <td style={{ position: 'sticky', left: colTeamsLeft, zIndex: 30, background: bg, borderRight: '1px solid #f3f4f6' }}
+                    className="px-1">
+                    {isMobile ? (
+                      <div className="flex flex-col leading-none gap-0.5">
+                        <div className="flex items-center gap-1">
+                          <Flag code={flagHome} size="sm" className="shrink-0 w-4 h-3 rounded-[1px]" />
+                          <span className="font-bold text-[10px] text-gray-800 tracking-tight">{abbrHome}</span>
+                          {match.is_brazil && <span className="shrink-0 text-[7px] font-black text-verde-700 bg-verde-100 rounded-sm px-0.5">×2</span>}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Flag code={flagAway} size="sm" className="shrink-0 w-4 h-3 rounded-[1px]" />
+                          <span className="font-bold text-[10px] text-gray-800 tracking-tight">{abbrAway}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col leading-none gap-px">
+                        <div className="flex items-center gap-0.5">
+                          <span className="truncate font-semibold text-gray-800" style={{ maxWidth: colTeamsW - 16 }}>{teamHome}</span>
+                          {match.is_brazil && <span className="shrink-0 text-[7px] font-black text-verde-700 bg-verde-100 rounded-sm px-0.5">×2</span>}
+                        </div>
+                        <span className="text-[8px] text-gray-300">vs</span>
+                        <span className="truncate font-semibold text-gray-800" style={{ maxWidth: colTeamsW - 8 }}>{teamAway}</span>
+                      </div>
+                    )}
+                  </td>
+                  <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: bg, borderRight: '2px solid #d1d5db' }}
                     className="text-center">
                     <ScoreInput match={match} canEdit={canEdit(match)}
                       onSaved={(sh, sa) => {

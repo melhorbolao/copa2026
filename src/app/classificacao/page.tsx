@@ -25,7 +25,7 @@ export default async function ClassificacaoPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAuthAdminClient() as any
 
-  const [matchesRes, participantsRes, betsRes, rulesRes, groupBetsRes, thirdBetsRes, totalsRes] = await Promise.all([
+  const [matchesRes, participantsRes, betsRes, rulesRes, groupBetsRes, thirdBetsRes, totalsRes, teamsRes] = await Promise.all([
     supabase.from('matches')
       .select('id, match_number, phase, group_name, round, team_home, team_away, flag_home, flag_away, match_datetime, city, score_home, score_away, penalty_winner, is_brazil, betting_deadline')
       .order('match_number', { ascending: true }),
@@ -37,6 +37,7 @@ export default async function ClassificacaoPage() {
     admin.from('group_bets').select('participant_id, group_name, first_place, second_place, points'),
     admin.from('third_place_bets').select('participant_id, group_name, team, points'),
     admin.from('participant_scores').select('participant_id, pts_total'),
+    admin.from('teams').select('name, abbr_br').catch(() => ({ data: [] })),
   ])
 
   const rulesMap: Record<string, number> = Object.fromEntries(
@@ -45,6 +46,11 @@ export default async function ClassificacaoPage() {
 
   const participantTotals: Record<string, number> = Object.fromEntries(
     (totalsRes.data ?? []).map((r: { participant_id: string; pts_total: number }) => [r.participant_id, r.pts_total])
+  )
+
+  const teamAbbrs: Record<string, string> = Object.fromEntries(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((teamsRes as any).data ?? []).map((t: { name: string; abbr_br: string }) => [t.name, t.abbr_br])
   )
 
   return (
@@ -60,6 +66,7 @@ export default async function ClassificacaoPage() {
         rules={rulesMap}
         isAdmin={isAdmin}
         activeParticipantId={activeParticipantId ?? ''}
+        teamAbbrs={teamAbbrs}
       />
     </>
   )
