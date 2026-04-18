@@ -8,7 +8,7 @@ import { Navbar } from '@/components/layout/Navbar'
 import { TabelaMBClient } from './TabelaMBClient'
 import type { MatchFull, Participant, BetRaw, GroupBetRaw, ThirdBetRaw } from './TabelaMBClient'
 
-export const metadata = { title: 'Tabela MB' }
+export const metadata = {}
 
 export default async function ClassificacaoPage() {
   const supabase = await createClient()
@@ -18,7 +18,7 @@ export default async function ClassificacaoPage() {
   const { data: profile } = await supabase
     .from('users').select('is_admin').eq('id', user.id).single()
   const isAdmin = profile?.is_admin ?? false
-  await requirePageAccess('classificacao', isAdmin)
+  await requirePageAccess('tabelaMB', isAdmin)
 
   const activeParticipantId = await getActiveParticipantId(supabase, user.id).catch(() => null)
 
@@ -47,6 +47,18 @@ export default async function ClassificacaoPage() {
     (totalsRes.data ?? []).map((r: { participant_id: string; pts_total: number }) => [r.participant_id, r.pts_total])
   )
 
+  // Query separada para evitar crash se a tabela teams ainda não existir
+  let teamAbbrs: Record<string, string> = {}
+  try {
+    const { data: teamsData } = await admin.from('teams').select('name, abbr_br')
+    if (teamsData) {
+      teamAbbrs = Object.fromEntries(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        teamsData.map((t: any) => [t.name, t.abbr_br])
+      )
+    }
+  } catch { /* tabela ainda não criada — sem siglas */ }
+
   return (
     <>
       <Navbar />
@@ -60,6 +72,7 @@ export default async function ClassificacaoPage() {
         rules={rulesMap}
         isAdmin={isAdmin}
         activeParticipantId={activeParticipantId ?? ''}
+        teamAbbrs={teamAbbrs}
       />
     </>
   )
