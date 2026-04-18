@@ -7,12 +7,12 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { createClient } from '@/lib/supabase/client'
 import { saveOfficialScore } from '@/app/acopa/actions'
 import { scoreMatchBet, detectMatchZebra, getMatchResult } from '@/lib/scoring/engine'
-import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, R32_MATCHES } from '@/lib/bracket/engine'
+import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap } from '@/lib/bracket/engine'
+import type { KnockoutTeamOverride } from '@/lib/bracket/engine'
 import { useAdminView } from '@/contexts/AdminViewContext'
 import { Flag } from '@/components/ui/Flag'
 import type { RuleMap } from '@/lib/scoring/engine'
 import type { MatchSlim, BetSlim } from '@/lib/bracket/engine'
-import type { R32Slot } from '@/app/tabela/BracketView'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -172,91 +172,6 @@ function fmtMatchDate(dt: string) {
   return { date, time }
 }
 
-// ── Knockout team resolution ───────────────────────────────────────────────────
-
-type TeamOverride = { team_home: string; flag_home: string; team_away: string; flag_away: string }
-
-function buildKnockoutTeamMap(r32Slots: R32Slot[], knockoutMatches: MatchFull[]): Map<string, TeamOverride> {
-  const map = new Map<string, TeamOverride>()
-  const byPhase = (phase: string) =>
-    knockoutMatches.filter(m => m.phase === phase).sort((a, b) => a.match_number - b.match_number)
-
-  const flagMap = new Map<string, string>()
-  for (const m of knockoutMatches) {
-    if (m.team_home && m.flag_home) flagMap.set(m.team_home, m.flag_home)
-    if (m.team_away && m.flag_away) flagMap.set(m.team_away, m.flag_away)
-  }
-  for (const s of r32Slots) {
-    if (s.teamA) flagMap.set(s.teamA.team, s.teamA.flag)
-    if (s.teamB) flagMap.set(s.teamB.team, s.teamB.flag)
-  }
-  const flag = (t: string | null) => (t ? (flagMap.get(t) ?? '') : '')
-
-  const winner = (m: MatchFull | undefined, a: string | null, b: string | null): string | null => {
-    if (!m || m.score_home === null || m.score_away === null) return null
-    if (m.score_home > m.score_away) return a
-    if (m.score_away > m.score_home) return b
-    return m.penalty_winner ?? null
-  }
-
-  const set = (m: MatchFull, a: string | null, b: string | null) => {
-    if (!a && !b) return
-    map.set(m.id, {
-      team_home: a ?? m.team_home, flag_home: flag(a) || m.flag_home,
-      team_away: b ?? m.team_away, flag_away: flag(b) || m.flag_away,
-    })
-  }
-
-  // R32
-  const r32DB = new Map(knockoutMatches.filter(m => m.phase === 'round_of_32').map(m => [m.match_number, m]))
-  const r32W: (string | null)[] = r32Slots.map((s, i) => {
-    const num = parseInt(R32_MATCHES[i]?.matchNum.slice(1) ?? '0', 10)
-    const db  = r32DB.get(num)
-    if (db) set(db, s.teamA?.team ?? null, s.teamB?.team ?? null)
-    return winner(db, s.teamA?.team ?? null, s.teamB?.team ?? null)
-  })
-
-  // R16
-  const r16DB = byPhase('round_of_16')
-  const r16W: (string | null)[] = r16DB.map((m, i) => {
-    const a = r32W[i * 2] ?? null, b = r32W[i * 2 + 1] ?? null
-    set(m, a, b)
-    return winner(m, a, b)
-  })
-
-  // QF
-  const qfDB = byPhase('quarterfinal')
-  const qfW: (string | null)[] = qfDB.map((m, i) => {
-    const a = r16W[i * 2] ?? null, b = r16W[i * 2 + 1] ?? null
-    set(m, a, b)
-    return winner(m, a, b)
-  })
-
-  // SF
-  const sfDB = byPhase('semifinal')
-  const sfW: (string | null)[] = sfDB.map((m, i) => {
-    const a = qfW[i * 2] ?? null, b = qfW[i * 2 + 1] ?? null
-    set(m, a, b)
-    return winner(m, a, b)
-  })
-
-  // Final
-  const finalM = knockoutMatches.find(m => m.phase === 'final')
-  if (finalM) set(finalM, sfW[0] ?? null, sfW[1] ?? null)
-
-  // 3º Lugar
-  const thirdM = knockoutMatches.find(m => m.phase === 'third_place')
-  if (thirdM) {
-    const loser = (i: number) => {
-      const w = sfW[i]; if (!w) return null
-      const a = qfW[i * 2] ?? null, b = qfW[i * 2 + 1] ?? null
-      return w === a ? b : a
-    }
-    set(thirdM, loser(0), loser(1))
-  }
-
-  return map
-}
 
 // ── ScoreInput ─────────────────────────────────────────────────────────────────
 
@@ -438,8 +353,8 @@ export function TabelaMBClient({
 
   const knockoutTeamMap = useMemo(() => {
     const thirdSlots = resolveThirdSlots(officialThirds)
-    if (!thirdSlots) return new Map<string, TeamOverride>()
-    const r32Slots = buildR32Teams(officialStandings, officialThirds, thirdSlots) as R32Slot[]
+    if (!thirdSlots) return new Map<string, KnockoutTeamOverride>()
+    const r32Slots = buildR32Teams(officialStandings, officialThirds, thirdSlots)
     const knockoutMatches = matches.filter(m => m.phase !== 'group')
     return buildKnockoutTeamMap(r32Slots, knockoutMatches)
   }, [officialStandings, officialThirds, matches])

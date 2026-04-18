@@ -20,7 +20,7 @@ import { StickyStats } from './StickyStats'
 import { AutoFillButton } from './AutoFillButton'
 import { formatBrasilia } from '@/utils/date'
 import type { MatchPhase } from '@/types/database'
-import { calcGroupStandings } from '@/lib/bracket/engine'
+import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap } from '@/lib/bracket/engine'
 import type { BetSlim, MatchSlim } from '@/lib/bracket/engine'
 
 const GROUP_ORDER = ['A','B','C','D','E','F','G','H','I','J','K','L']
@@ -123,6 +123,22 @@ export default async function PalpitesPage({
 
   const groupMatches    = (matches ?? []).filter(m => m.phase === 'group')
   const knockoutMatches = (matches ?? []).filter(m => m.phase !== 'group')
+
+  // Resolve team names for knockout matches from official group standings
+  const officialScoreMap = new Map<string, BetSlim>(
+    groupMatches
+      .filter(m => m.score_home !== null && m.score_away !== null)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((m: any) => [m.id, { match_id: m.id, score_home: m.score_home, score_away: m.score_away }])
+  )
+  const officialStandings = calcGroupStandings(slimGroupMatches, officialScoreMap)
+  const officialThirds    = rankThirds(officialStandings)
+  const officialThirdSlots = resolveThirdSlots(officialThirds)
+  const officialR32Slots  = officialThirdSlots
+    ? buildR32Teams(officialStandings, officialThirds, officialThirdSlots)
+    : []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const knockoutTeamMap = buildKnockoutTeamMap(officialR32Slots, knockoutMatches as any)
 
   // Mapa grupo → {teams, deadline}
   type TeamEntry = { team: string; flag: string }
@@ -379,15 +395,18 @@ export default async function PalpitesPage({
                   {visibleKnockoutPhases.map(phase => {
                     const phaseMatches = knockoutByPhase[phase]
                     if (!phaseMatches?.length) return null
+                    const resolvedMatches = phaseMatches.map(m => ({
+                      ...m, ...(knockoutTeamMap.get(m.id) ?? {}),
+                    }))
                     if (phase === 'final') return (
-                      phaseMatches.map(m => (
+                      resolvedMatches.map(m => (
                         <MatchBetRow key={m.id} match={m} bet={betMap.get(m.id) ?? null} />
                       ))
                     )
                     return (
                       <>
                         <SectionRow key={`hdr-${phase}`} label={PHASE_LABELS[phase]!} />
-                        {phaseMatches.map(m => (
+                        {resolvedMatches.map(m => (
                           <MatchBetRow key={m.id} match={m} bet={betMap.get(m.id) ?? null} />
                         ))}
                       </>

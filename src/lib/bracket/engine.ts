@@ -470,3 +470,105 @@ export function resolveR32ThirdSlot(
   if (!slot) return null
   return thirdSlots[slot] ?? null  // ex: "3E" (terceiro do grupo E)
 }
+
+// ── Knockout team override map ────────────────────────────────────────────────
+
+export type KnockoutTeamOverride = {
+  team_home: string; flag_home: string
+  team_away: string; flag_away: string
+}
+
+type KnockoutSlot = { teamA: { team: string; flag: string } | null; teamB: { team: string; flag: string } | null }
+type KnockoutMatch = {
+  id: string; phase: string; match_number: number
+  team_home: string; flag_home: string
+  team_away: string; flag_away: string
+  score_home: number | null; score_away: number | null
+  penalty_winner: string | null
+}
+
+/**
+ * Builds a map from match_id → resolved teams for all knockout matches,
+ * using official group standings (r32Slots) and actual knockout match scores.
+ */
+export function buildKnockoutTeamMap(
+  r32Slots: KnockoutSlot[],
+  knockoutMatches: KnockoutMatch[],
+): Map<string, KnockoutTeamOverride> {
+  const map = new Map<string, KnockoutTeamOverride>()
+  const byPhase = (phase: string) =>
+    knockoutMatches.filter(m => m.phase === phase).sort((a, b) => a.match_number - b.match_number)
+
+  const flagMap = new Map<string, string>()
+  for (const m of knockoutMatches) {
+    if (m.team_home && m.flag_home) flagMap.set(m.team_home, m.flag_home)
+    if (m.team_away && m.flag_away) flagMap.set(m.team_away, m.flag_away)
+  }
+  for (const s of r32Slots) {
+    if (s.teamA) flagMap.set(s.teamA.team, s.teamA.flag)
+    if (s.teamB) flagMap.set(s.teamB.team, s.teamB.flag)
+  }
+  const flag = (t: string | null) => (t ? (flagMap.get(t) ?? '') : '')
+
+  const winner = (m: KnockoutMatch | undefined, a: string | null, b: string | null): string | null => {
+    if (!m || m.score_home === null || m.score_away === null) return null
+    if (m.score_home > m.score_away) return a
+    if (m.score_away > m.score_home) return b
+    return m.penalty_winner ?? null
+  }
+
+  const set = (m: KnockoutMatch, a: string | null, b: string | null) => {
+    if (!a && !b) return
+    map.set(m.id, {
+      team_home: a ?? m.team_home, flag_home: flag(a) || m.flag_home,
+      team_away: b ?? m.team_away, flag_away: flag(b) || m.flag_away,
+    })
+  }
+
+  // R32
+  const r32DB = new Map(knockoutMatches.filter(m => m.phase === 'round_of_32').map(m => [m.match_number, m]))
+  const r32W: (string | null)[] = r32Slots.map((s, i) => {
+    const num = parseInt(R32_MATCHES[i]?.matchNum.slice(1) ?? '0', 10)
+    const db  = r32DB.get(num)
+    if (db) set(db, s.teamA?.team ?? null, s.teamB?.team ?? null)
+    return winner(db, s.teamA?.team ?? null, s.teamB?.team ?? null)
+  })
+
+  // R16
+  const r16DB = byPhase('round_of_16')
+  const r16W: (string | null)[] = r16DB.map((m, i) => {
+    const a = r32W[i * 2] ?? null, b = r32W[i * 2 + 1] ?? null
+    set(m, a, b); return winner(m, a, b)
+  })
+
+  // QF
+  const qfDB = byPhase('quarterfinal')
+  const qfW: (string | null)[] = qfDB.map((m, i) => {
+    const a = r16W[i * 2] ?? null, b = r16W[i * 2 + 1] ?? null
+    set(m, a, b); return winner(m, a, b)
+  })
+
+  // SF
+  const sfDB = byPhase('semifinal')
+  const sfW: (string | null)[] = sfDB.map((m, i) => {
+    const a = qfW[i * 2] ?? null, b = qfW[i * 2 + 1] ?? null
+    set(m, a, b); return winner(m, a, b)
+  })
+
+  // Final
+  const finalM = knockoutMatches.find(m => m.phase === 'final')
+  if (finalM) set(finalM, sfW[0] ?? null, sfW[1] ?? null)
+
+  // 3º Lugar
+  const thirdM = knockoutMatches.find(m => m.phase === 'third_place')
+  if (thirdM) {
+    const loser = (i: number) => {
+      const w = sfW[i]; if (!w) return null
+      const a = qfW[i * 2] ?? null, b = qfW[i * 2 + 1] ?? null
+      return w === a ? b : a
+    }
+    set(thirdM, loser(0), loser(1))
+  }
+
+  return map
+}
