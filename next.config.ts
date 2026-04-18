@@ -1,6 +1,12 @@
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
+  async redirects() {
+    return [
+      { source: '/classificacao', destination: '/tabelaMB', permanent: true },
+    ]
+  },
+
   // Mantém a configuração do Excel
   serverExternalPackages: ['exceljs'],
 
