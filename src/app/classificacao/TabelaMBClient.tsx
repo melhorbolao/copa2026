@@ -91,12 +91,12 @@ const ROW_H_BONUS = 38
 const ROW_H_SEC   = 26
 
 // Frozen column pixel offsets
-const COL_NUM_W      = 36
-const COL_TEAMS_LEFT = COL_NUM_W
+const COL_DATE_W     = 48
+const COL_TEAMS_LEFT = COL_DATE_W
 const COL_TEAMS_W    = 148
-const COL_SCORE_LEFT = COL_TEAMS_LEFT + COL_TEAMS_W   // 184
+const COL_SCORE_LEFT = COL_TEAMS_LEFT + COL_TEAMS_W   // 196
 const COL_SCORE_W    = 96
-const FROZEN_TOTAL   = COL_SCORE_LEFT + COL_SCORE_W   // 280
+const FROZEN_TOTAL   = COL_SCORE_LEFT + COL_SCORE_W   // 292
 const PART_COL_W     = 64
 
 // ── Row types ──────────────────────────────────────────────────────────────────
@@ -154,6 +154,15 @@ function thirdCellKind(
 
 const abbr = (name: string, max = 7) =>
   name.length <= max ? name : name.slice(0, max - 1) + '…'
+
+// ── Format match datetime (Brasília UTC-3) ─────────────────────────────────────
+
+function fmtMatchDate(dt: string) {
+  const d = new Date(dt)
+  const date = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' })
+  const time = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
+  return { date, time }
+}
 
 // ── Knockout team resolution ───────────────────────────────────────────────────
 
@@ -498,7 +507,7 @@ export function TabelaMBClient({
       <div ref={containerRef} className="flex-1 overflow-auto" style={{ WebkitOverflowScrolling: 'touch' as const }}>
         <table className="border-collapse" style={{ width: tableW, tableLayout: 'fixed', fontSize: 11 }}>
           <colgroup>
-            <col style={{ width: COL_NUM_W }} />
+            <col style={{ width: COL_DATE_W }} />
             <col style={{ width: COL_TEAMS_W }} />
             <col style={{ width: COL_SCORE_W }} />
             {participants.map(p => <col key={p.id} style={{ width: PART_COL_W }} />)}
@@ -508,7 +517,7 @@ export function TabelaMBClient({
           <thead>
             <tr style={{ height: 48, background: '#1f2937' }}>
               <th style={{ position: 'sticky', top: 0, left: 0, zIndex: 50, background: '#1f2937', borderRight: '1px solid #374151' }}
-                className="text-center text-gray-300 font-semibold">#</th>
+                className="text-center text-gray-300 font-semibold text-[10px]">Data</th>
               <th style={{ position: 'sticky', top: 0, left: COL_TEAMS_LEFT, zIndex: 50, background: '#1f2937', borderRight: '1px solid #374151' }}
                 className="text-left px-1.5 text-gray-300 font-semibold">Jogo</th>
               <th style={{ position: 'sticky', top: 0, left: COL_SCORE_LEFT, zIndex: 50, background: '#1f2937', borderRight: '2px solid #6b7280' }}
@@ -646,19 +655,23 @@ export function TabelaMBClient({
               const ktOverride = knockoutTeamMap.get(match.id)
               const teamHome = ktOverride?.team_home ?? match.team_home
               const teamAway = ktOverride?.team_away ?? match.team_away
+              const { date: mDate, time: mTime } = fmtMatchDate(match.match_datetime)
               return (
                 <tr key={match.id} style={{ height: ROW_H }}>
                   <td style={{ position: 'sticky', left: 0, zIndex: 30, background: bg, borderRight: '1px solid #f3f4f6' }}
                     className="text-center text-gray-500">
                     <div className="flex flex-col items-center leading-none gap-0.5">
-                      <span className="font-mono text-[10px]">{match.match_number}</span>
-                      {match.is_brazil && <span className="text-[7px] font-black text-verde-700 bg-verde-100 rounded-sm px-0.5">×2</span>}
+                      <span className="text-[9px] text-gray-600">{mDate}</span>
+                      <span className="text-[9px] font-semibold text-gray-800">{mTime}</span>
                     </div>
                   </td>
                   <td style={{ position: 'sticky', left: COL_TEAMS_LEFT, zIndex: 30, background: bg, borderRight: '1px solid #f3f4f6' }}
                     className="px-1.5">
                     <div className="flex flex-col leading-none gap-px">
-                      <span className="truncate font-semibold text-gray-800" style={{ maxWidth: COL_TEAMS_W - 8 }}>{teamHome}</span>
+                      <div className="flex items-center gap-0.5">
+                        <span className="truncate font-semibold text-gray-800" style={{ maxWidth: COL_TEAMS_W - 16 }}>{teamHome}</span>
+                        {match.is_brazil && <span className="shrink-0 text-[7px] font-black text-verde-700 bg-verde-100 rounded-sm px-0.5">×2</span>}
+                      </div>
                       <span className="text-[8px] text-gray-300">vs</span>
                       <span className="truncate font-semibold text-gray-800" style={{ maxWidth: COL_TEAMS_W - 8 }}>{teamAway}</span>
                     </div>
