@@ -3,9 +3,10 @@ import type { ThirdTeam } from '@/lib/bracket/engine'
 
 interface Props {
   thirds: ThirdTeam[]
+  annexCOption?: number | null
 }
 
-export function ThirdsTable({ thirds }: Props) {
+export function ThirdsTable({ thirds, annexCOption }: Props) {
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200 shadow-sm">
       <div
@@ -16,7 +17,7 @@ export function ThirdsTable({ thirds }: Props) {
           🏅 Melhores Terceiros Colocados
         </span>
         <span className="ml-auto text-[11px] font-medium text-white/60">
-          Art. 13 FIFA · 8 de 12 avançam
+          Art. 13 FIFA · 8 de 12 avançam{annexCOption != null ? ` (${annexCOption})` : ''}
         </span>
       </div>
 

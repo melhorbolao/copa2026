@@ -7,7 +7,9 @@
  * - Chaveamento (Anexo C): 495 combinações possíveis de 8 terceiros
  */
 
-import { findAnnexeC } from './annexe_c'
+import { findAnnexeC, findAnnexeCOption } from './annexe_c'
+
+export { findAnnexeCOption }
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 

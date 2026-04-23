@@ -12,6 +12,7 @@ import {
   calcGroupStandings,
   rankThirds,
   resolveThirdSlots,
+  findAnnexeCOption,
   buildR32Teams,
   R32_MATCHES,
 } from '@/lib/bracket/engine'
@@ -278,8 +279,12 @@ export function ACopaClient({ initialMatches, isAdmin, initialOfficialTopScorer,
     [slimMatches, officialBetMap],
   )
 
-  const thirds     = useMemo(() => rankThirds(standings), [standings])
-  const thirdSlots = useMemo(() => resolveThirdSlots(thirds), [thirds])
+  const thirds       = useMemo(() => rankThirds(standings), [standings])
+  const thirdSlots   = useMemo(() => resolveThirdSlots(thirds), [thirds])
+  const annexCOption = useMemo(() => {
+    const adv = thirds.filter(t => t.advances).map(t => t.group)
+    return adv.length === 8 ? findAnnexeCOption(adv) : null
+  }, [thirds])
   const r32Slots   = useMemo(
     () => buildR32Teams(standings, thirds, thirdSlots, undefined, completeGroups, allGroupsComplete),
     [standings, thirds, thirdSlots, completeGroups, allGroupsComplete],
@@ -451,7 +456,7 @@ export function ACopaClient({ initialMatches, isAdmin, initialOfficialTopScorer,
       {/* ── Melhores Terceiros — só na fase de grupos ────────────────────────── */}
       {hasAnyScore && isGroupStage && thirds.length > 0 && (
         <div className="mb-8">
-          <ThirdsTable thirds={thirds} />
+          <ThirdsTable thirds={thirds} annexCOption={annexCOption} />
         </div>
       )}
 

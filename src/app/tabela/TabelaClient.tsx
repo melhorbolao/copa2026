@@ -8,6 +8,7 @@ import {
   rankThirds,
   resolveThirdSlots,
   buildR32Teams,
+  findAnnexeCOption,
 } from '@/lib/bracket/engine'
 import type { CalcGroupStanding } from '@/lib/bracket/engine'
 
@@ -72,8 +73,12 @@ export function TabelaClient({
   }, [standings, manualOrders])
 
   // Recalcula terceiros e slots com os standings efetivos
-  const thirds     = useMemo(() => rankThirds(effectiveStandings), [effectiveStandings])
-  const thirdSlots = useMemo(() => resolveThirdSlots(thirds), [thirds])
+  const thirds       = useMemo(() => rankThirds(effectiveStandings), [effectiveStandings])
+  const thirdSlots   = useMemo(() => resolveThirdSlots(thirds), [thirds])
+  const annexCOption = useMemo(() => {
+    const adv = thirds.filter(t => t.advances).map(t => t.group)
+    return adv.length === 8 ? findAnnexeCOption(adv) : null
+  }, [thirds])
 
   // Aplica palpites de terceiro ao array de thirds — substitui o time calculado pelo apostado
   const thirdsForBracket = useMemo(() => {
@@ -157,7 +162,7 @@ export function TabelaClient({
       {/* Melhores terceiros */}
       {thirds.length > 0 && (
         <div className="mb-8">
-          <ThirdsTable thirds={thirds} />
+          <ThirdsTable thirds={thirds} annexCOption={annexCOption} />
         </div>
       )}
 
