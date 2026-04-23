@@ -77,7 +77,7 @@ export interface R32MatchDef {
 // Bloco 1: 2A, 1F, 1E, 1I
 // Bloco 2: 1H, 2K, 1G, 1D
 // Bloco 3: 1C, 2E, 1A, 1L
-// Bloco 4: 1J, 2D, 1B, 1K
+// Bloco 4: 2D, 1J, 1B, 1K
 export const R32_MATCHES: R32MatchDef[] = [
   // Bloco 1
   { matchNum: 'M73', slotA: '2A', slotB: '2B' },
@@ -95,8 +95,8 @@ export const R32_MATCHES: R32MatchDef[] = [
   { matchNum: 'M79', slotA: '1A', slotB: '3rd:CEFHI' },
   { matchNum: 'M80', slotA: '1L', slotB: '3rd:EHIJK' },
   // Bloco 4
-  { matchNum: 'M86', slotA: '1J', slotB: '2H' },
   { matchNum: 'M88', slotA: '2D', slotB: '2G' },
+  { matchNum: 'M86', slotA: '1J', slotB: '2H' },
   { matchNum: 'M85', slotA: '1B', slotB: '3rd:EFGIJ' },
   { matchNum: 'M87', slotA: '1K', slotB: '3rd:DEIJL' },
 ]

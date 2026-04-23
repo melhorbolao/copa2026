@@ -442,7 +442,7 @@ function TeamSlot({
         <>
           <Flag code={team.flag} size="sm" className="!h-2.5 !w-3.5 shrink-0" />
           <span className="min-w-0 flex-1 truncate">{team.team}</span>
-          {posLabel && <span className="shrink-0 text-[9px] font-medium text-gray-400">{posLabel}</span>}
+          {posLabel && <span className="hidden sm:inline shrink-0 text-[9px] font-medium text-gray-400">{posLabel}</span>}
           {isWinner && <span className="ml-auto shrink-0 text-[10px] text-verde-500">✓</span>}
         </>
       ) : (
