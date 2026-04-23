@@ -75,7 +75,7 @@ export interface R32MatchDef {
 
 // Ordem de exibição do chaveamento (16avos), organizada em 4 blocos de 4.
 // Bloco 1: 2A, 1F, 1E, 1I
-// Bloco 2: 2K, 1H, 1D, 1G
+// Bloco 2: 1H, 2K, 1G, 1D
 // Bloco 3: 1C, 2E, 1A, 1L
 // Bloco 4: 1J, 2D, 1B, 1K
 export const R32_MATCHES: R32MatchDef[] = [
@@ -85,10 +85,10 @@ export const R32_MATCHES: R32MatchDef[] = [
   { matchNum: 'M74', slotA: '1E', slotB: '3rd:ABCDF' },
   { matchNum: 'M77', slotA: '1I', slotB: '3rd:CDFGH' },
   // Bloco 2
-  { matchNum: 'M83', slotA: '2K', slotB: '2L' },
   { matchNum: 'M84', slotA: '1H', slotB: '2J' },
-  { matchNum: 'M81', slotA: '1D', slotB: '3rd:BEFIJ' },
+  { matchNum: 'M83', slotA: '2K', slotB: '2L' },
   { matchNum: 'M82', slotA: '1G', slotB: '3rd:AEHIJ' },
+  { matchNum: 'M81', slotA: '1D', slotB: '3rd:BEFIJ' },
   // Bloco 3
   { matchNum: 'M76', slotA: '1C', slotB: '2F' },
   { matchNum: 'M78', slotA: '2E', slotB: '2I' },
