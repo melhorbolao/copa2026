@@ -33,12 +33,14 @@ interface Props {
   match: MatchRow
   canEdit: boolean
   teamOverride?: TeamOverride
+  slotLabelHome?: string
+  slotLabelAway?: string
   onPenaltyUpdate?: (matchId: string, winner: string | null) => void
 }
 
 const KNOCKOUT_PHASES = new Set(['round_of_32', 'round_of_16', 'quarterfinal', 'semifinal', 'third_place', 'final'])
 
-export const MatchScoreRow = memo(function MatchScoreRow({ match, canEdit, teamOverride, onPenaltyUpdate }: Props) {
+export const MatchScoreRow = memo(function MatchScoreRow({ match, canEdit, teamOverride, slotLabelHome, slotLabelAway, onPenaltyUpdate }: Props) {
   const teamHome = teamOverride?.team_home ?? match.team_home
   const flagHome = teamOverride?.flag_home ?? match.flag_home
   const teamAway = teamOverride?.team_away ?? match.team_away
@@ -155,6 +157,7 @@ export const MatchScoreRow = memo(function MatchScoreRow({ match, canEdit, teamO
         <td className="w-20 px-1.5 py-2.5 text-right sm:w-auto sm:px-3">
           <div className="flex min-w-0 items-center justify-end gap-1 text-gray-900 sm:gap-1.5">
             <span className="min-w-0 truncate text-[10px] font-semibold sm:text-sm sm:whitespace-nowrap">{teamHome}</span>
+            {slotLabelHome && <span className="hidden sm:inline shrink-0 text-[9px] font-normal text-gray-400">{slotLabelHome}</span>}
             <Flag code={flagHome} size="sm" className="shrink-0" />
           </div>
         </td>
@@ -226,6 +229,7 @@ export const MatchScoreRow = memo(function MatchScoreRow({ match, canEdit, teamO
           <div className="flex min-w-0 items-center gap-1 text-gray-900 sm:gap-1.5">
             <Flag code={flagAway} size="sm" className="shrink-0" />
             <span className="min-w-0 truncate text-[10px] font-semibold sm:text-sm sm:whitespace-nowrap">{teamAway}</span>
+            {slotLabelAway && <span className="hidden sm:inline shrink-0 text-[9px] font-normal text-gray-400">{slotLabelAway}</span>}
           </div>
         </td>
 

@@ -20,7 +20,7 @@ import { StickyStats } from './StickyStats'
 import { AutoFillButton } from './AutoFillButton'
 import { formatBrasilia } from '@/utils/date'
 import type { MatchPhase } from '@/types/database'
-import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap } from '@/lib/bracket/engine'
+import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap, R32_MATCHES } from '@/lib/bracket/engine'
 import type { BetSlim, MatchSlim } from '@/lib/bracket/engine'
 
 const GROUP_ORDER = ['A','B','C','D','E','F','G','H','I','J','K','L']
@@ -139,6 +139,13 @@ export default async function PalpitesPage({
     : []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const knockoutTeamMap = buildKnockoutTeamMap(officialR32Slots, knockoutMatches as any)
+
+  const r32LabelMap = new Map<number, { labelA: string; labelB: string }>()
+  R32_MATCHES.forEach((m, i) => {
+    const num = parseInt(m.matchNum.slice(1), 10)
+    const slot = officialR32Slots[i]
+    if (slot) r32LabelMap.set(num, { labelA: slot.labelA, labelB: slot.labelB })
+  })
 
   // Mapa grupo → {teams, deadline}
   type TeamEntry = { team: string; flag: string }
@@ -398,6 +405,7 @@ export default async function PalpitesPage({
                     const resolvedMatches = phaseMatches.map(m => ({
                       ...m, ...(knockoutTeamMap.get(m.id) ?? {}),
                     }))
+                    const isR32 = phase === 'round_of_32'
                     if (phase === 'final') return (
                       resolvedMatches.map(m => (
                         <MatchBetRow key={m.id} match={m} bet={betMap.get(m.id) ?? null} />
@@ -406,9 +414,18 @@ export default async function PalpitesPage({
                     return (
                       <>
                         <SectionRow key={`hdr-${phase}`} label={PHASE_LABELS[phase]!} />
-                        {resolvedMatches.map(m => (
-                          <MatchBetRow key={m.id} match={m} bet={betMap.get(m.id) ?? null} />
-                        ))}
+                        {resolvedMatches.map(m => {
+                          const r32Labels = isR32 ? r32LabelMap.get(m.match_number) : undefined
+                          return (
+                            <MatchBetRow
+                              key={m.id}
+                              match={m}
+                              bet={betMap.get(m.id) ?? null}
+                              slotLabelHome={r32Labels?.labelA}
+                              slotLabelAway={r32Labels?.labelB}
+                            />
+                          )
+                        })}
                       </>
                     )
                   })}

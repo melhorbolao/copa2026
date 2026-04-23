@@ -285,6 +285,16 @@ export function ACopaClient({ initialMatches, isAdmin, initialOfficialTopScorer,
     [standings, thirds, thirdSlots, completeGroups, allGroupsComplete],
   )
 
+  const r32LabelMap = useMemo(() => {
+    const map = new Map<number, { labelA: string; labelB: string }>()
+    R32_MATCHES.forEach((m, i) => {
+      const num = parseInt(m.matchNum.slice(1), 10)
+      const slot = r32Slots[i]
+      if (slot) map.set(num, { labelA: slot.labelA, labelB: slot.labelB })
+    })
+    return map
+  }, [r32Slots])
+
   const sortedStandings = useMemo(
     () => GROUP_ORDER.map(g => standings.find(s => s.group === g)).filter(Boolean) as typeof standings,
     [standings],
@@ -396,15 +406,20 @@ export function ACopaClient({ initialMatches, isAdmin, initialOfficialTopScorer,
               </tr>
             </thead>
             <tbody>
-              {filteredMatches.map(match => (
-                <MatchScoreRow
-                  key={match.id}
-                  match={match}
-                  teamOverride={derivedTeamMap.get(match.id)}
-                  canEdit={computeCanEdit(match, isAdmin)}
-                  onPenaltyUpdate={handlePenaltyUpdate}
-                />
-              ))}
+              {filteredMatches.map(match => {
+                const r32Labels = match.phase === 'round_of_32' ? r32LabelMap.get(match.match_number) : undefined
+                return (
+                  <MatchScoreRow
+                    key={match.id}
+                    match={match}
+                    teamOverride={derivedTeamMap.get(match.id)}
+                    canEdit={computeCanEdit(match, isAdmin)}
+                    slotLabelHome={r32Labels?.labelA}
+                    slotLabelAway={r32Labels?.labelB}
+                    onPenaltyUpdate={handlePenaltyUpdate}
+                  />
+                )
+              })}
               {filteredMatches.length === 0 && (
                 <tr>
                   <td colSpan={5} className="py-8 text-center text-sm text-gray-400">

@@ -23,9 +23,11 @@ interface Props {
     score_away: number | null
   }
   bet: Bet | null
+  slotLabelHome?: string
+  slotLabelAway?: string
 }
 
-export function MatchBetRow({ match, bet }: Props) {
+export function MatchBetRow({ match, bet, slotLabelHome, slotLabelAway }: Props) {
   const [pending, startTransition] = useTransition()
   const [home, setHome] = useState(bet?.score_home?.toString() ?? '')
   const [away, setAway] = useState(bet?.score_away?.toString() ?? '')
@@ -133,6 +135,7 @@ export function MatchBetRow({ match, bet }: Props) {
       <td className="w-20 px-1.5 py-2.5 text-right sm:w-auto sm:px-3">
         <div className="flex min-w-0 items-center justify-end gap-1 text-gray-900 sm:gap-1.5">
           <span className="min-w-0 truncate text-[10px] font-semibold sm:text-sm sm:whitespace-nowrap">{match.team_home}</span>
+          {slotLabelHome && <span className="hidden sm:inline shrink-0 text-[9px] font-normal text-gray-400">{slotLabelHome}</span>}
           <Flag code={match.flag_home} size="sm" className="shrink-0" />
         </div>
       </td>
@@ -196,6 +199,7 @@ export function MatchBetRow({ match, bet }: Props) {
         <div className="flex min-w-0 items-center gap-1 text-gray-900 sm:gap-1.5">
           <Flag code={match.flag_away} size="sm" className="shrink-0" />
           <span className="min-w-0 truncate text-[10px] font-semibold sm:text-sm sm:whitespace-nowrap">{match.team_away}</span>
+          {slotLabelAway && <span className="hidden sm:inline shrink-0 text-[9px] font-normal text-gray-400">{slotLabelAway}</span>}
         </div>
       </td>
 
