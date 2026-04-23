@@ -70,7 +70,13 @@ export const MatchScoreRow = memo(function MatchScoreRow({ match, canEdit, teamO
   const hasScore   = match.score_home !== null && match.score_away !== null
   const isDraw     = hasScore && match.score_home === match.score_away
   const isKnockout = KNOCKOUT_PHASES.has(match.phase)
-  const showPenalty = isKnockout && isDraw
+
+  // Mostra pênaltis se o placar salvo é empate OU se o input local já é empate
+  // (sem esperar o real-time propagar a mudança ao banco)
+  const localH = parseInt(home, 10)
+  const localA = parseInt(away, 10)
+  const localDraw = home !== '' && away !== '' && !isNaN(localH) && !isNaN(localA) && localH === localA
+  const showPenalty = isKnockout && (isDraw || localDraw)
 
   const doSave = (h: number, a: number) => {
     setError('')
