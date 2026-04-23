@@ -76,7 +76,7 @@ export default async function PalpitesPage({
       .select('champion, runner_up, semi1, semi2, top_scorer, points')
       .eq('participant_id', participantId)
       .maybeSingle(),
-    supabase.from('top_scorer_mapping').select('raw_name, standardized_name').then(r => r.data ?? []).catch(() => []),
+    supabase.from('top_scorer_mapping').select('raw_name, standardized_name').then(r => r.data ?? [], () => []),
   ])
 
   // Admin client para contornar RLS em third_place_bets (tabela sem política SELECT explícita)

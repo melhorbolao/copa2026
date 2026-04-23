@@ -5,6 +5,7 @@ interface FlagProps {
   name?: string      // nome da seleção (usado no alt)
   size?: 'sm' | 'md' | 'lg'
   className?: string
+  title?: string
 }
 
 const sizes = {
@@ -13,7 +14,7 @@ const sizes = {
   lg: { width: 48, height: 36 },
 }
 
-export function Flag({ code, name = '', size = 'md', className = '' }: FlagProps) {
+export function Flag({ code, name = '', size = 'md', className = '', title }: FlagProps) {
   const { width, height } = sizes[size]
 
   if (!code) return null
@@ -28,6 +29,7 @@ export function Flag({ code, name = '', size = 'md', className = '' }: FlagProps
       width={width}
       height={height}
       alt={name ? `Bandeira ${name}` : `Bandeira ${code}`}
+      title={title}
       className={`inline-block rounded-sm object-cover shadow-sm ${className}`}
       unoptimized
     />

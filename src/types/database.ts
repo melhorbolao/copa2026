@@ -415,6 +415,36 @@ export type Database = {
         }
         Relationships: []
       }
+      tournament_settings: {
+        Row: {
+          key: string
+          value: string
+        }
+        Insert: {
+          key: string
+          value: string
+        }
+        Update: {
+          key?: string
+          value?: string
+        }
+        Relationships: []
+      }
+      top_scorer_mapping: {
+        Row: {
+          raw_name: string
+          standardized_name: string
+        }
+        Insert: {
+          raw_name: string
+          standardized_name: string
+        }
+        Update: {
+          raw_name?: string
+          standardized_name?: string
+        }
+        Relationships: []
+      }
       teams: {
         Row: {
           name: string
