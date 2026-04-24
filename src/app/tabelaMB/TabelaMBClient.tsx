@@ -874,7 +874,14 @@ export function TabelaMBClient({
                 className="text-center text-gray-200 font-semibold">Oficial</th>
               {/* Colunas de estatísticas */}
               <th style={{ position: 'sticky', top: 0, ...(isMobile ? {} : { left: frozenTotal }), zIndex: isMobile ? 40 : 50, background: '#1f2937', borderRight: '1px solid #374151' }}
-                className="text-center text-[9px] font-semibold text-gray-400 px-0.5">Líder</th>
+                className="text-center px-0.5">
+                <span className="block truncate font-semibold text-[9px] text-gray-300" style={{ maxWidth: STAT_COL_W - 4 }}>
+                  {participants.find(p => p.id === leaderId)?.apelido ?? 'Líder'}
+                </span>
+                <span className="block text-[11px] font-semibold text-gray-500">
+                  {leaderId && (computedTotals[leaderId] ?? 0) > 0 ? computedTotals[leaderId] : '–'}
+                </span>
+              </th>
               <th style={{ position: 'sticky', top: 0, ...(isMobile ? {} : { left: frozenTotal + STAT_COL_W }), zIndex: isMobile ? 40 : 50, background: '#1f2937', borderRight: '1px solid #374151' }}
                 className="text-center text-[9px] font-semibold text-gray-400 px-0.5">Pont.</th>
               <th style={{ position: 'sticky', top: 0, ...(isMobile ? {} : { left: frozenTotal + 2 * STAT_COL_W }), zIndex: isMobile ? 40 : 50, background: '#1f2937', borderRight: '1px solid #374151' }}
@@ -969,13 +976,28 @@ export function TabelaMBClient({
                     </td>
                     {/* Colunas de stats */}
                     {(() => {
-                      const stats = groupEventStats(g, of1, of2, participants, groupBetMap)
-                      const lb    = groupBetMap.get(`${leaderId}:${g}`)
-                      const lider = lb?.first_place ? `${teamAbbrs[lb.first_place] ?? abbr(lb.first_place, 4)}/${teamAbbrs[lb.second_place] ?? abbr(lb.second_place, 4)}` : '—'
-                      const media = stats.media > 0 ? stats.media.toFixed(1) : '—'
+                      const stats  = groupEventStats(g, of1, of2, participants, groupBetMap)
+                      const lb     = groupBetMap.get(`${leaderId}:${g}`)
+                      const lbKind = groupCellKind(lb, of1, of2)
+                      const lbBg   = CELL_KIND_BG_HEX[lbKind] || '#eff6ff'
+                      const media  = stats.media > 0 ? stats.media.toFixed(1) : '—'
                       const s0 = !isMobile ? { position: 'sticky' as const, zIndex: 20, background: '#eff6ff' } : {}
                       return (<>
-                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal } : {}) }} className="border-r border-blue-50 text-center text-[9px] text-gray-500 truncate px-0.5">{lider}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal, background: lbBg } : {}) }}
+                          className={`border-r border-blue-50 text-center ${isMobile ? CELL_BG[lbKind] : ''}`}>
+                          {lb?.first_place ? (
+                            <div className="flex flex-col items-center leading-none gap-px">
+                              <span className="text-[9px] text-gray-600 truncate font-medium" style={{ maxWidth: STAT_COL_W - 4 }}>
+                                {(teamAbbrs[lb.first_place] ?? abbr(lb.first_place, 4))}/{(teamAbbrs[lb.second_place] ?? abbr(lb.second_place, 4))}
+                              </span>
+                              {lb.points !== null && (
+                                <span className={`text-[10px] font-bold ${lb.points > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>
+                                  {lb.points > 0 ? `+${lb.points}` : '0'}
+                                </span>
+                              )}
+                            </div>
+                          ) : <span className="text-gray-200">—</span>}
+                        </td>
                         <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + STAT_COL_W } : {}) }} className="border-r border-blue-50 text-center text-[10px]">{stats.pontuaram > 0 ? <span className="font-bold text-gray-700">{stats.pontuaram}</span> : <span className="text-gray-300">–</span>}</td>
                         <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 2 * STAT_COL_W } : {}) }} className="border-r border-blue-50 text-center text-[10px]">{stats.cravaram > 0 ? <span className="font-bold text-emerald-600">{stats.cravaram}</span> : <span className="text-gray-300">–</span>}</td>
                         <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 3 * STAT_COL_W, borderRight: '2px solid #93c5fd' } : {}) }} className="border-r border-blue-50 text-center text-[10px] text-gray-500">{stats.media > 0 ? media : <span className="text-gray-300">–</span>}</td>
@@ -1042,11 +1064,27 @@ export function TabelaMBClient({
                       const thirdPts = rules['terceiro_classificado'] ?? 3
                       const stats    = thirdEventStats(g, ot, thirdPts, participants, thirdBetMap)
                       const lb       = thirdBetMap.get(`${leaderId}:${g}`)
-                      const lider    = lb?.team ? (teamAbbrs[lb.team] ?? abbr(lb.team)) : '—'
+                      const lbKind   = thirdCellKind(lb?.team, ot)
+                      const lbPts    = lbKind === 'exact' ? thirdPts : lbKind === 'wrong' ? 0 : null
+                      const lbBg     = CELL_KIND_BG_HEX[lbKind] || '#faf5ff'
                       const media    = stats.media > 0 ? stats.media.toFixed(1) : '—'
                       const s0 = !isMobile ? { position: 'sticky' as const, zIndex: 20, background: '#faf5ff' } : {}
                       return (<>
-                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal } : {}) }} className="border-r border-violet-50 text-center text-[9px] text-gray-500 truncate px-0.5">{lider}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal, background: lbBg } : {}) }}
+                          className={`border-r border-violet-50 text-center ${isMobile ? CELL_BG[lbKind] : ''}`}>
+                          {lb?.team ? (
+                            <div className="flex flex-col items-center leading-none gap-px">
+                              <span className="text-[9px] text-gray-600 truncate font-medium" style={{ maxWidth: STAT_COL_W - 4 }}>
+                                {teamAbbrs[lb.team] ?? abbr(lb.team)}
+                              </span>
+                              {lbPts !== null && (
+                                <span className={`text-[10px] font-bold ${lbPts > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>
+                                  {lbPts > 0 ? `+${lbPts}` : '0'}
+                                </span>
+                              )}
+                            </div>
+                          ) : <span className="text-gray-200">—</span>}
+                        </td>
                         <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + STAT_COL_W } : {}) }} className="border-r border-violet-50 text-center text-[10px]">{stats.pontuaram > 0 ? <span className="font-bold text-gray-700">{stats.pontuaram}</span> : <span className="text-gray-300">–</span>}</td>
                         <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 2 * STAT_COL_W } : {}) }} className="border-r border-violet-50 text-center text-[10px]">{stats.cravaram > 0 ? <span className="font-bold text-emerald-600">{stats.cravaram}</span> : <span className="text-gray-300">–</span>}</td>
                         <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 3 * STAT_COL_W, borderRight: '2px solid #c4b5fd' } : {}) }} className="border-r border-violet-50 text-center text-[10px] text-gray-500">{stats.media > 0 ? media : <span className="text-gray-300">–</span>}</td>
@@ -1103,13 +1141,25 @@ export function TabelaMBClient({
                       className="text-center text-[9px] text-amber-600 font-semibold">G4</td>
                     {/* Colunas de stats */}
                     {(() => {
-                      const stats = g4EventStats(participants, tournamentBetMap, knockoutResults, rules, isZebraChampion, scorerMapping)
-                      const lb    = tournamentBetMap.get(leaderId)
-                      const lider = lb?.champion ? a(lb.champion) : '—'
-                      const media = stats.media > 0 ? stats.media.toFixed(1) : '—'
+                      const stats  = g4EventStats(participants, tournamentBetMap, knockoutResults, rules, isZebraChampion, scorerMapping)
+                      const lb     = tournamentBetMap.get(leaderId)
+                      const lbG4Pts = lb ? scoreTournamentBet({ ...lb, top_scorer: '' }, knockoutResults, rules, isZebraChampion, scorerMapping) : null
+                      const media  = stats.media > 0 ? stats.media.toFixed(1) : '—'
                       const s0 = !isMobile ? { position: 'sticky' as const, zIndex: 20, background: '#fffbeb' } : {}
                       return (<>
-                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal } : {}) }} className="border-r border-amber-50 text-center text-[9px] text-gray-500 truncate px-0.5">{lider}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal } : {}) }} className="border-r border-amber-50 text-center">
+                          {lb ? (
+                            <div className="flex flex-col items-center leading-none gap-px py-0.5">
+                              <span className="text-[8px] text-gray-700 truncate font-medium" style={{ maxWidth: STAT_COL_W - 4 }}>🏆{a(lb.champion)}</span>
+                              <span className="text-[8px] text-gray-700 truncate font-medium" style={{ maxWidth: STAT_COL_W - 4 }}>🥈{a(lb.runner_up)}</span>
+                              {lbG4Pts !== null && (
+                                <span className={`text-[10px] font-bold ${lbG4Pts > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>
+                                  {lbG4Pts > 0 ? `+${lbG4Pts}` : '0'}
+                                </span>
+                              )}
+                            </div>
+                          ) : <span className="text-gray-200">—</span>}
+                        </td>
                         <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + STAT_COL_W } : {}) }} className="border-r border-amber-50 text-center text-[10px]">{stats.pontuaram > 0 ? <span className="font-bold text-gray-700">{stats.pontuaram}</span> : <span className="text-gray-300">–</span>}</td>
                         <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 2 * STAT_COL_W } : {}) }} className="border-r border-amber-50 text-center text-[10px]">{stats.cravaram > 0 ? <span className="font-bold text-emerald-600">{stats.cravaram}</span> : <span className="text-gray-300">–</span>}</td>
                         <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 3 * STAT_COL_W, borderRight: '2px solid #fde68a' } : {}) }} className="border-r border-amber-50 text-center text-[10px] text-gray-500">{stats.media > 0 ? media : <span className="text-gray-300">–</span>}</td>
@@ -1164,14 +1214,30 @@ export function TabelaMBClient({
                       className="text-center text-[9px] text-amber-600 font-semibold">Art.</td>
                     {/* Colunas de stats */}
                     {(() => {
-                      const stats = scorerEventStats(participants, tournamentBetMap, localScorers, artilhPts, scorerMapping)
-                      const lb    = tournamentBetMap.get(leaderId)
-                      const rawLb = lb?.top_scorer ?? ''
-                      const lider = rawLb ? (scorerMapping[rawLb] ?? rawLb) : '—'
-                      const media = stats.media > 0 ? stats.media.toFixed(1) : '—'
+                      const stats     = scorerEventStats(participants, tournamentBetMap, localScorers, artilhPts, scorerMapping)
+                      const lb        = tournamentBetMap.get(leaderId)
+                      const rawLb     = lb?.top_scorer ?? ''
+                      const lbDisplay = rawLb ? (scorerMapping[rawLb] ?? rawLb) : ''
+                      const lbCorrect = lbDisplay.length > 0 && localScorers.length > 0
+                        && localScorers.some(s => s.trim().toLowerCase() === lbDisplay.trim().toLowerCase())
+                      const lbPts     = localScorers.length > 0 && lbDisplay ? (lbCorrect ? artilhPts : 0) : null
+                      const lbBg      = lbCorrect ? '#d1fae5' : (lbPts !== null ? '#fff1f2' : '#fffbeb')
+                      const media     = stats.media > 0 ? stats.media.toFixed(1) : '—'
                       const s0 = !isMobile ? { position: 'sticky' as const, zIndex: 20, background: '#fffbeb' } : {}
                       return (<>
-                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal } : {}) }} className="border-r border-amber-50 text-center text-[9px] text-gray-500 truncate px-0.5">{lider}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal, background: lbBg } : {}) }}
+                          className={`border-r border-amber-50 text-center ${isMobile ? (lbCorrect ? 'bg-emerald-100' : lbPts !== null ? 'bg-rose-50' : '') : ''}`}>
+                          {lbDisplay ? (
+                            <div className="flex flex-col items-center leading-none gap-px">
+                              <span className="text-[9px] text-gray-700 truncate font-medium" style={{ maxWidth: STAT_COL_W - 4 }}>{lbDisplay}</span>
+                              {lbPts !== null && (
+                                <span className={`text-[10px] font-bold ${lbCorrect ? 'text-emerald-600' : 'text-gray-300'}`}>
+                                  {lbCorrect ? `+${lbPts}` : '0'}
+                                </span>
+                              )}
+                            </div>
+                          ) : <span className="text-gray-200">—</span>}
+                        </td>
                         <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + STAT_COL_W } : {}) }} className="border-r border-amber-50 text-center text-[10px]">{stats.pontuaram > 0 ? <span className="font-bold text-gray-700">{stats.pontuaram}</span> : <span className="text-gray-300">–</span>}</td>
                         <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 2 * STAT_COL_W } : {}) }} className="border-r border-amber-50 text-center text-[10px]">{stats.cravaram > 0 ? <span className="font-bold text-emerald-600">{stats.cravaram}</span> : <span className="text-gray-300">–</span>}</td>
                         <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 3 * STAT_COL_W, borderRight: '2px solid #fde68a' } : {}) }} className="border-r border-amber-50 text-center text-[10px] text-gray-500">{stats.media > 0 ? media : <span className="text-gray-300">–</span>}</td>
@@ -1292,13 +1358,27 @@ export function TabelaMBClient({
                   </td>
                   {/* Colunas de stats */}
                   {(() => {
-                    const stats = matchEventStats(match.id, match.score_home, match.score_away, participants, betMap)
-                    const lb    = betMap.get(`${leaderId}:${match.id}`)
-                    const lider = lb ? `${lb.score_home}–${lb.score_away}` : '—'
-                    const media = stats.media > 0 ? stats.media.toFixed(1) : '—'
+                    const stats  = matchEventStats(match.id, match.score_home, match.score_away, participants, betMap)
+                    const lb     = betMap.get(`${leaderId}:${match.id}`)
+                    const lbKind = matchCellKind(lb, match.score_home, match.score_away)
+                    const lbPts  = getMatchPts(leaderId, match.id)
+                    const lbBg   = CELL_KIND_BG_HEX[lbKind] || bg
+                    const media  = stats.media > 0 ? stats.media.toFixed(1) : '—'
                     const s0 = !isMobile ? { position: 'sticky' as const, zIndex: 20, background: bg } : {}
                     return (<>
-                      <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal } : {}) }} className="border-r border-gray-100 text-center text-[10px] text-gray-500 tabular-nums px-0.5">{lider}</td>
+                      <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal, background: lbBg } : {}) }}
+                        className={`border-r border-gray-100 text-center ${isMobile ? CELL_BG[lbKind] : ''}`}>
+                        {lb ? (
+                          <div className="flex flex-col items-center leading-none gap-px">
+                            <span className="tabular-nums font-semibold text-[9px] text-gray-700">{lb.score_home}–{lb.score_away}</span>
+                            {lbPts !== null && (
+                              <span className={`tabular-nums font-bold text-[10px] ${lbPts > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>
+                                {lbPts > 0 ? `+${lbPts}` : '0'}
+                              </span>
+                            )}
+                          </div>
+                        ) : <span className="text-gray-200">—</span>}
+                      </td>
                       <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + STAT_COL_W } : {}) }} className="border-r border-gray-100 text-center text-[10px]">{stats.pontuaram > 0 ? <span className="font-bold text-gray-700">{stats.pontuaram}</span> : <span className="text-gray-300">–</span>}</td>
                       <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 2 * STAT_COL_W } : {}) }} className="border-r border-gray-100 text-center text-[10px]">{stats.cravaram > 0 ? <span className="font-bold text-emerald-600">{stats.cravaram}</span> : <span className="text-gray-300">–</span>}</td>
                       <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 3 * STAT_COL_W, borderRight: '2px solid #d1d5db' } : {}) }} className="border-r border-gray-100 text-center text-[10px] text-gray-500">{stats.media > 0 ? media : <span className="text-gray-300">–</span>}</td>
