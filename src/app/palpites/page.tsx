@@ -79,14 +79,29 @@ export default async function PalpitesPage({
     supabase.from('top_scorer_mapping').select('raw_name, standardized_name').then(r => r.data ?? [], () => []),
   ])
 
-  // Admin client para contornar RLS em third_place_bets (tabela sem política SELECT explícita)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const thirdBetsResult = await (admin as any)
-    .from('third_place_bets')
-    .select('group_name, team, points')
-    .eq('participant_id', participantId)
-  if (thirdBetsResult.error) console.error('[palpites/page] third_place_bets SELECT error:', thirdBetsResult.error)
-  const thirdBets = (thirdBetsResult.data ?? []) as { group_name: string; team: string; points: number | null }[]
+  const adminAny = admin as any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let thirdBets: { group_name: string; team: string; points?: number | null }[] = []
+  {
+    // First attempt: include points column (requires add_scoring_infrastructure.sql to have run)
+    const r1 = await adminAny
+      .from('third_place_bets')
+      .select('group_name, team, points')
+      .eq('participant_id', participantId)
+    if (r1.error) {
+      // Likely the points column doesn't exist yet — fall back without it
+      console.error('[palpites/page] third_place_bets (with points) error:', r1.error?.message ?? r1.error)
+      const r2 = await adminAny
+        .from('third_place_bets')
+        .select('group_name, team')
+        .eq('participant_id', participantId)
+      if (r2.error) console.error('[palpites/page] third_place_bets fallback error:', r2.error?.message ?? r2.error)
+      thirdBets = r2.data ?? []
+    } else {
+      thirdBets = r1.data ?? []
+    }
+  }
 
   const thirdPts: number = await supabase
     .from('scoring_rules').select('points').eq('key', 'terceiro_classificado').maybeSingle()
