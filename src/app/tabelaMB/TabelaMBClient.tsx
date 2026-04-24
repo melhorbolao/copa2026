@@ -3,6 +3,8 @@
 import {
   useState, useEffect, useRef, useCallback, useTransition, memo, useMemo,
 } from 'react'
+import { toast } from 'react-hot-toast'
+import { downloadExcel } from '@/utils/downloadExcel'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { createClient } from '@/lib/supabase/client'
 import { saveOfficialScore, saveOfficialTopScorer } from '@/app/acopa/actions'
@@ -827,11 +829,14 @@ export function TabelaMBClient({
 
             const buf = await wb.xlsx.writeBuffer()
             const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-            const url = URL.createObjectURL(blob)
-            const a = document.createElement('a')
             const brNow = new Date(Date.now() - 3 * 60 * 60 * 1000)
             const stamp = `${String(brNow.getUTCMonth()+1).padStart(2,'0')}${String(brNow.getUTCDate()).padStart(2,'0')}${String(brNow.getUTCHours()).padStart(2,'0')}${String(brNow.getUTCMinutes()).padStart(2,'0')}`
-            a.href = url; a.download = `TabelaMB_${stamp}.xlsx`; a.click(); URL.revokeObjectURL(url)
+            const fileName = `TabelaMB_${stamp}.xlsx`
+            const result = await downloadExcel(blob, fileName)
+            if (result === 'saved')
+              toast.success(`Arquivo salvo: ${fileName}`, { duration: 5000 })
+            else if (result === 'downloaded')
+              toast.success(`Download iniciado: ${fileName}\nVerifique sua pasta de Downloads.`, { duration: 5000 })
           }}
         >⬇ Excel</button>
       </div>
