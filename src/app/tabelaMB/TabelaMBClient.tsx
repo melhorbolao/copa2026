@@ -746,59 +746,92 @@ export function TabelaMBClient({
             const ExcelJS = (await import('exceljs')).default
             const wb = new ExcelJS.Workbook()
             const ws = wb.addWorksheet('TabelaMB')
-            ws.addRow(['Data', 'Jogo', 'Oficial', 'Líder', 'Pont.', 'Crav.', 'Méd.', ...orderedParts.map(p => p.apelido)])
             const artPts = rules['artilheiro'] ?? 18
             const thPts  = rules['terceiro_classificado'] ?? 3
-            for (const row of allRows) {
+
+            // Participants in alphabetical order — same for everyone
+            const sortedParts = [...participants]
+
+            ws.addRow(['Data', 'Jogo', 'Oficial', 'Pont.', 'Crav.', 'Méd.', ...sortedParts.map(p => p.apelido)])
+
+            // Build all-phase rows regardless of current UI filter
+            const C = '' // section color placeholder
+            const exportRows: TableRow[] = []
+            const gMatches  = matches.filter(m => m.phase === 'group')
+            const r32       = matches.filter(m => m.phase === 'round_of_32')
+            const r16       = matches.filter(m => m.phase === 'round_of_16')
+            const qf        = matches.filter(m => m.phase === 'quarterfinal')
+            const sf        = matches.filter(m => m.phase === 'semifinal')
+            const fin       = matches.filter(m => m.phase === 'third_place' || m.phase === 'final')
+
+            if (gMatches.length) {
+              exportRows.push({ kind: 'section', label: 'Fase de Grupos', color: C })
+              gMatches.forEach(m => exportRows.push({ kind: 'match', match: m }))
+              exportRows.push({ kind: 'section', label: '1º e 2º Classificados por Grupo', color: C })
+              GROUP_ORDER.forEach(g => exportRows.push({ kind: 'group_bet', groupName: g }))
+              exportRows.push({ kind: 'section', label: 'Melhores Terceiros Classificados', color: C })
+              GROUP_ORDER.forEach(g => exportRows.push({ kind: 'third_bet', groupName: g }))
+            }
+            exportRows.push({ kind: 'section', label: 'G4 e Artilheiro', color: C })
+            exportRows.push({ kind: 'g4_row' })
+            exportRows.push({ kind: 'scorer_row' })
+            if (r32.length) { exportRows.push({ kind: 'section', label: '16 avos de Final', color: C }); r32.forEach(m => exportRows.push({ kind: 'match', match: m })) }
+            if (r16.length) { exportRows.push({ kind: 'section', label: 'Oitavas de Final',  color: C }); r16.forEach(m => exportRows.push({ kind: 'match', match: m })) }
+            if (qf.length)  { exportRows.push({ kind: 'section', label: 'Quartas de Final',  color: C }); qf.forEach(m  => exportRows.push({ kind: 'match', match: m })) }
+            if (sf.length)  { exportRows.push({ kind: 'section', label: 'Semifinais',         color: C }); sf.forEach(m  => exportRows.push({ kind: 'match', match: m })) }
+            if (fin.length) { exportRows.push({ kind: 'section', label: 'Final e 3º Lugar',   color: C }); fin.forEach(m => exportRows.push({ kind: 'match', match: m })) }
+
+            for (const row of exportRows) {
               if (row.kind === 'section') { ws.addRow([row.label]); continue }
               if (row.kind === 'match') {
-                const m  = row.match
+                const m = row.match
                 const th = knockoutTeamMap.get(m.id)
                 const { date, time } = fmtMatchDate(m.match_datetime)
-                const s  = matchEventStats(m.id, m.score_home, m.score_away, participants, betMap)
-                const lb = betMap.get(`${leaderId}:${m.id}`)
+                const s = matchEventStats(m.id, m.score_home, m.score_away, participants, betMap)
                 ws.addRow([`${date} ${time}`, `${th?.team_home ?? m.team_home} x ${th?.team_away ?? m.team_away}`,
                   m.score_home !== null ? `${m.score_home}–${m.score_away}` : '–',
-                  lb ? `${lb.score_home}–${lb.score_away}` : '–', s.pontuaram, s.cravaram, s.media > 0 ? +s.media.toFixed(1) : '–',
-                  ...orderedParts.map(p => { const b = betMap.get(`${p.id}:${m.id}`); const pts = getMatchPts(p.id, m.id); return b ? `${b.score_home}–${b.score_away}${pts !== null ? ` (${pts})` : ''}` : '–' })])
+                  s.pontuaram, s.cravaram, s.media > 0 ? +s.media.toFixed(1) : '–',
+                  ...sortedParts.map(p => { const b = betMap.get(`${p.id}:${m.id}`); const pts = getMatchPts(p.id, m.id); return b ? `${b.score_home}–${b.score_away}${pts !== null ? ` (${pts})` : ''}` : '–' })])
                 continue
               }
               if (row.kind === 'group_bet') {
                 const g = row.groupName; const of1 = offFirst(g); const of2 = offSecond(g)
                 const s = groupEventStats(g, of1, of2, participants, groupBetMap)
-                const lb = groupBetMap.get(`${leaderId}:${g}`)
                 ws.addRow([`Grupo ${g}`, '1º e 2º', of1 ? `${of1}/${of2}` : '–',
-                  lb?.first_place ? `${lb.first_place}/${lb.second_place}` : '–', s.pontuaram, s.cravaram, s.media > 0 ? +s.media.toFixed(1) : '–',
-                  ...orderedParts.map(p => { const b = groupBetMap.get(`${p.id}:${g}`); return b?.first_place ? `${b.first_place}/${b.second_place}${b.points !== null ? ` (${b.points})` : ''}` : '–' })])
+                  s.pontuaram, s.cravaram, s.media > 0 ? +s.media.toFixed(1) : '–',
+                  ...sortedParts.map(p => { const b = groupBetMap.get(`${p.id}:${g}`); return b?.first_place ? `${b.first_place}/${b.second_place}${b.points !== null ? ` (${b.points})` : ''}` : '–' })])
                 continue
               }
               if (row.kind === 'third_bet') {
                 const g = row.groupName; const ot = offThird(g)
                 const s = thirdEventStats(g, ot, thPts, participants, thirdBetMap)
-                const lb = thirdBetMap.get(`${leaderId}:${g}`)
-                ws.addRow([`3º Gr.${g}`, 'Melhor 3º', ot || '–', lb?.team ?? '–', s.pontuaram, s.cravaram, s.media > 0 ? +s.media.toFixed(1) : '–',
-                  ...orderedParts.map(p => { const b = thirdBetMap.get(`${p.id}:${g}`); return b?.team ?? '–' })])
+                ws.addRow([`3º Gr.${g}`, 'Melhor 3º', ot || '–',
+                  s.pontuaram, s.cravaram, s.media > 0 ? +s.media.toFixed(1) : '–',
+                  ...sortedParts.map(p => { const b = thirdBetMap.get(`${p.id}:${g}`); return b?.team ?? '–' })])
                 continue
               }
               if (row.kind === 'g4_row') {
                 const s = g4EventStats(participants, tournamentBetMap, knockoutResults, rules, isZebraChampion, scorerMapping)
-                const lb = tournamentBetMap.get(leaderId)
-                ws.addRow(['G4', 'Semi+Campeão', knockoutResults.champion ?? '–', lb?.champion ?? '–', s.pontuaram, s.cravaram, s.media > 0 ? +s.media.toFixed(1) : '–',
-                  ...orderedParts.map(p => { const b = tournamentBetMap.get(p.id); const pts = b ? scoreTournamentBet({ ...b, top_scorer: '' }, knockoutResults, rules, isZebraChampion, scorerMapping) : 0; return b ? `${b.champion}/${b.runner_up}${pts > 0 ? ` (+${pts})` : ''}` : '–' })])
+                ws.addRow(['G4', 'Semi+Campeão', knockoutResults.champion ?? '–',
+                  s.pontuaram, s.cravaram, s.media > 0 ? +s.media.toFixed(1) : '–',
+                  ...sortedParts.map(p => { const b = tournamentBetMap.get(p.id); const pts = b ? scoreTournamentBet({ ...b, top_scorer: '' }, knockoutResults, rules, isZebraChampion, scorerMapping) : 0; return b ? `${b.champion}/${b.runner_up}${pts > 0 ? ` (+${pts})` : ''}` : '–' })])
                 continue
               }
               if (row.kind === 'scorer_row') {
                 const s = scorerEventStats(participants, tournamentBetMap, localScorers, artPts, scorerMapping)
-                const lb = tournamentBetMap.get(leaderId)
-                const lbRaw = lb?.top_scorer ?? ''; const lbDisp = lbRaw ? (scorerMapping[lbRaw] ?? lbRaw) : '–'
-                ws.addRow(['Artilheiro', 'Top scorer', localScorers.join(', ') || '–', lbDisp, s.pontuaram, s.cravaram, s.media > 0 ? +s.media.toFixed(1) : '–',
-                  ...orderedParts.map(p => { const b = tournamentBetMap.get(p.id); const raw = b?.top_scorer ?? ''; return raw ? (scorerMapping[raw] ?? raw) : '–' })])
+                ws.addRow(['Artilheiro', 'Top scorer', localScorers.join(', ') || '–',
+                  s.pontuaram, s.cravaram, s.media > 0 ? +s.media.toFixed(1) : '–',
+                  ...sortedParts.map(p => { const b = tournamentBetMap.get(p.id); const raw = b?.top_scorer ?? ''; return raw ? (scorerMapping[raw] ?? raw) : '–' })])
               }
             }
+
             const buf = await wb.xlsx.writeBuffer()
             const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-            const url = URL.createObjectURL(blob); const a = document.createElement('a')
-            a.href = url; a.download = 'TabelaMB.xlsx'; a.click(); URL.revokeObjectURL(url)
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            const brNow = new Date(Date.now() - 3 * 60 * 60 * 1000)
+            const stamp = `${String(brNow.getUTCMonth()+1).padStart(2,'0')}${String(brNow.getUTCDate()).padStart(2,'0')}${String(brNow.getUTCHours()).padStart(2,'0')}${String(brNow.getUTCMinutes()).padStart(2,'0')}`
+            a.href = url; a.download = `TabelaMB_${stamp}.xlsx`; a.click(); URL.revokeObjectURL(url)
           }}
         >⬇ Excel</button>
       </div>
