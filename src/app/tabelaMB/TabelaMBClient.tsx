@@ -264,10 +264,12 @@ function fmtMatchDate(dt: string) {
 // ── ScoreInput ─────────────────────────────────────────────────────────────────
 
 const ScoreInput = memo(function ScoreInput({
-  match, canEdit, onSaved,
+  match, canEdit, possibleZebras, isActualZebra, onSaved,
 }: {
   match: MatchFull
   canEdit: boolean
+  possibleZebras?: { H: boolean; D: boolean; A: boolean }
+  isActualZebra?: boolean
   onSaved: (sh: number, sa: number) => void
 }) {
   const [home, setHome] = useState(match.score_home?.toString() ?? '')
@@ -300,11 +302,19 @@ const ScoreInput = memo(function ScoreInput({
   const hasScore = match.score_home !== null && match.score_away !== null
 
   if (!canEdit) {
-    return hasScore ? (
-      <span className="font-bold tabular-nums text-xs text-gray-700">
-        {match.score_home}–{match.score_away}
-      </span>
-    ) : <span className="text-gray-300 text-xs">–</span>
+    if (!hasScore) return <span className="text-gray-300 text-xs">–</span>
+    const result = getMatchResult(match.score_home!, match.score_away!)
+    return (
+      <div className="inline-flex items-center gap-0.5">
+        <span className={`inline-flex items-center justify-center min-w-[18px] rounded px-0.5 text-xs font-bold tabular-nums ${isActualZebra && result === 'H' ? 'bg-gray-900 text-white' : 'text-gray-700'}`}>
+          {match.score_home}
+        </span>
+        <span className={`text-[9px] font-bold ${isActualZebra && result === 'D' ? 'rounded bg-gray-900 text-white px-0.5' : 'text-gray-300'}`}>×</span>
+        <span className={`inline-flex items-center justify-center min-w-[18px] rounded px-0.5 text-xs font-bold tabular-nums ${isActualZebra && result === 'A' ? 'bg-gray-900 text-white' : 'text-gray-700'}`}>
+          {match.score_away}
+        </span>
+      </div>
+    )
   }
 
   return (
@@ -312,18 +322,51 @@ const ScoreInput = memo(function ScoreInput({
       <input type="text" inputMode="numeric" pattern="[0-9]*" value={home}
         onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0,2); setHome(v); homeRef.current = v; triggerSave(v, awayRef.current) }}
         placeholder="–"
-        className="w-7 rounded border border-gray-200 bg-white text-center text-xs font-bold py-0.5 focus:border-verde-400 focus:outline-none"
+        className={`w-7 rounded border text-center text-xs font-bold py-0.5 focus:outline-none ${
+          possibleZebras?.H
+            ? 'border-gray-700 bg-gray-900 text-white placeholder-gray-500 focus:border-gray-600'
+            : 'border-gray-200 bg-white focus:border-verde-400'
+        }`}
       />
-      <span className="text-gray-300 text-[9px]">×</span>
+      <span className={`text-[9px] font-bold ${
+        possibleZebras?.D ? 'rounded bg-gray-900 text-white px-0.5' : 'text-gray-300'
+      }`}>×</span>
       <input type="text" inputMode="numeric" pattern="[0-9]*" value={away}
         onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0,2); setAway(v); awayRef.current = v; triggerSave(homeRef.current, v) }}
         placeholder="–"
-        className="w-7 rounded border border-gray-200 bg-white text-center text-xs font-bold py-0.5 focus:border-verde-400 focus:outline-none"
+        className={`w-7 rounded border text-center text-xs font-bold py-0.5 focus:outline-none ${
+          possibleZebras?.A
+            ? 'border-gray-700 bg-gray-900 text-white placeholder-gray-500 focus:border-gray-600'
+            : 'border-gray-200 bg-white focus:border-verde-400'
+        }`}
       />
       {pending && <span className="text-[9px] text-gray-400 ml-0.5">…</span>}
     </div>
   )
 })
+
+// ── Zebra helpers ──────────────────────────────────────────────────────────────
+
+function collectMatchBets(matchId: string, participants: Participant[], betMap: BetMap) {
+  const bets: Array<{ score_home: number; score_away: number }> = []
+  for (const p of participants) {
+    const bet = betMap.get(`${p.id}:${matchId}`)
+    if (bet) bets.push(bet)
+  }
+  return bets
+}
+
+function detectPossibleZebras(
+  matchId: string, participants: Participant[], betMap: BetMap, threshold: number,
+): { H: boolean; D: boolean; A: boolean } | undefined {
+  const bets = collectMatchBets(matchId, participants, betMap)
+  if (bets.length === 0) return undefined
+  return {
+    H: detectMatchZebra(bets, 'H', threshold),
+    D: detectMatchZebra(bets, 'D', threshold),
+    A: detectMatchZebra(bets, 'A', threshold),
+  }
+}
 
 // ── Bet map helpers ────────────────────────────────────────────────────────────
 
@@ -1121,6 +1164,14 @@ export function TabelaMBClient({
               const abbrHome = teamAbbrs[teamHome] ?? teamHome.slice(0, 3).toUpperCase()
               const abbrAway = teamAbbrs[teamAway] ?? teamAway.slice(0, 3).toUpperCase()
               const { date: mDate, time: mTime } = fmtMatchDate(match.match_datetime)
+              const zebraThreshold = rules['percentual_zebra'] ?? 15
+              const hasResult      = match.score_home !== null && match.score_away !== null
+              const matchBetsList  = collectMatchBets(match.id, participants, betMap)
+              const possibleZebras = !hasResult ? detectPossibleZebras(match.id, participants, betMap, zebraThreshold) : undefined
+              const isActualZebra  = hasResult && matchBetsList.length > 0
+                ? detectMatchZebra(matchBetsList, getMatchResult(match.score_home!, match.score_away!), zebraThreshold)
+                : false
+              const zebraImgW = isMobile ? 18 : 24
               return (
                 <tr key={match.id} style={{ height: ROW_H }}>
                   <td style={{ position: 'sticky', left: 0, zIndex: 30, background: bg, borderRight: '1px solid #f3f4f6', overflow: 'hidden' }}
@@ -1135,31 +1186,45 @@ export function TabelaMBClient({
                   <td style={{ position: 'sticky', left: colTeamsLeft, zIndex: 30, background: bg, borderRight: '1px solid #f3f4f6' }}
                     className="px-1">
                     {isMobile ? (
-                      <div className="flex flex-col leading-none gap-0.5">
-                        <div className="flex items-center gap-1">
-                          <Flag code={flagHome} size="sm" className="shrink-0 w-4 h-3 rounded-[1px]" />
-                          <span className="font-bold text-[10px] text-gray-800 tracking-tight">{abbrHome}</span>
-                          {match.is_brazil && <span className="shrink-0 text-[7px] font-black text-verde-700 bg-verde-100 rounded-sm px-0.5">×2</span>}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Flag code={flagAway} size="sm" className="shrink-0 w-4 h-3 rounded-[1px]" />
-                          <span className="font-bold text-[10px] text-gray-800 tracking-tight">{abbrAway}</span>
+                      <div className="flex items-center gap-1">
+                        {isActualZebra && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src="/zebra.png" alt="🦓" width={zebraImgW} height={zebraImgW} className="shrink-0 object-contain" />
+                        )}
+                        <div className="flex flex-col leading-none gap-0.5 min-w-0">
+                          <div className="flex items-center gap-1">
+                            <Flag code={flagHome} size="sm" className="shrink-0 w-4 h-3 rounded-[1px]" />
+                            <span className="font-bold text-[10px] text-gray-800 tracking-tight">{abbrHome}</span>
+                            {match.is_brazil && <span className="shrink-0 text-[7px] font-black text-verde-700 bg-verde-100 rounded-sm px-0.5">×2</span>}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Flag code={flagAway} size="sm" className="shrink-0 w-4 h-3 rounded-[1px]" />
+                            <span className="font-bold text-[10px] text-gray-800 tracking-tight">{abbrAway}</span>
+                          </div>
                         </div>
                       </div>
                     ) : (
-                      <div className="flex flex-col leading-none gap-px">
-                        <div className="flex items-center gap-0.5">
-                          <span className="truncate font-semibold text-gray-800" style={{ maxWidth: colTeamsW - 16 }}>{teamHome}</span>
-                          {match.is_brazil && <span className="shrink-0 text-[7px] font-black text-verde-700 bg-verde-100 rounded-sm px-0.5">×2</span>}
+                      <div className="flex items-center gap-1">
+                        {isActualZebra && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src="/zebra.png" alt="🦓" width={zebraImgW} height={zebraImgW} className="shrink-0 object-contain" />
+                        )}
+                        <div className="flex flex-col leading-none gap-px min-w-0 flex-1">
+                          <div className="flex items-center gap-0.5 min-w-0">
+                            <span className="truncate font-semibold text-gray-800" style={{ maxWidth: colTeamsW - (isActualZebra ? 40 : 16) }}>{teamHome}</span>
+                            {match.is_brazil && <span className="shrink-0 text-[7px] font-black text-verde-700 bg-verde-100 rounded-sm px-0.5">×2</span>}
+                          </div>
+                          <span className="text-[8px] text-gray-300">vs</span>
+                          <span className="truncate font-semibold text-gray-800" style={{ maxWidth: colTeamsW - (isActualZebra ? 40 : 8) }}>{teamAway}</span>
                         </div>
-                        <span className="text-[8px] text-gray-300">vs</span>
-                        <span className="truncate font-semibold text-gray-800" style={{ maxWidth: colTeamsW - 8 }}>{teamAway}</span>
                       </div>
                     )}
                   </td>
                   <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: bg, borderRight: '1px solid #f3f4f6' }}
                     className="text-center">
                     <ScoreInput match={match} canEdit={canEdit(match)}
+                      possibleZebras={possibleZebras}
+                      isActualZebra={isActualZebra}
                       onSaved={(sh, sa) => {
                         setMatches(prev => prev.map(m => m.id === match.id ? { ...m, score_home: sh, score_away: sa } : m))
                         recomputeForMatch(match.id, sh, sa, match.is_brazil)
