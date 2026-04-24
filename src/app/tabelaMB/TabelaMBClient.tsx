@@ -104,7 +104,6 @@ const PHASE_FILTERS = [
 
 const ROW_H       = 44
 const ROW_H_BONUS = 38
-const ROW_H_G4    = 56
 const ROW_H_SEC   = 26
 
 // Frozen column pixel offsets (desktop)
@@ -122,7 +121,7 @@ type TableRow =
   | { kind: 'section';    label: string; color: string }
   | { kind: 'group_bet';  groupName: string }
   | { kind: 'third_bet';  groupName: string }
-  | { kind: 'g4_row' }
+  | { kind: 'g4_field'; field: 'champion' | 'runner_up' | 'semi1' | 'semi2' }
   | { kind: 'scorer_row' }
 
 // ── Cell classification ────────────────────────────────────────────────────────
@@ -226,13 +225,56 @@ function thirdEventStats(g: string, ot: string, thirdPts: number, parts: Partici
   return { pontuaram, cravaram, media: parts.length > 0 ? total / parts.length : 0 }
 }
 
-function g4EventStats(parts: Participant[], tournamentBetMap: Map<string, TournamentBetRaw>, knockoutResults: TournamentResults, rules: RuleMap, isZebraChampion: boolean, scorerMapping: Record<string, string>): EventStats {
+function scoreG4FieldBet(
+  field: 'champion' | 'runner_up' | 'semi1' | 'semi2',
+  betValue: string,
+  results: TournamentResults,
+  rules: RuleMap,
+  isZebraChampion: boolean,
+): number {
+  if (!betValue) return 0
+  const r = {
+    semis:    rules['semifinalista']   ?? 4,
+    finalist: rules['bonus_finalista'] ?? 8,
+    campeao:  rules['bonus_campeao']   ?? 12,
+    vice:     rules['bonus_vice']      ?? 8,
+    terceiro: rules['bonus_terceiro']  ?? 6,
+    quarto:   rules['bonus_quarto']    ?? 4,
+    zebraG4:  rules['bonus_zebra_g4']  ?? 0,
+  }
+  let pts = 0
+  if (field === 'champion') {
+    if (results.semifinalists.includes(betValue)) pts += r.semis
+    if (results.finalists.includes(betValue))     pts += r.finalist
+    if (results.champion === betValue) { pts += r.campeao; if (isZebraChampion) pts += r.zebraG4 }
+  } else if (field === 'runner_up') {
+    if (results.semifinalists.includes(betValue)) pts += r.semis
+    if (results.finalists.includes(betValue))     pts += r.finalist
+    if (results.runnerUp === betValue)            pts += r.vice
+  } else { // semi1 / semi2 — same logic
+    if (results.semifinalists.includes(betValue)) pts += r.semis
+    if (results.third  === betValue)              pts += r.terceiro
+    else if (results.fourth === betValue)         pts += r.quarto
+  }
+  return pts
+}
+
+function g4FieldStats(
+  field: 'champion' | 'runner_up' | 'semi1' | 'semi2',
+  parts: Participant[],
+  tournamentBetMap: Map<string, TournamentBetRaw>,
+  results: TournamentResults,
+  rules: RuleMap,
+  isZebraChampion: boolean,
+): EventStats {
+  const official = field === 'champion' ? results.champion : field === 'runner_up' ? results.runnerUp : field === 'semi1' ? results.third : results.fourth
   let pontuaram = 0, cravaram = 0, total = 0
   for (const p of parts) {
     const bet = tournamentBetMap.get(p.id)
-    const pts = bet ? scoreTournamentBet({ ...bet, top_scorer: '' }, knockoutResults, rules, isZebraChampion, scorerMapping) : 0
+    const val = bet?.[field] ?? ''
+    const pts = scoreG4FieldBet(field, val, results, rules, isZebraChampion)
     if (pts > 0) pontuaram++
-    if (bet && knockoutResults.champion && bet.champion === knockoutResults.champion && knockoutResults.runnerUp && bet.runner_up === knockoutResults.runnerUp) cravaram++
+    if (val && official && val === official) cravaram++
     total += pts
   }
   return { pontuaram, cravaram, media: parts.length > 0 ? total / parts.length : 0 }
@@ -598,8 +640,11 @@ export function TabelaMBClient({
       GROUP_ORDER.forEach(g => rows.push({ kind: 'third_bet', groupName: g }))
     }
     if (phase === 'final') {
-      rows.push({ kind: 'section', label: 'G4 — Semifinalistas e Campeão', color: '#78350f' })
-      rows.push({ kind: 'g4_row' })
+      rows.push({ kind: 'section', label: 'G4 — Bônus por Posição', color: '#78350f' })
+      rows.push({ kind: 'g4_field', field: 'champion' })
+      rows.push({ kind: 'g4_field', field: 'runner_up' })
+      rows.push({ kind: 'g4_field', field: 'semi1' })
+      rows.push({ kind: 'g4_field', field: 'semi2' })
       rows.push({ kind: 'section', label: 'Artilheiro', color: '#78350f' })
       rows.push({ kind: 'scorer_row' })
     }
@@ -613,9 +658,7 @@ export function TabelaMBClient({
     estimateSize: i => {
       const r = allRows[i]
       if (r.kind === 'section') return ROW_H_SEC
-      if (r.kind === 'group_bet' || r.kind === 'third_bet') return ROW_H_BONUS
-      if (r.kind === 'g4_row') return ROW_H_G4
-      if (r.kind === 'scorer_row') return ROW_H_BONUS
+      if (r.kind === 'group_bet' || r.kind === 'third_bet' || r.kind === 'g4_field' || r.kind === 'scorer_row') return ROW_H_BONUS
       return ROW_H
     },
     overscan: 8,
@@ -774,8 +817,12 @@ export function TabelaMBClient({
               exportRows.push({ kind: 'section', label: 'Melhores Terceiros Classificados', color: C })
               GROUP_ORDER.forEach(g => exportRows.push({ kind: 'third_bet', groupName: g }))
             }
-            exportRows.push({ kind: 'section', label: 'G4 e Artilheiro', color: C })
-            exportRows.push({ kind: 'g4_row' })
+            exportRows.push({ kind: 'section', label: 'G4 — Bônus por Posição', color: C })
+            exportRows.push({ kind: 'g4_field', field: 'champion' })
+            exportRows.push({ kind: 'g4_field', field: 'runner_up' })
+            exportRows.push({ kind: 'g4_field', field: 'semi1' })
+            exportRows.push({ kind: 'g4_field', field: 'semi2' })
+            exportRows.push({ kind: 'section', label: 'Artilheiro', color: C })
             exportRows.push({ kind: 'scorer_row' })
             if (r32.length) { exportRows.push({ kind: 'section', label: '16 avos de Final', color: C }); r32.forEach(m => exportRows.push({ kind: 'match', match: m })) }
             if (r16.length) { exportRows.push({ kind: 'section', label: 'Oitavas de Final',  color: C }); r16.forEach(m => exportRows.push({ kind: 'match', match: m })) }
@@ -812,11 +859,14 @@ export function TabelaMBClient({
                   ...sortedParts.map(p => { const b = thirdBetMap.get(`${p.id}:${g}`); return b?.team ?? '–' })])
                 continue
               }
-              if (row.kind === 'g4_row') {
-                const s = g4EventStats(participants, tournamentBetMap, knockoutResults, rules, isZebraChampion, scorerMapping)
-                ws.addRow(['G4', 'Semi+Campeão', knockoutResults.champion ?? '–',
+              if (row.kind === 'g4_field') {
+                const f = row.field
+                const XLABELS: Record<typeof f, string> = { champion: '🏆 Campeão', runner_up: '🥈 Vice', semi1: '3º Lugar', semi2: '4º Lugar' }
+                const official = f === 'champion' ? knockoutResults.champion : f === 'runner_up' ? knockoutResults.runnerUp : f === 'semi1' ? knockoutResults.third : knockoutResults.fourth
+                const s = g4FieldStats(f, participants, tournamentBetMap, knockoutResults, rules, isZebraChampion)
+                ws.addRow([XLABELS[f], 'G4', official ?? '–',
                   s.pontuaram, s.cravaram, s.media > 0 ? +s.media.toFixed(1) : '–',
-                  ...sortedParts.map(p => { const b = tournamentBetMap.get(p.id); const pts = b ? scoreTournamentBet({ ...b, top_scorer: '' }, knockoutResults, rules, isZebraChampion, scorerMapping) : 0; return b ? `${b.champion}/${b.runner_up}${pts > 0 ? ` (+${pts})` : ''}` : '–' })])
+                  ...sortedParts.map(p => { const b = tournamentBetMap.get(p.id); const val = b?.[f] ?? ''; const pts = val ? scoreG4FieldBet(f, val, knockoutResults, rules, isZebraChampion) : 0; return val ? `${val}${pts > 0 ? ` (+${pts})` : ''}` : '–' })])
                 continue
               }
               if (row.kind === 'scorer_row') {
@@ -1163,74 +1213,68 @@ export function TabelaMBClient({
                 )
               }
 
-              // ── G4 row ─────────────────────────────────────────────────────
-              if (row.kind === 'g4_row') {
+              // ── G4 field rows (one per position) ───────────────────────
+              if (row.kind === 'g4_field') {
+                const field = row.field
                 const a = (name: string) => teamAbbrs[name] ?? abbr(name, 4)
                 const kr = knockoutResults
+                const LABELS: Record<typeof field, string> = { champion: '🏆', runner_up: '🥈', semi1: '3º', semi2: '4º' }
+                const FULL:   Record<typeof field, string> = { champion: '🏆 Campeão', runner_up: '🥈 Vice', semi1: '3º Lugar', semi2: '4º Lugar' }
+                const official = field === 'champion' ? kr.champion : field === 'runner_up' ? kr.runnerUp : field === 'semi1' ? kr.third : kr.fourth
+                const stats = g4FieldStats(field, participants, tournamentBetMap, knockoutResults, rules, isZebraChampion)
+                const lb = tournamentBetMap.get(leaderId)
+                const lbVal = lb?.[field] ?? ''
+                const lbPts = lbVal ? scoreG4FieldBet(field, lbVal, knockoutResults, rules, isZebraChampion) : null
+                const lbBg  = lbPts !== null ? (lbPts > 0 ? '#d1fae5' : '#fff1f2') : '#fffbeb'
+                const media = stats.media > 0 ? stats.media.toFixed(1) : '—'
+                const s0 = !isMobile ? { position: 'sticky' as const, zIndex: 20, background: '#fffbeb' } : {}
                 return (
-                  <tr key="g4_row" style={{ height: ROW_H_G4, background: '#fffbeb' }}>
+                  <tr key={`g4_field_${field}`} style={{ height: ROW_H_BONUS, background: '#fffbeb' }}>
                     <td style={{ position: 'sticky', left: 0, zIndex: 30, background: '#fffbeb', borderRight: '1px solid #fde68a' }}
-                      className="text-center text-[9px] font-bold text-amber-700">G4</td>
+                      className="text-center text-[10px] font-bold text-amber-700">{LABELS[field]}</td>
                     <td style={{ position: 'sticky', left: colTeamsLeft, zIndex: 30, background: '#fffbeb', borderRight: '1px solid #fde68a' }}
-                      className="px-1.5 text-[9px] text-amber-800">
-                      <div className="leading-snug">
-                        {kr.champion  && <div>🏆 {a(kr.champion)}</div>}
-                        {kr.runnerUp  && <div>🥈 {a(kr.runnerUp)}</div>}
-                        {kr.third     && <div>3º {a(kr.third)}</div>}
-                        {kr.fourth    && <div>4º {a(kr.fourth)}</div>}
-                        {!kr.champion && <span className="text-gray-300">–</span>}
-                      </div>
+                      className="px-1.5 text-[10px] text-amber-800 font-semibold">
+                      <span className="block truncate" style={{ maxWidth: colTeamsW - 8 }}>
+                        {official ? a(official) : <span className="text-gray-300">–</span>}
+                      </span>
                     </td>
                     <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: '#fffbeb', borderRight: '1px solid #fde68a' }}
-                      className="text-center text-[9px] text-amber-600 font-semibold">G4</td>
-                    {/* Colunas de stats */}
-                    {(() => {
-                      const stats  = g4EventStats(participants, tournamentBetMap, knockoutResults, rules, isZebraChampion, scorerMapping)
-                      const lb     = tournamentBetMap.get(leaderId)
-                      const lbG4Pts = lb ? scoreTournamentBet({ ...lb, top_scorer: '' }, knockoutResults, rules, isZebraChampion, scorerMapping) : null
-                      const media  = stats.media > 0 ? stats.media.toFixed(1) : '—'
-                      const s0 = !isMobile ? { position: 'sticky' as const, zIndex: 20, background: '#fffbeb' } : {}
-                      return (<>
-                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal } : {}) }} className="border-r border-amber-50 text-center text-[10px]">{stats.pontuaram > 0 ? <span className="font-bold text-gray-700">{stats.pontuaram}</span> : <span className="text-gray-300">–</span>}</td>
-                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + STAT_COL_W } : {}) }} className="border-r border-amber-50 text-center text-[10px]">{stats.cravaram > 0 ? <span className="font-bold text-emerald-600">{stats.cravaram}</span> : <span className="text-gray-300">–</span>}</td>
-                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 2 * STAT_COL_W, borderRight: '2px solid #fde68a' } : {}) }} className="border-r border-amber-50 text-center text-[10px] text-gray-500">{stats.media > 0 ? media : <span className="text-gray-300">–</span>}</td>
-                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 3 * STAT_COL_W } : {}) }} className="border-r border-amber-50 text-center">
-                          {lb ? (
-                            <div className="flex flex-col items-center leading-none gap-px py-0.5">
-                              <span className="text-[8px] text-gray-700 truncate font-medium" style={{ maxWidth: STAT_COL_W - 4 }}>🏆{a(lb.champion)}</span>
-                              <span className="text-[8px] text-gray-700 truncate font-medium" style={{ maxWidth: STAT_COL_W - 4 }}>🥈{a(lb.runner_up)}</span>
-                              {lbG4Pts !== null && (
-                                <span className={`text-[10px] font-bold ${lbG4Pts > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>
-                                  {lbG4Pts > 0 ? `+${lbG4Pts}` : '0'}
-                                </span>
-                              )}
-                            </div>
-                          ) : <span className="text-gray-200">—</span>}
-                        </td>
-                      </>)
-                    })()}
+                      className="text-center text-[9px] text-amber-600 font-semibold px-0.5 leading-tight">
+                      {FULL[field].replace(/^[^\s]+ /, '')}
+                    </td>
+                    {/* Stats */}
+                    <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal } : {}) }} className="border-r border-amber-50 text-center text-[10px]">{stats.pontuaram > 0 ? <span className="font-bold text-gray-700">{stats.pontuaram}</span> : <span className="text-gray-300">–</span>}</td>
+                    <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + STAT_COL_W } : {}) }} className="border-r border-amber-50 text-center text-[10px]">{stats.cravaram > 0 ? <span className="font-bold text-emerald-600">{stats.cravaram}</span> : <span className="text-gray-300">–</span>}</td>
+                    <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 2 * STAT_COL_W, borderRight: '2px solid #fde68a' } : {}) }} className="border-r border-amber-50 text-center text-[10px] text-gray-500">{stats.media > 0 ? media : <span className="text-gray-300">–</span>}</td>
+                    <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 3 * STAT_COL_W, background: lbBg } : {}) }}
+                      className={`border-r border-amber-50 text-center ${isMobile ? (lbPts !== null ? (lbPts > 0 ? 'bg-emerald-100' : 'bg-rose-50') : '') : ''}`}>
+                      {lbVal ? (
+                        <div className="flex flex-col items-center leading-none gap-px">
+                          <span className="text-[9px] text-gray-700 truncate font-medium" style={{ maxWidth: STAT_COL_W - 4 }}>{a(lbVal)}</span>
+                          {lbPts !== null && <span className={`text-[10px] font-bold ${lbPts > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>{lbPts > 0 ? `+${lbPts}` : '0'}</span>}
+                        </div>
+                      ) : <span className="text-gray-200">—</span>}
+                    </td>
+                    {/* Participant cells */}
                     {orderedParts.map((p, idx) => {
-                      const bet  = tournamentBetMap.get(p.id)
+                      const bet = tournamentBetMap.get(p.id)
                       const isMe = p.id === activeParticipantId
                       const isFrozen = frozenPartLeft !== null && idx === 0
-                      const g4pts = bet
-                        ? scoreTournamentBet({ ...bet, top_scorer: '' }, knockoutResults, rules, isZebraChampion, scorerMapping)
-                        : null
-                      const hasPts = g4pts !== null && g4pts > 0
+                      const betVal = bet?.[field] ?? ''
+                      const pts = betVal ? scoreG4FieldBet(field, betVal, knockoutResults, rules, isZebraChampion) : null
+                      const isExact = !!betVal && !!official && betVal === official
+                      const isPartial = pts !== null && pts > 0 && !isExact
+                      const isWrong = pts !== null && pts === 0
+                      const cellBg = !isMobile ? '#fffbeb' : undefined
+                      const frozenBg = isExact ? '#d1fae5' : isPartial ? '#e0f2fe' : isWrong ? '#fff1f2' : '#fffbeb'
                       return (
                         <td key={p.id}
-                          style={isFrozen ? { position: 'sticky', left: frozenPartLeft!, zIndex: 20, background: '#fffbeb', borderLeft: '2px solid #fde68a' } : undefined}
-                          className={`border-r border-amber-50 text-center ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
-                          {bet ? (
-                            <div className="flex flex-col items-center leading-none gap-px py-0.5">
-                              <span className="text-[8px] text-gray-700 truncate font-medium" style={{ maxWidth: PART_COL_W - 4 }}>🏆{a(bet.champion)}</span>
-                              <span className="text-[8px] text-gray-700 truncate font-medium" style={{ maxWidth: PART_COL_W - 4 }}>🥈{a(bet.runner_up)}</span>
-                              <span className="text-[8px] text-gray-500 truncate" style={{ maxWidth: PART_COL_W - 4 }}>{a(bet.semi1)}·{a(bet.semi2)}</span>
-                              {g4pts !== null && (
-                                <span className={`text-[10px] font-bold ${hasPts ? 'text-emerald-600' : 'text-gray-300'}`}>
-                                  {hasPts ? `+${g4pts}` : '0'}
-                                </span>
-                              )}
+                          style={isFrozen ? { position: 'sticky', left: frozenPartLeft!, zIndex: 20, background: frozenBg, borderLeft: '2px solid #fde68a' } : { background: cellBg }}
+                          className={`border-r border-amber-50 text-center ${isExact ? 'bg-emerald-100' : isPartial ? 'bg-sky-100' : isWrong ? 'bg-rose-50' : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
+                          {betVal ? (
+                            <div className="flex flex-col items-center leading-none gap-px">
+                              <span className="text-[9px] text-gray-700 truncate font-medium" style={{ maxWidth: PART_COL_W - 4 }}>{a(betVal)}</span>
+                              {pts !== null && <span className={`text-[10px] font-bold ${pts > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>{pts > 0 ? `+${pts}` : '0'}</span>}
                             </div>
                           ) : <span className="text-gray-200">—</span>}
                         </td>
