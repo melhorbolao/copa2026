@@ -6,8 +6,37 @@ import { toast } from 'react-hot-toast'
 export function ExcelActions() {
   const fileRef     = useRef<HTMLInputElement>(null)
   const [importing,     setImporting]     = useState(false)
+  const [exporting,     setExporting]     = useState(false)
   const [emailing,      setEmailing]      = useState(false)
   const [showEmailConf, setShowEmailConf] = useState(false)
+
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      const res = await fetch('/api/palpites/export')
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        toast.error(data.error ?? 'Erro ao gerar planilha.')
+        return
+      }
+      const blob     = await res.blob()
+      const url      = URL.createObjectURL(blob)
+      const disposition = res.headers.get('Content-Disposition') ?? ''
+      const match    = disposition.match(/filename="([^"]+)"/)
+      const fileName = match?.[1] ?? 'palpites.xlsx'
+      const a        = document.createElement('a')
+      a.href         = url
+      a.download     = fileName
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch {
+      toast.error('Erro ao baixar planilha.')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -63,14 +92,14 @@ export function ExcelActions() {
   return (
     <div className="flex items-center gap-2">
       {/* Exportar */}
-      <a
-        href="/api/palpites/export"
-        download
-        className="flex items-center gap-1.5 rounded-lg border border-verde-200 bg-verde-50 px-3 py-1.5 text-xs font-semibold text-verde-700 hover:bg-verde-100 transition"
+      <button
+        onClick={handleExport}
+        disabled={exporting}
+        className="flex items-center gap-1.5 rounded-lg border border-verde-200 bg-verde-50 px-3 py-1.5 text-xs font-semibold text-verde-700 hover:bg-verde-100 disabled:opacity-50 transition"
       >
-        <DownloadIcon />
-        Excel
-      </a>
+        {exporting ? <SpinnerIcon /> : <DownloadIcon />}
+        {exporting ? 'Gerando…' : 'Excel'}
+      </button>
 
       {/* Importar */}
       <button
