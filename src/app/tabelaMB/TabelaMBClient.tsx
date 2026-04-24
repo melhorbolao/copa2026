@@ -903,7 +903,10 @@ export function TabelaMBClient({
                     }}
                     className={`text-center px-0.5 ${isMe ? 'text-verde-200' : 'text-gray-300'}`}
                   >
-                    <span className="block truncate font-semibold" style={{ maxWidth: PART_COL_W - 4 }}>{p.apelido}</span>
+                    <div className="flex items-center justify-center gap-0.5">
+                      {p.id === leaderId && <span className="text-[9px] leading-none">🥇</span>}
+                      <span className="truncate font-semibold" style={{ maxWidth: PART_COL_W - (p.id === leaderId ? 16 : 4) }}>{p.apelido}</span>
+                    </div>
                     <span className={`block text-[11px] font-semibold ${isMe ? 'text-verde-300' : 'text-gray-500'}`}>
                       {total > 0 ? total : '–'}
                     </span>
