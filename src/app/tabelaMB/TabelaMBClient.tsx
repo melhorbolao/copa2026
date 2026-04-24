@@ -875,9 +875,12 @@ export function TabelaMBClient({
               {/* Colunas de estatísticas */}
               <th style={{ position: 'sticky', top: 0, ...(isMobile ? {} : { left: frozenTotal }), zIndex: isMobile ? 40 : 50, background: '#1f2937', borderRight: '1px solid #374151' }}
                 className="text-center px-0.5">
-                <span className="block truncate font-semibold text-[9px] text-gray-300" style={{ maxWidth: STAT_COL_W - 4 }}>
-                  {participants.find(p => p.id === leaderId)?.apelido ?? 'Líder'}
-                </span>
+                <div className="flex items-center justify-center gap-0.5">
+                  <span className="text-[9px] leading-none">🥇</span>
+                  <span className="truncate font-semibold text-[9px] text-gray-300" style={{ maxWidth: STAT_COL_W - 18 }}>
+                    {participants.find(p => p.id === leaderId)?.apelido ?? 'Líder'}
+                  </span>
+                </div>
                 <span className="block text-[11px] font-semibold text-gray-500">
                   {leaderId && (computedTotals[leaderId] ?? 0) > 0 ? computedTotals[leaderId] : '–'}
                 </span>
