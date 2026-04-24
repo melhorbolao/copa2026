@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ExcelJS from 'exceljs'
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createClient, createAuthAdminClient } from '@/lib/supabase/server'
 import { getActiveParticipantId } from '@/lib/participant'
 
 export async function POST(req: NextRequest) {
   const supabase      = await createClient()
-  const adminSupabase = await createAdminClient()
+  const adminSupabase = createAuthAdminClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
