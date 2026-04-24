@@ -906,7 +906,13 @@ export function TabelaMBClient({
               <th style={{ position: 'sticky', top: 0, left: colScoreLeft, zIndex: 50, background: '#1f2937', borderRight: '1px solid #374151' }}
                 className="text-center text-gray-200 font-semibold">Oficial</th>
               {/* Colunas de estatísticas */}
-              <th style={{ position: 'sticky', top: 0, ...(isMobile ? {} : { left: frozenTotal }), zIndex: isMobile ? 40 : 50, background: '#1f2937', borderRight: '1px solid #374151' }}
+              <th title="Pontuaram — acertaram ao menos o vencedor do evento" style={{ position: 'sticky', top: 0, ...(isMobile ? {} : { left: frozenTotal }), zIndex: isMobile ? 40 : 50, background: '#1f2937', borderRight: '1px solid #374151' }}
+                className="text-center text-[9px] font-semibold text-gray-400 px-0.5">Pont.</th>
+              <th title="Cravaram — acertaram o placar exato" style={{ position: 'sticky', top: 0, ...(isMobile ? {} : { left: frozenTotal + STAT_COL_W }), zIndex: isMobile ? 40 : 50, background: '#1f2937', borderRight: '1px solid #374151' }}
+                className="text-center text-[9px] font-semibold text-gray-400 px-0.5">Crav.</th>
+              <th title="Média de pontos dos participantes" style={{ position: 'sticky', top: 0, ...(isMobile ? {} : { left: frozenTotal + 2 * STAT_COL_W }), zIndex: isMobile ? 40 : 50, background: '#1f2937', borderRight: '1px solid #374151' }}
+                className="text-center text-[9px] font-semibold text-gray-400 px-0.5">Méd.</th>
+              <th style={{ position: 'sticky', top: 0, ...(isMobile ? {} : { left: frozenTotal + 3 * STAT_COL_W }), zIndex: isMobile ? 40 : 50, background: '#1f2937', borderRight: '2px solid #6b7280' }}
                 className="text-center px-0.5">
                 <div className="flex items-center justify-center gap-0.5">
                   <span className="text-[9px] leading-none">🥇</span>
@@ -918,12 +924,6 @@ export function TabelaMBClient({
                   {leaderId && (computedTotals[leaderId] ?? 0) > 0 ? computedTotals[leaderId] : '–'}
                 </span>
               </th>
-              <th style={{ position: 'sticky', top: 0, ...(isMobile ? {} : { left: frozenTotal + STAT_COL_W }), zIndex: isMobile ? 40 : 50, background: '#1f2937', borderRight: '1px solid #374151' }}
-                className="text-center text-[9px] font-semibold text-gray-400 px-0.5">Pont.</th>
-              <th style={{ position: 'sticky', top: 0, ...(isMobile ? {} : { left: frozenTotal + 2 * STAT_COL_W }), zIndex: isMobile ? 40 : 50, background: '#1f2937', borderRight: '1px solid #374151' }}
-                className="text-center text-[9px] font-semibold text-gray-400 px-0.5">Crav.</th>
-              <th style={{ position: 'sticky', top: 0, ...(isMobile ? {} : { left: frozenTotal + 3 * STAT_COL_W }), zIndex: isMobile ? 40 : 50, background: '#1f2937', borderRight: '2px solid #6b7280' }}
-                className="text-center text-[9px] font-semibold text-gray-400 px-0.5">Méd.</th>
               {orderedParts.map((p, idx) => {
                 const isMe = p.id === activeParticipantId
                 const isFrozen = frozenPartLeft !== null && idx === 0
@@ -1022,7 +1022,10 @@ export function TabelaMBClient({
                       const media  = stats.media > 0 ? stats.media.toFixed(1) : '—'
                       const s0 = !isMobile ? { position: 'sticky' as const, zIndex: 20, background: '#eff6ff' } : {}
                       return (<>
-                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal, background: lbBg } : {}) }}
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal } : {}) }} className="border-r border-blue-50 text-center text-[10px]">{stats.pontuaram > 0 ? <span className="font-bold text-gray-700">{stats.pontuaram}</span> : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + STAT_COL_W } : {}) }} className="border-r border-blue-50 text-center text-[10px]">{stats.cravaram > 0 ? <span className="font-bold text-emerald-600">{stats.cravaram}</span> : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 2 * STAT_COL_W, borderRight: '2px solid #93c5fd' } : {}) }} className="border-r border-blue-50 text-center text-[10px] text-gray-500">{stats.media > 0 ? media : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 3 * STAT_COL_W, background: lbBg } : {}) }}
                           className={`border-r border-blue-50 text-center ${isMobile ? CELL_BG[lbKind] : ''}`}>
                           {lb?.first_place ? (
                             <div className="flex flex-col items-center leading-none gap-px">
@@ -1037,9 +1040,6 @@ export function TabelaMBClient({
                             </div>
                           ) : <span className="text-gray-200">—</span>}
                         </td>
-                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + STAT_COL_W } : {}) }} className="border-r border-blue-50 text-center text-[10px]">{stats.pontuaram > 0 ? <span className="font-bold text-gray-700">{stats.pontuaram}</span> : <span className="text-gray-300">–</span>}</td>
-                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 2 * STAT_COL_W } : {}) }} className="border-r border-blue-50 text-center text-[10px]">{stats.cravaram > 0 ? <span className="font-bold text-emerald-600">{stats.cravaram}</span> : <span className="text-gray-300">–</span>}</td>
-                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 3 * STAT_COL_W, borderRight: '2px solid #93c5fd' } : {}) }} className="border-r border-blue-50 text-center text-[10px] text-gray-500">{stats.media > 0 ? media : <span className="text-gray-300">–</span>}</td>
                       </>)
                     })()}
                     {orderedParts.map((p, idx) => {
@@ -1109,7 +1109,10 @@ export function TabelaMBClient({
                       const media    = stats.media > 0 ? stats.media.toFixed(1) : '—'
                       const s0 = !isMobile ? { position: 'sticky' as const, zIndex: 20, background: '#faf5ff' } : {}
                       return (<>
-                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal, background: lbBg } : {}) }}
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal } : {}) }} className="border-r border-violet-50 text-center text-[10px]">{stats.pontuaram > 0 ? <span className="font-bold text-gray-700">{stats.pontuaram}</span> : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + STAT_COL_W } : {}) }} className="border-r border-violet-50 text-center text-[10px]">{stats.cravaram > 0 ? <span className="font-bold text-emerald-600">{stats.cravaram}</span> : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 2 * STAT_COL_W, borderRight: '2px solid #c4b5fd' } : {}) }} className="border-r border-violet-50 text-center text-[10px] text-gray-500">{stats.media > 0 ? media : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 3 * STAT_COL_W, background: lbBg } : {}) }}
                           className={`border-r border-violet-50 text-center ${isMobile ? CELL_BG[lbKind] : ''}`}>
                           {lb?.team ? (
                             <div className="flex flex-col items-center leading-none gap-px">
@@ -1124,9 +1127,6 @@ export function TabelaMBClient({
                             </div>
                           ) : <span className="text-gray-200">—</span>}
                         </td>
-                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + STAT_COL_W } : {}) }} className="border-r border-violet-50 text-center text-[10px]">{stats.pontuaram > 0 ? <span className="font-bold text-gray-700">{stats.pontuaram}</span> : <span className="text-gray-300">–</span>}</td>
-                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 2 * STAT_COL_W } : {}) }} className="border-r border-violet-50 text-center text-[10px]">{stats.cravaram > 0 ? <span className="font-bold text-emerald-600">{stats.cravaram}</span> : <span className="text-gray-300">–</span>}</td>
-                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 3 * STAT_COL_W, borderRight: '2px solid #c4b5fd' } : {}) }} className="border-r border-violet-50 text-center text-[10px] text-gray-500">{stats.media > 0 ? media : <span className="text-gray-300">–</span>}</td>
                       </>)
                     })()}
                     {orderedParts.map((p, idx) => {
@@ -1186,7 +1186,10 @@ export function TabelaMBClient({
                       const media  = stats.media > 0 ? stats.media.toFixed(1) : '—'
                       const s0 = !isMobile ? { position: 'sticky' as const, zIndex: 20, background: '#fffbeb' } : {}
                       return (<>
-                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal } : {}) }} className="border-r border-amber-50 text-center">
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal } : {}) }} className="border-r border-amber-50 text-center text-[10px]">{stats.pontuaram > 0 ? <span className="font-bold text-gray-700">{stats.pontuaram}</span> : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + STAT_COL_W } : {}) }} className="border-r border-amber-50 text-center text-[10px]">{stats.cravaram > 0 ? <span className="font-bold text-emerald-600">{stats.cravaram}</span> : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 2 * STAT_COL_W, borderRight: '2px solid #fde68a' } : {}) }} className="border-r border-amber-50 text-center text-[10px] text-gray-500">{stats.media > 0 ? media : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 3 * STAT_COL_W } : {}) }} className="border-r border-amber-50 text-center">
                           {lb ? (
                             <div className="flex flex-col items-center leading-none gap-px py-0.5">
                               <span className="text-[8px] text-gray-700 truncate font-medium" style={{ maxWidth: STAT_COL_W - 4 }}>🏆{a(lb.champion)}</span>
@@ -1199,9 +1202,6 @@ export function TabelaMBClient({
                             </div>
                           ) : <span className="text-gray-200">—</span>}
                         </td>
-                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + STAT_COL_W } : {}) }} className="border-r border-amber-50 text-center text-[10px]">{stats.pontuaram > 0 ? <span className="font-bold text-gray-700">{stats.pontuaram}</span> : <span className="text-gray-300">–</span>}</td>
-                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 2 * STAT_COL_W } : {}) }} className="border-r border-amber-50 text-center text-[10px]">{stats.cravaram > 0 ? <span className="font-bold text-emerald-600">{stats.cravaram}</span> : <span className="text-gray-300">–</span>}</td>
-                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 3 * STAT_COL_W, borderRight: '2px solid #fde68a' } : {}) }} className="border-r border-amber-50 text-center text-[10px] text-gray-500">{stats.media > 0 ? media : <span className="text-gray-300">–</span>}</td>
                       </>)
                     })()}
                     {orderedParts.map((p, idx) => {
@@ -1264,7 +1264,10 @@ export function TabelaMBClient({
                       const media     = stats.media > 0 ? stats.media.toFixed(1) : '—'
                       const s0 = !isMobile ? { position: 'sticky' as const, zIndex: 20, background: '#fffbeb' } : {}
                       return (<>
-                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal, background: lbBg } : {}) }}
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal } : {}) }} className="border-r border-amber-50 text-center text-[10px]">{stats.pontuaram > 0 ? <span className="font-bold text-gray-700">{stats.pontuaram}</span> : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + STAT_COL_W } : {}) }} className="border-r border-amber-50 text-center text-[10px]">{stats.cravaram > 0 ? <span className="font-bold text-emerald-600">{stats.cravaram}</span> : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 2 * STAT_COL_W, borderRight: '2px solid #fde68a' } : {}) }} className="border-r border-amber-50 text-center text-[10px] text-gray-500">{stats.media > 0 ? media : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 3 * STAT_COL_W, background: lbBg } : {}) }}
                           className={`border-r border-amber-50 text-center ${isMobile ? (lbCorrect ? 'bg-emerald-100' : lbPts !== null ? 'bg-rose-50' : '') : ''}`}>
                           {lbDisplay ? (
                             <div className="flex flex-col items-center leading-none gap-px">
@@ -1277,9 +1280,6 @@ export function TabelaMBClient({
                             </div>
                           ) : <span className="text-gray-200">—</span>}
                         </td>
-                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + STAT_COL_W } : {}) }} className="border-r border-amber-50 text-center text-[10px]">{stats.pontuaram > 0 ? <span className="font-bold text-gray-700">{stats.pontuaram}</span> : <span className="text-gray-300">–</span>}</td>
-                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 2 * STAT_COL_W } : {}) }} className="border-r border-amber-50 text-center text-[10px]">{stats.cravaram > 0 ? <span className="font-bold text-emerald-600">{stats.cravaram}</span> : <span className="text-gray-300">–</span>}</td>
-                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 3 * STAT_COL_W, borderRight: '2px solid #fde68a' } : {}) }} className="border-r border-amber-50 text-center text-[10px] text-gray-500">{stats.media > 0 ? media : <span className="text-gray-300">–</span>}</td>
                       </>)
                     })()}
                     {orderedParts.map((p, idx) => {
@@ -1405,7 +1405,10 @@ export function TabelaMBClient({
                     const media  = stats.media > 0 ? stats.media.toFixed(1) : '—'
                     const s0 = !isMobile ? { position: 'sticky' as const, zIndex: 20, background: bg } : {}
                     return (<>
-                      <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal, background: lbBg } : {}) }}
+                      <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal } : {}) }} className="border-r border-gray-100 text-center text-[10px]">{stats.pontuaram > 0 ? <span className="font-bold text-gray-700">{stats.pontuaram}</span> : <span className="text-gray-300">–</span>}</td>
+                      <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + STAT_COL_W } : {}) }} className="border-r border-gray-100 text-center text-[10px]">{stats.cravaram > 0 ? <span className="font-bold text-emerald-600">{stats.cravaram}</span> : <span className="text-gray-300">–</span>}</td>
+                      <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 2 * STAT_COL_W, borderRight: '2px solid #d1d5db' } : {}) }} className="border-r border-gray-100 text-center text-[10px] text-gray-500">{stats.media > 0 ? media : <span className="text-gray-300">–</span>}</td>
+                      <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 3 * STAT_COL_W, background: lbBg } : {}) }}
                         className={`border-r border-gray-100 text-center ${isMobile ? CELL_BG[lbKind] : ''}`}>
                         {lb ? (
                           <div className="flex flex-col items-center leading-none gap-px">
@@ -1418,9 +1421,6 @@ export function TabelaMBClient({
                           </div>
                         ) : <span className="text-gray-200">—</span>}
                       </td>
-                      <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + STAT_COL_W } : {}) }} className="border-r border-gray-100 text-center text-[10px]">{stats.pontuaram > 0 ? <span className="font-bold text-gray-700">{stats.pontuaram}</span> : <span className="text-gray-300">–</span>}</td>
-                      <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 2 * STAT_COL_W } : {}) }} className="border-r border-gray-100 text-center text-[10px]">{stats.cravaram > 0 ? <span className="font-bold text-emerald-600">{stats.cravaram}</span> : <span className="text-gray-300">–</span>}</td>
-                      <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 3 * STAT_COL_W, borderRight: '2px solid #d1d5db' } : {}) }} className="border-r border-gray-100 text-center text-[10px] text-gray-500">{stats.media > 0 ? media : <span className="text-gray-300">–</span>}</td>
                     </>)
                   })()}
                   {orderedParts.map((p, idx) => {
