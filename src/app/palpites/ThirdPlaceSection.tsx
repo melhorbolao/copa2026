@@ -28,9 +28,11 @@ interface Props {
   existingBets: Bet[] | null
   groupBets?: Record<string, { first_place: string; second_place: string } | undefined>
   calculatedThirds?: Record<string, { third: string; tiedTeams: string[] }>
+  officialThirdTeams?: Record<string, string>   // group → official 3rd-place team (from real scores)
+  thirdPts?: number
 }
 
-export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBets, calculatedThirds }: Props) {
+export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBets, calculatedThirds, officialThirdTeams, thirdPts = 3 }: Props) {
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState('')
 
@@ -100,17 +102,27 @@ export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBet
         </div>
         {existingBets?.length ? (
           <div className="grid grid-cols-2 gap-0 divide-x divide-y divide-gray-100 sm:grid-cols-4">
-            {existingBets.map(b => (
-              <div key={b.group_name} className="px-4 py-3">
-                <div className="text-xs text-gray-400">Gr. {b.group_name}</div>
-                <div className="mt-0.5 flex items-center gap-1 font-bold text-gray-900 text-sm">
-                  {b.team}
-                  {b.team && calculatedThirds?.[b.group_name] &&
-                    b.team !== calculatedThirds[b.group_name].third &&
-                    !calculatedThirds[b.group_name].tiedTeams.includes(b.team) && <ConflictDot />}
+            {existingBets.map(b => {
+              const officialThird = officialThirdTeams?.[b.group_name]
+              const isCorrect = !!officialThird && b.team === officialThird
+              const hasResult = !!officialThird
+              return (
+                <div key={b.group_name} className="px-4 py-3">
+                  <div className="text-xs text-gray-400">Gr. {b.group_name}</div>
+                  <div className="mt-0.5 flex items-center gap-1 font-bold text-gray-900 text-sm">
+                    {b.team}
+                    {b.team && calculatedThirds?.[b.group_name] &&
+                      b.team !== calculatedThirds[b.group_name].third &&
+                      !calculatedThirds[b.group_name].tiedTeams.includes(b.team) && <ConflictDot />}
+                  </div>
+                  {hasResult && (
+                    isCorrect
+                      ? <span className="text-xs font-bold text-verde-600">+{thirdPts} pts</span>
+                      : <span className="text-xs text-gray-400">0 pts</span>
+                  )}
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         ) : (
           <p className="px-4 py-3 text-sm text-gray-400">Sem palpite de terceiros registrado.</p>

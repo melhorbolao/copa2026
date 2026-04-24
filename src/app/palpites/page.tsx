@@ -88,6 +88,10 @@ export default async function PalpitesPage({
   if (thirdBetsResult.error) console.error('[palpites/page] third_place_bets SELECT error:', thirdBetsResult.error)
   const thirdBets = (thirdBetsResult.data ?? []) as { group_name: string; team: string }[]
 
+  const thirdPts: number = await supabase
+    .from('scoring_rules').select('points').eq('key', 'terceiro_classificado').maybeSingle()
+    .then(r => r.data?.points ?? 3, () => 3)
+
   const scorerMapping: Record<string, string> = Object.fromEntries(
     (scorerMappingsRaw as { raw_name: string; standardized_name: string }[]).map(m => [m.raw_name, m.standardized_name])
   )
@@ -131,7 +135,11 @@ export default async function PalpitesPage({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .map((m: any) => [m.id, { match_id: m.id, score_home: m.score_home, score_away: m.score_away }])
   )
-  const officialStandings = calcGroupStandings(slimGroupMatches, officialScoreMap)
+  const officialStandings  = calcGroupStandings(slimGroupMatches, officialScoreMap)
+  const officialThirdTeams: Record<string, string> = {}
+  for (const s of officialStandings) {
+    if (s.teams[2]?.team) officialThirdTeams[s.group] = s.teams[2].team
+  }
   const officialThirds    = rankThirds(officialStandings)
   const officialThirdSlots = resolveThirdSlots(officialThirds)
   const officialR32Slots  = officialThirdSlots
@@ -453,6 +461,8 @@ export default async function PalpitesPage({
                 calculatedThirds={Object.fromEntries(
                   Object.entries(calculatedTopPerGroup).map(([g, t]) => [g, { third: t.third, tiedTeams: t.tiedTeams }])
                 )}
+                officialThirdTeams={officialThirdTeams}
+                thirdPts={thirdPts}
               />
             )}
 
