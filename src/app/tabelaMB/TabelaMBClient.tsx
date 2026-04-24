@@ -5,7 +5,7 @@ import {
 } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { createClient } from '@/lib/supabase/client'
-import { saveOfficialScore } from '@/app/acopa/actions'
+import { saveOfficialScore, saveOfficialTopScorer } from '@/app/acopa/actions'
 import { scoreMatchBet, detectMatchZebra, getMatchResult, scoreTournamentBet } from '@/lib/scoring/engine'
 import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap } from '@/lib/bracket/engine'
 import type { KnockoutTeamOverride } from '@/lib/bracket/engine'
@@ -111,6 +111,7 @@ const COL_TEAMS_DESKTOP = 148
 const COL_TEAMS_MOBILE  = 60
 const COL_SCORE_W       = 96
 const PART_COL_W        = 64
+const STAT_COL_W        = 52  // 4 colunas de estatísticas × 52px = 208px
 
 // ── Row types ──────────────────────────────────────────────────────────────────
 
@@ -178,6 +179,77 @@ function thirdCellKind(
 
 const abbr = (name: string, max = 7) =>
   name.length <= max ? name : name.slice(0, max - 1) + '…'
+
+// ── Per-event aggregate stats ──────────────────────────────────────────────────
+
+interface EventStats { pontuaram: number; cravaram: number; media: number }
+
+function matchEventStats(matchId: string, sh: number | null, sa: number | null, parts: Participant[], betMap: BetMap): EventStats {
+  let pontuaram = 0, cravaram = 0, total = 0
+  for (const p of parts) {
+    const bet = betMap.get(`${p.id}:${matchId}`)
+    if (!bet) continue
+    const kind = matchCellKind(bet, sh, sa)
+    const pts  = bet.livePoints !== undefined ? bet.livePoints : (bet.storedPoints ?? 0)
+    if ((pts ?? 0) > 0) pontuaram++
+    if (kind === 'exact') cravaram++
+    total += pts ?? 0
+  }
+  return { pontuaram, cravaram, media: parts.length > 0 ? total / parts.length : 0 }
+}
+
+function groupEventStats(g: string, of1: string, of2: string, parts: Participant[], groupBetMap: Map<string, { first_place: string; second_place: string; points: number | null }>): EventStats {
+  let pontuaram = 0, cravaram = 0, total = 0
+  for (const p of parts) {
+    const bet = groupBetMap.get(`${p.id}:${g}`)
+    const kind = groupCellKind(bet, of1, of2)
+    const pts  = bet?.points ?? 0
+    if ((pts ?? 0) > 0) pontuaram++
+    if (kind === 'exact') cravaram++
+    total += pts ?? 0
+  }
+  return { pontuaram, cravaram, media: parts.length > 0 ? total / parts.length : 0 }
+}
+
+function thirdEventStats(g: string, ot: string, thirdPts: number, parts: Participant[], thirdBetMap: Map<string, { team: string }>): EventStats {
+  let pontuaram = 0, cravaram = 0, total = 0
+  for (const p of parts) {
+    const bet  = thirdBetMap.get(`${p.id}:${g}`)
+    const kind = thirdCellKind(bet?.team, ot)
+    const pts  = kind === 'exact' ? thirdPts : 0
+    if (pts > 0) pontuaram++
+    if (kind === 'exact') cravaram++
+    total += pts
+  }
+  return { pontuaram, cravaram, media: parts.length > 0 ? total / parts.length : 0 }
+}
+
+function g4EventStats(parts: Participant[], tournamentBetMap: Map<string, TournamentBetRaw>, knockoutResults: TournamentResults, rules: RuleMap, isZebraChampion: boolean, scorerMapping: Record<string, string>): EventStats {
+  let pontuaram = 0, cravaram = 0, total = 0
+  for (const p of parts) {
+    const bet = tournamentBetMap.get(p.id)
+    const pts = bet ? scoreTournamentBet({ ...bet, top_scorer: '' }, knockoutResults, rules, isZebraChampion, scorerMapping) : 0
+    if (pts > 0) pontuaram++
+    if (bet && knockoutResults.champion && bet.champion === knockoutResults.champion && knockoutResults.runnerUp && bet.runner_up === knockoutResults.runnerUp) cravaram++
+    total += pts
+  }
+  return { pontuaram, cravaram, media: parts.length > 0 ? total / parts.length : 0 }
+}
+
+function scorerEventStats(parts: Participant[], tournamentBetMap: Map<string, TournamentBetRaw>, localScorers: string[], artilhPts: number, scorerMapping: Record<string, string>): EventStats {
+  let pontuaram = 0, cravaram = 0, total = 0
+  for (const p of parts) {
+    const bet = tournamentBetMap.get(p.id)
+    if (!bet?.top_scorer) continue
+    const norm      = (scorerMapping[bet.top_scorer] ?? bet.top_scorer).trim().toLowerCase()
+    const isCorrect = localScorers.length > 0 && localScorers.some(s => s.trim().toLowerCase() === norm)
+    const pts       = localScorers.length > 0 ? (isCorrect ? artilhPts : 0) : 0
+    if (pts > 0) pontuaram++
+    if (isCorrect) cravaram++
+    total += pts
+  }
+  return { pontuaram, cravaram, media: parts.length > 0 ? total / parts.length : 0 }
+}
 
 // ── Format match datetime (Brasília UTC-3) ─────────────────────────────────────
 
@@ -280,6 +352,12 @@ export function TabelaMBClient({
   const [phase,   setPhase]   = useState('group')
   const [now,     setNow]     = useState(Date.now())
   const [isMobile, setIsMobile] = useState(false)
+
+  // Admin: gestão de artilheiros oficiais
+  const [localScorers, setLocalScorers] = useState<string[]>(officialTopScorers)
+  const [scorerInput,  setScorerInput]  = useState('')
+  const [scorerPending, startScorerTransition] = useTransition()
+  const [scorerError,  setScorerError]  = useState('')
 
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -492,7 +570,7 @@ export function TabelaMBClient({
   const activePart   = participants.find(p => p.id === activeParticipantId)
   const otherParts   = participants.filter(p => p.id !== activeParticipantId)
   const orderedParts = activePart ? [activePart, ...otherParts] : participants
-  const frozenPartLeft = !isMobile && activePart ? frozenTotal : null
+  const frozenPartLeft = !isMobile && activePart ? frozenTotal + 4 * STAT_COL_W : null
 
   // Compute totals client-side so match livePoints + group + third bets are all included.
   // Third-place points are computed live (DB only stores them after all 72 group matches finish).
@@ -524,11 +602,37 @@ export function TabelaMBClient({
     return totals
   }, [participants, matches, betMap, groupBetMap, thirdBetMap, officialThirds, rules, tournamentBetMap, knockoutResults, isZebraChampion, scorerMapping])
 
+  const leaderId = useMemo(() => {
+    let best = -Infinity, bestId = ''
+    for (const p of participants) {
+      const pts = computedTotals[p.id] ?? 0
+      if (pts > best) { best = pts; bestId = p.id }
+    }
+    return bestId
+  }, [participants, computedTotals])
+
+  // Funções de save do artilheiro (admin)
+  const handleScorerSave = useCallback((names: string[]) => {
+    setLocalScorers(names)
+    setScorerError('')
+    startScorerTransition(async () => {
+      const r = await saveOfficialTopScorer(JSON.stringify(names))
+      if (r.error) setScorerError(r.error)
+    })
+  }, [])
+
+  const handleScorerAdd = useCallback(() => {
+    const t = scorerInput.trim()
+    if (!t || localScorers.includes(t)) return
+    handleScorerSave([...localScorers, t])
+    setScorerInput('')
+  }, [scorerInput, localScorers, handleScorerSave])
+
   const vItems    = rowVirtualizer.getVirtualItems()
   const totalSize = rowVirtualizer.getTotalSize()
   const padTop    = vItems.length > 0 ? vItems[0].start : 0
   const padBot    = vItems.length > 0 ? totalSize - vItems[vItems.length - 1].end : 0
-  const tableW    = frozenTotal + participants.length * PART_COL_W
+  const tableW    = frozenTotal + 4 * STAT_COL_W + participants.length * PART_COL_W
 
   const getMatchPts = (pid: string, mid: string) => {
     const e = betMap.get(`${pid}:${mid}`)
@@ -554,7 +658,94 @@ export function TabelaMBClient({
         <span className="ml-auto text-[10px] text-gray-400">
           {filteredMatches.length} jogos · {participants.length} part.
         </span>
+        {/* Botão de exportação Excel — apenas desktop */}
+        <button
+          className="hidden sm:inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition"
+          onClick={async () => {
+            const ExcelJS = (await import('exceljs')).default
+            const wb = new ExcelJS.Workbook()
+            const ws = wb.addWorksheet('TabelaMB')
+            ws.addRow(['Data', 'Jogo', 'Oficial', 'Líder', 'Pont.', 'Crav.', 'Méd.', ...orderedParts.map(p => p.apelido)])
+            const artPts = rules['artilheiro'] ?? 18
+            const thPts  = rules['terceiro_classificado'] ?? 3
+            for (const row of allRows) {
+              if (row.kind === 'section') { ws.addRow([row.label]); continue }
+              if (row.kind === 'match') {
+                const m  = row.match
+                const th = knockoutTeamMap.get(m.id)
+                const { date, time } = fmtMatchDate(m.match_datetime)
+                const s  = matchEventStats(m.id, m.score_home, m.score_away, participants, betMap)
+                const lb = betMap.get(`${leaderId}:${m.id}`)
+                ws.addRow([`${date} ${time}`, `${th?.team_home ?? m.team_home} x ${th?.team_away ?? m.team_away}`,
+                  m.score_home !== null ? `${m.score_home}–${m.score_away}` : '–',
+                  lb ? `${lb.score_home}–${lb.score_away}` : '–', s.pontuaram, s.cravaram, s.media > 0 ? +s.media.toFixed(1) : '–',
+                  ...orderedParts.map(p => { const b = betMap.get(`${p.id}:${m.id}`); const pts = getMatchPts(p.id, m.id); return b ? `${b.score_home}–${b.score_away}${pts !== null ? ` (${pts})` : ''}` : '–' })])
+                continue
+              }
+              if (row.kind === 'group_bet') {
+                const g = row.groupName; const of1 = offFirst(g); const of2 = offSecond(g)
+                const s = groupEventStats(g, of1, of2, participants, groupBetMap)
+                const lb = groupBetMap.get(`${leaderId}:${g}`)
+                ws.addRow([`Grupo ${g}`, '1º e 2º', of1 ? `${of1}/${of2}` : '–',
+                  lb?.first_place ? `${lb.first_place}/${lb.second_place}` : '–', s.pontuaram, s.cravaram, s.media > 0 ? +s.media.toFixed(1) : '–',
+                  ...orderedParts.map(p => { const b = groupBetMap.get(`${p.id}:${g}`); return b?.first_place ? `${b.first_place}/${b.second_place}${b.points !== null ? ` (${b.points})` : ''}` : '–' })])
+                continue
+              }
+              if (row.kind === 'third_bet') {
+                const g = row.groupName; const ot = offThird(g)
+                const s = thirdEventStats(g, ot, thPts, participants, thirdBetMap)
+                const lb = thirdBetMap.get(`${leaderId}:${g}`)
+                ws.addRow([`3º Gr.${g}`, 'Melhor 3º', ot || '–', lb?.team ?? '–', s.pontuaram, s.cravaram, s.media > 0 ? +s.media.toFixed(1) : '–',
+                  ...orderedParts.map(p => { const b = thirdBetMap.get(`${p.id}:${g}`); return b?.team ?? '–' })])
+                continue
+              }
+              if (row.kind === 'g4_row') {
+                const s = g4EventStats(participants, tournamentBetMap, knockoutResults, rules, isZebraChampion, scorerMapping)
+                const lb = tournamentBetMap.get(leaderId)
+                ws.addRow(['G4', 'Semi+Campeão', knockoutResults.champion ?? '–', lb?.champion ?? '–', s.pontuaram, s.cravaram, s.media > 0 ? +s.media.toFixed(1) : '–',
+                  ...orderedParts.map(p => { const b = tournamentBetMap.get(p.id); const pts = b ? scoreTournamentBet({ ...b, top_scorer: '' }, knockoutResults, rules, isZebraChampion, scorerMapping) : 0; return b ? `${b.champion}/${b.runner_up}${pts > 0 ? ` (+${pts})` : ''}` : '–' })])
+                continue
+              }
+              if (row.kind === 'scorer_row') {
+                const s = scorerEventStats(participants, tournamentBetMap, localScorers, artPts, scorerMapping)
+                const lb = tournamentBetMap.get(leaderId)
+                const lbRaw = lb?.top_scorer ?? ''; const lbDisp = lbRaw ? (scorerMapping[lbRaw] ?? lbRaw) : '–'
+                ws.addRow(['Artilheiro', 'Top scorer', localScorers.join(', ') || '–', lbDisp, s.pontuaram, s.cravaram, s.media > 0 ? +s.media.toFixed(1) : '–',
+                  ...orderedParts.map(p => { const b = tournamentBetMap.get(p.id); const raw = b?.top_scorer ?? ''; return raw ? (scorerMapping[raw] ?? raw) : '–' })])
+              }
+            }
+            const buf = await wb.xlsx.writeBuffer()
+            const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+            const url = URL.createObjectURL(blob); const a = document.createElement('a')
+            a.href = url; a.download = 'TabelaMB.xlsx'; a.click(); URL.revokeObjectURL(url)
+          }}
+        >⬇ Excel</button>
       </div>
+
+      {/* Admin: gestão de artilheiro oficial */}
+      {effectiveIsAdmin && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-amber-200 bg-amber-50 px-3 py-1.5 shrink-0">
+          <span className="text-[11px] font-bold text-amber-700">⚽ Artilheiro oficial:</span>
+          {localScorers.map(n => (
+            <span key={n} className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+              {n}
+              <button onClick={() => handleScorerSave(localScorers.filter(x => x !== n))} className="text-amber-500 hover:text-red-500 leading-none">×</button>
+            </span>
+          ))}
+          <input
+            type="text" value={scorerInput} onChange={e => setScorerInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleScorerAdd()}
+            placeholder="Adicionar…"
+            className="rounded border border-amber-200 bg-white px-2 py-0.5 text-[11px] focus:outline-none focus:border-amber-400 w-32"
+          />
+          <button onClick={handleScorerAdd} disabled={!scorerInput.trim() || scorerPending}
+            className="rounded bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white hover:bg-amber-600 disabled:opacity-40 transition">
+            +
+          </button>
+          {scorerError && <span className="text-[10px] text-red-500">{scorerError}</span>}
+          {scorerPending && <span className="text-[10px] text-gray-400">Salvando…</span>}
+        </div>
+      )}
 
       {/* Matrix */}
       <div ref={containerRef} className="flex-1 overflow-auto" style={{ WebkitOverflowScrolling: 'touch' as const }}>
@@ -563,6 +754,10 @@ export function TabelaMBClient({
             <col style={{ width: colDateW }} />
             <col style={{ width: colTeamsW }} />
             <col style={{ width: COL_SCORE_W }} />
+            <col style={{ width: STAT_COL_W }} />
+            <col style={{ width: STAT_COL_W }} />
+            <col style={{ width: STAT_COL_W }} />
+            <col style={{ width: STAT_COL_W }} />
             {orderedParts.map(p => <col key={p.id} style={{ width: PART_COL_W }} />)}
           </colgroup>
 
@@ -573,8 +768,17 @@ export function TabelaMBClient({
                 className="text-center text-gray-300 font-semibold text-[10px]">Data</th>
               <th style={{ position: 'sticky', top: 0, left: colTeamsLeft, zIndex: 50, background: '#1f2937', borderRight: '1px solid #374151' }}
                 className="text-left px-1.5 text-gray-300 font-semibold">Jogo</th>
-              <th style={{ position: 'sticky', top: 0, left: colScoreLeft, zIndex: 50, background: '#1f2937', borderRight: '2px solid #6b7280' }}
+              <th style={{ position: 'sticky', top: 0, left: colScoreLeft, zIndex: 50, background: '#1f2937', borderRight: '1px solid #374151' }}
                 className="text-center text-gray-200 font-semibold">Oficial</th>
+              {/* Colunas de estatísticas */}
+              <th style={{ position: 'sticky', top: 0, ...(isMobile ? {} : { left: frozenTotal }), zIndex: isMobile ? 40 : 50, background: '#1f2937', borderRight: '1px solid #374151' }}
+                className="text-center text-[9px] font-semibold text-gray-400 px-0.5">Líder</th>
+              <th style={{ position: 'sticky', top: 0, ...(isMobile ? {} : { left: frozenTotal + STAT_COL_W }), zIndex: isMobile ? 40 : 50, background: '#1f2937', borderRight: '1px solid #374151' }}
+                className="text-center text-[9px] font-semibold text-gray-400 px-0.5">Pont.</th>
+              <th style={{ position: 'sticky', top: 0, ...(isMobile ? {} : { left: frozenTotal + 2 * STAT_COL_W }), zIndex: isMobile ? 40 : 50, background: '#1f2937', borderRight: '1px solid #374151' }}
+                className="text-center text-[9px] font-semibold text-gray-400 px-0.5">Crav.</th>
+              <th style={{ position: 'sticky', top: 0, ...(isMobile ? {} : { left: frozenTotal + 3 * STAT_COL_W }), zIndex: isMobile ? 40 : 50, background: '#1f2937', borderRight: '2px solid #6b7280' }}
+                className="text-center text-[9px] font-semibold text-gray-400 px-0.5">Méd.</th>
               {orderedParts.map((p, idx) => {
                 const isMe = p.id === activeParticipantId
                 const isFrozen = frozenPartLeft !== null && idx === 0
@@ -602,7 +806,7 @@ export function TabelaMBClient({
 
           {/* Body */}
           <tbody>
-            {padTop > 0 && <tr style={{ height: padTop }}><td colSpan={3 + participants.length} /></tr>}
+            {padTop > 0 && <tr style={{ height: padTop }}><td colSpan={7 + participants.length} /></tr>}
 
             {vItems.map(vRow => {
               const row = allRows[vRow.index]
@@ -616,7 +820,7 @@ export function TabelaMBClient({
                 const borderClr = row.color === '#1e3a5f' ? '#93c5fd' : row.color === '#78350f' ? '#fde68a' : '#c4b5fd'
                 return (
                   <tr key={`sec-${row.label}`} style={{ height: ROW_H_SEC }}>
-                    <td colSpan={3 + participants.length}
+                    <td colSpan={7 + participants.length}
                       style={{ position: 'sticky', left: 0, zIndex: 30, background: sectionBg, borderTop: `2px solid ${borderClr}`, borderBottom: `1px solid ${borderClr}` }}
                       className={`px-3 text-[10px] font-bold uppercase tracking-widest ${textCls}`}
                     >{row.label}</td>
@@ -657,10 +861,24 @@ export function TabelaMBClient({
                         </div>
                       )}
                     </td>
-                    <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: '#eff6ff', borderRight: '2px solid #93c5fd' }}
+                    <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: '#eff6ff', borderRight: '1px solid #bfdbfe' }}
                       className="text-center text-[10px] font-semibold text-blue-800">
                       {of1 ? `Gr. ${g}` : <span className="text-gray-300">–</span>}
                     </td>
+                    {/* Colunas de stats */}
+                    {(() => {
+                      const stats = groupEventStats(g, of1, of2, participants, groupBetMap)
+                      const lb    = groupBetMap.get(`${leaderId}:${g}`)
+                      const lider = lb?.first_place ? `${teamAbbrs[lb.first_place] ?? abbr(lb.first_place, 4)}/${teamAbbrs[lb.second_place] ?? abbr(lb.second_place, 4)}` : '—'
+                      const media = stats.media > 0 ? stats.media.toFixed(1) : '—'
+                      const s0 = !isMobile ? { position: 'sticky' as const, zIndex: 20, background: '#eff6ff' } : {}
+                      return (<>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal } : {}) }} className="border-r border-blue-50 text-center text-[9px] text-gray-500 truncate px-0.5">{lider}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + STAT_COL_W } : {}) }} className="border-r border-blue-50 text-center text-[10px]">{stats.pontuaram > 0 ? <span className="font-bold text-gray-700">{stats.pontuaram}</span> : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 2 * STAT_COL_W } : {}) }} className="border-r border-blue-50 text-center text-[10px]">{stats.cravaram > 0 ? <span className="font-bold text-emerald-600">{stats.cravaram}</span> : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 3 * STAT_COL_W, borderRight: '2px solid #93c5fd' } : {}) }} className="border-r border-blue-50 text-center text-[10px] text-gray-500">{stats.media > 0 ? media : <span className="text-gray-300">–</span>}</td>
+                      </>)
+                    })()}
                     {orderedParts.map((p, idx) => {
                       const bet  = groupBetMap.get(`${p.id}:${g}`)
                       const kind = groupCellKind(bet, of1, of2)
@@ -713,10 +931,25 @@ export function TabelaMBClient({
                         </span>
                       )}
                     </td>
-                    <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: '#faf5ff', borderRight: '2px solid #c4b5fd' }}
+                    <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: '#faf5ff', borderRight: '1px solid #e9d5ff' }}
                       className="text-center text-[10px] text-violet-600 font-semibold">
                       {ot ? `Gr. ${g}` : <span className="text-gray-300">–</span>}
                     </td>
+                    {/* Colunas de stats */}
+                    {(() => {
+                      const thirdPts = rules['terceiro_classificado'] ?? 3
+                      const stats    = thirdEventStats(g, ot, thirdPts, participants, thirdBetMap)
+                      const lb       = thirdBetMap.get(`${leaderId}:${g}`)
+                      const lider    = lb?.team ? (teamAbbrs[lb.team] ?? abbr(lb.team)) : '—'
+                      const media    = stats.media > 0 ? stats.media.toFixed(1) : '—'
+                      const s0 = !isMobile ? { position: 'sticky' as const, zIndex: 20, background: '#faf5ff' } : {}
+                      return (<>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal } : {}) }} className="border-r border-violet-50 text-center text-[9px] text-gray-500 truncate px-0.5">{lider}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + STAT_COL_W } : {}) }} className="border-r border-violet-50 text-center text-[10px]">{stats.pontuaram > 0 ? <span className="font-bold text-gray-700">{stats.pontuaram}</span> : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 2 * STAT_COL_W } : {}) }} className="border-r border-violet-50 text-center text-[10px]">{stats.cravaram > 0 ? <span className="font-bold text-emerald-600">{stats.cravaram}</span> : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 3 * STAT_COL_W, borderRight: '2px solid #c4b5fd' } : {}) }} className="border-r border-violet-50 text-center text-[10px] text-gray-500">{stats.media > 0 ? media : <span className="text-gray-300">–</span>}</td>
+                      </>)
+                    })()}
                     {orderedParts.map((p, idx) => {
                       const bet  = thirdBetMap.get(`${p.id}:${g}`)
                       const kind = thirdCellKind(bet?.team, ot)
@@ -764,8 +997,22 @@ export function TabelaMBClient({
                         {!kr.champion && <span className="text-gray-300">–</span>}
                       </div>
                     </td>
-                    <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: '#fffbeb', borderRight: '2px solid #fde68a' }}
+                    <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: '#fffbeb', borderRight: '1px solid #fde68a' }}
                       className="text-center text-[9px] text-amber-600 font-semibold">G4</td>
+                    {/* Colunas de stats */}
+                    {(() => {
+                      const stats = g4EventStats(participants, tournamentBetMap, knockoutResults, rules, isZebraChampion, scorerMapping)
+                      const lb    = tournamentBetMap.get(leaderId)
+                      const lider = lb?.champion ? a(lb.champion) : '—'
+                      const media = stats.media > 0 ? stats.media.toFixed(1) : '—'
+                      const s0 = !isMobile ? { position: 'sticky' as const, zIndex: 20, background: '#fffbeb' } : {}
+                      return (<>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal } : {}) }} className="border-r border-amber-50 text-center text-[9px] text-gray-500 truncate px-0.5">{lider}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + STAT_COL_W } : {}) }} className="border-r border-amber-50 text-center text-[10px]">{stats.pontuaram > 0 ? <span className="font-bold text-gray-700">{stats.pontuaram}</span> : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 2 * STAT_COL_W } : {}) }} className="border-r border-amber-50 text-center text-[10px]">{stats.cravaram > 0 ? <span className="font-bold text-emerald-600">{stats.cravaram}</span> : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 3 * STAT_COL_W, borderRight: '2px solid #fde68a' } : {}) }} className="border-r border-amber-50 text-center text-[10px] text-gray-500">{stats.media > 0 ? media : <span className="text-gray-300">–</span>}</td>
+                      </>)
+                    })()}
                     {orderedParts.map((p, idx) => {
                       const bet  = tournamentBetMap.get(p.id)
                       const isMe = p.id === activeParticipantId
@@ -800,7 +1047,7 @@ export function TabelaMBClient({
               // ── Scorer row ──────────────────────────────────────────────────
               if (row.kind === 'scorer_row') {
                 const artilhPts = rules['artilheiro'] ?? 18
-                const officialNames = officialTopScorers.join(', ')
+                const officialNames = localScorers.join(', ')
                 return (
                   <tr key="scorer_row" style={{ height: ROW_H_BONUS, background: '#fffbeb' }}>
                     <td style={{ position: 'sticky', left: 0, zIndex: 30, background: '#fffbeb', borderRight: '1px solid #fde68a' }}
@@ -811,8 +1058,23 @@ export function TabelaMBClient({
                         {officialNames || <span className="text-gray-300">–</span>}
                       </span>
                     </td>
-                    <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: '#fffbeb', borderRight: '2px solid #fde68a' }}
+                    <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: '#fffbeb', borderRight: '1px solid #fde68a' }}
                       className="text-center text-[9px] text-amber-600 font-semibold">Art.</td>
+                    {/* Colunas de stats */}
+                    {(() => {
+                      const stats = scorerEventStats(participants, tournamentBetMap, localScorers, artilhPts, scorerMapping)
+                      const lb    = tournamentBetMap.get(leaderId)
+                      const rawLb = lb?.top_scorer ?? ''
+                      const lider = rawLb ? (scorerMapping[rawLb] ?? rawLb) : '—'
+                      const media = stats.media > 0 ? stats.media.toFixed(1) : '—'
+                      const s0 = !isMobile ? { position: 'sticky' as const, zIndex: 20, background: '#fffbeb' } : {}
+                      return (<>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal } : {}) }} className="border-r border-amber-50 text-center text-[9px] text-gray-500 truncate px-0.5">{lider}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + STAT_COL_W } : {}) }} className="border-r border-amber-50 text-center text-[10px]">{stats.pontuaram > 0 ? <span className="font-bold text-gray-700">{stats.pontuaram}</span> : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 2 * STAT_COL_W } : {}) }} className="border-r border-amber-50 text-center text-[10px]">{stats.cravaram > 0 ? <span className="font-bold text-emerald-600">{stats.cravaram}</span> : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 3 * STAT_COL_W, borderRight: '2px solid #fde68a' } : {}) }} className="border-r border-amber-50 text-center text-[10px] text-gray-500">{stats.media > 0 ? media : <span className="text-gray-300">–</span>}</td>
+                      </>)
+                    })()}
                     {orderedParts.map((p, idx) => {
                       const bet  = tournamentBetMap.get(p.id)
                       const isMe = p.id === activeParticipantId
@@ -824,16 +1086,17 @@ export function TabelaMBClient({
                           <span className="text-gray-200">—</span>
                         </td>
                       )
-                      const norm = (scorerMapping[bet.top_scorer] ?? bet.top_scorer).trim().toLowerCase()
-                      const isCorrect = officialTopScorers.length > 0 && officialTopScorers.some(s => s.trim().toLowerCase() === norm)
-                      const pts = officialTopScorers.length > 0 ? (isCorrect ? artilhPts : 0) : null
+                      const displayName = scorerMapping[bet.top_scorer] ?? bet.top_scorer
+                      const norm      = displayName.trim().toLowerCase()
+                      const isCorrect = localScorers.length > 0 && localScorers.some(s => s.trim().toLowerCase() === norm)
+                      const pts       = localScorers.length > 0 ? (isCorrect ? artilhPts : 0) : null
                       return (
                         <td key={p.id}
                           style={isFrozen ? { position: 'sticky', left: frozenPartLeft!, zIndex: 20, background: isCorrect ? '#d1fae5' : pts !== null ? '#fff1f2' : '#fffbeb', borderLeft: '2px solid #fde68a' } : undefined}
                           className={`border-r border-amber-50 text-center ${isCorrect ? 'bg-emerald-100' : pts !== null ? 'bg-rose-50' : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                           <div className="flex flex-col items-center leading-none gap-px">
                             <span className="text-[9px] text-gray-700 truncate font-medium" style={{ maxWidth: PART_COL_W - 4 }}>
-                              {bet.top_scorer}
+                              {displayName}
                             </span>
                             {pts !== null && (
                               <span className={`text-[10px] font-bold ${isCorrect ? 'text-emerald-600' : 'text-gray-300'}`}>
@@ -894,7 +1157,7 @@ export function TabelaMBClient({
                       </div>
                     )}
                   </td>
-                  <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: bg, borderRight: '2px solid #d1d5db' }}
+                  <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: bg, borderRight: '1px solid #f3f4f6' }}
                     className="text-center">
                     <ScoreInput match={match} canEdit={canEdit(match)}
                       onSaved={(sh, sa) => {
@@ -903,6 +1166,20 @@ export function TabelaMBClient({
                       }}
                     />
                   </td>
+                  {/* Colunas de stats */}
+                  {(() => {
+                    const stats = matchEventStats(match.id, match.score_home, match.score_away, participants, betMap)
+                    const lb    = betMap.get(`${leaderId}:${match.id}`)
+                    const lider = lb ? `${lb.score_home}–${lb.score_away}` : '—'
+                    const media = stats.media > 0 ? stats.media.toFixed(1) : '—'
+                    const s0 = !isMobile ? { position: 'sticky' as const, zIndex: 20, background: bg } : {}
+                    return (<>
+                      <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal } : {}) }} className="border-r border-gray-100 text-center text-[10px] text-gray-500 tabular-nums px-0.5">{lider}</td>
+                      <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + STAT_COL_W } : {}) }} className="border-r border-gray-100 text-center text-[10px]">{stats.pontuaram > 0 ? <span className="font-bold text-gray-700">{stats.pontuaram}</span> : <span className="text-gray-300">–</span>}</td>
+                      <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 2 * STAT_COL_W } : {}) }} className="border-r border-gray-100 text-center text-[10px]">{stats.cravaram > 0 ? <span className="font-bold text-emerald-600">{stats.cravaram}</span> : <span className="text-gray-300">–</span>}</td>
+                      <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 3 * STAT_COL_W, borderRight: '2px solid #d1d5db' } : {}) }} className="border-r border-gray-100 text-center text-[10px] text-gray-500">{stats.media > 0 ? media : <span className="text-gray-300">–</span>}</td>
+                    </>)
+                  })()}
                   {orderedParts.map((p, idx) => {
                     const key  = `${p.id}:${match.id}`
                     const bet  = betMap.get(key)
@@ -932,7 +1209,7 @@ export function TabelaMBClient({
               )
             })}
 
-            {padBot > 0 && <tr style={{ height: padBot }}><td colSpan={3 + participants.length} /></tr>}
+            {padBot > 0 && <tr style={{ height: padBot }}><td colSpan={7 + participants.length} /></tr>}
           </tbody>
         </table>
       </div>
