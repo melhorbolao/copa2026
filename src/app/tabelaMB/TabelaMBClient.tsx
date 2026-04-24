@@ -328,25 +328,29 @@ const ScoreInput = memo(function ScoreInput({
     )
   }
 
+  const currentH = parseInt(home, 10)
+  const currentA = parseInt(away, 10)
+  const currentResult = (!isNaN(currentH) && !isNaN(currentA)) ? getMatchResult(currentH, currentA) : null
+
   return (
     <div className="flex items-center justify-center gap-0.5">
       <input type="text" inputMode="numeric" pattern="[0-9]*" value={home}
         onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0,2); setHome(v); homeRef.current = v; triggerSave(v, awayRef.current) }}
         placeholder="–"
         className={`w-7 rounded border text-center text-xs font-bold py-0.5 focus:outline-none ${
-          possibleZebras?.H
+          possibleZebras?.H || (isActualZebra && currentResult === 'H')
             ? 'border-gray-700 bg-gray-900 text-white placeholder-gray-500 focus:border-gray-600'
             : 'border-gray-200 bg-white focus:border-verde-400'
         }`}
       />
       <span className={`text-[9px] font-bold ${
-        possibleZebras?.D ? 'rounded bg-gray-900 text-white px-0.5' : 'text-gray-300'
+        possibleZebras?.D || (isActualZebra && currentResult === 'D') ? 'rounded bg-gray-900 text-white px-0.5' : 'text-gray-300'
       }`}>×</span>
       <input type="text" inputMode="numeric" pattern="[0-9]*" value={away}
         onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0,2); setAway(v); awayRef.current = v; triggerSave(homeRef.current, v) }}
         placeholder="–"
         className={`w-7 rounded border text-center text-xs font-bold py-0.5 focus:outline-none ${
-          possibleZebras?.A
+          possibleZebras?.A || (isActualZebra && currentResult === 'A')
             ? 'border-gray-700 bg-gray-900 text-white placeholder-gray-500 focus:border-gray-600'
             : 'border-gray-200 bg-white focus:border-verde-400'
         }`}
