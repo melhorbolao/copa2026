@@ -3,6 +3,8 @@ import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { formatBrasilia } from '@/utils/date'
 import { Countdown } from '@/app/palpites/Countdown'
+import { Suspense } from 'react'
+import { ParticipantesFilter } from './ParticipantesFilter'
 
 type MatchPhase = 'group' | 'round_of_32' | 'round_of_16' | 'quarterfinal' | 'semifinal' | 'third_place' | 'final'
 interface Match { id: string; phase: MatchPhase; round: number | null; betting_deadline: string }
@@ -24,7 +26,12 @@ const STAGE_LABELS: Record<StageKey, string> = {
   r1:'R1', r2:'R2', r3:'R3', r32:'16av', r16:'Oit', qf:'Qrt', sf:'Semi', final:'Final'
 }
 
-export default async function ControlePage() {
+export default async function ControlePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ filter?: string }>
+}) {
+  const { filter = '' } = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   let isAdmin = false
@@ -163,9 +170,19 @@ export default async function ControlePage() {
       : (DEADLINE_LABELS[nextMatch.phase] ?? 'Próxima etapa'),
   } : null
 
-  const sorted = [...(participants ?? [])].sort((a, b) =>
+  // Determina a próxima etapa (para filtro de palpites incompletos)
+  const nextStageKey: StageKey | null = nextMatch ? (getStageKey(nextMatch) as StageKey | null) : null
+  const nextStageLabel: string | null = nextStageKey ? STAGE_LABELS[nextStageKey] : null
+
+  const allSorted = [...(participants ?? [])].sort((a, b) =>
     a.apelido.localeCompare(b.apelido, 'pt-BR', { sensitivity: 'base' })
   )
+
+  const sorted = allSorted.filter(p => {
+    if (filter === 'pendente')   return !p.paid
+    if (filter === 'incompleto') return nextStageKey !== null && calcPct(p.id, nextStageKey) < 100
+    return true
+  })
 
   const pct    = (v: number) => v === -1 ? '—' : `${v}%`
   const pctCls = (v: number) =>
@@ -185,11 +202,17 @@ export default async function ControlePage() {
       )}
 
     <div className="mx-auto max-w-5xl px-4 py-8">
-      <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
+      <div className="mb-4 flex items-start justify-between gap-4 flex-wrap">
         <h1 className="text-2xl font-black text-gray-900">Participantes</h1>
         {nextDeadline && (
           <Countdown deadline={nextDeadline.iso} label={nextDeadline.label} />
         )}
+      </div>
+
+      <div className="mb-6">
+        <Suspense fallback={null}>
+          <ParticipantesFilter nextStageLabel={nextStageLabel} />
+        </Suspense>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -257,7 +280,9 @@ export default async function ControlePage() {
       </div>
 
       <p className="mt-3 text-right text-xs text-gray-400">
-        {sorted.length} participantes
+        {sorted.length === allSorted.length
+          ? `${sorted.length} participantes`
+          : `${sorted.length} de ${allSorted.length} participantes`}
       </p>
     </div>
     </>
