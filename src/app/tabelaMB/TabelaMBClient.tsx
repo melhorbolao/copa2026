@@ -413,7 +413,8 @@ export function TabelaMBClient({
 
   // Admin: gestão de artilheiros oficiais
   const [localScorers, setLocalScorers] = useState<string[]>(officialTopScorers)
-  const [scorerInput,  setScorerInput]  = useState('')
+  const [scorerInput,    setScorerInput]    = useState('')
+  const [scorerSelectVal, setScorerSelectVal] = useState('')
   const [scorerPending, startScorerTransition] = useTransition()
   const [scorerError,  setScorerError]  = useState('')
 
@@ -669,6 +670,21 @@ export function TabelaMBClient({
     return bestId
   }, [participants, computedTotals])
 
+  // Unique scorer names bet by participants (standardized), for the admin dropdown
+  const betScorerOptions = useMemo(() => {
+    const seen = new Set<string>()
+    const opts: string[] = []
+    for (const b of tournamentBetMap.values()) {
+      if (!b.top_scorer) continue
+      const display = (scorerMapping[b.top_scorer] ?? b.top_scorer).trim()
+      if (display && !seen.has(display.toLowerCase())) {
+        seen.add(display.toLowerCase())
+        opts.push(display)
+      }
+    }
+    return opts.sort()
+  }, [tournamentBetMap, scorerMapping])
+
   // Funções de save do artilheiro (admin)
   const handleScorerSave = useCallback((names: string[]) => {
     setLocalScorers(names)
@@ -679,11 +695,18 @@ export function TabelaMBClient({
     })
   }, [])
 
+  const handleScorerAddDirect = useCallback((name: string) => {
+    if (!name || localScorers.some(s => s.trim().toLowerCase() === name.trim().toLowerCase())) return
+    handleScorerSave([...localScorers, name])
+    setScorerSelectVal('')
+  }, [localScorers, handleScorerSave])
+
   const handleScorerAdd = useCallback(() => {
     const t = scorerInput.trim()
-    if (!t || localScorers.includes(t)) return
+    if (!t || localScorers.some(s => s.trim().toLowerCase() === t.toLowerCase())) return
     handleScorerSave([...localScorers, t])
     setScorerInput('')
+    setScorerSelectVal('')
   }, [scorerInput, localScorers, handleScorerSave])
 
   const vItems    = rowVirtualizer.getVirtualItems()
@@ -780,8 +803,8 @@ export function TabelaMBClient({
         >⬇ Excel</button>
       </div>
 
-      {/* Admin: gestão de artilheiro oficial */}
-      {effectiveIsAdmin && (
+      {/* Admin: gestão de artilheiro oficial — só na fase Final */}
+      {effectiveIsAdmin && phase === 'final' && (
         <div className="flex flex-wrap items-center gap-2 border-b border-amber-200 bg-amber-50 px-3 py-1.5 shrink-0">
           <span className="text-[11px] font-bold text-amber-700">⚽ Artilheiro oficial:</span>
           {localScorers.map(n => (
@@ -790,16 +813,37 @@ export function TabelaMBClient({
               <button onClick={() => handleScorerSave(localScorers.filter(x => x !== n))} className="text-amber-500 hover:text-red-500 leading-none">×</button>
             </span>
           ))}
-          <input
-            type="text" value={scorerInput} onChange={e => setScorerInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleScorerAdd()}
-            placeholder="Adicionar…"
-            className="rounded border border-amber-200 bg-white px-2 py-0.5 text-[11px] focus:outline-none focus:border-amber-400 w-32"
-          />
-          <button onClick={handleScorerAdd} disabled={!scorerInput.trim() || scorerPending}
-            className="rounded bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white hover:bg-amber-600 disabled:opacity-40 transition">
-            +
-          </button>
+          <select
+            value={scorerSelectVal}
+            onChange={e => {
+              const v = e.target.value
+              setScorerSelectVal(v)
+              if (v && v !== 'outro') handleScorerAddDirect(v)
+            }}
+            className="rounded border border-amber-200 bg-white px-2 py-0.5 text-[11px] focus:outline-none focus:border-amber-400"
+          >
+            <option value="">Adicionar…</option>
+            {betScorerOptions
+              .filter(n => !localScorers.some(s => s.trim().toLowerCase() === n.trim().toLowerCase()))
+              .map(n => <option key={n} value={n}>{n}</option>)
+            }
+            <option value="outro">Outro…</option>
+          </select>
+          {scorerSelectVal === 'outro' && (
+            <>
+              <input
+                type="text" value={scorerInput} onChange={e => setScorerInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleScorerAdd()}
+                placeholder="Nome do artilheiro"
+                autoFocus
+                className="rounded border border-amber-200 bg-white px-2 py-0.5 text-[11px] focus:outline-none focus:border-amber-400 w-36"
+              />
+              <button onClick={handleScorerAdd} disabled={!scorerInput.trim() || scorerPending}
+                className="rounded bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white hover:bg-amber-600 disabled:opacity-40 transition">
+                +
+              </button>
+            </>
+          )}
           {scorerError && <span className="text-[10px] text-red-500">{scorerError}</span>}
           {scorerPending && <span className="text-[10px] text-gray-400">Salvando…</span>}
         </div>
