@@ -302,7 +302,18 @@ const ScoreInput = memo(function ScoreInput({
   const hasScore = match.score_home !== null && match.score_away !== null
 
   if (!canEdit) {
-    if (!hasScore) return <span className="text-gray-300 text-xs">–</span>
+    if (!hasScore) {
+      // Mostra indicadores de possível zebra mesmo em modo leitura
+      const pz = possibleZebras
+      if (!pz || (!pz.H && !pz.D && !pz.A)) return <span className="text-gray-300 text-xs">–</span>
+      return (
+        <div className="inline-flex items-center gap-0.5">
+          <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[9px] ${pz.H ? 'bg-gray-900' : 'bg-gray-100 border border-gray-200'}`} />
+          <span className={`text-[9px] font-bold ${pz.D ? 'rounded bg-gray-900 text-white px-0.5' : 'text-gray-300'}`}>×</span>
+          <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[9px] ${pz.A ? 'bg-gray-900' : 'bg-gray-100 border border-gray-200'}`} />
+        </div>
+      )
+    }
     const result = getMatchResult(match.score_home!, match.score_away!)
     return (
       <div className="inline-flex items-center gap-0.5">
@@ -1186,29 +1197,25 @@ export function TabelaMBClient({
                   <td style={{ position: 'sticky', left: colTeamsLeft, zIndex: 30, background: bg, borderRight: '1px solid #f3f4f6' }}
                     className="px-1">
                     {isMobile ? (
-                      <div className="flex items-center gap-1">
-                        {isActualZebra && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src="/zebra.png" alt="🦓" width={zebraImgW} height={zebraImgW} className="shrink-0 object-contain" />
-                        )}
-                        <div className="flex flex-col leading-none gap-0.5 min-w-0">
-                          <div className="flex items-center gap-1">
-                            <Flag code={flagHome} size="sm" className="shrink-0 w-4 h-3 rounded-[1px]" />
-                            <span className="font-bold text-[10px] text-gray-800 tracking-tight">{abbrHome}</span>
-                            {match.is_brazil && <span className="shrink-0 text-[7px] font-black text-verde-700 bg-verde-100 rounded-sm px-0.5">×2</span>}
-                          </div>
+                      <div className="flex flex-col leading-none gap-0.5 min-w-0">
+                        <div className="flex items-center gap-1">
+                          <Flag code={flagHome} size="sm" className="shrink-0 w-4 h-3 rounded-[1px]" />
+                          <span className="font-bold text-[10px] text-gray-800 tracking-tight">{abbrHome}</span>
+                          {match.is_brazil && <span className="shrink-0 text-[7px] font-black text-verde-700 bg-verde-100 rounded-sm px-0.5">×2</span>}
+                        </div>
+                        <div className="flex items-center justify-between gap-1">
                           <div className="flex items-center gap-1">
                             <Flag code={flagAway} size="sm" className="shrink-0 w-4 h-3 rounded-[1px]" />
                             <span className="font-bold text-[10px] text-gray-800 tracking-tight">{abbrAway}</span>
                           </div>
+                          {isActualZebra && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src="/zebra.png" alt="🦓" width={zebraImgW} height={zebraImgW} className="shrink-0 object-contain" />
+                          )}
                         </div>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-1">
-                        {isActualZebra && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src="/zebra.png" alt="🦓" width={zebraImgW} height={zebraImgW} className="shrink-0 object-contain" />
-                        )}
+                      <div className="flex items-center justify-between gap-1 min-w-0">
                         <div className="flex flex-col leading-none gap-px min-w-0 flex-1">
                           <div className="flex items-center gap-0.5 min-w-0">
                             <span className="truncate font-semibold text-gray-800" style={{ maxWidth: colTeamsW - (isActualZebra ? 40 : 16) }}>{teamHome}</span>
@@ -1217,6 +1224,10 @@ export function TabelaMBClient({
                           <span className="text-[8px] text-gray-300">vs</span>
                           <span className="truncate font-semibold text-gray-800" style={{ maxWidth: colTeamsW - (isActualZebra ? 40 : 8) }}>{teamAway}</span>
                         </div>
+                        {isActualZebra && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src="/zebra.png" alt="🦓" width={zebraImgW} height={zebraImgW} className="shrink-0 object-contain" />
+                        )}
                       </div>
                     )}
                   </td>
