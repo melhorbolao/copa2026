@@ -127,9 +127,14 @@ export function TournamentSection({ allTeams, deadline, existingBet, scorerMappi
       <div className="flex items-center justify-between bg-gray-900 px-4 py-2.5">
         <div className="flex items-center gap-3">
           <span className="text-sm font-black uppercase tracking-widest text-white">🏆 Bônus G4 e Artilheiro</span>
-          {pending && (
-            <span className="text-xs text-gray-400 animate-pulse">Salvando…</span>
-          )}
+          {pending
+            ? <span className="text-xs text-gray-400 animate-pulse">Salvando…</span>
+            : existingBet?.points != null && (
+              existingBet.points > 0
+                ? <span className="text-xs font-bold text-verde-400">+{existingBet.points} pts</span>
+                : <span className="text-xs text-gray-500">0 pts</span>
+            )
+          }
         </div>
         <span className="text-xs text-gray-400">
           prazo: {formatBrasilia(deadline, "dd/MM HH:mm")}

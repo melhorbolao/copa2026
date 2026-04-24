@@ -207,9 +207,14 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
                 )}
               </div>
 
-              {/* Status */}
-              <div className="w-5 shrink-0 text-right">
-                {pending && <span className="text-xs text-gray-400">…</span>}
+              {/* Status / points */}
+              <div className="shrink-0 text-right">
+                {pending
+                  ? <span className="text-xs text-gray-400">…</span>
+                  : existingBet?.points != null
+                    ? <GroupPointsBadge points={existingBet.points} />
+                    : null
+                }
               </div>
             </div>
           )}

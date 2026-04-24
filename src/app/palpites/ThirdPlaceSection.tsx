@@ -9,7 +9,7 @@ const GROUP_ORDER = ['A','B','C','D','E','F','G','H','I','J','K','L']
 const MAX = 8
 
 interface Team  { team: string; flag: string }
-interface Bet   { group_name: string; team: string }
+interface Bet   { group_name: string; team: string; points?: number | null }
 
 const CONFLICT_TITLE = 'Alerta informativo: o palpite de classificado(s) está divergente da classificação decorrente dos palpites dos jogos. A regra do Melhor Bolão permite essa "incoerência".'
 
@@ -105,7 +105,6 @@ export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBet
             {existingBets.map(b => {
               const officialThird = officialThirdTeams?.[b.group_name]
               const isCorrect = !!officialThird && b.team === officialThird
-              const hasResult = !!officialThird
               return (
                 <div key={b.group_name} className="px-4 py-3">
                   <div className="text-xs text-gray-400">Gr. {b.group_name}</div>
@@ -115,11 +114,12 @@ export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBet
                       b.team !== calculatedThirds[b.group_name].third &&
                       !calculatedThirds[b.group_name].tiedTeams.includes(b.team) && <ConflictDot />}
                   </div>
-                  {hasResult && (
-                    isCorrect
-                      ? <span className="text-xs font-bold text-verde-600">+{thirdPts} pts</span>
-                      : <span className="text-xs text-gray-400">0 pts</span>
-                  )}
+                  <ThirdPointsBadge
+                    dbPoints={b.points}
+                    officialThird={officialThird}
+                    isCorrect={isCorrect}
+                    thirdPts={thirdPts}
+                  />
                 </div>
               )
             })}
@@ -168,8 +168,10 @@ export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBet
             const isSelected = g in selections
             const maxReached = selectedCount >= MAX && !isSelected
             const teams      = availableTeams(g)
-            const hasSavedBet = !!(existingBets ?? []).find(b => b.group_name === g)
+            const savedBet   = (existingBets ?? []).find(b => b.group_name === g)
             const teamValue  = selections[g] ?? ''
+            const officialThird = officialThirdTeams?.[g]
+            const isCorrect     = !!officialThird && teamValue === officialThird
 
             return (
               <div
@@ -218,6 +220,14 @@ export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBet
                         <span className="text-[10px] text-red-500">divergente</span>
                       </div>
                     )}
+                    {savedBet && (
+                      <ThirdPointsBadge
+                        dbPoints={savedBet.points}
+                        officialThird={officialThird}
+                        isCorrect={isCorrect}
+                        thirdPts={thirdPts}
+                      />
+                    )}
                   </div>
                 )}
               </div>
@@ -231,4 +241,20 @@ export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBet
       </div>
     </div>
   )
+}
+
+function ThirdPointsBadge({
+  dbPoints, officialThird, isCorrect, thirdPts,
+}: { dbPoints?: number | null; officialThird?: string; isCorrect: boolean; thirdPts: number }) {
+  if (dbPoints != null) {
+    return dbPoints > 0
+      ? <span className="mt-0.5 block text-xs font-bold text-verde-600">+{dbPoints} pts</span>
+      : <span className="mt-0.5 block text-xs text-gray-400">0 pts</span>
+  }
+  if (officialThird) {
+    return isCorrect
+      ? <span className="mt-0.5 block text-xs font-bold text-verde-600">+{thirdPts} pts</span>
+      : <span className="mt-0.5 block text-xs text-gray-400">0 pts</span>
+  }
+  return null
 }

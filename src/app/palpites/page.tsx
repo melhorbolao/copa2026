@@ -83,10 +83,10 @@ export default async function PalpitesPage({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const thirdBetsResult = await (admin as any)
     .from('third_place_bets')
-    .select('group_name, team')
+    .select('group_name, team, points')
     .eq('participant_id', participantId)
   if (thirdBetsResult.error) console.error('[palpites/page] third_place_bets SELECT error:', thirdBetsResult.error)
-  const thirdBets = (thirdBetsResult.data ?? []) as { group_name: string; team: string }[]
+  const thirdBets = (thirdBetsResult.data ?? []) as { group_name: string; team: string; points: number | null }[]
 
   const thirdPts: number = await supabase
     .from('scoring_rules').select('points').eq('key', 'terceiro_classificado').maybeSingle()
