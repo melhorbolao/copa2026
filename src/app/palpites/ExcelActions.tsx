@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { toast } from 'react-hot-toast'
+import { downloadExcel } from '@/utils/downloadExcel'
 
 export function ExcelActions() {
   const fileRef     = useRef<HTMLInputElement>(null)
@@ -20,17 +21,14 @@ export function ExcelActions() {
         return
       }
       const blob     = await res.blob()
-      const url      = URL.createObjectURL(blob)
       const disposition = res.headers.get('Content-Disposition') ?? ''
       const match    = disposition.match(/filename="([^"]+)"/)
       const fileName = match?.[1] ?? 'palpites.xlsx'
-      const a        = document.createElement('a')
-      a.href         = url
-      a.download     = fileName
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      const result   = await downloadExcel(blob, fileName)
+      if (result === 'saved')
+        toast.success(`Arquivo salvo: ${fileName}`, { duration: 5000 })
+      else if (result === 'downloaded')
+        toast.success(`Download iniciado: ${fileName}\nVerifique sua pasta de Downloads.`, { duration: 5000 })
     } catch {
       toast.error('Erro ao baixar planilha.')
     } finally {
