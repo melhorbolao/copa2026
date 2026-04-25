@@ -817,6 +817,11 @@ export function TabelaMBClient({
               exportRows.push({ kind: 'section', label: 'Melhores Terceiros Classificados', color: C })
               GROUP_ORDER.forEach(g => exportRows.push({ kind: 'third_bet', groupName: g }))
             }
+            if (r32.length) { exportRows.push({ kind: 'section', label: '16 avos de Final', color: C }); r32.forEach(m => exportRows.push({ kind: 'match', match: m })) }
+            if (r16.length) { exportRows.push({ kind: 'section', label: 'Oitavas de Final',  color: C }); r16.forEach(m => exportRows.push({ kind: 'match', match: m })) }
+            if (qf.length)  { exportRows.push({ kind: 'section', label: 'Quartas de Final',  color: C }); qf.forEach(m  => exportRows.push({ kind: 'match', match: m })) }
+            if (sf.length)  { exportRows.push({ kind: 'section', label: 'Semifinais',         color: C }); sf.forEach(m  => exportRows.push({ kind: 'match', match: m })) }
+            if (fin.length) { exportRows.push({ kind: 'section', label: 'Final e 3º Lugar',   color: C }); fin.forEach(m => exportRows.push({ kind: 'match', match: m })) }
             exportRows.push({ kind: 'section', label: 'G4 — Bônus por Posição', color: C })
             exportRows.push({ kind: 'g4_field', field: 'champion' })
             exportRows.push({ kind: 'g4_field', field: 'runner_up' })
@@ -824,11 +829,6 @@ export function TabelaMBClient({
             exportRows.push({ kind: 'g4_field', field: 'semi2' })
             exportRows.push({ kind: 'section', label: 'Artilheiro', color: C })
             exportRows.push({ kind: 'scorer_row' })
-            if (r32.length) { exportRows.push({ kind: 'section', label: '16 avos de Final', color: C }); r32.forEach(m => exportRows.push({ kind: 'match', match: m })) }
-            if (r16.length) { exportRows.push({ kind: 'section', label: 'Oitavas de Final',  color: C }); r16.forEach(m => exportRows.push({ kind: 'match', match: m })) }
-            if (qf.length)  { exportRows.push({ kind: 'section', label: 'Quartas de Final',  color: C }); qf.forEach(m  => exportRows.push({ kind: 'match', match: m })) }
-            if (sf.length)  { exportRows.push({ kind: 'section', label: 'Semifinais',         color: C }); sf.forEach(m  => exportRows.push({ kind: 'match', match: m })) }
-            if (fin.length) { exportRows.push({ kind: 'section', label: 'Final e 3º Lugar',   color: C }); fin.forEach(m => exportRows.push({ kind: 'match', match: m })) }
 
             for (const row of exportRows) {
               if (row.kind === 'section') { ws.addRow([row.label]); continue }
@@ -856,7 +856,7 @@ export function TabelaMBClient({
                 const s = thirdEventStats(g, ot, thPts, participants, thirdBetMap)
                 ws.addRow([`3º Gr.${g}`, 'Melhor 3º', ot || '–',
                   s.pontuaram, s.cravaram, s.media > 0 ? +s.media.toFixed(1) : '–',
-                  ...sortedParts.map(p => { const b = thirdBetMap.get(`${p.id}:${g}`); return b?.team ?? '–' })])
+                  ...sortedParts.map(p => { const b = thirdBetMap.get(`${p.id}:${g}`); if (!b?.team) return '–'; const pts = ot ? (b.team === ot ? thPts : 0) : null; return pts !== null ? `${b.team} (${pts > 0 ? `+${pts}` : '0'})` : b.team })])
                 continue
               }
               if (row.kind === 'g4_field') {
