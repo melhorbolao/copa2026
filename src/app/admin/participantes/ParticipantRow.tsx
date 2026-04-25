@@ -288,7 +288,7 @@ export function ParticipantRow({ participant, index, allUsers }: ParticipantRowP
         ) : (
           <div className="flex items-center gap-1.5">
             {primaryUser && (
-              <PalpitesModal userId={primaryUser.id} userName={participant.apelido} />
+              <PalpitesModal userId={primaryUser.id} participantId={participant.id} userName={participant.apelido} />
             )}
             <button
               onClick={() => setConfirming(true)}
