@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { updateTeam } from './actions'
+import { updateTeam, updateTeamElimination } from './actions'
 
 type Team = {
   name: string
   abbr_br: string
   abbr_fifa: string
   group_name: string
+  is_eliminated: boolean
 }
 
 type EditingRow = {
@@ -21,6 +22,9 @@ export function EquipesClient({ teams }: { teams: Team[] }) {
   const [draft, setDraft] = useState<EditingRow>({ abbr_br: '', abbr_fifa: '', group_name: '' })
   const [rowError, setRowError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+  const [teamState, setTeamState] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(teams.map(t => [t.name, t.is_eliminated]))
+  )
 
   function startEdit(team: Team) {
     setEditing(team.name)
@@ -54,6 +58,15 @@ export function EquipesClient({ teams }: { teams: Team[] }) {
     })
   }
 
+  function toggleElimination(name: string) {
+    const next = !teamState[name]
+    setTeamState(prev => ({ ...prev, [name]: next }))
+    startTransition(async () => {
+      const res = await updateTeamElimination(name, next)
+      if (res.error) setTeamState(prev => ({ ...prev, [name]: !next }))
+    })
+  }
+
   const sorted = [...teams].sort((a, b) =>
     a.group_name.localeCompare(b.group_name) || a.name.localeCompare(b.name, 'pt')
   )
@@ -69,16 +82,23 @@ export function EquipesClient({ teams }: { teams: Team[] }) {
               <th className="px-4 py-3 w-28">Sigla BR</th>
               <th className="px-4 py-3 w-28">FIFA</th>
               <th className="px-4 py-3 w-20">Grupo</th>
+              <th className="px-4 py-3 w-28 text-center">Eliminada</th>
               <th className="px-4 py-3 w-24"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {sorted.map((team, i) => {
               const isEditing = editing === team.name
+              const isEliminated = teamState[team.name] ?? false
               return (
-                <tr key={team.name} className={isEditing ? 'bg-verde-50' : 'hover:bg-gray-50'}>
+                <tr
+                  key={team.name}
+                  className={isEditing ? 'bg-verde-50' : isEliminated ? 'bg-red-50/40' : 'hover:bg-gray-50'}
+                >
                   <td className="px-4 py-2 text-gray-400">{i + 1}</td>
-                  <td className="px-4 py-2 font-medium text-gray-900">{team.name}</td>
+                  <td className={`px-4 py-2 font-medium ${isEliminated ? 'line-through text-gray-400' : 'text-gray-900'}`}>
+                    {team.name}
+                  </td>
 
                   {isEditing ? (
                     <>
@@ -106,6 +126,7 @@ export function EquipesClient({ teams }: { teams: Team[] }) {
                           onChange={e => setDraft(d => ({ ...d, group_name: e.target.value }))}
                         />
                       </td>
+                      <td className="px-4 py-2 text-center text-gray-400">—</td>
                       <td className="px-4 py-2">
                         <div className="flex gap-2">
                           <button
@@ -136,6 +157,20 @@ export function EquipesClient({ teams }: { teams: Team[] }) {
                         <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-verde-100 text-xs font-bold text-verde-800">
                           {team.group_name}
                         </span>
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        <button
+                          onClick={() => toggleElimination(team.name)}
+                          disabled={pending}
+                          title={isEliminated ? 'Clique para marcar como ativa' : 'Clique para marcar como eliminada'}
+                          className={`rounded px-2 py-0.5 text-xs font-semibold transition disabled:opacity-40 ${
+                            isEliminated
+                              ? 'bg-red-100 text-red-600 hover:bg-red-200'
+                              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                          }`}
+                        >
+                          {isEliminated ? '✗ Eliminada' : '✓ Ativa'}
+                        </button>
                       </td>
                       <td className="px-4 py-2">
                         <button

@@ -27,3 +27,23 @@ export async function updateTeam(
     return { error: err instanceof Error ? err.message : 'Erro inesperado' }
   }
 }
+
+export async function updateTeamElimination(
+  name: string,
+  isEliminated: boolean,
+): Promise<{ error?: string }> {
+  try {
+    await requireAdmin()
+    const admin = createAuthAdminClient()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (admin as any)
+      .from('teams')
+      .update({ is_eliminated: isEliminated })
+      .eq('name', name)
+    if (error) return { error: error.message }
+    revalidatePath('/admin/equipes')
+    return {}
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Erro inesperado' }
+  }
+}
