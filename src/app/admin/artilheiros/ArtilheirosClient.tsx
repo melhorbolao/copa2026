@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useRef, useTransition } from 'react'
-import { upsertTopScorerMapping, deleteTopScorerMapping } from './actions'
+import { upsertTopScorerMapping, deleteTopScorerMapping, updateScorerElimination } from './actions'
 
 interface Row {
   rawName: string
   standardizedName: string
+  isEliminated: boolean
   status: 'idle' | 'saving' | 'saved' | 'error'
   error: string
 }
@@ -13,13 +14,15 @@ interface Row {
 interface Props {
   rawNames: string[]
   initialMappings: Record<string, string>
+  initialEliminations: Record<string, boolean>
 }
 
-export function ArtilheirosClient({ rawNames, initialMappings }: Props) {
+export function ArtilheirosClient({ rawNames, initialMappings, initialEliminations }: Props) {
   const [rows, setRows] = useState<Row[]>(() =>
     rawNames.map(raw => ({
       rawName: raw,
       standardizedName: initialMappings[raw] ?? '',
+      isEliminated: initialEliminations[raw] ?? false,
       status: 'idle' as const,
       error: '',
     }))
@@ -58,6 +61,14 @@ export function ArtilheirosClient({ rawNames, initialMappings }: Props) {
     })
   }
 
+  const handleElimination = (rawName: string, isEliminated: boolean) => {
+    setRow(rawName, { isEliminated })
+    startTransition(async () => {
+      const r = await updateScorerElimination(rawName, isEliminated)
+      if (r.error) setRow(rawName, { isEliminated: !isEliminated, error: r.error })
+    })
+  }
+
   if (rawNames.length === 0) {
     return (
       <p className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm text-gray-400">
@@ -73,6 +84,7 @@ export function ArtilheirosClient({ rawNames, initialMappings }: Props) {
           <tr className="border-b border-gray-100 bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-400">
             <th className="px-4 py-2.5 text-left">De (nome digitado)</th>
             <th className="px-4 py-2.5 text-left">Para (nome padronizado)</th>
+            <th className="px-4 py-2.5 text-center w-24">Eliminado</th>
             <th className="px-4 py-2.5 text-left w-20">Status</th>
             <th className="px-4 py-2.5 w-10" />
           </tr>
@@ -90,6 +102,23 @@ export function ArtilheirosClient({ rawNames, initialMappings }: Props) {
                   className="w-full rounded border border-gray-200 px-2 py-1 text-sm focus:border-verde-400 focus:outline-none"
                 />
                 {row.error && <p className="mt-0.5 text-xs text-red-500">{row.error}</p>}
+              </td>
+              <td className="px-4 py-2.5 text-center">
+                {row.standardizedName ? (
+                  <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={row.isEliminated}
+                      onChange={e => handleElimination(row.rawName, e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 accent-red-500 cursor-pointer"
+                    />
+                    {row.isEliminated && (
+                      <span className="text-xs font-medium text-red-500">Sim</span>
+                    )}
+                  </label>
+                ) : (
+                  <span className="text-gray-300 text-xs">—</span>
+                )}
               </td>
               <td className="px-4 py-2.5 text-xs">
                 {row.status === 'saving' && <span className="text-gray-400">Salvando…</span>}
