@@ -13,8 +13,8 @@ import {
   buildR32Teams, buildKnockoutTeamMap, R32_MATCHES,
 } from '@/lib/bracket/engine'
 import type { BetSlim, MatchSlim } from '@/lib/bracket/engine'
-import { scoreTournamentBet } from '@/lib/scoring/engine'
-import type { TournamentResults } from '@/lib/scoring/engine'
+import { scoreTournamentBet, scoreTournamentBetBreakdown } from '@/lib/scoring/engine'
+import type { TournamentResults, TournamentBetBreakdown } from '@/lib/scoring/engine'
 import type { MatchPhase } from '@/types/database'
 
 const GROUP_ORDER = ['A','B','C','D','E','F','G','H','I','J','K','L']
@@ -235,11 +235,11 @@ export default async function PalpitesPage() {
   }
 
   let liveScore: number | null = null
+  let liveBreakdown: TournamentBetBreakdown | null = null
   if (tBet && (knockoutResults.semifinalists.length > 0 || knockoutResults.officialScorers.length > 0)) {
-    liveScore = scoreTournamentBet(
-      { champion: tBet.champion ?? '', runner_up: tBet.runner_up ?? '', semi1: tBet.semi1 ?? '', semi2: tBet.semi2 ?? '', top_scorer: tBet.top_scorer ?? '' },
-      knockoutResults, rulesMap, false, scorerMapping,
-    )
+    const betInput = { champion: tBet.champion ?? '', runner_up: tBet.runner_up ?? '', semi1: tBet.semi1 ?? '', semi2: tBet.semi2 ?? '', top_scorer: tBet.top_scorer ?? '' }
+    liveBreakdown = scoreTournamentBetBreakdown(betInput, knockoutResults, rulesMap, false, scorerMapping)
+    liveScore = liveBreakdown.champion + liveBreakdown.runner_up + liveBreakdown.semi1 + liveBreakdown.semi2 + liveBreakdown.top_scorer
   }
 
   // ── Filter-independent stats ─────────────────────────────────────
@@ -271,6 +271,7 @@ export default async function PalpitesPage() {
   } : null
 
   const props: PalpitesContentProps = {
+    liveBreakdown,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     groupMatches: groupMatches as any,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

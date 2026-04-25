@@ -4,6 +4,7 @@ import { useTransition, useState, useEffect, useRef } from 'react'
 import { saveTournamentBet } from './actions'
 import { Combobox } from '@/components/ui/Combobox'
 import { isDeadlinePassed, formatBrasilia } from '@/utils/date'
+import type { TournamentBetBreakdown } from '@/lib/scoring/engine'
 
 interface Team { team: string; flag: string }
 interface TBet { champion: string; runner_up: string; semi1: string; semi2: string; top_scorer: string; points?: number | null }
@@ -16,9 +17,16 @@ interface Props {
   existingBet: TBet | null
   scorerMapping?: Record<string, string>
   liveScore?: number | null
+  liveBreakdown?: TournamentBetBreakdown | null
 }
 
-export function TournamentSection({ allTeams, deadline, existingBet, scorerMapping, liveScore }: Props) {
+function ScoreBadge({ pts, compact = false }: { pts: number | null | undefined; compact?: boolean }) {
+  if (pts == null) return null
+  if (pts > 0) return <span className={`font-bold text-verde-500 ${compact ? 'text-[10px]' : 'text-xs'}`}>+{pts} pts</span>
+  return <span className={`text-gray-400 ${compact ? 'text-[10px]' : 'text-xs'}`}>0 pts</span>
+}
+
+export function TournamentSection({ allTeams, deadline, existingBet, scorerMapping, liveScore, liveBreakdown }: Props) {
   const [pending, startTransition] = useTransition()
   const [form, setForm] = useState<TBet>(() => existingBet
     ? {
@@ -70,7 +78,6 @@ export function TournamentSection({ allTeams, deadline, existingBet, scorerMappi
 
   const teams = allTeams.filter(t => t.team !== 'TBD')
   const selected = [form.champion, form.runner_up, form.semi1, form.semi2]
-  const filledCount = [form.champion, form.runner_up, form.semi1, form.semi2, form.top_scorer].filter(Boolean).length
 
   // Detecta campos G4 com valores duplicados
   const conflictFields = new Set<string>()
@@ -86,6 +93,14 @@ export function TournamentSection({ allTeams, deadline, existingBet, scorerMappi
   }
 
   if (deadlinePassed) {
+    const fields: { label: string; val: string; key: keyof TournamentBetBreakdown }[] = [
+      { label: '🥇 Campeão',    val: existingBet?.champion   ?? '',  key: 'champion'   },
+      { label: '🥈 Vice',       val: existingBet?.runner_up  ?? '',  key: 'runner_up'  },
+      { label: '3º Lugar',      val: existingBet?.semi1      ?? '',  key: 'semi1'      },
+      { label: '4º Lugar',      val: existingBet?.semi2      ?? '',  key: 'semi2'      },
+      { label: '⚽ Artilheiro', val: scorerMapping?.[existingBet?.top_scorer ?? ''] ?? existingBet?.top_scorer ?? '', key: 'top_scorer' },
+    ]
+
     return (
       <div className="border-t-4 border-azul-escuro bg-white">
         <div className="flex items-center justify-between gap-3 bg-gray-900 px-4 py-2.5">
@@ -103,16 +118,15 @@ export function TournamentSection({ allTeams, deadline, existingBet, scorerMappi
         </div>
         {existingBet ? (
           <div className="grid grid-cols-2 gap-0 divide-x divide-y divide-gray-100 sm:grid-cols-3 lg:grid-cols-5">
-            {([
-              ['🥇 Campeão',    existingBet.champion],
-              ['🥈 Vice',       existingBet.runner_up],
-              ['3º Lugar',      existingBet.semi1],
-              ['4º Lugar',      existingBet.semi2],
-              ['⚽ Artilheiro', scorerMapping?.[existingBet.top_scorer] ?? existingBet.top_scorer],
-            ] as [string, string][]).map(([label, val]) => (
+            {fields.map(({ label, val, key }) => (
               <div key={label} className="px-4 py-3">
                 <div className="text-xs text-gray-400">{label}</div>
-                <div className="mt-0.5 font-bold text-gray-900">{val}</div>
+                <div className="mt-0.5 font-bold text-gray-900">{val || '—'}</div>
+                {liveBreakdown && val && (
+                  <div className="mt-0.5">
+                    <ScoreBadge pts={liveBreakdown[key]} />
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -122,6 +136,13 @@ export function TournamentSection({ allTeams, deadline, existingBet, scorerMappi
       </div>
     )
   }
+
+  const fieldDefs: { field: keyof TBet & keyof TournamentBetBreakdown; label: string }[] = [
+    { field: 'champion',  label: '🥇 Campeão'       },
+    { field: 'runner_up', label: '🥈 Vice-Campeão'  },
+    { field: 'semi1',     label: '🥉 3º Lugar'      },
+    { field: 'semi2',     label: '4️⃣ 4º Lugar'      },
+  ]
 
   return (
     <div className="border-t-4 border-azul-escuro bg-white">
@@ -146,17 +167,18 @@ export function TournamentSection({ allTeams, deadline, existingBet, scorerMappi
 
       <div className="p-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {(['champion','runner_up','semi1','semi2'] as const).map((field, i) => {
-            const labels = ['🥇 Campeão','🥈 Vice-Campeão','🥉 3º Lugar','4️⃣ 4º Lugar']
-            const others = selected.filter((_, j) => j !== i)
+          {fieldDefs.map(({ field, label }) => {
+            const others = selected.filter(v => v !== form[field])
             const hasConflict = conflictFields.has(field)
+            const pts = liveBreakdown?.[field as keyof TournamentBetBreakdown]
             return (
               <div key={field}>
-                <label className={`mb-1 block text-xs font-semibold ${hasConflict ? 'text-red-500' : 'text-gray-500'}`}>
-                  {labels[i]}{hasConflict && ' ⚠️'}
+                <label className={`mb-1 flex items-center justify-between gap-1 text-xs font-semibold ${hasConflict ? 'text-red-500' : 'text-gray-500'}`}>
+                  <span>{label}{hasConflict && ' ⚠️'}</span>
+                  {liveBreakdown && form[field] && <ScoreBadge pts={pts} compact />}
                 </label>
                 <Combobox
-                  value={form[field]}
+                  value={form[field] as string}
                   onChange={v => handleSelect(field, v)}
                   options={teams.map(t => ({ value: t.team, label: t.team, disabled: others.includes(t.team) }))}
                   className={`w-full ${hasConflict ? 'ring-1 ring-red-400 rounded' : ''}`}
@@ -166,7 +188,10 @@ export function TournamentSection({ allTeams, deadline, existingBet, scorerMappi
           })}
 
           <div>
-            <label className="mb-1 block text-xs font-semibold text-gray-500">⚽ Artilheiro</label>
+            <label className="mb-1 flex items-center justify-between gap-1 text-xs font-semibold text-gray-500">
+              <span>⚽ Artilheiro</span>
+              {liveBreakdown && form.top_scorer && <ScoreBadge pts={liveBreakdown.top_scorer} compact />}
+            </label>
             <input
               type="text"
               value={form.top_scorer}

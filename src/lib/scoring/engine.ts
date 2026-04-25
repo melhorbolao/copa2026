@@ -125,18 +125,23 @@ export interface TournamentResults {
   officialScorers: string[]     // standardized name(s)
 }
 
-export function scoreTournamentBet(
+export interface TournamentBetBreakdown {
+  champion:   number
+  runner_up:  number
+  semi1:      number
+  semi2:      number
+  top_scorer: number
+}
+
+export function scoreTournamentBetBreakdown(
   bet: { champion: string; runner_up: string; semi1: string; semi2: string; top_scorer: string },
   results: TournamentResults,
   rules: RuleMap,
   isZebraChampion: boolean,
-  // scorerMapping: raw_name → standardized_name (pass {} if not needed)
   scorerMapping: Record<string, string>,
-): number {
-  let pts = 0
-
+): TournamentBetBreakdown {
   const r = {
-    semis:   rules['semifinalista']   ?? 4,
+    semis:    rules['semifinalista']   ?? 4,
     finalist: rules['bonus_finalista'] ?? 8,
     campeao:  rules['bonus_campeao']   ?? 12,
     vice:     rules['bonus_vice']      ?? 8,
@@ -146,43 +151,55 @@ export function scoreTournamentBet(
     artilh:   rules['artilheiro']      ?? 18,
   }
 
-  // champion pick
+  let champion = 0
   if (bet.champion) {
-    if (results.semifinalists.includes(bet.champion)) pts += r.semis
-    if (results.finalists.includes(bet.champion))     pts += r.finalist
+    if (results.semifinalists.includes(bet.champion)) champion += r.semis
+    if (results.finalists.includes(bet.champion))     champion += r.finalist
     if (results.champion === bet.champion) {
-      pts += r.campeao
-      if (isZebraChampion) pts += r.zebraG4
+      champion += r.campeao
+      if (isZebraChampion) champion += r.zebraG4
     }
   }
 
-  // runner_up pick
+  let runner_up = 0
   if (bet.runner_up) {
-    if (results.semifinalists.includes(bet.runner_up)) pts += r.semis
-    if (results.finalists.includes(bet.runner_up))     pts += r.finalist
-    if (results.runnerUp === bet.runner_up)             pts += r.vice
+    if (results.semifinalists.includes(bet.runner_up)) runner_up += r.semis
+    if (results.finalists.includes(bet.runner_up))     runner_up += r.finalist
+    if (results.runnerUp === bet.runner_up)             runner_up += r.vice
   }
 
-  // semi1 pick (predicted 3rd-place semi-finalist)
+  let semi1 = 0
   if (bet.semi1) {
-    if (results.semifinalists.includes(bet.semi1)) pts += r.semis
-    if (results.third  === bet.semi1)              pts += r.terceiro
-    else if (results.fourth === bet.semi1)         pts += r.quarto
+    if (results.semifinalists.includes(bet.semi1)) semi1 += r.semis
+    if (results.third  === bet.semi1)              semi1 += r.terceiro
+    else if (results.fourth === bet.semi1)         semi1 += r.quarto
   }
 
-  // semi2 pick (predicted 4th-place semi-finalist)
+  let semi2 = 0
   if (bet.semi2) {
-    if (results.semifinalists.includes(bet.semi2)) pts += r.semis
-    if (results.third  === bet.semi2)              pts += r.terceiro
-    else if (results.fourth === bet.semi2)         pts += r.quarto
+    if (results.semifinalists.includes(bet.semi2)) semi2 += r.semis
+    if (results.third  === bet.semi2)              semi2 += r.terceiro
+    else if (results.fourth === bet.semi2)         semi2 += r.quarto
   }
 
-  // top scorer — normalize via mapping before comparing
+  let top_scorer = 0
   if (bet.top_scorer && results.officialScorers.length > 0) {
     const normalized = (scorerMapping[bet.top_scorer] ?? bet.top_scorer).trim().toLowerCase()
     const isCorrect  = results.officialScorers.some(s => s.trim().toLowerCase() === normalized)
-    if (isCorrect) pts += r.artilh
+    if (isCorrect) top_scorer += r.artilh
   }
 
-  return pts
+  return { champion, runner_up, semi1, semi2, top_scorer }
+}
+
+export function scoreTournamentBet(
+  bet: { champion: string; runner_up: string; semi1: string; semi2: string; top_scorer: string },
+  results: TournamentResults,
+  rules: RuleMap,
+  isZebraChampion: boolean,
+  // scorerMapping: raw_name → standardized_name (pass {} if not needed)
+  scorerMapping: Record<string, string>,
+): number {
+  const b = scoreTournamentBetBreakdown(bet, results, rules, isZebraChampion, scorerMapping)
+  return b.champion + b.runner_up + b.semi1 + b.semi2 + b.top_scorer
 }
