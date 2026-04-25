@@ -4,6 +4,8 @@
 //   - matchId → recalculate only what changed after that match was scored
 //   - (no body) → full recalculation of every scored match
 
+export const maxDuration = 60  // extend Vercel function timeout to 60 s
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { recalculateAfterMatchScore, recalculateAll } from '@/lib/scoring/recalculate'
