@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAuthAdminClient } from '@/lib/supabase/server'
 import { getActiveParticipantId } from '@/lib/participant'
 import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
@@ -13,10 +13,15 @@ export default async function TabelaPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
-  const participantId = await getActiveParticipantId(supabase, user.id).catch(() => null)
-  if (!participantId) redirect('/aguardando-aprovacao')
 
-  const { data: userProfile } = await supabase.from('users').select('is_admin').eq('id', user.id).single()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAuthAdminClient() as any
+
+  const [participantId, { data: userProfile }] = await Promise.all([
+    getActiveParticipantId(supabase, user.id).catch(() => null),
+    supabase.from('users').select('is_admin').eq('id', user.id).single(),
+  ])
+  if (!participantId) redirect('/aguardando-aprovacao')
   await requirePageAccess('tabela', userProfile?.is_admin ?? false)
 
   const [{ data: rawMatches }, { data: rawBets }, { data: tBet }, { data: rawGroupBets }, { data: rawThirdBets }] = await Promise.all([
@@ -38,7 +43,7 @@ export default async function TabelaPage() {
       .from('group_bets')
       .select('group_name, first_place, second_place')
       .eq('participant_id', participantId),
-    supabase
+    admin
       .from('third_place_bets')
       .select('group_name, team')
       .eq('participant_id', participantId),

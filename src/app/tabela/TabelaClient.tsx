@@ -131,9 +131,10 @@ export function TabelaClient({
     if (thirdBet) setLocalThirdBets(prev => ({ ...prev, [group]: thirdBet }))
   }
 
-  const sortedStandings = GROUP_ORDER
-    .map(g => effectiveStandings.find(s => s.group === g))
-    .filter(Boolean) as CalcGroupStanding[]
+  const sortedStandings = useMemo(
+    () => GROUP_ORDER.map(g => effectiveStandings.find(s => s.group === g)).filter(Boolean) as CalcGroupStanding[],
+    [effectiveStandings],
+  )
 
   return (
     <>
