@@ -13,7 +13,7 @@ export function GroupFilter() {
     const params = new URLSearchParams(sp.toString())
     if (g) params.set('grupo', g)
     else   params.delete('grupo')
-    router.push(`/palpites?${params.toString()}`)
+    router.replace(`/palpites?${params.toString()}`)
   }
 
   const btn = (label: string, value: string) => {

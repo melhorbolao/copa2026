@@ -22,7 +22,7 @@ export function StageFilter() {
     const params = new URLSearchParams(sp.toString())
     if (v) params.set('etapa', v)
     else   params.delete('etapa')
-    router.push(`/palpites?${params.toString()}`)
+    router.replace(`/palpites?${params.toString()}`)
   }
 
   const btn = (label: string, value: string) => {

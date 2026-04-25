@@ -15,9 +15,10 @@ interface Props {
   deadline: string
   existingBet: TBet | null
   scorerMapping?: Record<string, string>
+  liveScore?: number | null
 }
 
-export function TournamentSection({ allTeams, deadline, existingBet, scorerMapping }: Props) {
+export function TournamentSection({ allTeams, deadline, existingBet, scorerMapping, liveScore }: Props) {
   const [pending, startTransition] = useTransition()
   const [form, setForm] = useState<TBet>(() => existingBet
     ? {
@@ -92,13 +93,13 @@ export function TournamentSection({ allTeams, deadline, existingBet, scorerMappi
             <span className="text-sm font-black uppercase tracking-widest text-white">🏆 Bônus G4 e Artilheiro</span>
             <span className="rounded-full bg-gray-700 px-2 py-0.5 text-xs text-gray-300">🔒 encerrado</span>
           </div>
-          {existingBet && existingBet.points !== undefined && (
-            existingBet.points === null
-              ? <span className="text-xs text-gray-400">⌛</span>
-              : existingBet.points > 0
-                ? <span className="text-xs font-bold text-verde-400">+{existingBet.points} pts</span>
-                : <span className="text-xs text-gray-500">0 pts</span>
-          )}
+          {existingBet && (() => {
+            const pts = existingBet.points ?? liveScore ?? null
+            if (pts === null) return <span className="text-xs text-gray-400">⌛</span>
+            return pts > 0
+              ? <span className="text-xs font-bold text-verde-400">+{pts} pts</span>
+              : <span className="text-xs text-gray-500">0 pts</span>
+          })()}
         </div>
         {existingBet ? (
           <div className="grid grid-cols-2 gap-0 divide-x divide-y divide-gray-100 sm:grid-cols-3 lg:grid-cols-5">
@@ -129,11 +130,13 @@ export function TournamentSection({ allTeams, deadline, existingBet, scorerMappi
           <span className="text-sm font-black uppercase tracking-widest text-white">🏆 Bônus G4 e Artilheiro</span>
           {pending
             ? <span className="text-xs text-gray-400 animate-pulse">Salvando…</span>
-            : existingBet?.points != null && (
-              existingBet.points > 0
-                ? <span className="text-xs font-bold text-verde-400">+{existingBet.points} pts</span>
+            : (() => {
+              const pts = existingBet?.points ?? liveScore ?? null
+              if (pts === null) return null
+              return pts > 0
+                ? <span className="text-xs font-bold text-verde-400">+{pts} pts</span>
                 : <span className="text-xs text-gray-500">0 pts</span>
-            )
+            })()
           }
         </div>
         <span className="text-xs text-gray-400">
