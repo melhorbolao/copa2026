@@ -15,6 +15,7 @@ import { ThirdPlaceProvider } from './ThirdPlaceContext'
 import { AutoFillButton } from './AutoFillButton'
 import { formatBrasilia } from '@/utils/date'
 import type { MatchPhase } from '@/types/database'
+import type { TournamentBetBreakdown } from '@/lib/scoring/engine'
 
 interface MatchRow {
   id: string
@@ -51,6 +52,7 @@ export interface PalpitesContentProps {
   calculatedTopPerGroup: Record<string, { first: string; second: string; third: string; tiedTeams: string[] }>
   officialThirdTeams: Record<string, string>
   liveScore: number | null
+  liveBreakdown: TournamentBetBreakdown | null
   scorerMapping: Record<string, string>
   thirdPts: number
   participantId: string
@@ -113,7 +115,7 @@ export function PalpitesContent({
   betMap, groupBetMap, tBet, thirdBets,
   groupTeams, allTeams, tournamentDeadline,
   calculatedTopPerGroup, officialThirdTeams,
-  liveScore, scorerMapping, thirdPts, participantId,
+  liveScore, liveBreakdown, scorerMapping, thirdPts, participantId,
   totalMatches, totalBets, totalGroupBets,
   thirdCount, bonusCount, allGroupsFilled, alreadyFilled, nextDeadline,
 }: PalpitesContentProps) {
@@ -315,6 +317,7 @@ export function PalpitesContent({
                   existingBet={tBet}
                   scorerMapping={scorerMapping}
                   liveScore={liveScore}
+                  liveBreakdown={liveBreakdown}
                 />
               )}
 
