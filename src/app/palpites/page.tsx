@@ -76,10 +76,16 @@ export default async function PalpitesPage() {
       .then((r: any) => r, () => null),
   ])
 
+  let thirdBets: { group_name: string; team: string; points: number | null }[] = []
   if (thirdBetsResult.error) {
     console.error('[palpites/page] third_place_bets error:', thirdBetsResult.error?.message)
+    // Fallback: points column may not exist yet in production (migration not run)
+    const r2 = await admin.from('third_place_bets').select('group_name, team').eq('participant_id', participantId)
+    if (r2.error) console.error('[palpites/page] third_place_bets fallback error:', r2.error?.message)
+    thirdBets = (r2.data ?? []) as typeof thirdBets
+  } else {
+    thirdBets = (thirdBetsResult.data ?? []) as typeof thirdBets
   }
-  const thirdBets = (thirdBetsResult.data ?? []) as { group_name: string; team: string; points: number | null }[]
 
   const rulesMap: Record<string, number> = Object.fromEntries(
     (rulesData ?? []).map((r: { key: string; points: number }) => [r.key, r.points])

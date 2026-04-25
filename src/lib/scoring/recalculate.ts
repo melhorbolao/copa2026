@@ -17,8 +17,9 @@ import {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-async function loadRules(): Promise<RuleMap> {
-  const admin = createAuthAdminClient()
+type AdminClient = ReturnType<typeof createAuthAdminClient>
+
+async function loadRules(admin: AdminClient): Promise<RuleMap> {
   const { data } = await admin.from('scoring_rules').select('key, points')
   return Object.fromEntries((data ?? []).map(r => [r.key, r.points]))
 }
@@ -32,26 +33,24 @@ function matchWinner(
   return m.penalty_winner ?? null
 }
 
-// ── Match bets ────────────────────────────────────────────────────────────────
+// ── Internal: update points without refreshing totals ─────────────────────────
+// These return the participant IDs they touched, so the caller can batch-refresh.
 
-export async function recalculateMatchBets(matchId: string): Promise<void> {
-  const admin = createAuthAdminClient()
-  const rules = await loadRules()
-
+async function _updateMatchBetPoints(matchId: string, admin: AdminClient, rules: RuleMap): Promise<string[]> {
   const { data: match } = await admin
     .from('matches')
     .select('id, score_home, score_away, is_brazil')
     .eq('id', matchId)
     .single()
 
-  if (!match || match.score_home === null || match.score_away === null) return
+  if (!match || match.score_home === null || match.score_away === null) return []
 
   const { data: bets } = await admin
     .from('bets')
     .select('id, participant_id, score_home, score_away')
     .eq('match_id', matchId)
 
-  if (!bets?.length) return
+  if (!bets?.length) return []
 
   const actualResult = getMatchResult(match.score_home, match.score_away)
   const threshold    = rules['percentual_zebra'] ?? 15
@@ -73,23 +72,18 @@ export async function recalculateMatchBets(matchId: string): Promise<void> {
     )
   )
 
-  await refreshParticipantTotals([...new Set(bets.map(b => b.participant_id))])
+  return [...new Set(bets.map(b => b.participant_id))]
 }
 
-// ── Group bets ────────────────────────────────────────────────────────────────
-
-export async function recalculateGroupBets(groupName: string): Promise<void> {
-  const admin = createAuthAdminClient()
-  const rules = await loadRules()
-
+async function _updateGroupBetPoints(groupName: string, admin: AdminClient, rules: RuleMap): Promise<string[]> {
   const { data: groupMatches } = await admin
     .from('matches')
     .select('id, group_name, phase, team_home, team_away, flag_home, flag_away, score_home, score_away')
     .eq('phase', 'group')
     .eq('group_name', groupName)
 
-  if (!groupMatches?.length) return
-  if (!groupMatches.every(m => m.score_home !== null && m.score_away !== null)) return
+  if (!groupMatches?.length) return []
+  if (!groupMatches.every(m => m.score_home !== null && m.score_away !== null)) return []
 
   const slimMatches: MatchSlim[] = groupMatches.map(m => ({
     id: m.id, group_name: m.group_name, phase: m.phase,
@@ -102,9 +96,9 @@ export async function recalculateGroupBets(groupName: string): Promise<void> {
       { match_id: m.id, score_home: m.score_home!, score_away: m.score_away! },
     ])
   )
-  const standings    = calcGroupStandings(slimMatches, betMap)
+  const standings     = calcGroupStandings(slimMatches, betMap)
   const groupStanding = standings.find(s => s.group === groupName)
-  if (!groupStanding || groupStanding.teams.length < 2) return
+  if (!groupStanding || groupStanding.teams.length < 2) return []
 
   const actual1st = groupStanding.teams[0].team
   const actual2nd = groupStanding.teams[1].team
@@ -114,7 +108,7 @@ export async function recalculateGroupBets(groupName: string): Promise<void> {
     .select('id, participant_id, first_place, second_place')
     .eq('group_name', groupName)
 
-  if (!groupBets?.length) return
+  if (!groupBets?.length) return []
 
   const threshold = rules['percentual_zebra'] ?? 15
   const isZebra1  = detectGroupZebra(
@@ -135,22 +129,17 @@ export async function recalculateGroupBets(groupName: string): Promise<void> {
     )
   )
 
-  await refreshParticipantTotals([...new Set(groupBets.map(b => b.participant_id))])
+  return [...new Set(groupBets.map(b => b.participant_id))]
 }
 
-// ── Third-place bets ──────────────────────────────────────────────────────────
-
-export async function recalculateThirdBets(): Promise<void> {
-  const admin = createAuthAdminClient()
-  const rules = await loadRules()
-
+async function _updateThirdBetPoints(admin: AdminClient, rules: RuleMap): Promise<string[]> {
   const { data: groupMatches } = await admin
     .from('matches')
     .select('id, group_name, phase, team_home, team_away, flag_home, flag_away, score_home, score_away')
     .eq('phase', 'group')
 
-  if (!groupMatches?.length) return
-  if (!groupMatches.every(m => m.score_home !== null && m.score_away !== null)) return
+  if (!groupMatches?.length) return []
+  if (!groupMatches.every(m => m.score_home !== null && m.score_away !== null)) return []
 
   const slimMatches: MatchSlim[] = groupMatches.map(m => ({
     id: m.id, group_name: m.group_name, phase: m.phase,
@@ -171,7 +160,7 @@ export async function recalculateThirdBets(): Promise<void> {
     .from('third_place_bets')
     .select('id, participant_id, group_name, team')
 
-  if (!thirdBets?.length) return
+  if (!thirdBets?.length) return []
 
   const thirdPts = rules['terceiro_classificado'] ?? 3
 
@@ -186,23 +175,17 @@ export async function recalculateThirdBets(): Promise<void> {
   )
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await refreshParticipantTotals([...new Set((thirdBets as any[]).map((b: any) => b.participant_id))])
+  return [...new Set((thirdBets as any[]).map((b: any) => b.participant_id as string))]
 }
 
-// ── Tournament bets ───────────────────────────────────────────────────────────
-
-export async function recalculateTournamentBets(): Promise<void> {
-  const admin = createAuthAdminClient()
-  const rules = await loadRules()
-
-  // Determine actual tournament results from knockout match data
+async function _updateTournamentBetPoints(admin: AdminClient, rules: RuleMap): Promise<string[]> {
   const { data: knockoutMatches } = await admin
     .from('matches')
     .select('id, phase, team_home, team_away, score_home, score_away, penalty_winner, match_number')
     .in('phase', ['quarterfinal', 'semifinal', 'third_place', 'final'])
     .order('match_number', { ascending: true })
 
-  if (!knockoutMatches) return
+  if (!knockoutMatches) return []
 
   const results: TournamentResults = {
     semifinalists:   [],
@@ -235,7 +218,6 @@ export async function recalculateTournamentBets(): Promise<void> {
     results.runnerUp = w ? (w === finalMatch.team_home ? finalMatch.team_away : finalMatch.team_home) : null
   }
 
-  // Official top scorer(s) from tournament_settings
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: scorerSetting } = await (admin as any)
     .from('tournament_settings')
@@ -249,7 +231,6 @@ export async function recalculateTournamentBets(): Promise<void> {
     catch { results.officialScorers = [scorerSetting.value] }
   }
 
-  // Top-scorer name mapping (raw → standardized)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: mappingRows } = await (admin as any)
     .from('top_scorer_mapping')
@@ -265,9 +246,8 @@ export async function recalculateTournamentBets(): Promise<void> {
     .from('tournament_bets')
     .select('id, participant_id, champion, runner_up, semi1, semi2, top_scorer')
 
-  if (!tournamentBets?.length) return
+  if (!tournamentBets?.length) return []
 
-  // Zebra for champion prediction
   const threshold = rules['percentual_zebra'] ?? 15
   const isZebraChampion = results.champion
     ? tournamentBets.length > 0 &&
@@ -285,7 +265,43 @@ export async function recalculateTournamentBets(): Promise<void> {
     )
   )
 
-  await refreshParticipantTotals([...new Set(tournamentBets.map(b => b.participant_id))])
+  return [...new Set(tournamentBets.map(b => b.participant_id))]
+}
+
+// ── Match bets (public: updates + refreshes totals) ───────────────────────────
+
+export async function recalculateMatchBets(matchId: string): Promise<void> {
+  const admin = createAuthAdminClient()
+  const rules = await loadRules(admin)
+  const ids   = await _updateMatchBetPoints(matchId, admin, rules)
+  await refreshParticipantTotals(ids)
+}
+
+// ── Group bets ────────────────────────────────────────────────────────────────
+
+export async function recalculateGroupBets(groupName: string): Promise<void> {
+  const admin = createAuthAdminClient()
+  const rules = await loadRules(admin)
+  const ids   = await _updateGroupBetPoints(groupName, admin, rules)
+  await refreshParticipantTotals(ids)
+}
+
+// ── Third-place bets ──────────────────────────────────────────────────────────
+
+export async function recalculateThirdBets(): Promise<void> {
+  const admin = createAuthAdminClient()
+  const rules = await loadRules(admin)
+  const ids   = await _updateThirdBetPoints(admin, rules)
+  await refreshParticipantTotals(ids)
+}
+
+// ── Tournament bets ───────────────────────────────────────────────────────────
+
+export async function recalculateTournamentBets(): Promise<void> {
+  const admin = createAuthAdminClient()
+  const rules = await loadRules(admin)
+  const ids   = await _updateTournamentBetPoints(admin, rules)
+  await refreshParticipantTotals(ids)
 }
 
 // ── Participant total ─────────────────────────────────────────────────────────
@@ -338,9 +354,7 @@ export async function recalculateAfterMatchScore(matchId: string): Promise<void>
   await recalculateMatchBets(matchId)
 
   if (match.phase === 'group' && match.group_name) {
-    // Check if group is now fully scored
     await recalculateGroupBets(match.group_name)
-    // Check if ALL group matches are done → score thirds
     await recalculateThirdBets()
   }
 
@@ -350,11 +364,12 @@ export async function recalculateAfterMatchScore(matchId: string): Promise<void>
 }
 
 // ── Full recalculation (admin reset) ─────────────────────────────────────────
+// Optimised: loads rules once, calls refreshParticipantTotals only once at the end.
 
 export async function recalculateAll(): Promise<void> {
   const admin = createAuthAdminClient()
+  const rules = await loadRules(admin)
 
-  // All scored matches
   const { data: scoredMatches } = await admin
     .from('matches')
     .select('id, phase, group_name')
@@ -362,22 +377,31 @@ export async function recalculateAll(): Promise<void> {
 
   if (!scoredMatches?.length) return
 
-  // 1. Match bets for every scored match (parallelized in batches of 8)
+  const allIds = new Set<string>()
+
+  // 1. Match bets (batches of 8 to avoid connection saturation)
   for (let i = 0; i < scoredMatches.length; i += 8) {
-    await Promise.all(
-      scoredMatches.slice(i, i + 8).map(m => recalculateMatchBets(m.id))
+    const results = await Promise.all(
+      scoredMatches.slice(i, i + 8).map(m => _updateMatchBetPoints(m.id, admin, rules))
     )
+    results.flat().forEach(id => allIds.add(id))
   }
 
-  // 2. Group bets for each unique group that's fully scored
+  // 2. Group bets — only groups with at least one scored match
   const groups = [...new Set(
     scoredMatches.filter(m => m.phase === 'group' && m.group_name).map(m => m.group_name as string)
   )]
-  await Promise.all(groups.map(g => recalculateGroupBets(g)))
+  const groupResults = await Promise.all(groups.map(g => _updateGroupBetPoints(g, admin, rules)))
+  groupResults.flat().forEach(id => allIds.add(id))
 
-  // 3. Thirds (fires only when all 72 group matches are scored internally)
-  await recalculateThirdBets()
+  // 3. Third-place bets (fires only when all group matches are scored internally)
+  const thirdIds = await _updateThirdBetPoints(admin, rules)
+  thirdIds.forEach(id => allIds.add(id))
 
-  // 4. Tournament
-  await recalculateTournamentBets()
+  // 4. Tournament bets
+  const tournamentIds = await _updateTournamentBetPoints(admin, rules)
+  tournamentIds.forEach(id => allIds.add(id))
+
+  // 5. Refresh participant totals once for all affected participants
+  await refreshParticipantTotals([...allIds])
 }
