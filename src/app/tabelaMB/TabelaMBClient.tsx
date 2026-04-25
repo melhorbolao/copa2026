@@ -715,6 +715,11 @@ export function TabelaMBClient({
     return bestId
   }, [participants, computedTotals])
 
+  // If the logged-in user is leading, their column is already the frozen Líder column — don't show twice
+  const isActiveLeader    = !!activeParticipantId && activeParticipantId === leaderId
+  const displayParts      = isActiveLeader ? otherParts : orderedParts
+  const displayFrozenLeft = isActiveLeader ? null : frozenPartLeft
+
   // Unique scorer names bet by participants (standardized), for the admin dropdown
   const betScorerOptions = useMemo(() => {
     const seen = new Set<string>()
@@ -758,7 +763,7 @@ export function TabelaMBClient({
   const totalSize = rowVirtualizer.getTotalSize()
   const padTop    = vItems.length > 0 ? vItems[0].start : 0
   const padBot    = vItems.length > 0 ? totalSize - vItems[vItems.length - 1].end : 0
-  const tableW    = frozenTotal + 4 * STAT_COL_W + participants.length * PART_COL_W
+  const tableW    = frozenTotal + 4 * STAT_COL_W + displayParts.length * PART_COL_W
 
   const getMatchPts = (pid: string, mid: string) => {
     const e = betMap.get(`${pid}:${mid}`)
@@ -948,7 +953,7 @@ export function TabelaMBClient({
             <col style={{ width: STAT_COL_W }} />
             <col style={{ width: STAT_COL_W }} />
             <col style={{ width: STAT_COL_W }} />
-            {orderedParts.map(p => <col key={p.id} style={{ width: PART_COL_W }} />)}
+            {displayParts.map(p => <col key={p.id} style={{ width: PART_COL_W }} />)}
           </colgroup>
 
           {/* Header */}
@@ -979,15 +984,15 @@ export function TabelaMBClient({
                   {leaderId && (computedTotals[leaderId] ?? 0) > 0 ? computedTotals[leaderId] : '–'}
                 </span>
               </th>
-              {orderedParts.map((p, idx) => {
+              {displayParts.map((p, idx) => {
                 const isMe = p.id === activeParticipantId
-                const isFrozen = frozenPartLeft !== null && idx === 0
+                const isFrozen = displayFrozenLeft !== null && idx === 0
                 const total = computedTotals[p.id] ?? 0
                 return (
                   <th key={p.id} title={p.apelido}
                     style={{
                       position: 'sticky', top: 0,
-                      ...(isFrozen ? { left: frozenPartLeft, borderLeft: '2px solid #6b7280' } : {}),
+                      ...(isFrozen ? { left: displayFrozenLeft!, borderLeft: '2px solid #6b7280' } : {}),
                       zIndex: isFrozen ? 50 : 40,
                       background: isMe ? '#14532d' : '#1f2937',
                       borderRight: '1px solid #374151',
@@ -1097,15 +1102,15 @@ export function TabelaMBClient({
                         </td>
                       </>)
                     })()}
-                    {orderedParts.map((p, idx) => {
+                    {displayParts.map((p, idx) => {
                       const bet  = groupBetMap.get(`${p.id}:${g}`)
                       const kind = groupCellKind(bet, of1, of2)
                       const isMe = p.id === activeParticipantId
-                      const isFrozen = frozenPartLeft !== null && idx === 0
+                      const isFrozen = displayFrozenLeft !== null && idx === 0
                       const frozenBg = isFrozen ? (CELL_KIND_BG_HEX[kind] || '#eff6ff') : undefined
                       return (
                         <td key={p.id}
-                          style={isFrozen ? { position: 'sticky', left: frozenPartLeft!, zIndex: 20, background: frozenBg, borderLeft: '2px solid #bfdbfe' } : undefined}
+                          style={isFrozen ? { position: 'sticky', left: displayFrozenLeft!, zIndex: 20, background: frozenBg, borderLeft: '2px solid #bfdbfe' } : undefined}
                           className={`border-r border-blue-50 text-center ${!isFrozen ? CELL_BG[kind] : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                           {bet?.first_place ? (
                             <div className="flex flex-col items-center leading-none gap-px">
@@ -1184,15 +1189,15 @@ export function TabelaMBClient({
                         </td>
                       </>)
                     })()}
-                    {orderedParts.map((p, idx) => {
+                    {displayParts.map((p, idx) => {
                       const bet  = thirdBetMap.get(`${p.id}:${g}`)
                       const kind = thirdCellKind(bet?.team, ot)
                       const isMe = p.id === activeParticipantId
-                      const isFrozen = frozenPartLeft !== null && idx === 0
+                      const isFrozen = displayFrozenLeft !== null && idx === 0
                       const frozenBg = isFrozen ? (CELL_KIND_BG_HEX[kind] || '#faf5ff') : undefined
                       return (
                         <td key={p.id}
-                          style={isFrozen ? { position: 'sticky', left: frozenPartLeft!, zIndex: 20, background: frozenBg, borderLeft: '2px solid #e9d5ff' } : undefined}
+                          style={isFrozen ? { position: 'sticky', left: displayFrozenLeft!, zIndex: 20, background: frozenBg, borderLeft: '2px solid #e9d5ff' } : undefined}
                           className={`border-r border-violet-50 text-center ${!isFrozen ? CELL_BG[kind] : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                           {bet?.team ? (
                             <div className="flex flex-col items-center leading-none gap-px">
@@ -1256,10 +1261,10 @@ export function TabelaMBClient({
                       ) : <span className="text-gray-200">—</span>}
                     </td>
                     {/* Participant cells */}
-                    {orderedParts.map((p, idx) => {
+                    {displayParts.map((p, idx) => {
                       const bet = tournamentBetMap.get(p.id)
                       const isMe = p.id === activeParticipantId
-                      const isFrozen = frozenPartLeft !== null && idx === 0
+                      const isFrozen = displayFrozenLeft !== null && idx === 0
                       const betVal = bet?.[field] ?? ''
                       const pts = betVal ? scoreG4FieldBet(field, betVal, knockoutResults, rules, isZebraChampion) : null
                       const isExact = !!betVal && !!official && betVal === official
@@ -1269,7 +1274,7 @@ export function TabelaMBClient({
                       const frozenBg = isExact ? '#d1fae5' : isPartial ? '#e0f2fe' : isWrong ? '#fff1f2' : '#fffbeb'
                       return (
                         <td key={p.id}
-                          style={isFrozen ? { position: 'sticky', left: frozenPartLeft!, zIndex: 20, background: frozenBg, borderLeft: '2px solid #fde68a' } : { background: cellBg }}
+                          style={isFrozen ? { position: 'sticky', left: displayFrozenLeft!, zIndex: 20, background: frozenBg, borderLeft: '2px solid #fde68a' } : { background: cellBg }}
                           className={`border-r border-amber-50 text-center ${isExact ? 'bg-emerald-100' : isPartial ? 'bg-sky-100' : isWrong ? 'bg-rose-50' : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                           {betVal ? (
                             <div className="flex flex-col items-center leading-none gap-px">
@@ -1331,13 +1336,13 @@ export function TabelaMBClient({
                         </td>
                       </>)
                     })()}
-                    {orderedParts.map((p, idx) => {
+                    {displayParts.map((p, idx) => {
                       const bet  = tournamentBetMap.get(p.id)
                       const isMe = p.id === activeParticipantId
-                      const isFrozen = frozenPartLeft !== null && idx === 0
+                      const isFrozen = displayFrozenLeft !== null && idx === 0
                       if (!bet?.top_scorer) return (
                         <td key={p.id}
-                          style={isFrozen ? { position: 'sticky', left: frozenPartLeft!, zIndex: 20, background: '#fffbeb', borderLeft: '2px solid #fde68a' } : undefined}
+                          style={isFrozen ? { position: 'sticky', left: displayFrozenLeft!, zIndex: 20, background: '#fffbeb', borderLeft: '2px solid #fde68a' } : undefined}
                           className={`border-r border-amber-50 text-center ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                           <span className="text-gray-200">—</span>
                         </td>
@@ -1348,7 +1353,7 @@ export function TabelaMBClient({
                       const pts       = localScorers.length > 0 ? (isCorrect ? artilhPts : 0) : null
                       return (
                         <td key={p.id}
-                          style={isFrozen ? { position: 'sticky', left: frozenPartLeft!, zIndex: 20, background: isCorrect ? '#d1fae5' : pts !== null ? '#fff1f2' : '#fffbeb', borderLeft: '2px solid #fde68a' } : undefined}
+                          style={isFrozen ? { position: 'sticky', left: displayFrozenLeft!, zIndex: 20, background: isCorrect ? '#d1fae5' : pts !== null ? '#fff1f2' : '#fffbeb', borderLeft: '2px solid #fde68a' } : undefined}
                           className={`border-r border-amber-50 text-center ${isCorrect ? 'bg-emerald-100' : pts !== null ? 'bg-rose-50' : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                           <div className="flex flex-col items-center leading-none gap-px">
                             <span className="text-[9px] text-gray-700 truncate font-medium" style={{ maxWidth: PART_COL_W - 4 }}>
@@ -1472,17 +1477,17 @@ export function TabelaMBClient({
                       </td>
                     </>)
                   })()}
-                  {orderedParts.map((p, idx) => {
+                  {displayParts.map((p, idx) => {
                     const key  = `${p.id}:${match.id}`
                     const bet  = betMap.get(key)
                     const kind = matchCellKind(bet, match.score_home, match.score_away)
                     const pts  = getMatchPts(p.id, match.id)
                     const isMe = p.id === activeParticipantId
-                    const isFrozen = frozenPartLeft !== null && idx === 0
+                    const isFrozen = displayFrozenLeft !== null && idx === 0
                     const frozenBg = isFrozen ? (CELL_KIND_BG_HEX[kind] || bg) : undefined
                     return (
                       <td key={p.id}
-                        style={isFrozen ? { position: 'sticky', left: frozenPartLeft!, zIndex: 20, background: frozenBg, borderLeft: '2px solid #d1d5db' } : undefined}
+                        style={isFrozen ? { position: 'sticky', left: displayFrozenLeft!, zIndex: 20, background: frozenBg, borderLeft: '2px solid #d1d5db' } : undefined}
                         className={`border-r border-gray-100 text-center ${!isFrozen ? CELL_BG[kind] : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                         {bet ? (
                           <div className="flex flex-col items-center leading-none gap-px">
