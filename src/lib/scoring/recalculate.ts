@@ -227,7 +227,7 @@ async function _updateTournamentBetPoints(admin: AdminClient, rules: RuleMap): P
     .select('value')
     .eq('key', 'official_top_scorer')
     .maybeSingle()
-    .catch(() => ({ data: null }))
+    .then((r: any) => r, () => ({ data: null }))
 
   if (scorerSetting?.value) {
     try { results.officialScorers = JSON.parse(scorerSetting.value) }
@@ -238,7 +238,7 @@ async function _updateTournamentBetPoints(admin: AdminClient, rules: RuleMap): P
   const { data: mappingRows } = await (admin as any)
     .from('top_scorer_mapping')
     .select('raw_name, standardized_name')
-    .catch(() => ({ data: [] }))
+    .then((r: any) => r, () => ({ data: [] }))
 
   const scorerMapping: Record<string, string> = Object.fromEntries(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
