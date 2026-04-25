@@ -8,7 +8,7 @@ import { downloadExcel } from '@/utils/downloadExcel'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { createClient } from '@/lib/supabase/client'
 import { saveOfficialScore, saveOfficialTopScorer } from '@/app/acopa/actions'
-import { scoreMatchBet, detectMatchZebra, getMatchResult, scoreTournamentBet } from '@/lib/scoring/engine'
+import { scoreMatchBet, detectMatchZebra, detectGroupZebra, getMatchResult, scoreTournamentBet } from '@/lib/scoring/engine'
 import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap } from '@/lib/bracket/engine'
 import type { KnockoutTeamOverride } from '@/lib/bracket/engine'
 import { useAdminView } from '@/contexts/AdminViewContext'
@@ -602,6 +602,48 @@ export function TabelaMBClient({
     return (correct / tournamentBetMap.size) * 100 <= threshold
   }, [knockoutResults.champion, tournamentBetMap, rules])
 
+  // Potential-zebra champion picks: teams that would be a zebra if they won
+  const potentialZebraChampions = useMemo(() => {
+    const threshold = rules['percentual_zebra'] ?? 15
+    const allPicks = participants.map(p => tournamentBetMap.get(p.id)?.champion).filter((x): x is string => !!x)
+    if (!allPicks.length) return new Set<string>()
+    const result = new Set<string>()
+    for (const team of new Set(allPicks)) {
+      if (detectGroupZebra(allPicks.map(fp => ({ first_place: fp })), team, threshold)) result.add(team)
+    }
+    return result
+  }, [rules, participants, tournamentBetMap])
+
+  // Per-group: which first-place picks are potential zebras?
+  const groupPotentialZebraTeams = useMemo(() => {
+    const threshold = rules['percentual_zebra'] ?? 15
+    const result = new Map<string, Set<string>>()
+    for (const g of GROUP_ORDER) {
+      const allPicks = participants.map(p => groupBetMap.get(`${p.id}:${g}`)?.first_place).filter((x): x is string => !!x)
+      const zebraTeams = new Set<string>()
+      if (allPicks.length) {
+        for (const team of new Set(allPicks)) {
+          if (detectGroupZebra(allPicks.map(fp => ({ first_place: fp })), team, threshold)) zebraTeams.add(team)
+        }
+      }
+      result.set(g, zebraTeams)
+    }
+    return result
+  }, [rules, participants, groupBetMap])
+
+  // Per-group: is the official first place a zebra?
+  const groupActualZebras = useMemo(() => {
+    const threshold = rules['percentual_zebra'] ?? 15
+    const result = new Set<string>()
+    for (const g of GROUP_ORDER) {
+      const of1 = officialStandings.find(s => s.group === g)?.teams[0]?.team ?? ''
+      if (!of1) continue
+      const allPicks = participants.map(p => groupBetMap.get(`${p.id}:${g}`)?.first_place).filter((x): x is string => !!x)
+      if (allPicks.length && detectGroupZebra(allPicks.map(fp => ({ first_place: fp })), of1, threshold)) result.add(g)
+    }
+    return result
+  }, [rules, participants, groupBetMap, officialStandings])
+
   const offFirst  = useCallback((g: string) => officialStandings.find(s => s.group === g)?.teams[0]?.team ?? '', [officialStandings])
   const offSecond = useCallback((g: string) => officialStandings.find(s => s.group === g)?.teams[1]?.team ?? '', [officialStandings])
   const offThird  = useCallback((g: string) => officialThirds.find(t => t.group === g && t.advances)?.team ?? '', [officialThirds])
@@ -1053,6 +1095,10 @@ export function TabelaMBClient({
                             <div className="flex items-center gap-1">
                               <Flag code={teamFlagMap.get(of1) ?? ''} size="sm" className="shrink-0 w-4 h-3 rounded-[1px]" />
                               <span className="font-bold text-[10px]">{teamAbbrs[of1] ?? abbr(of1, 4)}</span>
+                              {groupActualZebras.has(g) && (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src="/zebra.png" alt="🦓" width={13} height={13} className="shrink-0 object-contain" />
+                              )}
                             </div>
                           ) : <span className="text-gray-300">–</span>}
                           {of2 ? (
@@ -1064,7 +1110,13 @@ export function TabelaMBClient({
                         </div>
                       ) : (
                         <div className="leading-none">
-                          <span className="block truncate" style={{ maxWidth: colTeamsW - 8 }}>🥇 {of1 || '–'}</span>
+                          <div className="flex items-center gap-1" style={{ maxWidth: colTeamsW - 8 }}>
+                            <span className="truncate">🥇 {of1 || '–'}</span>
+                            {groupActualZebras.has(g) && of1 && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src="/zebra.png" alt="🦓" width={14} height={14} className="shrink-0 object-contain" />
+                            )}
+                          </div>
                           <span className="block truncate" style={{ maxWidth: colTeamsW - 8 }}>🥈 {of2 || '–'}</span>
                         </div>
                       )}
@@ -1089,9 +1141,15 @@ export function TabelaMBClient({
                           className={`border-r border-blue-50 text-center ${isMobile ? CELL_BG[lbKind] : ''}`}>
                           {lb?.first_place ? (
                             <div className="flex flex-col items-center leading-none gap-px">
-                              <span className="text-[9px] text-gray-600 truncate font-medium" style={{ maxWidth: STAT_COL_W - 4 }}>
-                                {(teamAbbrs[lb.first_place] ?? abbr(lb.first_place, 4))}/{(teamAbbrs[lb.second_place] ?? abbr(lb.second_place, 4))}
-                              </span>
+                              <div className="flex items-center gap-px overflow-hidden" style={{ maxWidth: STAT_COL_W - 4 }}>
+                                <span className={`text-[9px] font-medium shrink-0 ${groupPotentialZebraTeams.get(g)?.has(lb.first_place) ? 'bg-gray-900 text-white rounded px-0.5' : 'text-gray-600'}`}>
+                                  {teamAbbrs[lb.first_place] ?? abbr(lb.first_place, 4)}
+                                </span>
+                                <span className="text-[9px] text-gray-400 shrink-0">/</span>
+                                <span className="text-[9px] text-gray-600 truncate font-medium">
+                                  {teamAbbrs[lb.second_place] ?? abbr(lb.second_place, 4)}
+                                </span>
+                              </div>
                               {lb.points !== null && (
                                 <span className={`text-[10px] font-bold ${lb.points > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>
                                   {lb.points > 0 ? `+${lb.points}` : '0'}
@@ -1114,9 +1172,15 @@ export function TabelaMBClient({
                           className={`border-r border-blue-50 text-center ${!isFrozen ? CELL_BG[kind] : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                           {bet?.first_place ? (
                             <div className="flex flex-col items-center leading-none gap-px">
-                              <span className="text-[9px] text-gray-600 truncate font-medium" style={{ maxWidth: PART_COL_W - 4 }}>
-                                {(teamAbbrs[bet.first_place] ?? abbr(bet.first_place, 5))}/{(teamAbbrs[bet.second_place] ?? abbr(bet.second_place, 5))}
-                              </span>
+                              <div className="flex items-center gap-px overflow-hidden" style={{ maxWidth: PART_COL_W - 4 }}>
+                                <span className={`text-[9px] font-medium shrink-0 ${groupPotentialZebraTeams.get(g)?.has(bet.first_place) ? 'bg-gray-900 text-white rounded px-0.5' : 'text-gray-600'}`}>
+                                  {teamAbbrs[bet.first_place] ?? abbr(bet.first_place, 5)}
+                                </span>
+                                <span className="text-[9px] text-gray-400 shrink-0">/</span>
+                                <span className="text-[9px] text-gray-600 truncate font-medium">
+                                  {teamAbbrs[bet.second_place] ?? abbr(bet.second_place, 5)}
+                                </span>
+                              </div>
                               {bet.points !== null && (
                                 <span className={`text-[10px] font-bold ${bet.points > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>
                                   {bet.points > 0 ? `+${bet.points}` : '0'}
@@ -1239,9 +1303,17 @@ export function TabelaMBClient({
                       className="text-center text-[10px] font-bold text-amber-700">{LABELS[field]}</td>
                     <td style={{ position: 'sticky', left: colTeamsLeft, zIndex: 30, background: '#fffbeb', borderRight: '1px solid #fde68a' }}
                       className="px-1.5 text-[10px] text-amber-800 font-semibold">
-                      <span className="block truncate" style={{ maxWidth: colTeamsW - 8 }}>
-                        {official ? a(official) : <span className="text-gray-300">–</span>}
-                      </span>
+                      <div className="flex items-center gap-1 overflow-hidden" style={{ maxWidth: colTeamsW - 8 }}>
+                        {official ? (
+                          <>
+                            <span className="truncate">{a(official)}</span>
+                            {field === 'champion' && isZebraChampion && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src="/zebra.png" alt="🦓" width={14} height={14} className="shrink-0 object-contain" />
+                            )}
+                          </>
+                        ) : <span className="text-gray-300">–</span>}
+                      </div>
                     </td>
                     <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: '#fffbeb', borderRight: '1px solid #fde68a' }}
                       className="text-center text-[9px] text-amber-600 font-semibold px-0.5 leading-tight">
@@ -1255,7 +1327,7 @@ export function TabelaMBClient({
                       className={`border-r border-amber-50 text-center ${isMobile ? (lbPts !== null ? (lbPts > 0 ? 'bg-emerald-100' : 'bg-rose-50') : '') : ''}`}>
                       {lbVal ? (
                         <div className="flex flex-col items-center leading-none gap-px">
-                          <span className="text-[9px] text-gray-700 truncate font-medium" style={{ maxWidth: STAT_COL_W - 4 }}>{a(lbVal)}</span>
+                          <span className={`text-[9px] font-medium truncate ${field === 'champion' && potentialZebraChampions.has(lbVal) ? 'bg-gray-900 text-white rounded px-0.5' : 'text-gray-700'}`} style={{ maxWidth: STAT_COL_W - 4 }}>{a(lbVal)}</span>
                           {lbPts !== null && <span className={`text-[10px] font-bold ${lbPts > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>{lbPts > 0 ? `+${lbPts}` : '0'}</span>}
                         </div>
                       ) : <span className="text-gray-200">—</span>}
@@ -1278,7 +1350,7 @@ export function TabelaMBClient({
                           className={`border-r border-amber-50 text-center ${isExact ? 'bg-emerald-100' : isPartial ? 'bg-sky-100' : isWrong ? 'bg-rose-50' : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                           {betVal ? (
                             <div className="flex flex-col items-center leading-none gap-px">
-                              <span className="text-[9px] text-gray-700 truncate font-medium" style={{ maxWidth: PART_COL_W - 4 }}>{a(betVal)}</span>
+                              <span className={`text-[9px] font-medium truncate ${field === 'champion' && potentialZebraChampions.has(betVal) ? 'bg-gray-900 text-white rounded px-0.5' : 'text-gray-700'}`} style={{ maxWidth: PART_COL_W - 4 }}>{a(betVal)}</span>
                               {pts !== null && <span className={`text-[10px] font-bold ${pts > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>{pts > 0 ? `+${pts}` : '0'}</span>}
                             </div>
                           ) : <span className="text-gray-200">—</span>}
