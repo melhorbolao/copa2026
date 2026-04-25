@@ -1092,12 +1092,12 @@ export function TabelaMBClient({
                       {isMobile ? (
                         <div className="leading-none flex flex-col gap-0.5">
                           {of1 ? (
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1 w-full">
                               <Flag code={teamFlagMap.get(of1) ?? ''} size="sm" className="shrink-0 w-4 h-3 rounded-[1px]" />
                               <span className="font-bold text-[10px]">{teamAbbrs[of1] ?? abbr(of1, 4)}</span>
                               {groupActualZebras.has(g) && (
                                 // eslint-disable-next-line @next/next/no-img-element
-                                <img src="/zebra.png" alt="🦓" width={13} height={13} className="shrink-0 object-contain" />
+                                <img src="/zebra.png" alt="🦓" width={18} height={18} className="shrink-0 object-contain ml-auto" />
                               )}
                             </div>
                           ) : <span className="text-gray-300">–</span>}
@@ -1110,11 +1110,11 @@ export function TabelaMBClient({
                         </div>
                       ) : (
                         <div className="leading-none">
-                          <div className="flex items-center gap-1" style={{ maxWidth: colTeamsW - 8 }}>
+                          <div className="flex items-center gap-1 w-full" style={{ maxWidth: colTeamsW - 8 }}>
                             <span className="truncate">🥇 {of1 || '–'}</span>
                             {groupActualZebras.has(g) && of1 && (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img src="/zebra.png" alt="🦓" width={14} height={14} className="shrink-0 object-contain" />
+                              <img src="/zebra.png" alt="🦓" width={24} height={24} className="shrink-0 object-contain ml-auto" />
                             )}
                           </div>
                           <span className="block truncate" style={{ maxWidth: colTeamsW - 8 }}>🥈 {of2 || '–'}</span>
@@ -1303,13 +1303,13 @@ export function TabelaMBClient({
                       className="text-center text-[10px] font-bold text-amber-700">{LABELS[field]}</td>
                     <td style={{ position: 'sticky', left: colTeamsLeft, zIndex: 30, background: '#fffbeb', borderRight: '1px solid #fde68a' }}
                       className="px-1.5 text-[10px] text-amber-800 font-semibold">
-                      <div className="flex items-center gap-1 overflow-hidden" style={{ maxWidth: colTeamsW - 8 }}>
+                      <div className="flex items-center gap-1 overflow-hidden w-full" style={{ maxWidth: colTeamsW - 8 }}>
                         {official ? (
                           <>
                             <span className="truncate">{a(official)}</span>
                             {field === 'champion' && isZebraChampion && (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img src="/zebra.png" alt="🦓" width={14} height={14} className="shrink-0 object-contain" />
+                              <img src="/zebra.png" alt="🦓" width={isMobile ? 18 : 24} height={isMobile ? 18 : 24} className="shrink-0 object-contain ml-auto" />
                             )}
                           </>
                         ) : <span className="text-gray-300">–</span>}
