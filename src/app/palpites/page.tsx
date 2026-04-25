@@ -22,6 +22,8 @@ import { formatBrasilia } from '@/utils/date'
 import type { MatchPhase } from '@/types/database'
 import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap, R32_MATCHES } from '@/lib/bracket/engine'
 import type { BetSlim, MatchSlim } from '@/lib/bracket/engine'
+import { scoreTournamentBet } from '@/lib/scoring/engine'
+import type { TournamentResults } from '@/lib/scoring/engine'
 
 const GROUP_ORDER = ['A','B','C','D','E','F','G','H','I','J','K','L']
 
@@ -68,8 +70,8 @@ export default async function PalpitesPage({
 
   const admin = createAuthAdminClient()
 
-  const [{ data: matches }, { data: bets }, { data: groupBets }, { data: tBet }, scorerMappingsRaw] = await Promise.all([
-    supabase.from('matches').select('id, match_number, phase, group_name, round, team_home, team_away, flag_home, flag_away, match_datetime, city, betting_deadline, score_home, score_away, is_brazil').order('match_datetime', { ascending: true }),
+  const [{ data: matches }, { data: bets }, { data: groupBets }, { data: tBet }, scorerMappingsRaw, { data: rulesData }] = await Promise.all([
+    supabase.from('matches').select('id, match_number, phase, group_name, round, team_home, team_away, flag_home, flag_away, match_datetime, city, betting_deadline, score_home, score_away, is_brazil, penalty_winner').order('match_datetime', { ascending: true }),
     supabase.from('bets').select('match_id, score_home, score_away, points').eq('participant_id', participantId),
     supabase.from('group_bets').select('group_name, first_place, second_place, points').eq('participant_id', participantId),
     supabase.from('tournament_bets')
@@ -77,6 +79,7 @@ export default async function PalpitesPage({
       .eq('participant_id', participantId)
       .maybeSingle(),
     supabase.from('top_scorer_mapping').select('raw_name, standardized_name').then(r => r.data ?? [], () => []),
+    supabase.from('scoring_rules').select('key, points'),
   ])
 
   // Admin client para contornar RLS em third_place_bets (tabela sem política SELECT explícita)
@@ -88,9 +91,10 @@ export default async function PalpitesPage({
   if (thirdBetsResult.error) console.error('[palpites/page] third_place_bets SELECT error:', thirdBetsResult.error)
   const thirdBets = (thirdBetsResult.data ?? []) as { group_name: string; team: string; points: number | null }[]
 
-  const thirdPts: number = await supabase
-    .from('scoring_rules').select('points').eq('key', 'terceiro_classificado').maybeSingle()
-    .then(r => r.data?.points ?? 3, () => 3)
+  const rulesMap: Record<string, number> = Object.fromEntries(
+    (rulesData ?? []).map((r: { key: string; points: number }) => [r.key, r.points])
+  )
+  const thirdPts: number = rulesMap['terceiro_classificado'] ?? 3
 
   const scorerMapping: Record<string, string> = Object.fromEntries(
     (scorerMappingsRaw as { raw_name: string; standardized_name: string }[]).map(m => [m.raw_name, m.standardized_name])
@@ -147,6 +151,75 @@ export default async function PalpitesPage({
     : []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const knockoutTeamMap = buildKnockoutTeamMap(officialR32Slots, knockoutMatches as any)
+
+  // Official top scorer for live G4/artilheiro scoring
+  let officialTopScorers: string[] = []
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const r = await (admin as any).from('tournament_settings').select('value').eq('key', 'official_top_scorer').maybeSingle()
+    if (r.data?.value) {
+      try { officialTopScorers = JSON.parse(r.data.value) }
+      catch { officialTopScorers = [r.data.value] }
+    }
+  } catch { /* table may not exist */ }
+
+  // Build live knockout results from official match scores
+  const resolveKnockoutTeam = (m: { id: string; team_home: string; team_away: string }, side: 'home' | 'away'): string => {
+    const ov = knockoutTeamMap.get(m.id)
+    return side === 'home' ? (ov?.team_home ?? m.team_home) : (ov?.team_away ?? m.team_away)
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const knockoutWinner = (m: any): string | null => {
+    if (m.score_home === null || m.score_away === null) return null
+    const h = resolveKnockoutTeam(m, 'home'), a = resolveKnockoutTeam(m, 'away')
+    if (m.score_home > m.score_away) return h
+    if (m.score_away > m.score_home) return a
+    return m.penalty_winner ?? null
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const qfMatches = knockoutMatches.filter((m: any) => m.phase === 'quarterfinal').sort((a: any, b: any) => a.match_number - b.match_number)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sfMatches = knockoutMatches.filter((m: any) => m.phase === 'semifinal').sort((a: any, b: any) => a.match_number - b.match_number)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const finMatch  = knockoutMatches.find((m: any) => m.phase === 'final')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const thrMatch  = knockoutMatches.find((m: any) => m.phase === 'third_place')
+  const kSemifinalists = qfMatches.map(knockoutWinner).filter((t: string | null): t is string => !!t)
+  const kFinalists     = sfMatches.map(knockoutWinner).filter((t: string | null): t is string => !!t)
+  let kChampion: string | null = null, kRunnerUp: string | null = null
+  if (finMatch) {
+    kChampion = knockoutWinner(finMatch)
+    if (kChampion) kRunnerUp = resolveKnockoutTeam(finMatch, kChampion === resolveKnockoutTeam(finMatch, 'home') ? 'away' : 'home')
+  }
+  let kThird: string | null = null, kFourth: string | null = null
+  if (thrMatch) {
+    kThird = knockoutWinner(thrMatch)
+    if (kThird) kFourth = resolveKnockoutTeam(thrMatch, kThird === resolveKnockoutTeam(thrMatch, 'home') ? 'away' : 'home')
+  }
+  const knockoutResults: TournamentResults = {
+    semifinalists: kSemifinalists, finalists: kFinalists,
+    champion: kChampion, runnerUp: kRunnerUp,
+    third: kThird, fourth: kFourth,
+    officialScorers: officialTopScorers,
+  }
+
+  // Live G4 + artilheiro score (shown when knockout results are available)
+  let liveScore: number | null = null
+  if (tBet && (knockoutResults.semifinalists.length > 0 || knockoutResults.officialScorers.length > 0)) {
+    liveScore = scoreTournamentBet(
+      {
+        champion:   tBet.champion   ?? '',
+        runner_up:  tBet.runner_up  ?? '',
+        semi1:      tBet.semi1      ?? '',
+        semi2:      tBet.semi2      ?? '',
+        top_scorer: tBet.top_scorer ?? '',
+      },
+      knockoutResults,
+      rulesMap,
+      false,
+      scorerMapping,
+    )
+  }
 
   const r32LabelMap = new Map<number, { labelA: string; labelB: string }>()
   R32_MATCHES.forEach((m, i) => {
@@ -473,6 +546,7 @@ export default async function PalpitesPage({
                 deadline={tournamentDeadline}
                 existingBet={tBet ?? null}
                 scorerMapping={scorerMapping}
+                liveScore={liveScore}
               />
             )}
 
