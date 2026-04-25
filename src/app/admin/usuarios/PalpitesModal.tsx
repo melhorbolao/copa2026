@@ -4,8 +4,9 @@ import { useState, useRef } from 'react'
 import { toast } from 'react-hot-toast'
 
 interface Props {
-  userId:   string
-  userName: string
+  userId:        string
+  userName:      string
+  participantId?: string
 }
 
 interface ConfirmState {
@@ -13,9 +14,10 @@ interface ConfirmState {
   file: File
 }
 
-export function PalpitesModal({ userId, userName }: Props) {
+export function PalpitesModal({ userId, userName, participantId }: Props) {
   const [open,         setOpen]         = useState(false)
   const [uploading,    setUploading]    = useState(false)
+  const [downloading,  setDownloading]  = useState<'blank' | 'current' | null>(null)
   const [result,       setResult]       = useState<{ ok: boolean; msg: string } | null>(null)
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -25,6 +27,43 @@ export function PalpitesModal({ userId, userName }: Props) {
     setResult(null)
     setConfirmState(null)
     if (fileRef.current) fileRef.current.value = ''
+  }
+
+  const handleDownload = async (blank: boolean) => {
+    const which = blank ? 'blank' : 'current'
+    setDownloading(which)
+    try {
+      const params = new URLSearchParams()
+      if (participantId) {
+        params.set('participantId', participantId)
+      } else {
+        params.set('userId', userId)
+      }
+      if (blank) params.set('blank', '1')
+
+      const res = await fetch(`/api/admin/palpites/export?${params}`)
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        toast.error(body?.error ?? `Erro HTTP ${res.status}`)
+        return
+      }
+
+      const blob = await res.blob()
+      const disposition = res.headers.get('Content-Disposition') ?? ''
+      const match = disposition.match(/filename="([^"]+)"/)
+      const fileName = match?.[1] ?? 'palpites.xlsx'
+
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = fileName
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Erro ao baixar arquivo')
+    } finally {
+      setDownloading(null)
+    }
   }
 
   const doUpload = async (file: File, force = false) => {
@@ -113,20 +152,20 @@ export function PalpitesModal({ userId, userName }: Props) {
               <div>
                 <p className="mb-2 text-xs font-semibold uppercase text-gray-500">Download</p>
                 <div className="flex gap-2">
-                  <a
-                    href={`/api/admin/palpites/export?userId=${encodeURIComponent(userId)}&blank=1`}
-                    download
-                    className="flex-1 rounded-lg py-2 text-center text-xs font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition"
+                  <button
+                    onClick={() => handleDownload(true)}
+                    disabled={!!downloading}
+                    className="flex-1 rounded-lg py-2 text-center text-xs font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-60 transition"
                   >
-                    📄 Modelo em branco
-                  </a>
-                  <a
-                    href={`/api/admin/palpites/export?userId=${encodeURIComponent(userId)}`}
-                    download
-                    className="flex-1 rounded-lg py-2 text-center text-xs font-semibold bg-verde-50 text-verde-700 hover:bg-verde-100 transition"
+                    {downloading === 'blank' ? '⏳ Baixando…' : '📄 Modelo em branco'}
+                  </button>
+                  <button
+                    onClick={() => handleDownload(false)}
+                    disabled={!!downloading}
+                    className="flex-1 rounded-lg py-2 text-center text-xs font-semibold bg-verde-50 text-verde-700 hover:bg-verde-100 disabled:opacity-60 transition"
                   >
-                    📥 Palpites atuais
-                  </a>
+                    {downloading === 'current' ? '⏳ Baixando…' : '📥 Palpites atuais'}
+                  </button>
                 </div>
               </div>
 
