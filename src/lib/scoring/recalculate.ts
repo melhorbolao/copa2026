@@ -60,16 +60,17 @@ async function _updateMatchBetPoints(matchId: string, admin: AdminClient, rules:
     threshold,
   )
 
-  await Promise.all(
-    bets.map(bet =>
-      admin.from('bets').update({
-        points: scoreMatchBet(
-          bet.score_home, bet.score_away,
-          match.score_home!, match.score_away!,
-          isZebra, match.is_brazil, rules,
-        ),
-      }).eq('id', bet.id)
-    )
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (admin as any).from('bets').upsert(
+    bets.map(bet => ({
+      id: bet.id,
+      points: scoreMatchBet(
+        bet.score_home, bet.score_away,
+        match.score_home!, match.score_away!,
+        isZebra, match.is_brazil, rules,
+      ),
+    })),
+    { onConflict: 'id' },
   )
 
   return [...new Set(bets.map(b => b.participant_id))]
@@ -117,16 +118,17 @@ async function _updateGroupBetPoints(groupName: string, admin: AdminClient, rule
     threshold,
   )
 
-  await Promise.all(
-    groupBets.map(bet =>
-      admin.from('group_bets').update({
-        points: scoreGroupBet(
-          bet.first_place, bet.second_place,
-          actual1st, actual2nd,
-          isZebra1, rules,
-        ),
-      }).eq('id', bet.id)
-    )
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (admin as any).from('group_bets').upsert(
+    groupBets.map(bet => ({
+      id: bet.id,
+      points: scoreGroupBet(
+        bet.first_place, bet.second_place,
+        actual1st, actual2nd,
+        isZebra1, rules,
+      ),
+    })),
+    { onConflict: 'id' },
   )
 
   return [...new Set(groupBets.map(b => b.participant_id))]
@@ -164,14 +166,15 @@ async function _updateThirdBetPoints(admin: AdminClient, rules: RuleMap): Promis
 
   const thirdPts = rules['terceiro_classificado'] ?? 3
 
-  await Promise.all(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (admin as any).from('third_place_bets').upsert(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (thirdBets as any[]).map((bet: any) => {
       const actual = thirds.find(t => t.group === bet.group_name)
       const pts    = (actual?.advances && actual.team === bet.team) ? thirdPts : 0
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return (admin as any).from('third_place_bets').update({ points: pts }).eq('id', bet.id)
-    })
+      return { id: bet.id, points: pts }
+    }),
+    { onConflict: 'id' },
   )
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -254,15 +257,16 @@ async function _updateTournamentBetPoints(admin: AdminClient, rules: RuleMap): P
       (tournamentBets.filter(b => b.champion === results.champion).length / tournamentBets.length) * 100 <= threshold
     : false
 
-  await Promise.all(
-    tournamentBets.map(bet =>
-      admin.from('tournament_bets').update({
-        points: scoreTournamentBet(
-          { champion: bet.champion, runner_up: bet.runner_up, semi1: bet.semi1, semi2: bet.semi2, top_scorer: bet.top_scorer },
-          results, rules, isZebraChampion, scorerMapping,
-        ),
-      }).eq('id', bet.id)
-    )
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (admin as any).from('tournament_bets').upsert(
+    tournamentBets.map(bet => ({
+      id: bet.id,
+      points: scoreTournamentBet(
+        { champion: bet.champion, runner_up: bet.runner_up, semi1: bet.semi1, semi2: bet.semi2, top_scorer: bet.top_scorer },
+        results, rules, isZebraChampion, scorerMapping,
+      ),
+    })),
+    { onConflict: 'id' },
   )
 
   return [...new Set(tournamentBets.map(b => b.participant_id))]
@@ -305,35 +309,37 @@ export async function recalculateTournamentBets(): Promise<void> {
 }
 
 // ── Participant total ─────────────────────────────────────────────────────────
+// Bulk fetch all participants at once → 4 reads + 1 upsert (vs 5N before).
 
 export async function refreshParticipantTotals(participantIds: string[]): Promise<void> {
   if (!participantIds.length) return
   const admin = createAuthAdminClient()
 
-  await Promise.all(participantIds.map(async pid => {
-    const [bRes, gRes, tpRes, tbRes] = await Promise.all([
-      admin.from('bets').select('points').eq('participant_id', pid),
-      admin.from('group_bets').select('points').eq('participant_id', pid),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (admin as any).from('third_place_bets').select('points').eq('participant_id', pid),
-      admin.from('tournament_bets').select('points').eq('participant_id', pid).maybeSingle(),
-    ])
-
-    const sum = (rows: { points: number | null }[] | null) =>
-      (rows ?? []).reduce((acc, r) => acc + (r.points ?? 0), 0)
-
-    const ptsMatches    = sum(bRes.data)
-    const ptsGroups     = sum(gRes.data)
-    const ptsThirds     = sum(tpRes.data)
-    const ptsTournament = tbRes.data?.points ?? 0
-    const ptsTotal      = ptsMatches + ptsGroups + ptsThirds + ptsTournament
-
+  const [bRes, gRes, tpRes, tbRes] = await Promise.all([
+    admin.from('bets').select('participant_id, points').in('participant_id', participantIds),
+    admin.from('group_bets').select('participant_id, points').in('participant_id', participantIds),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (admin as any).from('participant_scores').upsert(
-      { participant_id: pid, pts_matches: ptsMatches, pts_groups: ptsGroups, pts_thirds: ptsThirds, pts_tournament: ptsTournament, pts_total: ptsTotal, updated_at: new Date().toISOString() },
-      { onConflict: 'participant_id' },
-    )
-  }))
+    (admin as any).from('third_place_bets').select('participant_id, points').in('participant_id', participantIds),
+    admin.from('tournament_bets').select('participant_id, points').in('participant_id', participantIds),
+  ])
+
+  const sumFor = (rows: { participant_id: string; points: number | null }[] | null, pid: string) =>
+    (rows ?? []).filter(r => r.participant_id === pid).reduce((acc, r) => acc + (r.points ?? 0), 0)
+
+  const now = new Date().toISOString()
+  const scores = participantIds.map(pid => {
+    const ptsMatches    = sumFor(bRes.data as { participant_id: string; points: number | null }[] | null, pid)
+    const ptsGroups     = sumFor(gRes.data as { participant_id: string; points: number | null }[] | null, pid)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ptsThirds     = sumFor(tpRes.data as any, pid)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ptsTournament = ((tbRes.data ?? []) as any[]).find((r: any) => r.participant_id === pid)?.points ?? 0
+    const ptsTotal      = ptsMatches + ptsGroups + ptsThirds + ptsTournament
+    return { participant_id: pid, pts_matches: ptsMatches, pts_groups: ptsGroups, pts_thirds: ptsThirds, pts_tournament: ptsTournament, pts_total: ptsTotal, updated_at: now }
+  })
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (admin as any).from('participant_scores').upsert(scores, { onConflict: 'participant_id' })
 }
 
 // ── Orchestrator ──────────────────────────────────────────────────────────────
@@ -364,7 +370,7 @@ export async function recalculateAfterMatchScore(matchId: string): Promise<void>
 }
 
 // ── Full recalculation (admin reset) ─────────────────────────────────────────
-// Optimised: loads rules once, calls refreshParticipantTotals only once at the end.
+// Optimised: loads rules once, bulk upserts, single refreshParticipantTotals at the end.
 
 export async function recalculateAll(): Promise<void> {
   const admin = createAuthAdminClient()
