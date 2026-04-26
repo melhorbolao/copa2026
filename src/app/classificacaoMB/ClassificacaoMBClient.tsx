@@ -36,17 +36,19 @@ interface Props {
 
 type RankedRow = ParticipantRow & { rank: number; diffLider: number; diffCorte: number | null }
 
-function Num({ v, green, red }: { v: number; green?: boolean; red?: boolean }) {
-  const cls = green ? 'text-verde-600' : red ? 'text-red-500' : 'text-gray-700'
-  return <span className={`tabular-nums ${cls}`}>{v}</span>
+function Num({ v, green }: { v: number; green?: boolean }) {
+  return (
+    <span className={`tabular-nums ${green && v > 0 ? 'text-verde-600 font-semibold' : 'text-gray-600'}`}>
+      {v}
+    </span>
+  )
 }
 
-function Diff({ v, invertSign = false }: { v: number | null; invertSign?: boolean }) {
+function Diff({ v }: { v: number | null }) {
   if (v === null) return <span className="text-gray-300">—</span>
-  const val = invertSign ? -v : v
-  if (val === 0) return <span className="text-amber-600 tabular-nums font-mono">0</span>
-  if (val > 0) return <span className="text-red-500 tabular-nums font-mono">+{val}</span>
-  return <span className="text-verde-600 tabular-nums font-mono">{val}</span>
+  if (v === 0)  return <span className="text-amber-500 tabular-nums font-mono">0</span>
+  if (v > 0)   return <span className="text-red-500 tabular-nums font-mono">+{v}</span>
+  return <span className="text-verde-600 tabular-nums font-mono">{v}</span>
 }
 
 function TeamCell({ team, abbrs, elTeams }: {
@@ -88,9 +90,9 @@ export function ClassificacaoMBClient({
 
   const { ranked, cutPts } = useMemo((): { ranked: RankedRow[]; cutPts: number | null } => {
     const sorted = [...rows].sort((a, b) => b.pts - a.pts)
+    const leaderPts = sorted.length > 0 ? sorted[0].pts : 0
     const effectiveZone = Math.min(prizeSpots, sorted.length)
     const cut = sorted.length > 0 ? sorted[effectiveZone - 1].pts : null
-    const leaderPts = sorted.length > 0 ? sorted[0].pts : 0
 
     const withRank: (ParticipantRow & { rank: number })[] = []
     for (let i = 0; i < sorted.length; i++) {
@@ -114,11 +116,8 @@ export function ClassificacaoMBClient({
     return atCut.length > 1 && atCut.some(r => r.rank <= prizeSpots) && atCut.some(r => r.rank > prizeSpots)
   }, [ranked, cutPts, prizeSpots])
 
-  const th = (label: string, title?: string, extra = '') => (
-    <th
-      className={`px-1.5 py-2 text-center whitespace-nowrap ${extra}`}
-      title={title ?? label}
-    >
+  const th = (label: string, title?: string, cls = '') => (
+    <th className={`px-1.5 py-2 text-center whitespace-nowrap ${cls}`} title={title ?? label}>
       {label}
     </th>
   )
@@ -139,22 +138,7 @@ export function ClassificacaoMBClient({
                 <th className="px-1.5 py-2 text-left min-w-[90px]">Participante</th>
                 <th className="px-1.5 py-2 text-right w-10" title="Pontuação total">Pts</th>
 
-                {/* Estatísticas de jogos */}
-                {th('Crav.', 'Jogos Cravados (placar exato)', 'hidden sm:table-cell w-10')}
-                {th('Pont.', 'Jogos Pontuados', 'hidden sm:table-cell w-10')}
-                {th('🦓⚽', '🦓 Apostada — acertou resultado que foi zebra', 'hidden sm:table-cell w-10')}
-                {th('🦓✓', '🦓 Pontuada — ganhou pontos em jogo de zebra', 'hidden sm:table-cell w-10')}
-
-                {/* Diferenças */}
-                {th('∆ Lider', 'Diferença pro Líder', 'hidden md:table-cell w-14')}
-                {th('∆ Corte', 'Diferença pro Corte', 'w-14')}
-
-                {/* Breakdown de pontos */}
-                {th('Pts Jg', 'Pontos com Jogos', 'hidden md:table-cell w-12')}
-                {th('Pts Cl', 'Pontos com Classificação de Grupos + 3os', 'hidden md:table-cell w-12')}
-                {th('Pts G4', 'Pontos com G4 + Artilheiro', 'hidden md:table-cell w-12')}
-
-                {/* Palpites dos jogos */}
+                {/* Último / Próximo jogo — logo após Pts */}
                 <th
                   className="hidden lg:table-cell px-1.5 py-2 text-center w-14"
                   title="Palpite no último jogo disputado"
@@ -168,12 +152,27 @@ export function ClassificacaoMBClient({
                   {nextMatch ? `${nextMatch.abbr_home}×${nextMatch.abbr_away}` : 'Próx.'}
                 </th>
 
-                {/* Apostas G4 */}
+                {/* Estatísticas de jogos */}
+                {th('Crav.', 'Jogos Cravados (placar exato)', 'hidden sm:table-cell w-10')}
+                {th('Pont.', 'Jogos Pontuados', 'hidden sm:table-cell w-10')}
+                {th('🦓 Apost.', '🦓 Apostada — número de apostas em resultados minoritários (possíveis zebras)', 'hidden sm:table-cell w-16')}
+                {th('🦓 Pont.', '🦓 Pontuada — zebras reais em que acertou o resultado', 'hidden sm:table-cell w-14')}
+
+                {/* Diferenças */}
+                {th('∆ Líder', 'Diferença pro Líder', 'hidden md:table-cell w-14')}
+                {th('∆ Corte', 'Diferença pro Corte', 'w-14')}
+
+                {/* Breakdown de pontos */}
+                {th('Pts Jg', 'Pontos com Jogos', 'hidden md:table-cell w-12')}
+                {th('Pts Cl', 'Pontos com Classificação de Grupos + 3os Lugares', 'hidden md:table-cell w-12')}
+                {th('Pts G4 + Art', 'Pontos com G4 + Artilheiro', 'hidden md:table-cell w-16')}
+
+                {/* G4 picks */}
                 {th('1º', 'Aposta: Campeão', 'w-11')}
                 {th('2º', 'Aposta: Vice-campeão', 'w-11')}
                 {th('3°', 'Aposta: 3º Lugar', 'hidden sm:table-cell w-11')}
                 {th('4°', 'Aposta: 4º Lugar', 'hidden sm:table-cell w-11')}
-                {th('⚽', 'Aposta: Artilheiro', 'hidden sm:table-cell min-w-[80px] text-left')}
+                <th className="hidden sm:table-cell px-1.5 py-2 text-left min-w-[80px]" title="Aposta: Artilheiro">⚽</th>
               </tr>
             </thead>
             <tbody>
@@ -190,15 +189,14 @@ export function ClassificacaoMBClient({
                 const boundary = tiedAtBoundary && row.pts === cutPts
 
                 let bg = ''
-                if (isActive)   bg = 'bg-verde-50'
-                else if (zone)  bg = boundary ? 'bg-amber-100' : 'bg-amber-50'
+                if (isActive)  bg = 'bg-verde-50'
+                else if (zone) bg = boundary ? 'bg-amber-100' : 'bg-amber-50'
 
                 return (
                   <tr
                     key={row.id}
                     className={`border-b border-gray-100 last:border-0 ${bg} ${isActive ? 'font-semibold' : ''}`}
                   >
-                    {/* Identidade */}
                     <td className="px-1.5 py-1 text-gray-500 tabular-nums">
                       {row.rank}
                       {boundary && <span className="ml-0.5 text-amber-500" title="Empate no corte">⚠</span>}
@@ -210,18 +208,26 @@ export function ClassificacaoMBClient({
                       {row.pts}
                     </td>
 
+                    {/* Último / Próximo */}
+                    <td className="hidden lg:table-cell px-1.5 py-1 text-center text-gray-700">
+                      <BetCell bet={row.lastMatchBet} />
+                    </td>
+                    <td className="hidden lg:table-cell px-1.5 py-1 text-center text-gray-700">
+                      <BetCell bet={row.nextMatchBet} />
+                    </td>
+
                     {/* Estatísticas */}
                     <td className="hidden sm:table-cell px-1.5 py-1 text-center">
-                      <Num v={row.cravados} green={row.cravados > 0} />
+                      <Num v={row.cravados} green />
                     </td>
                     <td className="hidden sm:table-cell px-1.5 py-1 text-center">
                       <Num v={row.pontuados} />
                     </td>
                     <td className="hidden sm:table-cell px-1.5 py-1 text-center">
-                      <Num v={row.zebraApostada} green={row.zebraApostada > 0} />
+                      <Num v={row.zebraApostada} green />
                     </td>
                     <td className="hidden sm:table-cell px-1.5 py-1 text-center">
-                      <Num v={row.zebraPontuada} green={row.zebraPontuada > 0} />
+                      <Num v={row.zebraPontuada} green />
                     </td>
 
                     {/* Diferenças */}
@@ -241,14 +247,6 @@ export function ClassificacaoMBClient({
                     </td>
                     <td className="hidden md:table-cell px-1.5 py-1 text-right font-mono tabular-nums text-gray-600">
                       {row.ptsG4}
-                    </td>
-
-                    {/* Palpites dos jogos */}
-                    <td className="hidden lg:table-cell px-1.5 py-1 text-center text-gray-700">
-                      <BetCell bet={row.lastMatchBet} />
-                    </td>
-                    <td className="hidden lg:table-cell px-1.5 py-1 text-center text-gray-700">
-                      <BetCell bet={row.nextMatchBet} />
                     </td>
 
                     {/* G4 picks */}
