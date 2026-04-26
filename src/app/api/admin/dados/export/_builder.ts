@@ -229,7 +229,7 @@ export async function buildTabelaMBBuffer(
   // ── FASE DE GRUPOS ────────────────────────────────────────────
   addMatchRows(groupMatches)
 
-  // ── BÔNUS (entre fase de grupos e mata-mata) ──────────────────
+  // ── BÔNUS: classificados (entre fase de grupos e mata-mata) ───
   addSection('BÔNUS: 1º CLASSIFICADO POR GRUPO')
   for (const g of GROUP_ORDER) {
     addDataRow(`grp_bet_1:${g}`, null, `Grupo ${g} – 1º Lugar`,
@@ -245,6 +245,11 @@ export async function buildTabelaMBBuffer(
     addDataRow(`grp_3rd:${g}`, null, `Grupo ${g} – 3º Lugar`,
       participants.map((p: any) => thirdBetMap.get(`${p.id}:${g}`)?.team ?? null))
   }
+
+  // ── MATA-MATA ─────────────────────────────────────────────────
+  addMatchRows(knockoutMatches)
+
+  // ── BÔNUS: G4 + Artilheiro (após todos os jogos) ──────────────
   addSection('BÔNUS: G4')
   for (const { key, label, field } of [
     { key: 'trn:champion',  label: 'Campeão',      field: 'champion'  },
@@ -257,9 +262,6 @@ export async function buildTabelaMBBuffer(
   addSection('BÔNUS: ARTILHEIRO')
   addDataRow('trn:scorer', null, 'Artilheiro',
     participants.map((p: any) => tBetMap.get(p.id)?.top_scorer ?? null))
-
-  // ── MATA-MATA ─────────────────────────────────────────────────
-  addMatchRows(knockoutMatches)
 
   const buffer = Buffer.from(await wb.xlsx.writeBuffer())
   const brNow  = toZonedTime(new Date(), BRASILIA_TZ)
