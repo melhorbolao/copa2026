@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { memo, useMemo } from 'react'
 
 interface ParticipantRow {
   id: string
@@ -39,22 +39,22 @@ interface Props {
 
 type RankedRow = ParticipantRow & { rank: number; diffLider: number; diffPremio: number | null; diffCorte: number | null }
 
-function Num({ v, green }: { v: number; green?: boolean }) {
+const Num = memo(function Num({ v, green }: { v: number; green?: boolean }) {
   return (
     <span className={`tabular-nums ${green && v > 0 ? 'text-verde-600 font-semibold' : 'text-gray-600'}`}>
       {v}
     </span>
   )
-}
+})
 
-function Diff({ v }: { v: number | null }) {
+const Diff = memo(function Diff({ v }: { v: number | null }) {
   if (v === null) return <span className="text-gray-300">—</span>
   if (v === 0)  return <span className="text-amber-500 tabular-nums font-mono">0</span>
   if (v > 0)   return <span className="text-verde-600 tabular-nums font-mono">+{v}</span>
   return <span className="text-red-500 tabular-nums font-mono">{v}</span>
-}
+})
 
-function TeamCell({ team, abbrs, elTeams }: {
+const TeamCell = memo(function TeamCell({ team, abbrs, elTeams }: {
   team: string | undefined; abbrs: Record<string, string>; elTeams: Set<string>
 }) {
   if (!team) return <span className="text-gray-300">—</span>
@@ -64,9 +64,9 @@ function TeamCell({ team, abbrs, elTeams }: {
       {display}
     </span>
   )
-}
+})
 
-function ScorerCell({ raw, mapping, elStd }: {
+const ScorerCell = memo(function ScorerCell({ raw, mapping, elStd }: {
   raw: string | undefined; mapping: Record<string, string>; elStd: Set<string>
 }) {
   if (!raw) return <span className="text-gray-300">—</span>
@@ -76,12 +76,12 @@ function ScorerCell({ raw, mapping, elStd }: {
       {std}
     </span>
   )
-}
+})
 
-function BetCell({ bet }: { bet: { score_home: number; score_away: number } | null }) {
+const BetCell = memo(function BetCell({ bet }: { bet: { score_home: number; score_away: number } | null }) {
   if (!bet) return <span className="text-gray-300">—</span>
   return <span className="font-mono tabular-nums">{bet.score_home}-{bet.score_away}</span>
-}
+})
 
 function formatRenderedAt(iso: string): string {
   try {

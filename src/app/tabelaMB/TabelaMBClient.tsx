@@ -644,9 +644,9 @@ export function TabelaMBClient({
     return result
   }, [rules, participants, groupBetMap, officialStandings])
 
-  const offFirst  = useCallback((g: string) => officialStandings.find(s => s.group === g)?.teams[0]?.team ?? '', [officialStandings])
-  const offSecond = useCallback((g: string) => officialStandings.find(s => s.group === g)?.teams[1]?.team ?? '', [officialStandings])
-  const offThird  = useCallback((g: string) => officialThirds.find(t => t.group === g && t.advances)?.team ?? '', [officialThirds])
+  const offFirstMap  = useMemo(() => new Map(GROUP_ORDER.map(g => [g, officialStandings.find(s => s.group === g)?.teams[0]?.team ?? ''])), [officialStandings])
+  const offSecondMap = useMemo(() => new Map(GROUP_ORDER.map(g => [g, officialStandings.find(s => s.group === g)?.teams[1]?.team ?? ''])), [officialStandings])
+  const offThirdMap  = useMemo(() => new Map(GROUP_ORDER.map(g => [g, officialThirds.find(t => t.group === g && t.advances)?.team ?? ''])), [officialThirds])
 
   const teamFlagMap = useMemo(() => {
     const m = new Map<string, string>()
@@ -777,6 +777,54 @@ export function TabelaMBClient({
     return opts.sort()
   }, [tournamentBetMap, scorerMapping])
 
+  // ── Pre-computed stats Maps — eliminam O(n) loops do render loop ──────────────
+
+  const matchStatsMap = useMemo(() => {
+    const m = new Map<string, EventStats>()
+    for (const match of matches)
+      m.set(match.id, matchEventStats(match.id, match.score_home, match.score_away, participants, betMap))
+    return m
+  }, [matches, betMap, participants])
+
+  const groupStatsMap = useMemo(() => {
+    const m = new Map<string, EventStats>()
+    for (const g of GROUP_ORDER)
+      m.set(g, groupEventStats(g, offFirstMap.get(g) ?? '', offSecondMap.get(g) ?? '', participants, groupBetMap))
+    return m
+  }, [offFirstMap, offSecondMap, participants, groupBetMap])
+
+  const thirdStatsMap = useMemo(() => {
+    const thirdPts = rules['terceiro_classificado'] ?? 3
+    const m = new Map<string, EventStats>()
+    for (const g of GROUP_ORDER)
+      m.set(g, thirdEventStats(g, offThirdMap.get(g) ?? '', thirdPts, participants, thirdBetMap))
+    return m
+  }, [offThirdMap, participants, thirdBetMap, rules])
+
+  const matchZebraMap = useMemo(() => {
+    const threshold = rules['percentual_zebra'] ?? 15
+    const possible = new Map<string, { H: boolean; D: boolean; A: boolean } | undefined>()
+    const actual   = new Map<string, boolean>()
+    for (const m of matches) {
+      const betsList  = collectMatchBets(m.id, participants, betMap)
+      const hasResult = m.score_home !== null && m.score_away !== null
+      if (!hasResult) {
+        possible.set(m.id, betsList.length > 0 ? {
+          H: detectMatchZebra(betsList, 'H', threshold),
+          D: detectMatchZebra(betsList, 'D', threshold),
+          A: detectMatchZebra(betsList, 'A', threshold),
+        } : undefined)
+        actual.set(m.id, false)
+      } else {
+        possible.set(m.id, undefined)
+        actual.set(m.id, betsList.length > 0
+          ? detectMatchZebra(betsList, getMatchResult(m.score_home!, m.score_away!), threshold)
+          : false)
+      }
+    }
+    return { possible, actual }
+  }, [matches, betMap, participants, rules])
+
   // Funções de save do artilheiro (admin)
   const handleScorerSave = useCallback((names: string[]) => {
     setLocalScorers(names)
@@ -891,16 +939,16 @@ export function TabelaMBClient({
                 continue
               }
               if (row.kind === 'group_bet') {
-                const g = row.groupName; const of1 = offFirst(g); const of2 = offSecond(g)
-                const s = groupEventStats(g, of1, of2, participants, groupBetMap)
+                const g = row.groupName; const of1 = offFirstMap.get(g) ?? ''; const of2 = offSecondMap.get(g) ?? ''
+                const s = groupStatsMap.get(g) ?? { pontuaram: 0, cravaram: 0, media: 0 }
                 ws.addRow([`Grupo ${g}`, '1º e 2º', of1 ? `${of1}/${of2}` : '–',
                   s.pontuaram, s.cravaram, s.media > 0 ? +s.media.toFixed(1) : '–',
                   ...sortedParts.map(p => { const b = groupBetMap.get(`${p.id}:${g}`); return b?.first_place ? `${b.first_place}/${b.second_place}${b.points !== null ? ` (${b.points})` : ''}` : '–' })])
                 continue
               }
               if (row.kind === 'third_bet') {
-                const g = row.groupName; const ot = offThird(g)
-                const s = thirdEventStats(g, ot, thPts, participants, thirdBetMap)
+                const g = row.groupName; const ot = offThirdMap.get(g) ?? ''
+                const s = thirdStatsMap.get(g) ?? { pontuaram: 0, cravaram: 0, media: 0 }
                 ws.addRow([`3º Gr.${g}`, 'Melhor 3º', ot || '–',
                   s.pontuaram, s.cravaram, s.media > 0 ? +s.media.toFixed(1) : '–',
                   ...sortedParts.map(p => { const b = thirdBetMap.get(`${p.id}:${g}`); if (!b?.team) return '–'; const pts = ot ? (b.team === ot ? thPts : 0) : null; return pts !== null ? `${b.team} (${pts > 0 ? `+${pts}` : '0'})` : b.team })])
@@ -1081,8 +1129,8 @@ export function TabelaMBClient({
               // ── Group bet row ───────────────────────────────────────────────
               if (row.kind === 'group_bet') {
                 const g    = row.groupName
-                const of1  = offFirst(g)
-                const of2  = offSecond(g)
+                const of1  = offFirstMap.get(g) ?? ''
+                const of2  = offSecondMap.get(g) ?? ''
                 return (
                   <tr key={`gb-${g}`} style={{ height: ROW_H_BONUS, background: '#eff6ff' }}>
                     <td style={{ position: 'sticky', left: 0, zIndex: 30, background: '#eff6ff', borderRight: '1px solid #bfdbfe' }}
@@ -1127,7 +1175,7 @@ export function TabelaMBClient({
                     </td>
                     {/* Colunas de stats */}
                     {(() => {
-                      const stats  = groupEventStats(g, of1, of2, participants, groupBetMap)
+                      const stats  = groupStatsMap.get(g) ?? { pontuaram: 0, cravaram: 0, media: 0 }
                       const lb     = groupBetMap.get(`${leaderId}:${g}`)
                       const lbKind = groupCellKind(lb, of1, of2)
                       const lbBg   = CELL_KIND_BG_HEX[lbKind] || '#eff6ff'
@@ -1198,7 +1246,7 @@ export function TabelaMBClient({
               // ── Third bet row ───────────────────────────────────────────────
               if (row.kind === 'third_bet') {
                 const g  = row.groupName
-                const ot = offThird(g)
+                const ot = offThirdMap.get(g) ?? ''
                 return (
                   <tr key={`tb-${g}`} style={{ height: ROW_H_BONUS, background: '#faf5ff' }}>
                     <td style={{ position: 'sticky', left: 0, zIndex: 30, background: '#faf5ff', borderRight: '1px solid #e9d5ff' }}
@@ -1225,7 +1273,7 @@ export function TabelaMBClient({
                     {/* Colunas de stats */}
                     {(() => {
                       const thirdPts = rules['terceiro_classificado'] ?? 3
-                      const stats    = thirdEventStats(g, ot, thirdPts, participants, thirdBetMap)
+                      const stats    = thirdStatsMap.get(g) ?? { pontuaram: 0, cravaram: 0, media: 0 }
                       const lb       = thirdBetMap.get(`${leaderId}:${g}`)
                       const lbKind   = thirdCellKind(lb?.team, ot)
                       const lbPts    = lbKind === 'exact' ? thirdPts : lbKind === 'wrong' ? 0 : null
@@ -1454,13 +1502,9 @@ export function TabelaMBClient({
               const abbrHome = teamAbbrs[teamHome] ?? teamHome.slice(0, 3).toUpperCase()
               const abbrAway = teamAbbrs[teamAway] ?? teamAway.slice(0, 3).toUpperCase()
               const { date: mDate, time: mTime } = fmtMatchDate(match.match_datetime)
-              const zebraThreshold = rules['percentual_zebra'] ?? 15
               const hasResult      = match.score_home !== null && match.score_away !== null
-              const matchBetsList  = collectMatchBets(match.id, participants, betMap)
-              const possibleZebras = !hasResult ? detectPossibleZebras(match.id, participants, betMap, zebraThreshold) : undefined
-              const isActualZebra  = hasResult && matchBetsList.length > 0
-                ? detectMatchZebra(matchBetsList, getMatchResult(match.score_home!, match.score_away!), zebraThreshold)
-                : false
+              const possibleZebras = matchZebraMap.possible.get(match.id)
+              const isActualZebra  = matchZebraMap.actual.get(match.id) ?? false
               const zebraImgW = isMobile ? 18 : 24
               return (
                 <tr key={match.id} style={{ height: ROW_H }}>
@@ -1523,7 +1567,7 @@ export function TabelaMBClient({
                   </td>
                   {/* Colunas de stats */}
                   {(() => {
-                    const stats  = matchEventStats(match.id, match.score_home, match.score_away, participants, betMap)
+                    const stats  = matchStatsMap.get(match.id) ?? { pontuaram: 0, cravaram: 0, media: 0 }
                     const lb     = betMap.get(`${leaderId}:${match.id}`)
                     const lbKind = matchCellKind(lb, match.score_home, match.score_away)
                     const lbPts  = getMatchPts(leaderId, match.id)
