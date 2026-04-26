@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 
 interface Option {
   value: string
@@ -16,18 +16,33 @@ interface Props {
   className?: string
 }
 
-const DROPDOWN_HEIGHT = 208 // max-h-52 = 13rem = 208px
+const MAX_H = 208 // max-h-52 = 13rem
 
 export function Combobox({ value, onChange, options, placeholder = '— selecione —', className = '' }: Props) {
-  const [query, setQuery]     = useState('')
-  const [open,  setOpen]      = useState(false)
-  const [dropUp, setDropUp]   = useState(false)
-  const inputRef              = useRef<HTMLInputElement>(null)
-  const containerRef          = useRef<HTMLDivElement>(null)
+  const [query, setQuery] = useState('')
+  const [open,  setOpen]  = useState(false)
+  const [dropStyle, setDropStyle] = useState<React.CSSProperties>({ display: 'none' })
+
+  const inputRef    = useRef<HTMLInputElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   const selectedLabel = options.find(o => o.value === value)?.label ?? ''
 
-  // Fecha ao clicar fora
+  // Compute fixed position so the dropdown never extends the document height
+  const computePosition = useCallback(() => {
+    if (!containerRef.current) return
+    const rect  = containerRef.current.getBoundingClientRect()
+    const viewH = window.visualViewport?.height ?? window.innerHeight
+    const viewW = window.visualViewport?.width  ?? window.innerWidth
+    const goUp  = viewH - rect.bottom < MAX_H && rect.top > MAX_H
+
+    setDropStyle(goUp
+      ? { position: 'fixed', bottom: viewH - rect.top + 2, left: rect.left, width: rect.width, maxWidth: viewW - rect.left - 4, zIndex: 200 }
+      : { position: 'fixed', top: rect.bottom + 2,         left: rect.left, width: rect.width, maxWidth: viewW - rect.left - 4, zIndex: 200 }
+    )
+  }, [])
+
+  // Close on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
@@ -39,36 +54,26 @@ export function Combobox({ value, onChange, options, placeholder = '— selecion
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  // Re-verifica direção quando o viewport muda de tamanho (teclado mobile aparece/some)
+  // Reposition while open (scroll / keyboard resize)
   useEffect(() => {
     if (!open) return
-    const vv = window.visualViewport
-    if (!vv) return
-    const handler = () => checkDropDirection()
-    vv.addEventListener('resize', handler)
-    vv.addEventListener('scroll', handler)
+    const update = () => computePosition()
+    window.addEventListener('scroll', update, { capture: true, passive: true })
+    window.visualViewport?.addEventListener('resize', update)
+    window.visualViewport?.addEventListener('scroll', update)
     return () => {
-      vv.removeEventListener('resize', handler)
-      vv.removeEventListener('scroll', handler)
+      window.removeEventListener('scroll', update, { capture: true })
+      window.visualViewport?.removeEventListener('resize', update)
+      window.visualViewport?.removeEventListener('scroll', update)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
+  }, [open, computePosition])
 
   const filtered = query.trim()
     ? options.filter(o => o.label.toLowerCase().includes(query.toLowerCase()))
     : options
 
-  const checkDropDirection = () => {
-    if (!containerRef.current) return
-    const rect = containerRef.current.getBoundingClientRect()
-    // visualViewport reflete o viewport real após o teclado mobile aparecer
-    const viewportBottom = window.visualViewport?.height ?? window.innerHeight
-    const spaceBelow = viewportBottom - rect.bottom
-    setDropUp(spaceBelow < DROPDOWN_HEIGHT)
-  }
-
   const handleFocus = () => {
-    checkDropDirection()
+    computePosition()
     setQuery('')
     setOpen(true)
   }
@@ -105,9 +110,10 @@ export function Combobox({ value, onChange, options, placeholder = '— selecion
         className="w-full rounded border border-gray-200 py-1 px-1.5 text-xs focus:border-verde-400 focus:outline-none"
       />
       {open && (
-        <ul className={`absolute z-[200] max-h-52 w-full overflow-y-auto rounded border border-gray-200 bg-white shadow-lg ${
-          dropUp ? 'bottom-full mb-0.5' : 'top-full mt-0.5'
-        }`}>
+        <ul
+          style={dropStyle}
+          className="max-h-52 overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
+        >
           {filtered.length === 0 ? (
             <li className="px-2 py-2 text-xs text-gray-400">Nenhum resultado</li>
           ) : (
