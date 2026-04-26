@@ -867,13 +867,6 @@ export function TabelaMBClient({
   return (
     <div className="flex flex-col" style={{ height: 'calc(100dvh - 56px)' }}>
 
-      {/* Production mode notice */}
-      {productionMode && (
-        <div className="shrink-0 bg-amber-50 border-b border-amber-200 px-3 py-1.5 text-center text-[11px] font-semibold text-amber-700">
-          🔒 Modo Produção — palpites de rodadas ainda não liberadas estão ocultos
-        </div>
-      )}
-
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-1.5 border-b border-gray-200 bg-white px-3 py-2 shrink-0">
         <span className="text-[11px] font-semibold text-gray-400">Fase:</span>
@@ -1037,6 +1030,13 @@ export function TabelaMBClient({
           )}
           {scorerError && <span className="text-[10px] text-red-500">{scorerError}</span>}
           {scorerPending && <span className="text-[10px] text-gray-400">Salvando…</span>}
+        </div>
+      )}
+
+      {/* Production mode notice — per-phase */}
+      {productionMode && (
+        <div className="shrink-0 border-b border-amber-100 bg-amber-50 px-3 py-1 text-center text-[10px] font-medium text-amber-600">
+          🔒 palpites no prazo de envio/edição estão ocultos
         </div>
       )}
 
