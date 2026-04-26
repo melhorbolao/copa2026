@@ -104,8 +104,11 @@ export function ClassificacaoMBClient({
   const elStd   = useMemo(() => new Set(eliminatedStdScorers), [eliminatedStdScorers])
 
   const showPremio      = colVisibility['premio']       ?? false
+  const showLastMatch   = colVisibility['last_match']   ?? true
+  const showNextMatch   = colVisibility['next_match']   ?? true
   const showDeltaPremio = colVisibility['delta_premio'] ?? true
   const showDeltaCorte  = colVisibility['delta_corte']  ?? true
+  const showPtsJg       = colVisibility['pts_jg']       ?? true
   const showPtsCl       = colVisibility['pts_cl']       ?? true
   const showPtsG4       = colVisibility['pts_g4']       ?? true
 
@@ -172,18 +175,22 @@ export function ClassificacaoMBClient({
                 <th className="px-1.5 py-2 text-right w-10" title="Pontuação total">Pts</th>
 
                 {/* Último / Próximo jogo */}
-                <th
-                  className="hidden lg:table-cell px-1.5 py-2 text-center w-14"
-                  title="Palpite no último jogo disputado"
-                >
-                  {lastMatch ? `${lastMatch.abbr_home}×${lastMatch.abbr_away}` : 'Último'}
-                </th>
-                <th
-                  className="hidden lg:table-cell px-1.5 py-2 text-center w-14"
-                  title="Palpite no próximo jogo"
-                >
-                  {nextMatch ? `${nextMatch.abbr_home}×${nextMatch.abbr_away}` : 'Próx.'}
-                </th>
+                {showLastMatch && (
+                  <th
+                    className="hidden lg:table-cell px-1.5 py-2 text-center w-14"
+                    title="Palpite no último jogo disputado"
+                  >
+                    {lastMatch ? `${lastMatch.abbr_home}×${lastMatch.abbr_away}` : 'Último'}
+                  </th>
+                )}
+                {showNextMatch && (
+                  <th
+                    className="hidden lg:table-cell px-1.5 py-2 text-center w-14"
+                    title="Palpite no próximo jogo"
+                  >
+                    {nextMatch ? `${nextMatch.abbr_home}×${nextMatch.abbr_away}` : 'Próx.'}
+                  </th>
+                )}
 
                 {/* Estatísticas de jogos */}
                 {th('Crav.', 'Jogos Cravados (placar exato)', 'hidden sm:table-cell w-10')}
@@ -197,7 +204,7 @@ export function ClassificacaoMBClient({
                 {showDeltaCorte  && th('∆ Corte',  'Diferença pro Corte', 'w-14')}
 
                 {/* Breakdown de pontos */}
-                {th('Pts Jg', 'Pontos com Jogos', 'hidden md:table-cell w-12')}
+                {showPtsJg && th('Pts Jg', 'Pontos com Jogos', 'hidden md:table-cell w-12')}
                 {showPtsCl && th('Pts Cl', 'Pontos com Classificação de Grupos + 3os Lugares', 'hidden md:table-cell w-12')}
                 {showPtsG4 && th('Pts G4 + Art', 'Pontos com G4 + Artilheiro', 'hidden md:table-cell w-16')}
 
@@ -253,12 +260,16 @@ export function ClassificacaoMBClient({
                     </td>
 
                     {/* Último / Próximo */}
-                    <td className="hidden lg:table-cell px-1.5 py-1 text-center text-gray-700">
-                      <BetCell bet={row.lastMatchBet} />
-                    </td>
-                    <td className="hidden lg:table-cell px-1.5 py-1 text-center text-gray-700">
-                      <BetCell bet={row.nextMatchBet} />
-                    </td>
+                    {showLastMatch && (
+                      <td className="hidden lg:table-cell px-1.5 py-1 text-center text-gray-700">
+                        <BetCell bet={row.lastMatchBet} />
+                      </td>
+                    )}
+                    {showNextMatch && (
+                      <td className="hidden lg:table-cell px-1.5 py-1 text-center text-gray-700">
+                        <BetCell bet={row.nextMatchBet} />
+                      </td>
+                    )}
 
                     {/* Estatísticas */}
                     <td className="hidden sm:table-cell px-1.5 py-1 text-center">
@@ -290,9 +301,11 @@ export function ClassificacaoMBClient({
                     )}
 
                     {/* Breakdown de pontos */}
-                    <td className="hidden md:table-cell px-1.5 py-1 text-right font-mono tabular-nums text-gray-600">
-                      {row.ptsMatches}
-                    </td>
+                    {showPtsJg && (
+                      <td className="hidden md:table-cell px-1.5 py-1 text-right font-mono tabular-nums text-gray-600">
+                        {row.ptsMatches}
+                      </td>
+                    )}
                     {showPtsCl && (
                       <td className="hidden md:table-cell px-1.5 py-1 text-right font-mono tabular-nums text-gray-600">
                         {row.ptsClassif}

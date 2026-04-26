@@ -67,8 +67,11 @@ export default async function ClassificacaoMBPage() {
   let premioSpots = 10
   const colVisibility: Record<string, boolean> = {
     premio:       false,
+    last_match:   true,
+    next_match:   true,
     delta_premio: true,
     delta_corte:  true,
+    pts_jg:       true,
     pts_cl:       true,
     pts_g4:       true,
   }
@@ -87,8 +90,9 @@ export default async function ClassificacaoMBPage() {
 
   try {
     const COL_KEYS = [
-      'classif_col_premio', 'classif_col_delta_premio',
-      'classif_col_delta_corte', 'classif_col_pts_cl', 'classif_col_pts_g4',
+      'classif_col_premio', 'classif_col_last_match', 'classif_col_next_match',
+      'classif_col_delta_premio', 'classif_col_delta_corte',
+      'classif_col_pts_jg', 'classif_col_pts_cl', 'classif_col_pts_g4',
     ]
     const [scorerRes, scorerSetting, settingsRes, premioSpotsRes, colSettingsRes] = await Promise.all([
       admin.from('top_scorer_mapping').select('raw_name, standardized_name, is_eliminated'),
