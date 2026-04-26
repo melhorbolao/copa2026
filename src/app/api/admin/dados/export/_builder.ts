@@ -202,27 +202,34 @@ export async function buildTabelaMBBuffer(
     })
   }
 
-  // ── MATCHES ──────────────────────────────────────────────────
-  let currentSection = ''
-  for (const m of matches) {
-    const sectionKey = m.phase === 'group' ? `group_r${m.round}` : m.phase
-    if (sectionKey !== currentSection) {
-      currentSection = sectionKey
-      const label = m.phase === 'group'
-        ? `RODADA ${m.round} (FASE DE GRUPOS)`
-        : (PHASE_LABEL[m.phase] ?? m.phase.toUpperCase())
-      addSection(label)
+  const groupMatches   = matches.filter(m => m.phase === 'group')
+  const knockoutMatches = matches.filter(m => m.phase !== 'group')
+
+  const addMatchRows = (list: any[]) => {
+    let currentSection = ''
+    for (const m of list) {
+      const sectionKey = m.phase === 'group' ? `group_r${m.round}` : m.phase
+      if (sectionKey !== currentSection) {
+        currentSection = sectionKey
+        const label = m.phase === 'group'
+          ? `RODADA ${m.round} (FASE DE GRUPOS)`
+          : (PHASE_LABEL[m.phase] ?? m.phase.toUpperCase())
+        addSection(label)
+      }
+      const desc = `J${m.match_number} ${m.team_home ?? '?'} vs ${m.team_away ?? '?'}${m.group_name ? ` (Grp ${m.group_name})` : ''}`
+      const dt   = m.match_datetime ? new Date(m.match_datetime) : null
+      const values = participants.map((p: any) => {
+        const bet = betMap.get(`${p.id}:${m.id}`)
+        return bet ? `${bet.score_home}-${bet.score_away}` : null
+      })
+      addDataRow(m.id, dt, desc, values)
     }
-    const desc = `J${m.match_number} ${m.team_home ?? '?'} vs ${m.team_away ?? '?'}${m.group_name ? ` (Grp ${m.group_name})` : ''}`
-    const dt   = m.match_datetime ? new Date(m.match_datetime) : null
-    const values = participants.map((p: any) => {
-      const bet = betMap.get(`${p.id}:${m.id}`)
-      return bet ? `${bet.score_home}-${bet.score_away}` : null
-    })
-    addDataRow(m.id, dt, desc, values)
   }
 
-  // ── GROUP BETS ────────────────────────────────────────────────
+  // ── FASE DE GRUPOS ────────────────────────────────────────────
+  addMatchRows(groupMatches)
+
+  // ── BÔNUS (entre fase de grupos e mata-mata) ──────────────────
   addSection('BÔNUS: 1º CLASSIFICADO POR GRUPO')
   for (const g of GROUP_ORDER) {
     addDataRow(`grp_bet_1:${g}`, null, `Grupo ${g} – 1º Lugar`,
@@ -233,15 +240,11 @@ export async function buildTabelaMBBuffer(
     addDataRow(`grp_bet_2:${g}`, null, `Grupo ${g} – 2º Lugar`,
       participants.map((p: any) => grpBetMap.get(`${p.id}:${g}`)?.second_place ?? null))
   }
-
-  // ── THIRD BETS ────────────────────────────────────────────────
   addSection('BÔNUS: 3ºS CLASSIFICADOS POR GRUPO')
   for (const g of GROUP_ORDER) {
     addDataRow(`grp_3rd:${g}`, null, `Grupo ${g} – 3º Lugar`,
       participants.map((p: any) => thirdBetMap.get(`${p.id}:${g}`)?.team ?? null))
   }
-
-  // ── G4 ────────────────────────────────────────────────────────
   addSection('BÔNUS: G4')
   for (const { key, label, field } of [
     { key: 'trn:champion',  label: 'Campeão',      field: 'champion'  },
@@ -251,11 +254,12 @@ export async function buildTabelaMBBuffer(
   ]) {
     addDataRow(key, null, `G4 – ${label}`, participants.map((p: any) => tBetMap.get(p.id)?.[field] ?? null))
   }
-
-  // ── SCORER ────────────────────────────────────────────────────
   addSection('BÔNUS: ARTILHEIRO')
   addDataRow('trn:scorer', null, 'Artilheiro',
     participants.map((p: any) => tBetMap.get(p.id)?.top_scorer ?? null))
+
+  // ── MATA-MATA ─────────────────────────────────────────────────
+  addMatchRows(knockoutMatches)
 
   const buffer = Buffer.from(await wb.xlsx.writeBuffer())
   const brNow  = toZonedTime(new Date(), BRASILIA_TZ)
