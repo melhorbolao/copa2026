@@ -11,7 +11,8 @@ const tabs = [
   { href: '/admin/avisos',        label: 'Avisos'        },
   { href: '/admin/artilheiros',   label: 'Artilheiros'   },
   { href: '/admin/equipes',       label: 'Equipes'       },
-  { href: '/admin/paginas',       label: 'Páginas'       },
+  { href: '/admin/paginas',        label: 'Páginas'       },
+  { href: '/admin/classificacao', label: 'Classificação' },
 ]
 
 export function AdminTabs() {

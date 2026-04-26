@@ -64,6 +64,14 @@ export default async function ClassificacaoMBPage() {
   let eliminatedStdScorers: string[] = []
   let officialScorers: string[] = []
   let prizeSpots = 8
+  let premioSpots = 10
+  const colVisibility: Record<string, boolean> = {
+    premio:       false,
+    delta_premio: true,
+    delta_corte:  true,
+    pts_cl:       true,
+    pts_g4:       true,
+  }
 
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -78,10 +86,16 @@ export default async function ClassificacaoMBPage() {
   } catch { /* tabela não tem a coluna ainda */ }
 
   try {
-    const [scorerRes, scorerSetting, settingsRes] = await Promise.all([
+    const COL_KEYS = [
+      'classif_col_premio', 'classif_col_delta_premio',
+      'classif_col_delta_corte', 'classif_col_pts_cl', 'classif_col_pts_g4',
+    ]
+    const [scorerRes, scorerSetting, settingsRes, premioSpotsRes, colSettingsRes] = await Promise.all([
       admin.from('top_scorer_mapping').select('raw_name, standardized_name, is_eliminated'),
       admin.from('tournament_settings').select('value').eq('key', 'official_top_scorer').maybeSingle(),
       admin.from('tournament_settings').select('value').eq('key', 'prize_spots').maybeSingle(),
+      admin.from('tournament_settings').select('value').eq('key', 'premio_spots').maybeSingle(),
+      admin.from('tournament_settings').select('key, value').in('key', COL_KEYS),
     ])
     if (scorerRes.data) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -98,6 +112,17 @@ export default async function ClassificacaoMBPage() {
     if (settingsRes.data?.value) {
       const n = parseInt(settingsRes.data.value, 10)
       if (!isNaN(n) && n > 0) prizeSpots = n
+    }
+    if (premioSpotsRes.data?.value) {
+      const n = parseInt(premioSpotsRes.data.value, 10)
+      if (!isNaN(n) && n > 0) premioSpots = n
+    }
+    if (colSettingsRes.data) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const r of colSettingsRes.data as any[]) {
+        const short = (r.key as string).replace('classif_col_', '')
+        colVisibility[short] = r.value === 'true'
+      }
     }
   } catch { /* tabelas opcionais */ }
 
@@ -298,7 +323,10 @@ export default async function ClassificacaoMBPage() {
         scorerMapping={scorerMapping}
         teamAbbrs={teamAbbrs}
         prizeSpots={prizeSpots}
+        premioSpots={premioSpots}
         activeParticipantId={activeParticipantId ?? ''}
+        colVisibility={colVisibility}
+        renderedAt={new Date().toISOString()}
       />
     </>
   )

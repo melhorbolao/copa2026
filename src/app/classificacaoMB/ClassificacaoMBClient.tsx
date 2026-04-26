@@ -31,10 +31,13 @@ interface Props {
   scorerMapping: Record<string, string>
   teamAbbrs: Record<string, string>
   prizeSpots: number
+  premioSpots: number
   activeParticipantId: string
+  colVisibility: Record<string, boolean>
+  renderedAt: string
 }
 
-type RankedRow = ParticipantRow & { rank: number; diffLider: number; diffCorte: number | null }
+type RankedRow = ParticipantRow & { rank: number; diffLider: number; diffPremio: number | null; diffCorte: number | null }
 
 function Num({ v, green }: { v: number; green?: boolean }) {
   return (
@@ -80,19 +83,42 @@ function BetCell({ bet }: { bet: { score_home: number; score_away: number } | nu
   return <span className="font-mono tabular-nums">{bet.score_home}-{bet.score_away}</span>
 }
 
+function formatRenderedAt(iso: string): string {
+  try {
+    const d = new Date(iso)
+    return d.toLocaleString('pt-BR', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+      timeZone: 'America/Sao_Paulo',
+    })
+  } catch { return '' }
+}
+
 export function ClassificacaoMBClient({
   rows, lastMatch, nextMatch,
   eliminatedTeams, eliminatedStdScorers,
-  scorerMapping, teamAbbrs, prizeSpots, activeParticipantId,
+  scorerMapping, teamAbbrs, prizeSpots, premioSpots,
+  activeParticipantId, colVisibility, renderedAt,
 }: Props) {
   const elTeams = useMemo(() => new Set(eliminatedTeams), [eliminatedTeams])
   const elStd   = useMemo(() => new Set(eliminatedStdScorers), [eliminatedStdScorers])
 
-  const { ranked, cutPts } = useMemo((): { ranked: RankedRow[]; cutPts: number | null } => {
+  const showPremio      = colVisibility['premio']       ?? false
+  const showDeltaPremio = colVisibility['delta_premio'] ?? true
+  const showDeltaCorte  = colVisibility['delta_corte']  ?? true
+  const showPtsCl       = colVisibility['pts_cl']       ?? true
+  const showPtsG4       = colVisibility['pts_g4']       ?? true
+
+  const { ranked, cutPts, premioCutPts } = useMemo((): {
+    ranked: RankedRow[]; cutPts: number | null; premioCutPts: number | null
+  } => {
     const sorted = [...rows].sort((a, b) => b.pts - a.pts)
     const leaderPts = sorted.length > 0 ? sorted[0].pts : 0
     const effectiveZone = Math.min(prizeSpots, sorted.length)
     const cut = sorted.length > 0 ? sorted[effectiveZone - 1].pts : null
+
+    const effectivePremio = Math.min(premioSpots, sorted.length)
+    const premioCut = sorted.length > 0 ? sorted[effectivePremio - 1].pts : null
 
     const withRank: (ParticipantRow & { rank: number })[] = []
     for (let i = 0; i < sorted.length; i++) {
@@ -103,10 +129,11 @@ export function ClassificacaoMBClient({
     const out: RankedRow[] = withRank.map(r => ({
       ...r,
       diffLider: leaderPts - r.pts,
+      diffPremio: premioCut !== null ? premioCut - r.pts : null,
       diffCorte: cut !== null ? cut - r.pts : null,
     }))
-    return { ranked: out, cutPts: cut }
-  }, [rows, prizeSpots])
+    return { ranked: out, cutPts: cut, premioCutPts: premioCut }
+  }, [rows, prizeSpots, premioSpots])
 
   const inZone = (pts: number) => cutPts !== null && pts >= cutPts
 
@@ -124,8 +151,9 @@ export function ClassificacaoMBClient({
 
   return (
     <div className="mx-auto max-w-full px-2 py-4 pb-32 sm:px-4 sm:py-6">
-      <div className="mb-3">
+      <div className="mb-3 flex items-baseline gap-3">
         <h1 className="text-2xl font-black text-gray-900">Classificação Melhor Bolão</h1>
+        <span className="text-[10px] text-gray-400">{formatRenderedAt(renderedAt)}</span>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
@@ -133,12 +161,17 @@ export function ClassificacaoMBClient({
           <table className="w-full text-xs">
             <thead className="sticky top-0 z-10 border-b border-gray-200 bg-gray-50 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
               <tr>
+                {/* Prêmio (opcional, antes de #) */}
+                {showPremio && (
+                  <th className="px-1.5 py-2 text-center w-14" title="Faixa de premiação">Prêmio</th>
+                )}
+
                 {/* Identidade */}
                 <th className="px-1.5 py-2 text-left w-8">#</th>
                 <th className="px-1.5 py-2 text-left min-w-[90px]">Participante</th>
                 <th className="px-1.5 py-2 text-right w-10" title="Pontuação total">Pts</th>
 
-                {/* Último / Próximo jogo — logo após Pts */}
+                {/* Último / Próximo jogo */}
                 <th
                   className="hidden lg:table-cell px-1.5 py-2 text-center w-14"
                   title="Palpite no último jogo disputado"
@@ -160,12 +193,13 @@ export function ClassificacaoMBClient({
 
                 {/* Diferenças */}
                 {th('∆ Líder', 'Diferença pro Líder', 'hidden md:table-cell w-14')}
-                {th('∆ Corte', 'Diferença pro Corte', 'w-14')}
+                {showDeltaPremio && th('∆ Prêmio', `Diferença pro ${premioSpots}º colocado (1º premiado)`, 'hidden md:table-cell w-16')}
+                {showDeltaCorte  && th('∆ Corte',  'Diferença pro Corte', 'w-14')}
 
                 {/* Breakdown de pontos */}
                 {th('Pts Jg', 'Pontos com Jogos', 'hidden md:table-cell w-12')}
-                {th('Pts Cl', 'Pontos com Classificação de Grupos + 3os Lugares', 'hidden md:table-cell w-12')}
-                {th('Pts G4 + Art', 'Pontos com G4 + Artilheiro', 'hidden md:table-cell w-16')}
+                {showPtsCl && th('Pts Cl', 'Pontos com Classificação de Grupos + 3os Lugares', 'hidden md:table-cell w-12')}
+                {showPtsG4 && th('Pts G4 + Art', 'Pontos com G4 + Artilheiro', 'hidden md:table-cell w-16')}
 
                 {/* G4 picks */}
                 {th('1º', 'Aposta: Campeão', 'w-11')}
@@ -178,7 +212,7 @@ export function ClassificacaoMBClient({
             <tbody>
               {ranked.length === 0 && (
                 <tr>
-                  <td colSpan={20} className="py-12 text-center text-sm text-gray-400">
+                  <td colSpan={22} className="py-12 text-center text-sm text-gray-400">
                     Nenhum participante cadastrado ainda.
                   </td>
                 </tr>
@@ -197,6 +231,16 @@ export function ClassificacaoMBClient({
                     key={row.id}
                     className={`border-b border-gray-100 last:border-0 ${bg} ${isActive ? 'font-semibold' : ''}`}
                   >
+                    {showPremio && (
+                      <td className="px-1.5 py-1 text-center text-gray-400 tabular-nums">
+                        {premioCutPts !== null && row.pts >= premioCutPts ? (
+                          <span className="text-amber-600 font-semibold">🏆</span>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
+                      </td>
+                    )}
+
                     <td className="px-1.5 py-1 text-gray-500 tabular-nums">
                       {row.rank}
                       {boundary && <span className="ml-0.5 text-amber-500" title="Empate no corte">⚠</span>}
@@ -234,20 +278,31 @@ export function ClassificacaoMBClient({
                     <td className="hidden md:table-cell px-1.5 py-1 text-right">
                       <Diff v={row.diffLider} />
                     </td>
-                    <td className="px-1.5 py-1 text-right">
-                      <Diff v={row.diffCorte} />
-                    </td>
+                    {showDeltaPremio && (
+                      <td className="hidden md:table-cell px-1.5 py-1 text-right">
+                        <Diff v={row.diffPremio} />
+                      </td>
+                    )}
+                    {showDeltaCorte && (
+                      <td className="px-1.5 py-1 text-right">
+                        <Diff v={row.diffCorte} />
+                      </td>
+                    )}
 
                     {/* Breakdown de pontos */}
                     <td className="hidden md:table-cell px-1.5 py-1 text-right font-mono tabular-nums text-gray-600">
                       {row.ptsMatches}
                     </td>
-                    <td className="hidden md:table-cell px-1.5 py-1 text-right font-mono tabular-nums text-gray-600">
-                      {row.ptsClassif}
-                    </td>
-                    <td className="hidden md:table-cell px-1.5 py-1 text-right font-mono tabular-nums text-gray-600">
-                      {row.ptsG4}
-                    </td>
+                    {showPtsCl && (
+                      <td className="hidden md:table-cell px-1.5 py-1 text-right font-mono tabular-nums text-gray-600">
+                        {row.ptsClassif}
+                      </td>
+                    )}
+                    {showPtsG4 && (
+                      <td className="hidden md:table-cell px-1.5 py-1 text-right font-mono tabular-nums text-gray-600">
+                        {row.ptsG4}
+                      </td>
+                    )}
 
                     {/* G4 picks */}
                     <td className="px-1.5 py-1 text-center">
