@@ -90,19 +90,22 @@ export async function notifyUserApproved({ name, email }: { name: string; email:
 export async function sendReminderEmail({
   name,
   email,
+  subject,
   body,
   attachments,
 }: {
   name: string
   email: string
+  subject: string
   body: string
   attachments?: Array<{ filename: string; content: Buffer; contentType?: string }>
 }) {
   const personalizedBody = body.replace(/\{nome\}/gi, name)
+  const personalizedSubject = subject.replace(/\{nome\}/gi, name)
   await resend.emails.send({
     from: `Melhor Bolão <${FROM}>`,
     to:   email,
-    subject: '⏰ Lembrete: seus palpites estão pendentes!',
+    subject: personalizedSubject,
     html: htmlWrapper(`
       <p style="margin:0;font-size:15px;color:#374151;white-space:pre-line;line-height:1.7">
         ${personalizedBody.replace(/\n/g, '<br/>')}

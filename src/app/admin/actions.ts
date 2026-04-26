@@ -253,6 +253,7 @@ export async function toggleApproved(userId: string, current: boolean) {
 export async function sendReminderEmails(
   recipients: 'all' | 'pending' | 'cut1' | 'cut2',
   stage: string,
+  subject: string,
   body: string,
   attachPalpites: boolean = false,
   attachTabelaMB: boolean = false,
@@ -375,7 +376,7 @@ export async function sendReminderEmails(
       if (tabelaMBAttachment) attachments.push(tabelaMBAttachment)
 
       await sendReminderEmail({
-        name: u.name, email: u.email, body,
+        name: u.name, email: u.email, subject, body,
         attachments: attachments.length > 0 ? attachments : undefined,
       })
       sent++

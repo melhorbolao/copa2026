@@ -20,6 +20,8 @@ const CUT_FILTERS = [
   { value: 'cut2', label: 'Classificados após 2º corte (apostaram nas quartas)' },
 ]
 
+const DEFAULT_SUBJECT = '⏰ Lembrete: seus palpites estão pendentes!'
+
 const DEFAULT_BODY =
   `Olá {nome},
 
@@ -33,6 +35,7 @@ export function ReminderSection() {
   const [open,           setOpen]       = useState(false)
   const [recipients,     setRecipients] = useState<'all' | 'pending' | 'cut1' | 'cut2'>('all')
   const [stage,          setStage]      = useState('r1')
+  const [subject,        setSubject]    = useState(DEFAULT_SUBJECT)
   const [body,           setBody]       = useState(DEFAULT_BODY)
   const [attachPalpites, setAttachPalpites] = useState(false)
   const [attachTabelaMB, setAttachTabelaMB] = useState(false)
@@ -43,7 +46,7 @@ export function ReminderSection() {
     setResult(null)
     startTransition(async () => {
       try {
-        const { sent } = await sendReminderEmails(recipients, stage, body, attachPalpites, attachTabelaMB)
+        const { sent } = await sendReminderEmails(recipients, stage, subject, body, attachPalpites, attachTabelaMB)
         setResult(`✓ ${sent} e-mail${sent !== 1 ? 's' : ''} enviado${sent !== 1 ? 's' : ''} com sucesso.`)
       } catch (err) {
         setResult(`Erro: ${err instanceof Error ? err.message : 'Falha ao enviar.'}`)
@@ -105,6 +108,17 @@ export function ReminderSection() {
         </div>
       </div>
 
+      {/* Assunto */}
+      <div className="mt-3">
+        <label className="mb-1 block text-xs font-semibold text-gray-600">Assunto</label>
+        <input
+          type="text"
+          value={subject}
+          onChange={e => setSubject(e.target.value)}
+          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none"
+        />
+      </div>
+
       {/* Corpo do e-mail */}
       <div className="mt-3">
         <label className="mb-1 block text-xs font-semibold text-gray-600">
@@ -154,7 +168,7 @@ export function ReminderSection() {
       <div className="mt-4 flex items-center gap-3">
         <button
           onClick={handleSend}
-          disabled={pending || !body.trim()}
+          disabled={pending || !body.trim() || !subject.trim()}
           className="rounded-lg px-5 py-2 text-sm font-bold text-white disabled:opacity-40 transition"
           style={{ backgroundColor: '#002776' }}
         >
