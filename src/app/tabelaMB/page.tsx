@@ -6,6 +6,7 @@ import { getActiveParticipantId } from '@/lib/participant'
 import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { TabelaMBClient } from './TabelaMBClient'
+import { getVisibilitySettings, isMatchBetsVisible, isBonusVisible } from '@/lib/production-mode'
 import type { MatchFull, Participant, BetRaw, GroupBetRaw, ThirdBetRaw, TournamentBetRaw } from './TabelaMBClient'
 
 export const metadata = {}
@@ -25,6 +26,8 @@ export default async function ClassificacaoPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAuthAdminClient() as any
 
+  const visibilitySettings = await getVisibilitySettings()
+
   const [matchesRes, participantsRes, betsRes, rulesRes, groupBetsRes, thirdBetsRes, totalsRes, tournamentBetsRes] = await Promise.all([
     supabase.from('matches')
       .select('id, match_number, phase, group_name, round, team_home, team_away, flag_home, flag_away, match_datetime, city, score_home, score_away, penalty_winner, is_brazil, betting_deadline')
@@ -39,6 +42,24 @@ export default async function ClassificacaoPage() {
     admin.from('participant_scores').select('participant_id, pts_total'),
     admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer, points'),
   ])
+
+  // ── Production mode filtering (server-side, before data reaches the client) ──
+  const now = new Date()
+  const allMatches = (matchesRes.data ?? []) as MatchFull[]
+
+  const bonusDeadlineStr = allMatches.find(m => m.phase === 'group' && m.round === 1)?.betting_deadline ?? null
+  const bonusViz = isBonusVisible(bonusDeadlineStr, now, visibilitySettings)
+
+  const visibleMatchIds = new Set<string>(
+    allMatches
+      .filter(m => isMatchBetsVisible(m.phase, m.round ?? null, m.betting_deadline, now, visibilitySettings))
+      .map(m => m.id),
+  )
+
+  const filteredBets     = ((betsRes.data ?? []) as BetRaw[]).filter(b => visibleMatchIds.has(b.match_id))
+  const filteredGroupBets    = bonusViz ? ((groupBetsRes.data    ?? []) as GroupBetRaw[])    : []
+  const filteredThirdBets    = bonusViz ? ((thirdBetsRes.data    ?? []) as ThirdBetRaw[])    : []
+  const filteredTournamentBets = bonusViz ? ((tournamentBetsRes.data ?? []) as TournamentBetRaw[]) : []
 
   const rulesMap: Record<string, number> = Object.fromEntries(
     (rulesRes.data ?? []).map((r: { key: string; points: number }) => [r.key, r.points])
@@ -82,12 +103,13 @@ export default async function ClassificacaoPage() {
     <>
       <Navbar />
       <TabelaMBClient
-        initialMatches={(matchesRes.data ?? []) as MatchFull[]}
+        initialMatches={allMatches}
         participants={(participantsRes.data ?? []) as Participant[]}
-        initialBets={(betsRes.data ?? []) as BetRaw[]}
-        initialGroupBets={(groupBetsRes.data ?? []) as GroupBetRaw[]}
-        initialThirdBets={(thirdBetsRes.data ?? []) as ThirdBetRaw[]}
-        initialTournamentBets={(tournamentBetsRes.data ?? []) as TournamentBetRaw[]}
+        initialBets={filteredBets}
+        initialGroupBets={filteredGroupBets}
+        initialThirdBets={filteredThirdBets}
+        initialTournamentBets={filteredTournamentBets}
+        productionMode={visibilitySettings.productionMode}
         participantTotals={participantTotals}
         rules={rulesMap}
         isAdmin={isAdmin}

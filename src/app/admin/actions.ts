@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache'
 import { createClient, createAdminClient, createAuthAdminClient } from '@/lib/supabase/server'
 import { notifyUserApproved, sendReminderEmail } from '@/lib/email'
 import { buildPalpitesBuffer } from '@/app/api/palpites/_workbook'
+import { buildTabelaMBBuffer } from '@/app/api/admin/dados/export/_builder'
+import { getVisibilitySettings } from '@/lib/production-mode'
 import { isEmailEnabled } from '@/lib/email-settings'
 import type { MatchPhase } from '@/types/database'
 
@@ -253,6 +255,7 @@ export async function sendReminderEmails(
   stage: string,
   body: string,
   attachPalpites: boolean = false,
+  attachTabelaMB: boolean = false,
 ) {
   await requireAdmin()
   const supabase = await createAdminClient()
@@ -336,28 +339,45 @@ export async function sendReminderEmails(
     }
   }
 
+  // Generate TabelaMB attachment once for all recipients (filtered by production mode)
+  let tabelaMBAttachment: { filename: string; content: Buffer; contentType: string } | undefined
+  if (attachTabelaMB) {
+    try {
+      const visSettings = await getVisibilitySettings()
+      const { buffer, fileName } = await buildTabelaMBBuffer(visSettings)
+      tabelaMBAttachment = {
+        filename: fileName,
+        content: buffer,
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }
+    } catch { /* silent */ }
+  }
+
   let sent = 0
   for (const u of targets) {
     try {
-      let attachments: Array<{ filename: string; content: Buffer; contentType: string }> | undefined
+      const attachments: Array<{ filename: string; content: Buffer; contentType: string }> = []
+
       if (attachPalpites) {
         const participantIds = userToParticipants.get(u.id) ?? []
-        if (participantIds.length > 0) {
-          attachments = []
-          for (const pid of participantIds) {
-            try {
-              const { buffer, fileName } = await buildPalpitesBuffer(supabase, pid)
-              attachments.push({
-                filename: fileName,
-                content: buffer,
-                contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-              })
-            } catch { /* ignora falha individual de planilha */ }
-          }
-          if (attachments.length === 0) attachments = undefined
+        for (const pid of participantIds) {
+          try {
+            const { buffer, fileName } = await buildPalpitesBuffer(supabase, pid)
+            attachments.push({
+              filename: fileName,
+              content: buffer,
+              contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            })
+          } catch { /* ignora falha individual */ }
         }
       }
-      await sendReminderEmail({ name: u.name, email: u.email, body, attachments })
+
+      if (tabelaMBAttachment) attachments.push(tabelaMBAttachment)
+
+      await sendReminderEmail({
+        name: u.name, email: u.email, body,
+        attachments: attachments.length > 0 ? attachments : undefined,
+      })
       sent++
     } catch { /* continua mesmo se um falhar */ }
   }

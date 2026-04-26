@@ -35,6 +35,7 @@ export function ReminderSection() {
   const [stage,          setStage]      = useState('r1')
   const [body,           setBody]       = useState(DEFAULT_BODY)
   const [attachPalpites, setAttachPalpites] = useState(false)
+  const [attachTabelaMB, setAttachTabelaMB] = useState(false)
   const [result,         setResult]     = useState<string | null>(null)
   const [pending,        startTransition] = useTransition()
 
@@ -42,7 +43,7 @@ export function ReminderSection() {
     setResult(null)
     startTransition(async () => {
       try {
-        const { sent } = await sendReminderEmails(recipients, stage, body, attachPalpites)
+        const { sent } = await sendReminderEmails(recipients, stage, body, attachPalpites, attachTabelaMB)
         setResult(`✓ ${sent} e-mail${sent !== 1 ? 's' : ''} enviado${sent !== 1 ? 's' : ''} com sucesso.`)
       } catch (err) {
         setResult(`Erro: ${err instanceof Error ? err.message : 'Falha ao enviar.'}`)
@@ -117,21 +118,37 @@ export function ReminderSection() {
         />
       </div>
 
-      {/* Checkbox anexo */}
-      <label className="mt-3 flex cursor-pointer items-start gap-2.5">
-        <input
-          type="checkbox"
-          checked={attachPalpites}
-          onChange={e => setAttachPalpites(e.target.checked)}
-          className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-blue-600"
-        />
-        <span className="text-xs text-gray-700">
-          Anexar planilha de palpites de cada participante
-          <span className="block text-gray-400">
-            Se o usuário tiver mais de um participante, todas as planilhas são anexadas.
+      {/* Checkboxes de anexos */}
+      <div className="mt-3 space-y-2">
+        <label className="flex cursor-pointer items-start gap-2.5">
+          <input
+            type="checkbox"
+            checked={attachPalpites}
+            onChange={e => setAttachPalpites(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-blue-600"
+          />
+          <span className="text-xs text-gray-700">
+            Anexar planilha de palpites de cada participante
+            <span className="block text-gray-400">
+              Se o usuário tiver mais de um participante, todas as planilhas são anexadas.
+            </span>
           </span>
-        </span>
-      </label>
+        </label>
+        <label className="flex cursor-pointer items-start gap-2.5">
+          <input
+            type="checkbox"
+            checked={attachTabelaMB}
+            onChange={e => setAttachTabelaMB(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-blue-600"
+          />
+          <span className="text-xs text-gray-700">
+            Anexar planilha Tabela MB (todos os participantes)
+            <span className="block text-gray-400">
+              Em Modo Produção, apenas rodadas já liberadas são incluídas no arquivo.
+            </span>
+          </span>
+        </label>
+      </div>
 
       {/* Ações */}
       <div className="mt-4 flex items-center gap-3">

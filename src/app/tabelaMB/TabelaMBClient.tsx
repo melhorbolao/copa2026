@@ -85,6 +85,7 @@ interface Props {
   teamAbbrs: Record<string, string>
   officialTopScorers: string[]
   scorerMapping: Record<string, string>
+  productionMode?: boolean
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -447,7 +448,7 @@ function buildBetMap(bets: BetRaw[]): BetMap {
 export function TabelaMBClient({
   initialMatches, participants, initialBets, initialGroupBets, initialThirdBets,
   initialTournamentBets, participantTotals, rules, isAdmin, activeParticipantId,
-  teamAbbrs, officialTopScorers, scorerMapping,
+  teamAbbrs, officialTopScorers, scorerMapping, productionMode = false,
 }: Props) {
   const [matches, setMatches] = useState<MatchFull[]>(initialMatches)
   const [betMap,  setBetMap]  = useState<BetMap>(() => buildBetMap(initialBets))
@@ -865,6 +866,13 @@ export function TabelaMBClient({
 
   return (
     <div className="flex flex-col" style={{ height: 'calc(100dvh - 56px)' }}>
+
+      {/* Production mode notice */}
+      {productionMode && (
+        <div className="shrink-0 bg-amber-50 border-b border-amber-200 px-3 py-1.5 text-center text-[11px] font-semibold text-amber-700">
+          🔒 Modo Produção — palpites de rodadas ainda não liberadas estão ocultos
+        </div>
+      )}
 
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-1.5 border-b border-gray-200 bg-white px-3 py-2 shrink-0">
