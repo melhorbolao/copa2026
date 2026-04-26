@@ -50,8 +50,8 @@ function Num({ v, green }: { v: number; green?: boolean }) {
 function Diff({ v }: { v: number | null }) {
   if (v === null) return <span className="text-gray-300">—</span>
   if (v === 0)  return <span className="text-amber-500 tabular-nums font-mono">0</span>
-  if (v > 0)   return <span className="text-red-500 tabular-nums font-mono">+{v}</span>
-  return <span className="text-verde-600 tabular-nums font-mono">{v}</span>
+  if (v > 0)   return <span className="text-verde-600 tabular-nums font-mono">+{v}</span>
+  return <span className="text-red-500 tabular-nums font-mono">{v}</span>
 }
 
 function TeamCell({ team, abbrs, elTeams }: {
@@ -128,9 +128,9 @@ export function ClassificacaoMBClient({
 
     const out: RankedRow[] = withRank.map(r => ({
       ...r,
-      diffLider: leaderPts - r.pts,
-      diffPremio: premioCut !== null ? premioCut - r.pts : null,
-      diffCorte: cut !== null ? cut - r.pts : null,
+      diffLider: r.pts - leaderPts,
+      diffPremio: premioCut !== null ? r.pts - premioCut : null,
+      diffCorte: cut !== null ? r.pts - cut : null,
     }))
     return { ranked: out, cutPts: cut, premioCutPts: premioCut }
   }, [rows, prizeSpots, premioSpots])
