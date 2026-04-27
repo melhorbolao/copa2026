@@ -809,19 +809,15 @@ export function TabelaMBClient({
     for (const m of matches) {
       const betsList  = collectMatchBets(m.id, participants, betMap)
       const hasResult = m.score_home !== null && m.score_away !== null
-      if (!hasResult) {
-        possible.set(m.id, betsList.length > 0 ? {
-          H: detectMatchZebra(betsList, 'H', threshold),
-          D: detectMatchZebra(betsList, 'D', threshold),
-          A: detectMatchZebra(betsList, 'A', threshold),
-        } : undefined)
-        actual.set(m.id, false)
-      } else {
-        possible.set(m.id, undefined)
-        actual.set(m.id, betsList.length > 0
-          ? detectMatchZebra(betsList, getMatchResult(m.score_home!, m.score_away!), threshold)
-          : false)
-      }
+      // Always compute minority outcomes (used for per-participant cell styling)
+      possible.set(m.id, betsList.length > 0 ? {
+        H: detectMatchZebra(betsList, 'H', threshold),
+        D: detectMatchZebra(betsList, 'D', threshold),
+        A: detectMatchZebra(betsList, 'A', threshold),
+      } : undefined)
+      actual.set(m.id, hasResult && betsList.length > 0
+        ? detectMatchZebra(betsList, getMatchResult(m.score_home!, m.score_away!), threshold)
+        : false)
     }
     return { possible, actual }
   }, [matches, betMap, participants, rules])
@@ -1609,13 +1605,17 @@ export function TabelaMBClient({
                     const isMe = p.id === activeParticipantId
                     const isFrozen = displayFrozenLeft !== null && idx === 0
                     const frozenBg = isFrozen ? (CELL_KIND_BG_HEX[kind] || bg) : undefined
+                    const betOutcome = bet ? getMatchResult(bet.score_home, bet.score_away) : null
+                    const isPotentialZebra = betOutcome !== null && possibleZebras?.[betOutcome] === true
                     return (
                       <td key={p.id}
                         style={isFrozen ? { position: 'sticky', left: displayFrozenLeft!, zIndex: 20, background: frozenBg, borderLeft: '2px solid #d1d5db' } : undefined}
                         className={`border-r border-gray-100 text-center ${!isFrozen ? CELL_BG[kind] : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                         {bet ? (
                           <div className="flex flex-col items-center leading-none gap-px">
-                            <span className="tabular-nums font-semibold text-gray-700">{bet.score_home}–{bet.score_away}</span>
+                            <span className={`tabular-nums font-semibold rounded px-0.5 ${isPotentialZebra ? 'bg-gray-900 text-white' : 'text-gray-700'}`}>
+                              {bet.score_home}–{bet.score_away}
+                            </span>
                             {pts !== null && (
                               <span className={`tabular-nums font-bold ${pts > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>
                                 {pts > 0 ? `+${pts}` : '0'}
