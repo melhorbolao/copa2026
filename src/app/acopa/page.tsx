@@ -56,7 +56,7 @@ export default async function ACopaPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-black text-gray-900 mb-1">🌍 A Copa</h1>
           <p className="text-sm text-gray-500">
-            Resultados oficiais · Copa do Mundo 2026 · Comum a todos os participantes
+            Resultados oficiais · Comum a todos os participantes
           </p>
           <p className="mt-2 text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
             Qualquer participante pode registrar o placar de um jogo durante as <strong>4 horas</strong> após o início da partida.

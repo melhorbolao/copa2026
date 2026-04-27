@@ -198,7 +198,6 @@ export function PalpitesContent({
         <div className="mb-4 flex items-start justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-2xl font-black text-gray-900">Meus Palpites</h1>
-            <p className="mt-0.5 text-sm text-gray-500">Jogos · classificação de grupos · torneio</p>
             <div className="mt-2"><ExcelActions /></div>
           </div>
           <div className="flex flex-col items-end gap-2">
