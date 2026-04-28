@@ -16,6 +16,18 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
 
   const { data: profile } = await supabase.from('users').select('is_admin, name').eq('id', user.id).single()
   const isAdmin = profile?.is_admin ?? false
+
+  // Garante que a página aparece no menu (idempotente)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ;(createAuthAdminClient() as any)
+    .from('page_visibility')
+    .upsert(
+      { page_name: 'jogos', label: 'Jogos', show_for_admin: true, show_for_users: true, sort_order: 0 },
+      { onConflict: 'page_name' },
+    )
+    .then(() => {})
+    .catch(() => {})
+
   await requirePageAccess('jogos', isAdmin)
 
   const activeParticipantId = await getActiveParticipantId(supabase, user.id).catch(() => null)
