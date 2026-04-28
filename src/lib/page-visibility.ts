@@ -12,7 +12,7 @@ export interface PageVisibilityRow {
 }
 
 const PAGE_ORDER = [
-  'palpites', 'tabela', 'acopa', 'tabelaMB', 'classificacaoMB',
+  'jogos', 'palpites', 'tabela', 'acopa', 'tabelaMB', 'classificacaoMB',
   'participantes', 'pontuacao', 'regulamento',
 ]
 
