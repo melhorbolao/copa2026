@@ -1,16 +1,8 @@
 {
-  "crons": [
+  "rewrites": [
     {
-      "path": "/api/cron/alert-24h",
-      "schedule": "0 0 * * *"
-    },
-    {
-      "path": "/api/cron/alert-6h",
-      "schedule": "0 1 * * *"
-    },
-    {
-      "path": "/api/cron/receipt",
-      "schedule": "0 2 * * *"
+      "source": "/(.*)",
+      "destination": "https://melhorbolao.app.br//$1"
     }
   ]
 }
