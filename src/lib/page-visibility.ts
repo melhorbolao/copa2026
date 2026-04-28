@@ -16,6 +16,11 @@ const PAGE_ORDER = [
   'participantes', 'pontuacao', 'regulamento',
 ]
 
+// Pages that always appear in nav when missing from DB (admin can override once row exists)
+const DEFAULT_PAGES: PageVisibilityRow[] = [
+  { id: '__default_jogos', page_name: 'jogos', label: 'Jogos', show_for_admin: true, show_for_users: true, sort_order: 0 },
+]
+
 // Memoized per request — deduplicates calls from Sidebar, Navbar, and page components
 export const getPageVisibility = cache(async (): Promise<PageVisibilityRow[]> => {
   try {
@@ -25,6 +30,10 @@ export const getPageVisibility = cache(async (): Promise<PageVisibilityRow[]> =>
       .from('page_visibility')
       .select('id, page_name, label, show_for_admin, show_for_users, sort_order')
     const rows = (data ?? []) as PageVisibilityRow[]
+    // Merge defaults for pages not yet in DB
+    for (const def of DEFAULT_PAGES) {
+      if (!rows.find(r => r.page_name === def.page_name)) rows.push(def)
+    }
     return rows.sort((a, b) => {
       if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order
       const ai = PAGE_ORDER.indexOf(a.page_name)
