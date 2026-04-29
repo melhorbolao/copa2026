@@ -71,9 +71,10 @@ export function JogosDashboard({
   const [attendance, setAttendance] = useState(initialAttendance)
   const [photos, setPhotos]       = useState(initialPhotos)
 
-  // Goal animation state: { home?: number (timestamp), away?: number }
-  const [goalAnim, setGoalAnim]   = useState<{ home?: number; away?: number }>({})
-  const prevScoreRef = useRef<{ home: number | null; away: number | null }>({ home: null, away: null })
+  // Goal animation state — booleans cleared automatically after GOAL_ANIM_MS
+  const [goalAnim, setGoalAnim]   = useState<{ home: boolean; away: boolean }>({ home: false, away: false })
+  const prevScoreRef  = useRef<{ home: number | null; away: number | null }>({ home: null, away: null })
+  const goalTimersRef = useRef<{ home?: ReturnType<typeof setTimeout>; away?: ReturnType<typeof setTimeout> }>({})
 
   // Current match index
   const [matchIdx, setMatchIdx] = useState(() => {
@@ -94,15 +95,20 @@ export function JogosDashboard({
     router.replace(`/jogos?${params.toString()}`, { scroll: false })
   }, [match?.id]) // eslint-disable-line
 
-  // Goal animation detection
+  // Goal animation detection — triggered by Realtime score changes
   useEffect(() => {
     if (!match) return
     const prev = prevScoreRef.current
-    const now  = Date.now()
-    if (prev.home !== null && match.score_home !== null && match.score_home > prev.home)
-      setGoalAnim(g => ({ ...g, home: now }))
-    if (prev.away !== null && match.score_away !== null && match.score_away > prev.away)
-      setGoalAnim(g => ({ ...g, away: now }))
+    if (prev.home !== null && match.score_home !== null && match.score_home > prev.home) {
+      clearTimeout(goalTimersRef.current.home)
+      setGoalAnim(g => ({ ...g, home: true }))
+      goalTimersRef.current.home = setTimeout(() => setGoalAnim(g => ({ ...g, home: false })), GOAL_ANIM_MS)
+    }
+    if (prev.away !== null && match.score_away !== null && match.score_away > prev.away) {
+      clearTimeout(goalTimersRef.current.away)
+      setGoalAnim(g => ({ ...g, away: true }))
+      goalTimersRef.current.away = setTimeout(() => setGoalAnim(g => ({ ...g, away: false })), GOAL_ANIM_MS)
+    }
     prevScoreRef.current = { home: match.score_home, away: match.score_away }
   }, [match?.score_home, match?.score_away]) // eslint-disable-line
 
@@ -149,12 +155,6 @@ export function JogosDashboard({
     () => bets.filter(b => b.match_id === match?.id),
     [bets, match?.id],
   )
-
-  // Is goal animation still active?
-  const goalAnimActive = useMemo(() => ({
-    home: goalAnim.home !== undefined && Date.now() - goalAnim.home < GOAL_ANIM_MS,
-    away: goalAnim.away !== undefined && Date.now() - goalAnim.away < GOAL_ANIM_MS,
-  }), [goalAnim])
 
   // Zebra detection for header
   const headerZebra = useMemo(() => {
@@ -297,7 +297,7 @@ export function JogosDashboard({
         abbr={abbr}
         isAdmin={isAdmin}
         userId={userId}
-        goalAnim={goalAnimActive}
+        goalAnim={goalAnim}
         isZebra={headerZebra}
         presentCount={presentParticipantIds.size}
         attendance={matchAttendance}
