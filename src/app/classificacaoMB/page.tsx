@@ -48,7 +48,7 @@ export default async function ClassificacaoMBPage() {
   const [participantsRes, matchesRes, betsRes, groupBetsRes, tournamentBetsRes, scoresRes, rulesRes] = await Promise.all([
     supabase.from('participants').select('id, apelido').order('apelido'),
     supabase.from('matches')
-      .select('id, match_number, match_datetime, team_home, team_away, score_home, score_away, phase, penalty_winner')
+      .select('id, match_number, match_datetime, team_home, team_away, score_home, score_away, phase, group_name, penalty_winner')
       .order('match_datetime', { ascending: true }),
     admin.from('bets').select('participant_id, match_id, score_home, score_away, points'),
     admin.from('group_bets').select('participant_id, points'),
@@ -136,7 +136,7 @@ export default async function ClassificacaoMBPage() {
     id: string; match_number: number; match_datetime: string
     team_home: string; team_away: string
     score_home: number | null; score_away: number | null
-    phase: string; penalty_winner: string | null
+    phase: string; group_name: string | null; penalty_winner: string | null
   }[]
   const allBets = (betsRes.data ?? []) as {
     participant_id: string; match_id: string
@@ -305,6 +305,18 @@ export default async function ClassificacaoMBPage() {
     }
   })
 
+  const matchesRegistered = completedMatches.length
+
+  // Group is "defined" when every match in that group has a score
+  const groupTotals: Record<string, { total: number; done: number }> = {}
+  for (const m of matches.filter(m => m.phase === 'group' && m.group_name)) {
+    const g = m.group_name!
+    if (!groupTotals[g]) groupTotals[g] = { total: 0, done: 0 }
+    groupTotals[g].total++
+    if (m.score_home !== null) groupTotals[g].done++
+  }
+  const groupsDefined = Object.values(groupTotals).filter(v => v.total > 0 && v.done === v.total).length
+
   const abbr = (team: string) => teamAbbrs[team] ?? team.slice(0, 3).toUpperCase()
 
   return (
@@ -331,6 +343,8 @@ export default async function ClassificacaoMBPage() {
         activeParticipantId={activeParticipantId ?? ''}
         colVisibility={colVisibility}
         renderedAt={new Date().toISOString()}
+        matchesRegistered={matchesRegistered}
+        groupsDefined={groupsDefined}
       />
     </>
   )

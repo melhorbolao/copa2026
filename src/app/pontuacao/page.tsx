@@ -33,7 +33,7 @@ export default async function PontuacaoPage() {
         <div className="mb-8 flex items-end justify-between">
           <div>
             <h1 className="text-3xl font-black text-gray-900 mb-1">Pontuação</h1>
-            <p className="text-sm text-gray-500">Tabela de referência — Melhor Bolão · Copa 2026</p>
+            <p className="text-sm text-gray-500">Tabela de referência · Melhor Bolão · Copa do Mundo 2026</p>
           </div>
           {/* Badge renderizado dentro de ScoringTable (client) para respeitar viewMode */}
         </div>

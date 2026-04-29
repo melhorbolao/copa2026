@@ -30,9 +30,6 @@ export default async function AdminLayout({
         {/* Cabeçalho */}
         <div className="mb-6">
           <h1 className="text-2xl font-black text-gray-900">Painel Administrativo</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Gerencie usuários e pagamentos.
-          </p>
         </div>
 
         {/* Tabs de navegação */}

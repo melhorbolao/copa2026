@@ -35,6 +35,8 @@ interface Props {
   activeParticipantId: string
   colVisibility: Record<string, boolean>
   renderedAt: string
+  matchesRegistered: number
+  groupsDefined: number
 }
 
 type RankedRow = ParticipantRow & { rank: number; diffLider: number; diffPremio: number | null; diffCorte: number | null }
@@ -98,7 +100,7 @@ export function ClassificacaoMBClient({
   rows, lastMatch, nextMatch,
   eliminatedTeams, eliminatedStdScorers,
   scorerMapping, teamAbbrs, prizeSpots, premioSpots,
-  activeParticipantId, colVisibility, renderedAt,
+  activeParticipantId, colVisibility, renderedAt, matchesRegistered, groupsDefined,
 }: Props) {
   const elTeams = useMemo(() => new Set(eliminatedTeams), [eliminatedTeams])
   const elStd   = useMemo(() => new Set(eliminatedStdScorers), [eliminatedStdScorers])
@@ -157,6 +159,7 @@ export function ClassificacaoMBClient({
       <div className="mb-3 flex items-baseline gap-3">
         <h1 className="text-2xl font-black text-gray-900">Classificação Melhor Bolão</h1>
         <span className="text-[10px] text-gray-400">{formatRenderedAt(renderedAt)}</span>
+        <span className="text-[10px] text-gray-400">· {matchesRegistered} jogos registrados e {groupsDefined}/12 grupos definidos</span>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">

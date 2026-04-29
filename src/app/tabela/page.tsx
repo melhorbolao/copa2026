@@ -115,7 +115,7 @@ export default async function TabelaPage() {
             Minha Tabela
           </h1>
           <p className="text-sm text-gray-500">
-            Classificação calculada com base nos seus palpites · Copa 2026
+            Calculada com base em Meus Palpites
           </p>
 
           {/* Progresso dos palpites */}
