@@ -108,7 +108,7 @@ export function ScoreHeader({
   return (
     <>
       {/* Fixed pill header */}
-      <div className="fixed top-14 sm:top-0 left-0 right-0 z-40 flex justify-center px-2 pt-2 pb-1 pointer-events-none">
+      <div className="fixed top-14 sm:top-0 left-0 right-0 z-40 flex justify-center px-3 pt-2 pb-1 pointer-events-none">
         <div
           className="w-full max-w-3xl rounded-2xl shadow-2xl pointer-events-auto"
           style={{ background: '#1A1A1A', border: '1px solid #2a2a2a' }}
