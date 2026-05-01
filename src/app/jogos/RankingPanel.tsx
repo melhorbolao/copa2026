@@ -16,11 +16,16 @@ interface Props {
   teamAbbrs: Record<string, string>
 }
 
+type SortKey = 'pos' | 'total' | 'match'
+type SortDir = 'asc' | 'desc'
+
 export function RankingPanel({
   match, matchBets, participants, matchPoints, ptsWithoutMatch,
   rankBefore, rankAfter, quase, abbr,
 }: Props) {
   const [secador, setSecador] = useState(false)
+  const [sortKey, setSortKey] = useState<SortKey>('pos')
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
 
   const hasResult = match.score_home !== null && match.score_away !== null
 
@@ -35,15 +40,36 @@ export function RankingPanel({
 
   const participantMap = new Map(participants.map(p => [p.id, p]))
 
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir(key === 'pos' ? 'asc' : 'desc')
+    }
+  }
+
+  const SortArrow = ({ k }: { k: SortKey }) => {
+    if (sortKey !== k) return <span className="text-gray-600 ml-0.5">↕</span>
+    return <span className="text-gray-300 ml-0.5">{sortDir === 'asc' ? '↑' : '↓'}</span>
+  }
+
   const rankRows = participants
     .map(p => ({
       ...p,
       ptsGained: matchPoints[p.id] ?? 0,
+      total: (ptsWithoutMatch[p.id] ?? 0) + (matchPoints[p.id] ?? 0),
       before: rankBefore[p.id] ?? participants.length,
       after: rankAfter[p.id] ?? participants.length,
       delta: (rankBefore[p.id] ?? participants.length) - (rankAfter[p.id] ?? participants.length),
     }))
-    .sort((a, b) => a.after - b.after)
+    .sort((a, b) => {
+      let diff = 0
+      if (sortKey === 'pos') diff = a.after - b.after
+      else if (sortKey === 'total') diff = b.total - a.total
+      else if (sortKey === 'match') diff = b.ptsGained - a.ptsGained
+      return sortDir === 'asc' ? diff : -diff
+    })
 
   if (!hasResult) {
     return (
@@ -62,7 +88,6 @@ export function RankingPanel({
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wide">✓ Cravando agora</span>
 
-            {/* Secador button — imagem grande quando ativo */}
             {secador ? (
               <button
                 onClick={() => setSecador(false)}
@@ -143,27 +168,34 @@ export function RankingPanel({
 
       {/* Full ranking table */}
       <div>
-        <div className="grid grid-cols-[2rem_1fr_4rem_3rem_3rem_3rem] text-[10px] font-bold text-gray-400 uppercase tracking-wide px-3 py-1.5 border-b border-gray-100">
-          <span className="text-center">#</span>
+        <div className="grid grid-cols-[2rem_1fr_4.5rem_4rem_2.5rem] text-[10px] font-bold text-gray-400 uppercase tracking-wide px-3 py-1.5 border-b border-gray-100">
+          <button className="flex items-center justify-center gap-0.5 hover:text-gray-600 transition" onClick={() => handleSort('pos')}>
+            #<SortArrow k="pos" />
+          </button>
           <span>Nome</span>
-          <span className="text-right">Pts jogo</span>
-          <span className="text-right">Antes</span>
-          <span className="text-right">Depois</span>
+          <button className="flex items-center justify-end gap-0.5 hover:text-gray-600 transition" onClick={() => handleSort('total')}>
+            PTS Total<SortArrow k="total" />
+          </button>
+          <button className="flex items-center justify-end gap-0.5 hover:text-gray-600 transition" onClick={() => handleSort('match')}>
+            PTS Jogo<SortArrow k="match" />
+          </button>
           <span className="text-right">↑↓</span>
         </div>
+
         <div className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
           {rankRows.map(row => (
             <div key={row.id}
-              className={`grid grid-cols-[2rem_1fr_4rem_3rem_3rem_3rem] items-center px-3 py-1.5 text-xs ${cravandoPids.has(row.id) ? 'bg-emerald-50' : ''}`}>
+              className={`grid grid-cols-[2rem_1fr_4.5rem_4rem_2.5rem] items-center px-3 py-1.5 text-xs ${cravandoPids.has(row.id) ? 'bg-emerald-50' : ''}`}>
               <span className="text-center font-bold text-gray-500">{row.after}</span>
               <span className={`font-medium truncate ${cravandoPids.has(row.id) ? 'text-emerald-700' : 'text-gray-800'}`}>
                 {row.apelido}
               </span>
+              <span className="text-right tabular-nums font-bold text-gray-700">
+                {row.total}
+              </span>
               <span className={`text-right tabular-nums font-bold ${row.ptsGained > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>
                 {row.ptsGained > 0 ? `+${row.ptsGained}` : '0'}
               </span>
-              <span className="text-right tabular-nums text-gray-400">{row.before}</span>
-              <span className="text-right tabular-nums text-gray-600 font-semibold">{row.after}</span>
               <span className={`text-right tabular-nums font-bold ${row.delta > 0 ? 'text-emerald-500' : row.delta < 0 ? 'text-rose-400' : 'text-gray-300'}`}>
                 {row.delta > 0 ? `↑${row.delta}` : row.delta < 0 ? `↓${Math.abs(row.delta)}` : '='}
               </span>

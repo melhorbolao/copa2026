@@ -113,17 +113,17 @@ export function ScoreHeader({
           className="w-full max-w-3xl rounded-2xl shadow-2xl pointer-events-auto"
           style={{ background: '#1A1A1A', border: '1px solid #2a2a2a' }}
         >
-          {/* Top row */}
+          {/* Top row: nav+phase | scoreboard | date+stadium */}
           <div className="flex items-center gap-1 px-3 pt-2.5 pb-1">
 
-            {/* Left: meta + nav prev */}
-            <div className="flex items-center gap-1 min-w-0 flex-1">
-              <NavArrow dir="left" disabled={matchIdx === 0} onClick={() => onNavigate(-1)} />
+            {/* Left: stacked nav arrows + phase label */}
+            <div className="flex items-center gap-1 flex-1 min-w-0">
+              <div className="flex flex-col items-center">
+                <NavArrow dir="left" disabled={matchIdx === 0} onClick={() => onNavigate(-1)} />
+                <NavArrow dir="right" disabled={matchIdx === matches.length - 1} onClick={() => onNavigate(1)} />
+              </div>
               <div className="min-w-0">
-                <div className="text-[10px] text-gray-400 leading-none truncate">
-                  {fmtDate(match.match_datetime)} · {match.city}
-                </div>
-                <div className="text-[9px] text-gray-600 leading-none mt-0.5">{phaseLabel}</div>
+                <div className="text-[9px] text-gray-600 leading-none truncate">{phaseLabel}</div>
               </div>
             </div>
 
@@ -148,11 +148,17 @@ export function ScoreHeader({
               <TeamSide flag={match.flag_away} abbr={abbr(match.team_away)} side="away" goalAnim={goalAnim.away} />
             </div>
 
-            {/* Right: stadium + nav next */}
-            <div className="flex items-center gap-1 flex-1 justify-end">
+            {/* Right: date/city + stadium icon */}
+            <div className="flex items-center gap-1.5 flex-1 justify-end min-w-0">
+              <div className="min-w-0 text-right">
+                <div className="text-[10px] text-gray-400 leading-none truncate">
+                  {fmtDate(match.match_datetime)}
+                </div>
+                <div className="text-[9px] text-gray-600 leading-none mt-0.5 truncate">{match.city}</div>
+              </div>
               <button
                 onClick={() => setShowPresence(v => !v)}
-                className="flex flex-col items-center gap-0 relative"
+                className="flex flex-col items-center gap-0 shrink-0"
                 title="No Estádio"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -161,7 +167,6 @@ export function ScoreHeader({
                   <span className="text-[9px] font-bold text-cyan-400 leading-none">{presentCount}</span>
                 )}
               </button>
-              <NavArrow dir="right" disabled={matchIdx === matches.length - 1} onClick={() => onNavigate(1)} />
             </div>
           </div>
 
