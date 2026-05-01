@@ -22,14 +22,14 @@ type BetGroup = {
   pct: number
   pts: number | null
   isExact: boolean
-  isMinority: boolean
+  isImpossible: boolean
 }
 
 function fmtPct(n: number) {
   return n.toFixed(1).replace('.', ',') + '%'
 }
 
-export function BetStats({ match, matchBets, participants, minorityMap, isZebra, rules }: Props) {
+export function BetStats({ match, matchBets, participants, minorityMap, isZebra, rules, abbr }: Props) {
   const hasResult = match.score_home !== null && match.score_away !== null
 
   const groups = useMemo<BetGroup[]>(() => {
@@ -45,11 +45,11 @@ export function BetStats({ match, matchBets, participants, minorityMap, isZebra,
       .map(({ sh, sa, count }) => {
         const result = getMatchResult(sh, sa)
         const isExact = hasResult && match.score_home === sh && match.score_away === sa
-        const isMinority = minorityMap ? minorityMap[result] : false
+        const isImpossible = hasResult && ((match.score_home! > sh) || (match.score_away! > sa))
         const pts = hasResult
           ? scoreMatchBet(sh, sa, match.score_home!, match.score_away!, isZebra, match.is_brazil, rules)
           : null
-        return { score_home: sh, score_away: sa, result, count, pct: (count / total) * 100, pts, isExact, isMinority }
+        return { score_home: sh, score_away: sa, result, count, pct: (count / total) * 100, pts, isExact, isImpossible }
       })
       .sort((a, b) => b.count - a.count)
   }, [matchBets, match.score_home, match.score_away, hasResult, minorityMap, isZebra, rules, match.is_brazil])
@@ -88,47 +88,49 @@ export function BetStats({ match, matchBets, participants, minorityMap, isZebra,
         )}
 
         <div className="flex-1 min-w-0">
-          {/* Title + percentage summary */}
+          {/* Title */}
           <div className="px-4 pt-3 pb-1 text-center">
             <h2 className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Distribuição de Palpites</h2>
-            <p className="text-xs text-gray-400 mt-0.5 tabular-nums">
-              {fmtPct(colTotals.H)}&nbsp;&nbsp;{fmtPct(colTotals.D)}&nbsp;&nbsp;{fmtPct(colTotals.A)}
-            </p>
+          </div>
+
+          {/* 3-column percentage header — aligns with scoreboard [home | logo | away] */}
+          <div className="grid grid-cols-3 text-center text-xs font-bold text-gray-400 tabular-nums pb-2 border-b border-gray-50">
+            <span>{fmtPct(colTotals.H)}</span>
+            <span>{fmtPct(colTotals.D)}</span>
+            <span>{fmtPct(colTotals.A)}</span>
           </div>
 
           {/* Bet rows — Score | Count(%) | Points */}
           <div className="divide-y divide-gray-50">
             {groups.map(g => {
-              const isMissed = hasResult && (g.pts ?? 0) === 0
+              // isImpossible: a team already exceeded this bet → strikethrough
+              // pts=0 without impossible: just light gray
+              const textScore = g.isExact
+                ? 'text-blue-600'
+                : g.isImpossible
+                  ? 'text-gray-300 line-through'
+                  : (g.pts === 0 && hasResult)
+                    ? 'text-gray-300'
+                    : 'text-gray-700'
+              const textMeta = g.isExact
+                ? 'text-blue-500 font-semibold'
+                : (g.pts === 0 && hasResult) ? 'text-gray-300' : 'text-gray-500'
+              const textPts = g.isExact
+                ? 'text-blue-600'
+                : (g.pts === 0 && hasResult) ? 'text-gray-300' : 'text-gray-400'
+
               return (
                 <div
                   key={`${g.score_home}-${g.score_away}`}
                   className={`grid grid-cols-[5rem_1fr_3.5rem] items-center px-4 py-1 gap-1 ${g.isExact ? 'bg-blue-50/60' : ''}`}
                 >
-                  {/* Score */}
-                  <span className={`font-mono font-bold tabular-nums text-sm ${
-                    g.isExact ? 'text-blue-600'
-                    : isMissed ? 'text-gray-300 line-through'
-                    : 'text-gray-700'
-                  }`}>
+                  <span className={`font-mono font-bold tabular-nums text-sm ${textScore}`}>
                     {g.score_home}x{g.score_away}
                   </span>
-
-                  {/* Count (%) */}
-                  <span className={`text-xs tabular-nums ${
-                    g.isExact ? 'text-blue-500 font-semibold'
-                    : isMissed ? 'text-gray-300'
-                    : 'text-gray-500'
-                  }`}>
+                  <span className={`text-xs tabular-nums ${textMeta}`}>
                     {g.count} ({g.pct.toFixed(0)}%)
                   </span>
-
-                  {/* Points */}
-                  <span className={`text-sm font-bold tabular-nums text-right ${
-                    g.isExact ? 'text-blue-600'
-                    : isMissed ? 'text-gray-300'
-                    : 'text-gray-400'
-                  }`}>
+                  <span className={`text-sm font-bold tabular-nums text-right ${textPts}`}>
                     {g.pts !== null ? (g.pts > 0 ? `+${g.pts}` : '0') : ''}
                   </span>
                 </div>

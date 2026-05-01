@@ -136,7 +136,7 @@ export function ScoreHeader({
               {/* Center logo + zebra */}
               <div className="flex flex-col items-center gap-0.5 px-0.5">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/logo.png" alt="" width={18} height={18} className="object-contain opacity-30" style={{ mixBlendMode: 'screen' }} />
+                <img src="/logoCopa.png" alt="" width={22} height={22} className="object-contain opacity-60" style={{ mixBlendMode: 'screen' }} />
                 {isZebra && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src="/zebra.png" alt="zebra" width={12} height={12} className="object-contain" />
@@ -267,9 +267,9 @@ function NavArrow({ dir, disabled, onClick }: { dir: 'left' | 'right'; disabled:
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`flex items-center justify-center w-7 h-7 rounded-full transition text-gray-400 ${disabled ? 'opacity-20 cursor-not-allowed' : 'hover:bg-white/10 hover:text-white active:scale-95'}`}
+      className={`flex items-center justify-center w-10 h-10 rounded-full transition text-xl font-bold ${disabled ? 'text-gray-700 cursor-not-allowed' : 'text-gray-300 hover:bg-white/10 hover:text-white active:scale-95'}`}
     >
-      {dir === 'left' ? '‹' : '›'}
+      {dir === 'left' ? '←' : '→'}
     </button>
   )
 }
