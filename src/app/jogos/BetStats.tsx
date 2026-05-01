@@ -93,11 +93,13 @@ export function BetStats({ match, matchBets, participants, minorityMap, isZebra,
             <h2 className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Distribuição de Palpites</h2>
           </div>
 
-          {/* 3-column percentage header — aligns with scoreboard [home | logo | away] */}
-          <div className="grid grid-cols-3 text-center text-xs font-bold text-gray-400 tabular-nums pb-2 border-b border-gray-50">
-            <span>{fmtPct(colTotals.H)}</span>
-            <span>{fmtPct(colTotals.D)}</span>
-            <span>{fmtPct(colTotals.A)}</span>
+          {/* 3-column percentage header — centered to align with scoreboard center (~256px) */}
+          <div className="flex justify-center pb-2 border-b border-gray-50">
+            <div className="grid grid-cols-3 text-center text-xs font-bold text-gray-400 tabular-nums w-64">
+              <span>{fmtPct(colTotals.H)}</span>
+              <span>{fmtPct(colTotals.D)}</span>
+              <span>{fmtPct(colTotals.A)}</span>
+            </div>
           </div>
 
           {/* Bet rows — Score | Count(%) | Points */}

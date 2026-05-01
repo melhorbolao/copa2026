@@ -117,13 +117,13 @@ export function ScoreHeader({
           <div className="flex items-center gap-1 px-3 pt-2.5 pb-1">
 
             {/* Left: stacked nav arrows + phase label */}
-            <div className="flex items-center gap-1 flex-1 min-w-0">
-              <div className="flex flex-col items-center">
+            <div className="flex items-center gap-0.5 flex-1 min-w-0">
+              <div className="flex flex-col items-center shrink-0">
                 <NavArrow dir="left" disabled={matchIdx === 0} onClick={() => onNavigate(-1)} />
                 <NavArrow dir="right" disabled={matchIdx === matches.length - 1} onClick={() => onNavigate(1)} />
               </div>
               <div className="min-w-0">
-                <div className="text-[9px] text-gray-600 leading-none truncate">{phaseLabel}</div>
+                <div className="text-xs text-gray-400 leading-tight truncate">{phaseLabel}</div>
               </div>
             </div>
 
@@ -136,7 +136,7 @@ export function ScoreHeader({
               {/* Center logo + zebra */}
               <div className="flex flex-col items-center gap-0.5 px-0.5">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/logoCopa.png" alt="" width={22} height={22} className="object-contain opacity-60" style={{ mixBlendMode: 'screen' }} />
+                <img src="/logoCopa.png" alt="" width={24} height={24} className="object-contain" />
                 {isZebra && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src="/zebra.png" alt="zebra" width={12} height={12} className="object-contain" />
@@ -151,10 +151,10 @@ export function ScoreHeader({
             {/* Right: date/city + stadium icon */}
             <div className="flex items-center gap-1.5 flex-1 justify-end min-w-0">
               <div className="min-w-0 text-right">
-                <div className="text-[10px] text-gray-400 leading-none truncate">
+                <div className="text-xs text-gray-300 leading-tight truncate font-medium">
                   {fmtDate(match.match_datetime)}
                 </div>
-                <div className="text-[9px] text-gray-600 leading-none mt-0.5 truncate">{match.city}</div>
+                <div className="text-[10px] text-gray-500 leading-tight mt-0.5 truncate">{match.city}</div>
               </div>
               <button
                 onClick={() => setShowPresence(v => !v)}
@@ -267,9 +267,14 @@ function NavArrow({ dir, disabled, onClick }: { dir: 'left' | 'right'; disabled:
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`flex items-center justify-center w-10 h-10 rounded-full transition text-xl font-bold ${disabled ? 'text-gray-700 cursor-not-allowed' : 'text-gray-300 hover:bg-white/10 hover:text-white active:scale-95'}`}
+      className={`flex items-center justify-center w-9 h-9 transition ${disabled ? 'opacity-20 cursor-not-allowed' : 'active:scale-95'}`}
     >
-      {dir === 'left' ? '←' : '→'}
+      <svg width="28" height="20" viewBox="0 0 28 20" fill="none">
+        {dir === 'left'
+          ? <path d="M17 2L5 10L17 18" stroke={disabled ? '#555' : '#ccc'} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
+          : <path d="M11 2L23 10L11 18" stroke={disabled ? '#555' : '#ccc'} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
+        }
+      </svg>
     </button>
   )
 }
@@ -282,7 +287,7 @@ function TeamSide({ flag, abbr, side, goalAnim }: {
     <div className="flex flex-col items-center">
       <div className={`flex items-center gap-1 ${side === 'away' ? 'flex-row-reverse' : ''}`}>
         <Flag code={flag} size="sm" className="w-7 h-[18px] rounded-[2px] object-cover" />
-        <span className="text-[10px] font-black text-white tracking-wide">{abbr}</span>
+        <span className="text-[11px] font-black text-white tracking-wide">{abbr}</span>
       </div>
       {/* ⚽ aparece centralizado abaixo da sigla, ocupa espaço fixo para não empurrar layout */}
       <div className="h-3 flex items-center justify-center">
@@ -292,14 +297,14 @@ function TeamSide({ flag, abbr, side, goalAnim }: {
   )
 }
 
-/** Retângulo ciano vertical com o dígito do placar */
+/** Retângulo ciano preenchido com o dígito do placar */
 function ScoreBox({ score, editing, inputVal, onInput }: {
   score: number | null; editing: boolean; inputVal: string; onInput: (v: string) => void
 }) {
   return (
     <div
-      className="flex items-center justify-center font-black text-base px-2 py-1 min-w-[2rem] rounded-md"
-      style={{ background: editing ? '#333' : '#0a0f0f', border: `2px solid ${CYAN}`, color: CYAN }}
+      className="flex items-center justify-center font-black text-lg px-2 py-1 min-w-[2.2rem] rounded-md"
+      style={{ background: editing ? '#333' : CYAN, border: `2px solid ${CYAN}`, color: editing ? CYAN : '#000' }}
     >
       {editing
         ? <input
@@ -311,7 +316,7 @@ function ScoreBox({ score, editing, inputVal, onInput }: {
           />
         : score !== null
           ? <span className="tabular-nums">{score}</span>
-          : <span className="text-gray-600 text-sm font-bold">–</span>
+          : <span className="font-bold text-black/40">–</span>
       }
     </div>
   )
