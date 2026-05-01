@@ -136,7 +136,7 @@ export function ScoreHeader({
               {/* Center logo + zebra */}
               <div className="flex flex-col items-center gap-0.5 px-0.5">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/logoCopa.png" alt="" width={24} height={24} className="object-contain" />
+                <img src="/logoCopa.png" alt="" width={24} height={24} className="object-contain rounded-sm" style={{ background: '#CC0000', padding: '2px' }} />
                 {isZebra && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src="/zebra.png" alt="zebra" width={12} height={12} className="object-contain" />
@@ -303,7 +303,7 @@ function ScoreBox({ score, editing, inputVal, onInput }: {
 }) {
   return (
     <div
-      className="flex items-center justify-center font-black text-lg px-2 py-1 min-w-[2.2rem] rounded-md"
+      className="flex items-center justify-center font-black text-lg px-2 py-1 min-w-[2.2rem]"
       style={{ background: editing ? '#333' : CYAN, border: `2px solid ${CYAN}`, color: editing ? CYAN : '#000' }}
     >
       {editing
