@@ -316,6 +316,8 @@ export function JogosDashboard({
           matchBets={matchBets}
           participants={participants}
           minorityMap={minorityMap}
+          isZebra={headerZebra}
+          rules={rules}
           abbr={abbr}
         />
 
