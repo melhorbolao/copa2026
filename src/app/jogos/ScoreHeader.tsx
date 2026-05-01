@@ -82,10 +82,8 @@ export function ScoreHeader({
 
   const togglePresence = () => {
     if (amPresent) {
-      // Remove
       startPresence(async () => { await upsertAttendance(match.id, [], false) })
     } else {
-      // Open selection modal
       const myPids = userToParticipants[userId] ?? []
       setSelectedPids(myPids)
       setPresenceSelecting(true)
@@ -110,7 +108,7 @@ export function ScoreHeader({
   return (
     <>
       {/* Fixed pill header */}
-      <div className="fixed top-14 sm:top-0 left-0 right-0 z-40 flex justify-center px-2 pt-2 pb-1 pointer-events-none">
+      <div className="fixed top-14 sm:top-0 left-0 right-0 z-40 flex justify-center px-3 pt-2 pb-1 pointer-events-none">
         <div
           className="w-full max-w-3xl rounded-2xl shadow-2xl pointer-events-auto"
           style={{ background: '#1A1A1A', border: '1px solid #2a2a2a' }}
@@ -129,36 +127,25 @@ export function ScoreHeader({
               </div>
             </div>
 
-            {/* Center: scoreboard */}
-            <div className="flex items-center gap-2 shrink-0">
-              {/* Home */}
-              <TeamBlock
-                flag={match.flag_home}
-                abbr={abbr(match.team_home)}
-                score={match.score_home}
-                goalAnim={goalAnim.home}
-                side="home"
-                editing={editing}
-                inputVal={ih}
-                onInput={setIh}
-                isZebra={isZebra}
-              />
+            {/* Center: [flag abbr] [score] [logo] [score] [abbr flag] */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <TeamSide flag={match.flag_home} abbr={abbr(match.team_home)} side="home" goalAnim={goalAnim.home} />
 
-              {/* Separator */}
-              <div className="text-gray-500 font-bold text-sm select-none">·</div>
+              <ScoreBox score={match.score_home} editing={editing} inputVal={ih} onInput={setIh} />
 
-              {/* Away */}
-              <TeamBlock
-                flag={match.flag_away}
-                abbr={abbr(match.team_away)}
-                score={match.score_away}
-                goalAnim={goalAnim.away}
-                side="away"
-                editing={editing}
-                inputVal={ia}
-                onInput={setIa}
-                isZebra={isZebra}
-              />
+              {/* Center logo + zebra */}
+              <div className="flex flex-col items-center gap-0.5 px-0.5">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/logoCopa.png" alt="" width={22} height={22} className="object-contain opacity-60" style={{ mixBlendMode: 'screen' }} />
+                {isZebra && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src="/zebra.png" alt="zebra" width={12} height={12} className="object-contain" />
+                )}
+              </div>
+
+              <ScoreBox score={match.score_away} editing={editing} inputVal={ia} onInput={setIa} />
+
+              <TeamSide flag={match.flag_away} abbr={abbr(match.team_away)} side="away" goalAnim={goalAnim.away} />
             </div>
 
             {/* Right: date/city + stadium icon */}
@@ -208,7 +195,7 @@ export function ScoreHeader({
         </div>
       </div>
 
-      {/* Presence: who's there popup */}
+      {/* Presence popup */}
       {showPresence && (
         <div className="fixed inset-0 z-50 flex items-end justify-center p-4" onClick={() => setShowPresence(false)}>
           <div className="w-full max-w-sm rounded-2xl bg-gray-900 border border-gray-700 p-4" onClick={e => e.stopPropagation()}>
@@ -280,52 +267,52 @@ function NavArrow({ dir, disabled, onClick }: { dir: 'left' | 'right'; disabled:
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`flex items-center justify-center w-7 h-7 rounded-full transition text-gray-400 ${disabled ? 'opacity-20 cursor-not-allowed' : 'hover:bg-white/10 hover:text-white active:scale-95'}`}
+      className={`flex items-center justify-center w-10 h-10 rounded-full transition text-xl font-bold ${disabled ? 'text-gray-700 cursor-not-allowed' : 'text-gray-300 hover:bg-white/10 hover:text-white active:scale-95'}`}
     >
-      {dir === 'left' ? '‹' : '›'}
+      {dir === 'left' ? '←' : '→'}
     </button>
   )
 }
 
-function TeamBlock({ flag, abbr, score, goalAnim, side, editing, inputVal, onInput, isZebra }: {
-  flag: string; abbr: string; score: number | null; goalAnim: boolean
-  side: 'home' | 'away'; editing: boolean; inputVal: string; onInput: (v: string) => void; isZebra: boolean
+/** Bloco [bandeira + sigla] com ⚽ centralizado abaixo da sigla */
+function TeamSide({ flag, abbr, side, goalAnim }: {
+  flag: string; abbr: string; side: 'home' | 'away'; goalAnim: boolean
 }) {
   return (
-    <div className={`flex flex-col items-center gap-0.5 ${side === 'away' ? 'flex-col-reverse sm:flex-col' : ''}`}>
-      <div className="flex items-center gap-1.5">
-        {side === 'away' && (
-          <div
-            className="rounded flex items-center justify-center font-black text-white text-sm sm:text-base px-2 py-0.5 min-w-[2rem] text-center"
-            style={{ background: editing ? '#333' : '#1e1e1e', border: `1.5px solid ${CYAN}`, color: CYAN }}
-          >
-            {editing
-              ? <input value={inputVal} onChange={e => onInput(e.target.value)} className="w-8 bg-transparent text-center outline-none font-black" style={{ color: CYAN }} inputMode="numeric" />
-              : score !== null ? score : <span className="text-gray-600">–</span>
-            }
-          </div>
-        )}
-        <div className="flex flex-col items-center">
-          <Flag code={flag} size="sm" className="w-8 h-[21px] rounded-[2px] object-cover" />
-          <span className="text-[10px] font-black text-white tracking-wide mt-0.5">{abbr}</span>
-        </div>
-        {side === 'home' && (
-          <div
-            className="rounded flex items-center justify-center font-black text-white text-sm sm:text-base px-2 py-0.5 min-w-[2rem] text-center"
-            style={{ background: editing ? '#333' : '#1e1e1e', border: `1.5px solid ${CYAN}`, color: CYAN }}
-          >
-            {editing
-              ? <input value={inputVal} onChange={e => onInput(e.target.value)} className="w-8 bg-transparent text-center outline-none font-black" style={{ color: CYAN }} inputMode="numeric" />
-              : score !== null ? score : <span className="text-gray-600">–</span>
-            }
-          </div>
-        )}
+    <div className="flex flex-col items-center">
+      <div className={`flex items-center gap-1 ${side === 'away' ? 'flex-row-reverse' : ''}`}>
+        <Flag code={flag} size="sm" className="w-7 h-[18px] rounded-[2px] object-cover" />
+        <span className="text-[10px] font-black text-white tracking-wide">{abbr}</span>
       </div>
-      {/* Goal animation & zebra */}
-      <div className="h-4 flex items-center justify-center gap-1">
-        {goalAnim && <span className="text-sm animate-bounce">⚽</span>}
-        {isZebra && <img src="/zebra.png" alt="zebra" width={16} height={16} className="object-contain" />}
+      {/* ⚽ aparece centralizado abaixo da sigla, ocupa espaço fixo para não empurrar layout */}
+      <div className="h-3 flex items-center justify-center">
+        {goalAnim && <span className="text-[11px] animate-bounce leading-none">⚽</span>}
       </div>
+    </div>
+  )
+}
+
+/** Retângulo ciano vertical com o dígito do placar */
+function ScoreBox({ score, editing, inputVal, onInput }: {
+  score: number | null; editing: boolean; inputVal: string; onInput: (v: string) => void
+}) {
+  return (
+    <div
+      className="flex items-center justify-center font-black text-base px-2 py-1 min-w-[2rem] rounded-md"
+      style={{ background: editing ? '#333' : '#0a0f0f', border: `2px solid ${CYAN}`, color: CYAN }}
+    >
+      {editing
+        ? <input
+            value={inputVal}
+            onChange={e => onInput(e.target.value)}
+            className="w-7 bg-transparent text-center outline-none font-black"
+            style={{ color: CYAN }}
+            inputMode="numeric"
+          />
+        : score !== null
+          ? <span className="tabular-nums">{score}</span>
+          : <span className="text-gray-600 text-sm font-bold">–</span>
+      }
     </div>
   )
 }

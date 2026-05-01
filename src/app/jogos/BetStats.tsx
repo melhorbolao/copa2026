@@ -23,7 +23,10 @@ type BetGroup = {
   pts: number | null
   isExact: boolean
   isImpossible: boolean
-  isMinority: boolean
+}
+
+function fmtPct(n: number) {
+  return n.toFixed(1).replace('.', ',') + '%'
 }
 
 export function BetStats({ match, matchBets, participants, minorityMap, isZebra, rules, abbr }: Props) {
@@ -43,11 +46,10 @@ export function BetStats({ match, matchBets, participants, minorityMap, isZebra,
         const result = getMatchResult(sh, sa)
         const isExact = hasResult && match.score_home === sh && match.score_away === sa
         const isImpossible = hasResult && ((match.score_home! > sh) || (match.score_away! > sa))
-        const isMinority = minorityMap ? minorityMap[result] : false
         const pts = hasResult
           ? scoreMatchBet(sh, sa, match.score_home!, match.score_away!, isZebra, match.is_brazil, rules)
           : null
-        return { score_home: sh, score_away: sa, result, count, pct: (count / total) * 100, pts, isExact, isImpossible, isMinority }
+        return { score_home: sh, score_away: sa, result, count, pct: (count / total) * 100, pts, isExact, isImpossible }
       })
       .sort((a, b) => b.count - a.count)
   }, [matchBets, match.score_home, match.score_away, hasResult, minorityMap, isZebra, rules, match.is_brazil])
@@ -77,120 +79,74 @@ export function BetStats({ match, matchBets, participants, minorityMap, isZebra,
     <div className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
       <div className="flex">
 
-        {/* Left zebra strip — visible only when actual result is minority */}
+        {/* Large zebra on left when actual result is minority */}
         {isZebra && (
-          <div className="flex flex-col items-center justify-center gap-1.5 bg-gray-900 px-2 py-3 shrink-0">
+          <div className="flex items-center justify-center px-3 py-2 shrink-0 self-stretch">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/zebra.png" alt="zebra" width={36} height={36} className="object-contain animate-bounce" />
-            <span
-              className="text-[7px] font-black text-yellow-300 uppercase tracking-widest"
-              style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
-            >ZEBRA</span>
+            <img src="/zebra.png" alt="zebra" width={110} height={110} className="object-contain" />
           </div>
         )}
 
         <div className="flex-1 min-w-0">
-          <div className="px-4 pt-3 pb-1">
-            <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wide">Distribuição de Palpites</h2>
+          {/* Title */}
+          <div className="px-4 pt-3 pb-1 text-center">
+            <h2 className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Distribuição de Palpites</h2>
           </div>
 
-          {/* Column header (Home / X / Away) with percentages */}
-          <div className="grid grid-cols-3 border-b border-gray-100 text-center text-[11px] font-bold px-4 py-2 gap-1">
-            {(['H', 'D', 'A'] as const).map(r => {
-              const isZebraCol = !!minorityMap?.[r]
+          {/* 3-column percentage header — aligns with scoreboard [home | logo | away] */}
+          <div className="grid grid-cols-3 text-center text-xs font-bold text-gray-400 tabular-nums pb-2 border-b border-gray-50">
+            <span>{fmtPct(colTotals.H)}</span>
+            <span>{fmtPct(colTotals.D)}</span>
+            <span>{fmtPct(colTotals.A)}</span>
+          </div>
+
+          {/* Bet rows — Score | Count(%) | Points */}
+          <div className="divide-y divide-gray-50">
+            {groups.map(g => {
+              // isImpossible: a team already exceeded this bet → strikethrough
+              // pts=0 without impossible: just light gray
+              const textScore = g.isExact
+                ? 'text-blue-600'
+                : g.isImpossible
+                  ? 'text-gray-300 line-through'
+                  : (g.pts === 0 && hasResult)
+                    ? 'text-gray-300'
+                    : 'text-gray-700'
+              const textMeta = g.isExact
+                ? 'text-blue-500 font-semibold'
+                : (g.pts === 0 && hasResult) ? 'text-gray-300' : 'text-gray-500'
+              const textPts = g.isExact
+                ? 'text-blue-600'
+                : (g.pts === 0 && hasResult) ? 'text-gray-300' : 'text-gray-400'
+
               return (
-                <div key={r} className={`flex flex-col items-center gap-0.5 rounded-lg py-1 ${isZebraCol ? 'bg-gray-900' : ''}`}>
-                  <div className="flex items-center gap-1">
-                    <span className={isZebraCol ? 'text-white font-black' : 'text-gray-500'}>
-                      {r === 'H' ? abbr(match.team_home) : r === 'A' ? abbr(match.team_away) : 'X'}
-                    </span>
-                    {isZebraCol && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src="/zebra.png" alt="zebra" width={20} height={20} className="object-contain animate-bounce" />
-                    )}
-                  </div>
-                  <span className={`text-base font-black ${isZebraCol ? 'text-yellow-300' : 'text-gray-700'}`}>
-                    {colTotals[r].toFixed(0)}%
+                <div
+                  key={`${g.score_home}-${g.score_away}`}
+                  className={`grid grid-cols-[5rem_1fr_3.5rem] items-center px-4 py-1 gap-1 ${g.isExact ? 'bg-blue-50/60' : ''}`}
+                >
+                  <span className={`font-mono font-bold tabular-nums text-sm ${textScore}`}>
+                    {g.score_home}x{g.score_away}
+                  </span>
+                  <span className={`text-xs tabular-nums ${textMeta}`}>
+                    {g.count} ({g.pct.toFixed(0)}%)
+                  </span>
+                  <span className={`text-sm font-bold tabular-nums text-right ${textPts}`}>
+                    {g.pts !== null ? (g.pts > 0 ? `+${g.pts}` : '0') : ''}
                   </span>
                 </div>
               )
             })}
           </div>
 
-          {/* Bet rows */}
-          <div className="divide-y divide-gray-50">
-            {groups.map(g => (
-              <div
-                key={`${g.score_home}-${g.score_away}`}
-                className={`flex items-center px-4 py-1.5 gap-2 ${
-                  g.isExact ? 'bg-emerald-50'
-                  : g.isImpossible ? 'bg-rose-50/60'
-                  : g.isMinority ? 'border-l-2 border-gray-800'
-                  : ''
-                }`}
-              >
-                {/* Score pill */}
-                <span className={`font-mono font-bold tabular-nums text-xs w-11 text-center rounded px-1 py-0.5 shrink-0 ${
-                  g.isExact ? 'bg-emerald-100 text-emerald-700'
-                  : g.isImpossible ? 'text-rose-400 line-through'
-                  : g.isMinority ? 'bg-gray-900 text-white'
-                  : 'text-gray-700'
-                }`}>
-                  {g.score_home}–{g.score_away}
-                </span>
-
-                {/* Count + % */}
-                <span className="text-[11px] tabular-nums text-gray-500 shrink-0 w-14">
-                  {g.count} <span className="text-gray-300">·</span> {g.pct.toFixed(0)}%
-                </span>
-
-                {/* Bar */}
-                <div className="flex-1 relative h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                  <div
-                    className={`absolute left-0 top-0 h-full rounded-full ${
-                      g.isExact ? 'bg-emerald-400'
-                      : g.isImpossible ? 'bg-rose-300'
-                      : g.isMinority ? 'bg-gray-800'
-                      : 'bg-blue-300'
-                    }`}
-                    style={{ width: `${g.pct}%` }}
-                  />
-                </div>
-
-                {/* Points earned */}
-                <span className={`text-xs tabular-nums font-bold w-10 text-right shrink-0 ${
-                  g.pts === null ? 'text-gray-200'
-                  : g.pts === 0 ? 'text-gray-300'
-                  : g.isExact ? 'text-emerald-600'
-                  : 'text-blue-500'
-                }`}>
-                  {g.pts !== null ? (g.pts > 0 ? `+${g.pts}` : '0') : '—'}
-                </span>
-
-                {/* Status icon */}
-                <span className="w-4 text-center shrink-0">
-                  {g.isExact && <span className="text-emerald-500 font-bold text-xs">✓</span>}
-                  {g.isImpossible && !g.isExact && <span className="text-rose-400 font-bold text-xs">✕</span>}
-                  {g.isMinority && !g.isExact && !g.isImpossible && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src="/zebra.png" alt="zebra" width={14} height={14} className="object-contain inline" />
-                  )}
-                </span>
+          {/* Average */}
+          {avgPts !== null && (
+            <div className="px-4 py-2 text-right border-t border-gray-50">
+              <div className="text-sm font-bold text-gray-600 tabular-nums">
+                {avgPts.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
               </div>
-            ))}
-          </div>
-
-          {/* Footer */}
-          <div className="px-4 py-1.5 border-t border-gray-50 flex items-center justify-between">
-            <span className="text-[10px] text-gray-400">
-              {matchBets.length} palpites · {participants.length} participantes
-            </span>
-            {avgPts !== null && (
-              <span className="text-[10px] text-gray-500">
-                Média: <span className="font-bold text-blue-500">{avgPts.toFixed(1)} pts</span>
-              </span>
-            )}
-          </div>
+              <div className="text-[10px] text-gray-400">(média)</div>
+            </div>
+          )}
         </div>
       </div>
     </div>

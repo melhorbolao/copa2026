@@ -16,7 +16,7 @@ interface Props {
   teamAbbrs: Record<string, string>
 }
 
-type SortKey = 'pos' | 'total' | 'match'
+type SortKey = 'pos' | 'total' | 'match' | 'delta'
 type SortDir = 'asc' | 'desc'
 
 export function RankingPanel({
@@ -45,7 +45,7 @@ export function RankingPanel({
       setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     } else {
       setSortKey(key)
-      setSortDir(key === 'pos' ? 'asc' : 'desc')
+      setSortDir(key === 'pos' ? 'asc' : 'desc')  // delta: more gain first (desc)
     }
   }
 
@@ -68,6 +68,7 @@ export function RankingPanel({
       if (sortKey === 'pos') diff = a.after - b.after
       else if (sortKey === 'total') diff = b.total - a.total
       else if (sortKey === 'match') diff = b.ptsGained - a.ptsGained
+      else if (sortKey === 'delta') diff = b.delta - a.delta
       return sortDir === 'asc' ? diff : -diff
     })
 
@@ -179,7 +180,9 @@ export function RankingPanel({
           <button className="flex items-center justify-end gap-0.5 hover:text-gray-600 transition" onClick={() => handleSort('match')}>
             PTS Jogo<SortArrow k="match" />
           </button>
-          <span className="text-right">↑↓</span>
+          <button className="flex items-center justify-end gap-0.5 hover:text-gray-600 transition" onClick={() => handleSort('delta')}>
+            ↑↓<SortArrow k="delta" />
+          </button>
         </div>
 
         <div className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
