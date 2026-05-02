@@ -80,19 +80,31 @@ export function ScoreHeader({
     })
   }
 
-  const togglePresence = () => {
+  const myPids       = userToParticipants[userId] ?? []
+  const myParticipants = participants.filter(p => myPids.includes(p.id))
+
+  const openPresenceEditor = () => {
     if (amPresent) {
-      startPresence(async () => { await upsertAttendance(match.id, [], false) })
+      // Pre-select what's already saved (intersection with user's own pids)
+      const current = (myAttendance?.participant_ids ?? []).filter(id => myPids.includes(id))
+      setSelectedPids(current)
     } else {
-      const myPids = userToParticipants[userId] ?? []
-      setSelectedPids(myPids)
-      setPresenceSelecting(true)
+      // Default: only the active participant (or first if no active)
+      const def = activeParticipantId && myPids.includes(activeParticipantId)
+        ? [activeParticipantId]
+        : myPids.slice(0, 1)
+      setSelectedPids(def)
     }
+    setPresenceSelecting(true)
   }
 
   const confirmPresence = () => {
     startPresence(async () => {
-      await upsertAttendance(match.id, selectedPids, true)
+      if (selectedPids.length === 0) {
+        await upsertAttendance(match.id, [], false)
+      } else {
+        await upsertAttendance(match.id, selectedPids, true)
+      }
       setPresenceSelecting(false)
     })
   }
@@ -247,11 +259,11 @@ export function ScoreHeader({
                 </ul>
             }
             <button
-              onClick={() => { setShowPresence(false); togglePresence() }}
+              onClick={() => { setShowPresence(false); openPresenceEditor() }}
               disabled={presencePending}
-              className={`w-full rounded-xl py-2 text-sm font-bold transition ${amPresent ? 'bg-red-900 text-red-300 hover:bg-red-800' : 'bg-cyan-500 text-black hover:bg-cyan-400'}`}
+              className="w-full rounded-xl py-2 text-sm font-bold transition bg-cyan-500 text-black hover:bg-cyan-400"
             >
-              {presencePending ? '…' : amPresent ? 'Cancelar minha presença' : 'Marcar presença'}
+              {presencePending ? '…' : amPresent ? 'Editar presença' : 'Marcar presença'}
             </button>
           </div>
         </div>
@@ -261,10 +273,10 @@ export function ScoreHeader({
       {presenceSelecting && (
         <div className="fixed inset-0 z-50 flex items-end justify-center p-4" onClick={() => setPresenceSelecting(false)}>
           <div className="w-full max-w-sm rounded-2xl bg-gray-900 border border-gray-700 p-4" onClick={e => e.stopPropagation()}>
-            <p className="text-sm font-bold text-white mb-1">Marcar presença</p>
-            <p className="text-xs text-gray-400 mb-3">Quem está com você no estádio?</p>
+            <p className="text-sm font-bold text-white mb-1">{amPresent ? 'Editar presença' : 'Marcar presença'}</p>
+            <p className="text-xs text-gray-400 mb-3">{amPresent ? 'Desmarque todos para remover sua presença.' : 'Quem está com você no estádio?'}</p>
             <ul className="space-y-1 max-h-52 overflow-y-auto mb-3">
-              {participants.map(p => (
+              {myParticipants.map(p => (
                 <li key={p.id}>
                   <label className="flex items-center gap-2 cursor-pointer py-1">
                     <input
