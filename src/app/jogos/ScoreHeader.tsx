@@ -132,32 +132,41 @@ export function ScoreHeader({
               </div>
             </div>
 
-            {/* Center: one items-stretch strip — all 5 elements share the same height */}
-            <div className="flex flex-col items-center shrink-0">
-              <div className="flex items-stretch gap-0">
-                <div className="flex items-center gap-1 px-1.5 bg-black">
+            {/* Center: [team-col][score|logo|score][team-col] — items-start aligns tops */}
+            <div className="flex items-start gap-0 shrink-0">
+
+              {/* Home column: black bar on top, goal ball below */}
+              <div className="flex flex-col items-center">
+                <div className="flex items-center gap-1 px-1.5 h-8 bg-black">
                   <Flag code={match.flag_home} size="sm" className="w-8 h-[26px] rounded-[2px] object-cover" />
                   <span className="text-[13px] font-black text-white tracking-wide">{abbr(match.team_home)}</span>
                 </div>
+                <div className="h-4 flex items-center justify-center mt-0.5">
+                  {goalAnim.home && <span className="text-base leading-none select-none">⚽</span>}
+                </div>
+              </div>
+
+              {/* Score strip: score | red-logo | score */}
+              <div className="flex items-stretch gap-0">
                 <ScoreBox score={match.score_home} editing={editing} inputVal={ih} onInput={setIh} />
                 <div className="relative flex items-center justify-center w-9" style={{ background: '#FD1111' }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src="/logoCopa.png" alt="" className="absolute z-10" style={{ height: '38px', width: 'auto' }} />
                 </div>
                 <ScoreBox score={match.score_away} editing={editing} inputVal={ia} onInput={setIa} />
-                <div className="flex items-center gap-1 px-1.5 bg-black flex-row-reverse">
+              </div>
+
+              {/* Away column: black bar on top, goal ball below */}
+              <div className="flex flex-col items-center">
+                <div className="flex items-center gap-1 px-1.5 h-8 bg-black flex-row-reverse">
                   <Flag code={match.flag_away} size="sm" className="w-8 h-[26px] rounded-[2px] object-cover" />
                   <span className="text-[13px] font-black text-white tracking-wide">{abbr(match.team_away)}</span>
                 </div>
-              </div>
-              <div className="flex w-full justify-between h-3">
-                <div className="flex items-center justify-center">
-                  {goalAnim.home && <span className="text-[11px] animate-bounce leading-none">⚽</span>}
-                </div>
-                <div className="flex items-center justify-center">
-                  {goalAnim.away && <span className="text-[11px] animate-bounce leading-none">⚽</span>}
+                <div className="h-4 flex items-center justify-center mt-0.5">
+                  {goalAnim.away && <span className="text-base leading-none select-none">⚽</span>}
                 </div>
               </div>
+
             </div>
 
             {/* Right: date/city + stadium icon */}
