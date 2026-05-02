@@ -247,24 +247,22 @@ export function JogosDashboard({
     return pts
   }, [match?.score_home, match?.score_away, matchBets, match?.is_brazil, rules, threshold])
 
-  // Points WITHOUT this match (using stored totals minus stored match bet points)
+  // Points WITHOUT this match (live total minus this match's contribution)
   const ptsWithoutMatch = useMemo(() => {
     const out: Record<string, number> = {}
     for (const p of participants) {
-      const stored = storedTotals[p.id] ?? 0
-      const storedBet = bets.find(b => b.match_id === match?.id && b.participant_id === p.id)
-      out[p.id] = stored - (storedBet?.points ?? 0)
+      out[p.id] = (livePoints[p.id] ?? 0) - (matchPoints[p.id] ?? 0)
     }
     return out
-  }, [participants, storedTotals, bets, match?.id])
+  }, [participants, livePoints, matchPoints])
 
-  // Ranking before (by stored totals)
+  // Ranking before (live total without this match)
   const rankBefore = useMemo(() => {
-    const sorted = [...participants].sort((a, b) => (storedTotals[b.id] ?? 0) - (storedTotals[a.id] ?? 0))
+    const sorted = [...participants].sort((a, b) => (ptsWithoutMatch[b.id] ?? 0) - (ptsWithoutMatch[a.id] ?? 0))
     const out: Record<string, number> = {}
     sorted.forEach((p, i) => { out[p.id] = i + 1 })
     return out
-  }, [participants, storedTotals])
+  }, [participants, ptsWithoutMatch])
 
   // Ranking after (stored without match + new match points)
   const rankAfter = useMemo(() => {
