@@ -111,7 +111,7 @@ export function ScoreHeader({
       <div className="fixed top-14 sm:top-0 left-0 right-0 z-40 flex justify-center px-3 pt-2 pb-1 pointer-events-none">
         <div
           className="w-full max-w-3xl rounded-2xl shadow-2xl pointer-events-auto"
-          style={{ background: '#1A1A1A', border: '1px solid #2a2a2a' }}
+          style={{ background: '#2a2a2a', border: '1px solid #3a3a3a' }}
         >
           {/* Top row: nav+phase | scoreboard | date+stadium */}
           <div className="flex items-center gap-1 px-3 pt-2.5 pb-1">
@@ -127,23 +127,25 @@ export function ScoreHeader({
               </div>
             </div>
 
-            {/* Center: [flag abbr] [score] [logo] [score] [abbr flag] */}
-            <div className="flex items-center gap-1.5 shrink-0">
+            {/* Center: [team] [score|logo|score strip] [team] */}
+            <div className="flex items-start gap-0 shrink-0">
               <TeamSide flag={match.flag_home} abbr={abbr(match.team_home)} side="home" goalAnim={goalAnim.home} />
 
-              <ScoreBox score={match.score_home} editing={editing} inputVal={ih} onInput={setIh} />
-
-              {/* Center logo + zebra */}
-              <div className="flex flex-col items-center gap-0.5 px-0.5">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/logoCopa.png" alt="" width={24} height={24} className="object-contain rounded-sm" style={{ background: '#CC0000', padding: '2px' }} />
+              <div className="flex flex-col items-center">
+                {/* Continuous strip: score | red-logo | score — all same height via items-stretch */}
+                <div className="flex items-stretch">
+                  <ScoreBox score={match.score_home} editing={editing} inputVal={ih} onInput={setIh} />
+                  <div className="flex items-center justify-center px-1.5" style={{ background: '#CC0000' }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src="/logoCopa.png" alt="" width={22} height={22} className="object-contain" />
+                  </div>
+                  <ScoreBox score={match.score_away} editing={editing} inputVal={ia} onInput={setIa} />
+                </div>
                 {isZebra && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src="/zebra.png" alt="zebra" width={12} height={12} className="object-contain" />
+                  <img src="/zebra.png" alt="zebra" width={12} height={12} className="object-contain mt-0.5" />
                 )}
               </div>
-
-              <ScoreBox score={match.score_away} editing={editing} inputVal={ia} onInput={setIa} />
 
               <TeamSide flag={match.flag_away} abbr={abbr(match.team_away)} side="away" goalAnim={goalAnim.away} />
             </div>
@@ -285,7 +287,7 @@ function TeamSide({ flag, abbr, side, goalAnim }: {
 }) {
   return (
     <div className="flex flex-col items-center">
-      <div className={`flex items-center gap-1 ${side === 'away' ? 'flex-row-reverse' : ''}`}>
+      <div className={`flex items-center gap-1 px-1.5 py-1 bg-black ${side === 'away' ? 'flex-row-reverse' : ''}`}>
         <Flag code={flag} size="sm" className="w-7 h-[18px] rounded-[2px] object-cover" />
         <span className="text-[11px] font-black text-white tracking-wide">{abbr}</span>
       </div>
@@ -304,7 +306,7 @@ function ScoreBox({ score, editing, inputVal, onInput }: {
   return (
     <div
       className="flex items-center justify-center font-black text-lg px-2 py-1 min-w-[2.2rem]"
-      style={{ background: editing ? '#333' : CYAN, border: `2px solid ${CYAN}`, color: editing ? CYAN : '#000' }}
+      style={{ background: editing ? '#333' : CYAN, border: editing ? `2px solid ${CYAN}` : '2px solid transparent', color: editing ? CYAN : '#000' }}
     >
       {editing
         ? <input
