@@ -30,6 +30,7 @@ type BetGroup = {
   isExact: boolean
   isImpossible: boolean
   medals: number[]
+  hasLantern: boolean
 }
 
 function fmtPct(n: number) {
@@ -46,6 +47,11 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
       if (r >= 1 && r <= 3) m.set(p.id, r)
     }
     return m
+  }, [participants, rankAfter])
+
+  const lanternPids = useMemo(() => {
+    const lastRank = Math.max(0, ...participants.map(p => rankAfter[p.id] ?? 0))
+    return new Set(participants.filter(p => (rankAfter[p.id] ?? 0) === lastRank && lastRank > 0).map(p => p.id))
   }, [participants, rankAfter])
 
   const groups = useMemo<BetGroup[]>(() => {
@@ -70,10 +76,11 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
           for (const [pid, r] of medalTier) if (r === rank && pidSet.has(pid)) return true
           return false
         })
-        return { score_home: sh, score_away: sa, result, count, pct: (count / total) * 100, pts, isExact, isImpossible, medals }
+        const hasLantern = [...pidSet].some(pid => lanternPids.has(pid))
+        return { score_home: sh, score_away: sa, result, count, pct: (count / total) * 100, pts, isExact, isImpossible, medals, hasLantern }
       })
       .sort((a, b) => b.count - a.count)
-  }, [matchBets, match.score_home, match.score_away, hasResult, isZebra, rules, match.is_brazil, medalTier])
+  }, [matchBets, match.score_home, match.score_away, hasResult, isZebra, rules, match.is_brazil, medalTier, lanternPids])
 
   const colTotals = useMemo(() => {
     const t = { H: 0, D: 0, A: 0 }
@@ -152,6 +159,7 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
           const scoreEl = (
             <span className="flex items-center justify-center gap-0.5">
               {g.medals.map(r => <span key={r} className="text-xs leading-none">{MEDAL[r]}</span>)}
+              {g.hasLantern && <span className="text-xs leading-none">🔦</span>}
               <span className={scoreClass}>{g.score_home}x{g.score_away}</span>
             </span>
           )
