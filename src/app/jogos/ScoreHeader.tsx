@@ -106,9 +106,10 @@ export function ScoreHeader({
   return (
     <>
       {/* Fixed pill header */}
-      <div className="fixed top-14 sm:top-0 left-0 right-0 z-40 flex justify-center px-3 pt-2 pb-1 pointer-events-none">
+      <div className="fixed top-14 sm:top-0 left-0 right-0 z-40 pt-2 pb-1 pointer-events-none">
+        <div className="max-w-3xl mx-auto px-3 sm:px-4">
         <div
-          className="w-full max-w-3xl rounded-2xl shadow-2xl pointer-events-auto"
+          className="w-full rounded-2xl shadow-2xl pointer-events-auto"
           style={{ background: '#2a2a2a', border: '1px solid #3a3a3a' }}
         >
           {/* Top row: nav+phase | scoreboard | date+stadium */}
@@ -217,6 +218,7 @@ export function ScoreHeader({
             </div>
           </div>
 
+        </div>
         </div>
       </div>
 

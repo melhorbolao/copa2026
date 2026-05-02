@@ -39,6 +39,7 @@ export function RankingPanel({
     .sort((a, b) => (matchPoints[b.id] ?? 0) - (matchPoints[a.id] ?? 0))[0]
 
   const participantMap = new Map(participants.map(p => [p.id, p]))
+  const betMap = new Map(matchBets.map(b => [b.participant_id, b]))
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -169,11 +170,12 @@ export function RankingPanel({
 
       {/* Full ranking table */}
       <div>
-        <div className="grid grid-cols-[2rem_1fr_4.5rem_4rem_2.5rem] text-[10px] font-bold text-gray-400 uppercase tracking-wide px-3 py-1.5 border-b border-gray-100">
+        <div className="grid grid-cols-[2rem_1fr_3rem_4.5rem_4rem_2.5rem] text-[10px] font-bold text-gray-400 uppercase tracking-wide px-3 py-1.5 border-b border-gray-100">
           <button className="flex items-center justify-center gap-0.5 hover:text-gray-600 transition" onClick={() => handleSort('pos')}>
             #<SortArrow k="pos" />
           </button>
           <span>Nome</span>
+          <span className="text-center">Palp</span>
           <button className="flex items-center justify-end gap-0.5 hover:text-gray-600 transition" onClick={() => handleSort('total')}>
             PTS Total<SortArrow k="total" />
           </button>
@@ -188,11 +190,16 @@ export function RankingPanel({
         <div className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
           {rankRows.map(row => (
             <div key={row.id}
-              className={`grid grid-cols-[2rem_1fr_4.5rem_4rem_2.5rem] items-center px-3 py-1.5 text-xs ${cravandoPids.has(row.id) ? 'bg-emerald-50' : ''}`}>
+              className={`grid grid-cols-[2rem_1fr_3rem_4.5rem_4rem_2.5rem] items-center px-3 py-1.5 text-xs ${cravandoPids.has(row.id) ? 'bg-emerald-50' : ''}`}>
               <span className="text-center font-bold text-gray-500">{row.after}</span>
               <span className={`font-medium truncate ${cravandoPids.has(row.id) ? 'text-emerald-700' : 'text-gray-800'}`}>
                 {row.apelido}
               </span>
+              {(() => { const b = betMap.get(row.id); return (
+                <span className="text-center tabular-nums font-mono text-[10px] text-gray-400">
+                  {b ? `${b.score_home}x${b.score_away}` : '–'}
+                </span>
+              )})()}
               <span className="text-right tabular-nums font-bold text-gray-700">
                 {row.total}
               </span>
