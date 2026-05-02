@@ -90,20 +90,9 @@ export function RankingPanel({
       {/* Cravando agora */}
       {cravando.length > 0 && (
         <div className="bg-emerald-50 border-b border-emerald-100 px-4 py-3">
-          <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wide">✓ Cravando agora</span>
-
-            {secador ? (
-              <button
-                onClick={() => setSecador(false)}
-                className="flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl bg-orange-100 border-2 border-orange-400 active:scale-95 transition"
-                title="Desativar secador"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/secador.png" alt="secador" width={40} height={40} className="object-contain animate-pulse" />
-                <span className="text-[8px] font-black text-orange-700 tracking-widest uppercase leading-none">On</span>
-              </button>
-            ) : (
+            {!secador && (
               <button
                 onClick={() => setSecador(true)}
                 className="px-3 py-1 rounded-full text-[10px] font-bold text-gray-400 border border-gray-200 hover:border-gray-400 hover:text-gray-600 transition"
@@ -114,28 +103,41 @@ export function RankingPanel({
             )}
           </div>
 
-          <div className="flex flex-wrap gap-1.5">
-            {cravando.map(b => {
-              const p = participantMap.get(b.participant_id)
-              if (!p) return null
-              const before = rankBefore[p.id] ?? 0
-              const after  = rankAfter[p.id]  ?? 0
-              const delta  = before - after
-              const isSecado = secador && topGainer && p.id !== topGainer.id
-              return (
-                <div key={p.id} className={`flex items-center gap-1 rounded-full px-2.5 py-1 shadow-sm border text-xs transition ${isSecado ? 'bg-orange-50 border-orange-300' : 'bg-white border-emerald-200'}`}>
-                  <span className={`font-semibold ${isSecado ? 'text-orange-500 line-through' : 'text-gray-800'}`}>{p.apelido}</span>
-                  <span className="text-gray-300">·</span>
-                  <span className="text-gray-400 tabular-nums">{before}→{after}</span>
-                  {delta > 0 && <span className="text-emerald-500 font-bold">↑{delta}</span>}
-                  {delta < 0 && <span className="text-rose-400 font-bold">↓{Math.abs(delta)}</span>}
-                  {isSecado && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src="/secador.png" alt="🌬" width={16} height={16} className="object-contain" />
-                  )}
-                </div>
-              )
-            })}
+          <div className="flex items-center gap-2">
+            {/* Secador to the left of chips, pointing right at the participants */}
+            {secador && (
+              <button
+                onClick={() => setSecador(false)}
+                className="shrink-0 active:scale-95 transition"
+                title="Desativar secador"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/secador.png" alt="secador" width={52} height={52}
+                  className="object-contain animate-pulse"
+                  style={{ transform: 'scaleX(-1)' }}
+                />
+              </button>
+            )}
+
+            <div className="flex flex-wrap gap-1.5">
+              {cravando.map(b => {
+                const p = participantMap.get(b.participant_id)
+                if (!p) return null
+                const before = rankBefore[p.id] ?? 0
+                const after  = rankAfter[p.id]  ?? 0
+                const delta  = before - after
+                const isSecado = secador && topGainer && p.id !== topGainer.id
+                return (
+                  <div key={p.id} className={`flex items-center gap-1 rounded-full px-2.5 py-1 shadow-sm border text-xs transition ${isSecado ? 'bg-orange-50 border-orange-300' : 'bg-white border-emerald-200'}`}>
+                    <span className={`font-semibold ${isSecado ? 'text-orange-500 line-through' : 'text-gray-800'}`}>{p.apelido}</span>
+                    <span className="text-gray-300">·</span>
+                    <span className="text-gray-400 tabular-nums">{before}→{after}</span>
+                    {delta > 0 && <span className="text-emerald-500 font-bold">↑{delta}</span>}
+                    {delta < 0 && <span className="text-rose-400 font-bold">↓{Math.abs(delta)}</span>}
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
       )}
