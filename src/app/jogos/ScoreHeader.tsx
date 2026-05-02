@@ -113,7 +113,7 @@ export function ScoreHeader({
           style={{ background: '#2a2a2a', border: '1px solid #3a3a3a' }}
         >
           {/* Top row: nav+phase | scoreboard | date+stadium */}
-          <div className="flex items-center gap-1 px-3 pt-1.5 pb-2">
+          <div className="flex items-center gap-1 px-3 pt-3 pb-1">
 
             {/* Left: stacked nav arrows + phase label */}
             <div className="flex items-center gap-0.5 flex-1 min-w-0">
