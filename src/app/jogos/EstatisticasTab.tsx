@@ -102,7 +102,7 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
               <button key={g}
                 onClick={() => setSelGroup(g)}
                 className={`px-2 py-0.5 rounded-full text-[11px] font-semibold transition ${selGroup === g ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-              >G{g}</button>
+              >{g}</button>
             ))}
           </div>
         </div>
