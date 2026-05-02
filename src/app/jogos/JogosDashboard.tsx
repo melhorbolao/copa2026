@@ -356,10 +356,9 @@ export function JogosDashboard({
           match={match}
           matchBets={matchBets}
           participants={participants}
-          minorityMap={minorityMap}
           isZebra={headerZebra}
           rules={rules}
-          abbr={abbr}
+          rankAfter={rankAfter}
         />
 
         <RankingPanel

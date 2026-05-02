@@ -4,14 +4,15 @@ import { useMemo } from 'react'
 import { getMatchResult, scoreMatchBet } from '@/lib/scoring/engine'
 import type { MatchFull, BetRaw, Participant } from './JogosDashboard'
 
+const MEDAL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' }
+
 interface Props {
   match: MatchFull
   matchBets: BetRaw[]
   participants: Participant[]
-  minorityMap: { H: boolean; D: boolean; A: boolean } | null
   isZebra: boolean
   rules: Record<string, number>
-  abbr: (t: string) => string
+  rankAfter: Record<string, number>
 }
 
 type BetGroup = {
@@ -23,36 +24,54 @@ type BetGroup = {
   pts: number | null
   isExact: boolean
   isImpossible: boolean
+  medals: number[]  // ranks (1/2/3) of top-3 participants who chose this score
 }
 
 function fmtPct(n: number) {
   return n.toFixed(1).replace('.', ',') + '%'
 }
 
-export function BetStats({ match, matchBets, participants, minorityMap, isZebra, rules, abbr }: Props) {
+export function BetStats({ match, matchBets, participants, isZebra, rules, rankAfter }: Props) {
   const hasResult = match.score_home !== null && match.score_away !== null
+
+  // pid → rank (1/2/3 only)
+  const medalTier = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const p of participants) {
+      const r = rankAfter[p.id]
+      if (r >= 1 && r <= 3) m.set(p.id, r)
+    }
+    return m
+  }, [participants, rankAfter])
 
   const groups = useMemo<BetGroup[]>(() => {
     if (matchBets.length === 0) return []
-    const map = new Map<string, { sh: number; sa: number; count: number }>()
+    const map = new Map<string, { sh: number; sa: number; count: number; pids: string[] }>()
     for (const b of matchBets) {
       const k = `${b.score_home}-${b.score_away}`
-      const prev = map.get(k) ?? { sh: b.score_home, sa: b.score_away, count: 0 }
-      map.set(k, { ...prev, count: prev.count + 1 })
+      const prev = map.get(k) ?? { sh: b.score_home, sa: b.score_away, count: 0, pids: [] }
+      map.set(k, { ...prev, count: prev.count + 1, pids: [...prev.pids, b.participant_id] })
     }
     const total = matchBets.length
     return [...map.values()]
-      .map(({ sh, sa, count }) => {
+      .map(({ sh, sa, count, pids }) => {
         const result = getMatchResult(sh, sa)
         const isExact = hasResult && match.score_home === sh && match.score_away === sa
-        const isImpossible = hasResult && ((match.score_home! > sh) || (match.score_away! > sa))
+        const isImpossible = hasResult && (match.score_home! > sh || match.score_away! > sa)
         const pts = hasResult
           ? scoreMatchBet(sh, sa, match.score_home!, match.score_away!, isZebra, match.is_brazil, rules)
           : null
-        return { score_home: sh, score_away: sa, result, count, pct: (count / total) * 100, pts, isExact, isImpossible }
+        const pidSet = new Set(pids)
+        const medals = [1, 2, 3].filter(rank => {
+          for (const [pid, r] of medalTier) {
+            if (r === rank && pidSet.has(pid)) return true
+          }
+          return false
+        })
+        return { score_home: sh, score_away: sa, result, count, pct: (count / total) * 100, pts, isExact, isImpossible, medals }
       })
       .sort((a, b) => b.count - a.count)
-  }, [matchBets, match.score_home, match.score_away, hasResult, minorityMap, isZebra, rules, match.is_brazil])
+  }, [matchBets, match.score_home, match.score_away, hasResult, isZebra, rules, match.is_brazil, medalTier])
 
   const colTotals = useMemo(() => {
     const t = { H: 0, D: 0, A: 0 }
@@ -77,60 +96,69 @@ export function BetStats({ match, matchBets, participants, minorityMap, isZebra,
 
   return (
     <div className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
+      <div className="px-4 pt-3 pb-1 text-center">
+        <h2 className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Distribuição de Palpites</h2>
+      </div>
+
       <div className="flex">
 
-        {/* Large zebra on left when actual result is minority */}
-        {isZebra && (
-          <div className="flex items-center justify-center px-3 py-2 shrink-0 self-stretch">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/zebra.png" alt="zebra" width={110} height={110} className="object-contain" />
-          </div>
-        )}
+        {/* Zebra zone — fixed width always reserved so layout never shifts */}
+        <div className="w-[80px] shrink-0 flex items-center justify-center py-2 pl-1">
+          {isZebra && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src="/zebra.png" alt="zebra" width={72} height={72} className="object-contain" />
+          )}
+        </div>
 
-        <div className="flex-1 min-w-0">
-          {/* Title */}
-          <div className="px-4 pt-3 pb-1 text-center">
-            <h2 className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Distribuição de Palpites</h2>
-          </div>
+        {/* Table */}
+        <div className="flex-1 min-w-0 pr-3">
 
-          {/* Percentage header — same grid as bet rows so columns align */}
-          <div className="grid grid-cols-[5rem_1fr_3.5rem] text-xs font-bold text-gray-400 tabular-nums px-4 pb-2 border-b border-gray-50 gap-1">
+          {/* % header: H col | D col (under Copa logo) | A col */}
+          <div className="grid grid-cols-[1fr_1fr_1fr_4rem_2rem] text-xs font-bold text-gray-400 tabular-nums pb-2 border-b border-gray-100">
             <span className="text-center">{fmtPct(colTotals.H)}</span>
             <span className="text-center">{fmtPct(colTotals.D)}</span>
-            <span className="text-right">{fmtPct(colTotals.A)}</span>
+            <span className="text-center">{fmtPct(colTotals.A)}</span>
+            <span />
+            <span />
           </div>
 
-          {/* Bet rows — Score | Count(%) | Points */}
+          {/* Bet rows — sorted by count desc, each score placed in its result column */}
           <div className="divide-y divide-gray-50">
             {groups.map(g => {
-              // isImpossible: a team already exceeded this bet → strikethrough
-              // pts=0 without impossible: just light gray
-              const textScore = g.isExact
+              const baseColor = g.isExact
                 ? 'text-blue-600'
-                : g.isImpossible
-                  ? 'text-gray-300 line-through'
+                : (g.pts !== null && g.pts > 0)
+                  ? 'text-gray-800'
                   : (g.pts === 0 && hasResult)
                     ? 'text-gray-300'
                     : 'text-gray-700'
-              const textMeta = g.isExact
-                ? 'text-blue-500 font-semibold'
-                : (g.pts === 0 && hasResult) ? 'text-gray-300' : 'text-gray-500'
-              const textPts = g.isExact
-                ? 'text-blue-600'
-                : (g.pts === 0 && hasResult) ? 'text-gray-300' : 'text-gray-400'
+              const scoreClass = `font-mono font-bold text-sm tabular-nums ${baseColor}${g.isImpossible ? ' line-through' : ''}`
+              const metaClass = `text-xs tabular-nums text-center ${
+                g.isExact ? 'text-blue-500 font-semibold' : (g.pts === 0 && hasResult) ? 'text-gray-300' : 'text-gray-500'
+              }`
+              const ptsClass = `text-sm font-bold tabular-nums text-right ${
+                g.isExact ? 'text-blue-600' : (g.pts === 0 && hasResult) ? 'text-gray-300' : 'text-gray-400'
+              }`
+
+              const scoreEl = (
+                <span className="flex items-center justify-center gap-0.5">
+                  {g.medals.map(r => (
+                    <span key={r} className="text-xs leading-none">{MEDAL[r]}</span>
+                  ))}
+                  <span className={scoreClass}>{g.score_home}x{g.score_away}</span>
+                </span>
+              )
 
               return (
                 <div
                   key={`${g.score_home}-${g.score_away}`}
-                  className={`grid grid-cols-[5rem_1fr_3.5rem] items-center px-4 py-1 gap-1 ${g.isExact ? 'bg-blue-50/60' : ''}`}
+                  className={`grid grid-cols-[1fr_1fr_1fr_4rem_2rem] items-center py-1${g.isExact ? ' bg-blue-50/60' : ''}`}
                 >
-                  <span className={`font-mono font-bold tabular-nums text-sm ${textScore}`}>
-                    {g.score_home}x{g.score_away}
-                  </span>
-                  <span className={`text-xs tabular-nums ${textMeta}`}>
-                    {g.count} ({g.pct.toFixed(0)}%)
-                  </span>
-                  <span className={`text-sm font-bold tabular-nums text-right ${textPts}`}>
+                  <span className="flex justify-center">{g.result === 'H' ? scoreEl : null}</span>
+                  <span className="flex justify-center">{g.result === 'D' ? scoreEl : null}</span>
+                  <span className="flex justify-center">{g.result === 'A' ? scoreEl : null}</span>
+                  <span className={metaClass}>{g.count}({g.pct.toFixed(0)}%)</span>
+                  <span className={ptsClass}>
                     {g.pts !== null ? (g.pts > 0 ? `+${g.pts}` : '0') : ''}
                   </span>
                 </div>
@@ -140,7 +168,7 @@ export function BetStats({ match, matchBets, participants, minorityMap, isZebra,
 
           {/* Average */}
           {avgPts !== null && (
-            <div className="px-4 py-2 text-right border-t border-gray-50">
+            <div className="py-2 text-right border-t border-gray-50">
               <div className="text-sm font-bold text-gray-600 tabular-nums">
                 {avgPts.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
               </div>
