@@ -101,9 +101,7 @@ export function ScoreHeader({
   for (const a of attendance) for (const pid of a.participant_ids ?? []) presentPids.add(pid)
   const presentNames = participants.filter(p => presentPids.has(p.id)).map(p => p.apelido)
 
-  const phaseLabel = match.phase === 'group'
-    ? `Rodada ${match.round} · Grupo ${match.group_name}`
-    : { round_of_32: '16 Avos', round_of_16: 'Oitavas', quarterfinal: 'Quartas', semifinal: 'Semifinal', third_place: '3º Lugar', final: 'Final' }[match.phase] ?? match.phase
+  const phaseLabel = { round_of_32: '16 Avos', round_of_16: 'Oitavas', quarterfinal: 'Quartas', semifinal: 'Semifinal', third_place: '3º Lugar', final: 'Final' }[match.phase] ?? match.phase
 
   return (
     <>
@@ -119,11 +117,18 @@ export function ScoreHeader({
             {/* Left: stacked nav arrows + phase label */}
             <div className="flex items-center gap-0.5 flex-1 min-w-0">
               <div className="flex flex-col items-center shrink-0">
-                <NavArrow dir="left" disabled={matchIdx === 0} onClick={() => onNavigate(-1)} />
                 <NavArrow dir="right" disabled={matchIdx === matches.length - 1} onClick={() => onNavigate(1)} />
+                <NavArrow dir="left" disabled={matchIdx === 0} onClick={() => onNavigate(-1)} />
               </div>
               <div className="min-w-0">
-                <div className="text-xs text-gray-400 leading-tight truncate">{phaseLabel}</div>
+                {match.phase === 'group' ? (
+                  <>
+                    <div className="text-xs text-gray-400 leading-tight">Rodada {match.round}</div>
+                    <div className="text-xs text-gray-400 leading-tight">Grupo {match.group_name}</div>
+                  </>
+                ) : (
+                  <div className="text-xs text-gray-400 leading-tight truncate">{phaseLabel}</div>
+                )}
               </div>
             </div>
 
@@ -135,9 +140,9 @@ export function ScoreHeader({
                 {/* Continuous strip: score | red-logo | score — all same height via items-stretch */}
                 <div className="flex items-stretch">
                   <ScoreBox score={match.score_home} editing={editing} inputVal={ih} onInput={setIh} />
-                  <div className="flex items-center justify-center px-1.5" style={{ background: '#CC0000' }}>
+                  <div className="flex items-center justify-center px-1" style={{ background: '#CC0000' }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src="/logoCopa.png" alt="" width={22} height={22} className="object-contain" />
+                    <img src="/logoCopa.png" alt="" className="relative z-10" style={{ height: '44px', width: 'auto' }} />
                   </div>
                   <ScoreBox score={match.score_away} editing={editing} inputVal={ia} onInput={setIa} />
                 </div>
@@ -287,7 +292,7 @@ function TeamSide({ flag, abbr, side, goalAnim }: {
 }) {
   return (
     <div className="flex flex-col items-center">
-      <div className={`flex items-center gap-1 px-1.5 py-1 bg-black ${side === 'away' ? 'flex-row-reverse' : ''}`}>
+      <div className={`flex items-center gap-1 px-1.5 h-9 bg-black ${side === 'away' ? 'flex-row-reverse' : ''}`}>
         <Flag code={flag} size="sm" className="w-7 h-[18px] rounded-[2px] object-cover" />
         <span className="text-[11px] font-black text-white tracking-wide">{abbr}</span>
       </div>
