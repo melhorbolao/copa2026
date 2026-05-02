@@ -16,7 +16,7 @@ interface Props {
   teamAbbrs: Record<string, string>
 }
 
-type SortKey = 'pos' | 'total' | 'match' | 'delta'
+type SortKey = 'pos' | 'total' | 'match' | 'delta' | 'name'
 type SortDir = 'asc' | 'desc'
 
 export function RankingPanel({
@@ -46,7 +46,7 @@ export function RankingPanel({
       setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     } else {
       setSortKey(key)
-      setSortDir(key === 'pos' ? 'asc' : 'desc')  // delta: more gain first (desc)
+      setSortDir(key === 'pos' || key === 'name' ? 'asc' : 'desc')
     }
   }
 
@@ -70,6 +70,9 @@ export function RankingPanel({
       else if (sortKey === 'total') diff = b.total - a.total
       else if (sortKey === 'match') diff = b.ptsGained - a.ptsGained
       else if (sortKey === 'delta') diff = b.delta - a.delta
+      else if (sortKey === 'name') return sortDir === 'asc'
+        ? a.apelido.localeCompare(b.apelido, 'pt-BR')
+        : b.apelido.localeCompare(a.apelido, 'pt-BR')
       return sortDir === 'asc' ? diff : -diff
     })
 
@@ -174,7 +177,9 @@ export function RankingPanel({
           <button className="flex items-center justify-center gap-0.5 hover:text-gray-600 transition" onClick={() => handleSort('pos')}>
             #<SortArrow k="pos" />
           </button>
-          <span>Nome</span>
+          <button className="flex items-center gap-0.5 hover:text-gray-600 transition" onClick={() => handleSort('name')}>
+            Nome<SortArrow k="name" />
+          </button>
           <span className="text-center">Palp</span>
           <button className="flex items-center justify-end gap-0.5 hover:text-gray-600 transition" onClick={() => handleSort('total')}>
             PTS Total<SortArrow k="total" />

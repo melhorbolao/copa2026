@@ -121,7 +121,7 @@ export function ScoreHeader({
                 <NavArrow dir="right" disabled={matchIdx === matches.length - 1} onClick={() => onNavigate(1)} />
                 <NavArrow dir="left" disabled={matchIdx === 0} onClick={() => onNavigate(-1)} />
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 hidden sm:block">
                 {match.phase === 'group' ? (
                   <>
                     <div className="text-xs text-gray-400 leading-tight">Rodada {match.round}</div>
@@ -198,7 +198,7 @@ export function ScoreHeader({
 
             {/* Right: date/city + stadium icon */}
             <div className="flex items-center gap-1.5 flex-1 justify-end min-w-0">
-              <div className="min-w-0 text-right">
+              <div className="min-w-0 text-right hidden sm:block">
                 <div className="text-xs text-gray-300 leading-tight truncate font-medium">
                   {fmtDate(match.match_datetime)}
                 </div>
