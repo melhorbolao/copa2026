@@ -3,7 +3,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useTransition, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { addStadiumPhoto, deleteStadiumPhoto } from './actions'
+import { addStadiumPhoto, deleteStadiumPhoto, tagStadiumPhoto } from './actions'
 import type { MatchFull, AttendanceRow, PhotoRow, Participant } from './JogosDashboard'
 
 interface Props {
@@ -18,23 +18,29 @@ interface Props {
   onAttendanceChange: (updated: AttendanceRow | null) => void
   onPhotoAdded: (p: PhotoRow) => void
   onPhotoDeleted: (id: string) => void
+  onPhotoUpdated: (p: PhotoRow) => void
 }
 
 export function StadiumSection({
   match, matchAttendance, matchPhotos, participants, userId, isAdmin,
-  userToParticipants, activeParticipantId, onPhotoAdded, onPhotoDeleted,
+  userToParticipants, onPhotoAdded, onPhotoDeleted, onPhotoUpdated,
 }: Props) {
   const fileRef   = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const [caption,   setCaption]   = useState('')
-  const [selectedPids, setSelectedPids] = useState<string[]>(() => {
-    const my = userToParticipants[userId] ?? []
-    return my
-  })
-  const [deleteId, setDeleteId]   = useState<string | null>(null)
-  const [deleting, startDelete]   = useTransition()
   const [uploadErr, setUploadErr] = useState('')
-  // signed URLs are generated client-side (not during SSR)
+
+  // Only the user's own participants can be tagged in uploads
+  const myPids         = userToParticipants[userId] ?? []
+  const myParticipants = participants.filter(p => myPids.includes(p.id))
+  const [selectedPids, setSelectedPids] = useState<string[]>(myPids)
+
+  // Per-photo tagging state
+  const [taggingPhotoId, setTaggingPhotoId]   = useState<string | null>(null)
+  const [taggingPids,    setTaggingPids]       = useState<string[]>([])
+  const [tagging, startTagging]               = useTransition()
+
+  // Signed URLs generated client-side
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({})
 
   useEffect(() => {
@@ -69,7 +75,6 @@ export function StadiumSection({
       if (upErr) throw new Error(upErr.message)
       const res = await addStadiumPhoto(match.id, path, selectedPids, caption)
       if (res.error) throw new Error(res.error)
-      // Get signed URL to display
       const { data: urlData } = await supabase.storage.from('stadium-photos').createSignedUrl(path, 3600)
       onPhotoAdded({
         id: Date.now().toString(), match_id: match.id, user_id: userId,
@@ -86,11 +91,28 @@ export function StadiumSection({
   }
 
   const handleDelete = (id: string) => {
-    setDeleteId(id)
-    startDelete(async () => {
+    startTagging(async () => {
       const res = await deleteStadiumPhoto(id)
       if (!res.error) onPhotoDeleted(id)
-      setDeleteId(null)
+    })
+  }
+
+  const openTagging = (photo: PhotoRow) => {
+    const alreadyTagged = new Set(photo.participant_ids ?? [])
+    const untagged = myParticipants.filter(p => !alreadyTagged.has(p.id))
+    setTaggingPids(untagged.map(p => p.id))
+    setTaggingPhotoId(photo.id)
+  }
+
+  const confirmTagging = (photo: PhotoRow) => {
+    if (taggingPids.length === 0) { setTaggingPhotoId(null); return }
+    startTagging(async () => {
+      const res = await tagStadiumPhoto(photo.id, taggingPids)
+      if (!res.error) {
+        const merged = [...new Set([...(photo.participant_ids ?? []), ...taggingPids])]
+        onPhotoUpdated({ ...photo, participant_ids: merged })
+      }
+      setTaggingPhotoId(null)
     })
   }
 
@@ -107,13 +129,12 @@ export function StadiumSection({
           fileRef={fileRef} uploading={uploading} uploadErr={uploadErr}
           caption={caption} setCaption={setCaption}
           selectedPids={selectedPids} setSelectedPids={setSelectedPids}
-          participants={participants} onFile={handleFileChange}
+          myParticipants={myParticipants} onFile={handleFileChange}
         />
       </div>
     )
   }
 
-  // Aggregate all present participant IDs
   const presentPids = new Set<string>()
   for (const a of matchAttendance) for (const pid of a.participant_ids ?? []) presentPids.add(pid)
   const presentNames = [...presentPids].map(id => participantMap.get(id)?.apelido).filter(Boolean)
@@ -135,13 +156,13 @@ export function StadiumSection({
         )}
       </div>
 
-      {/* Photo upload */}
+      {/* Upload — only user's own participants shown */}
       <div className="px-4 py-3 border-b border-gray-100">
         <UploadBlock
           fileRef={fileRef} uploading={uploading} uploadErr={uploadErr}
           caption={caption} setCaption={setCaption}
           selectedPids={selectedPids} setSelectedPids={setSelectedPids}
-          participants={participants} onFile={handleFileChange}
+          myParticipants={myParticipants} onFile={handleFileChange}
         />
       </div>
 
@@ -150,34 +171,94 @@ export function StadiumSection({
         <div className="px-4 py-3">
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">Fotos</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {matchPhotos.map(p => {
-              const names = (p.participant_ids ?? []).map(id => participantMap.get(id)?.apelido).filter(Boolean)
-              const canDelete = isAdmin || p.user_id === userId
-              const photoUrl = p.url ?? signedUrls[p.id] ?? null
+            {matchPhotos.map(photo => {
+              const names = (photo.participant_ids ?? []).map(id => participantMap.get(id)?.apelido).filter(Boolean)
+              const canDelete = isAdmin || photo.user_id === userId
+              const photoUrl = photo.url ?? signedUrls[photo.id] ?? null
+              const alreadyTagged = new Set(photo.participant_ids ?? [])
+              const canTag = myParticipants.some(p => !alreadyTagged.has(p.id))
+              const isTagging = taggingPhotoId === photo.id
+
               return (
-                <div key={p.id} className="relative group rounded-xl overflow-hidden bg-gray-100 aspect-square">
-                  {photoUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={photoUrl} alt={p.caption ?? ''} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">Sem preview</div>
-                  )}
-                  {/* Overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {names.length > 0 && (
-                      <p className="text-[10px] text-white font-medium leading-tight">{names.join(', ')}</p>
+                <div key={photo.id} className="rounded-xl overflow-hidden bg-gray-100 border border-gray-200">
+                  {/* Image */}
+                  <div className="relative aspect-square group">
+                    {photoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={photoUrl} alt={photo.caption ?? ''} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">Sem preview</div>
                     )}
-                    {p.caption && <p className="text-[9px] text-gray-300 mt-0.5">{p.caption}</p>}
-                    {canDelete && (
-                      <button
-                        onClick={() => handleDelete(p.id)}
-                        disabled={deleting && deleteId === p.id}
-                        className="mt-1 self-start text-[9px] bg-red-600 text-white rounded px-1.5 py-0.5 hover:bg-red-500"
-                      >
-                        {deleting && deleteId === p.id ? '…' : 'Excluir'}
-                      </button>
-                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {names.length > 0 && (
+                        <p className="text-[10px] text-white font-medium leading-tight">{names.join(', ')}</p>
+                      )}
+                      {photo.caption && <p className="text-[9px] text-gray-300 mt-0.5">{photo.caption}</p>}
+                      {canDelete && (
+                        <button
+                          onClick={() => handleDelete(photo.id)}
+                          disabled={tagging}
+                          className="mt-1 self-start text-[9px] bg-red-600 text-white rounded px-1.5 py-0.5 hover:bg-red-500"
+                        >
+                          Excluir
+                        </button>
+                      )}
+                    </div>
                   </div>
+
+                  {/* Tag section below image */}
+                  {names.length > 0 && !isTagging && (
+                    <p className="px-2 pt-1 text-[10px] text-gray-500 leading-tight">{names.join(', ')}</p>
+                  )}
+
+                  {/* "Marcar-me" button — shows if user has untagged participants */}
+                  {canTag && !isTagging && (
+                    <button
+                      onClick={() => openTagging(photo)}
+                      className="w-full px-2 py-1.5 text-[11px] font-semibold text-blue-600 hover:bg-blue-50 transition text-left"
+                    >
+                      + Marcar-me nesta foto
+                    </button>
+                  )}
+
+                  {/* Inline tagging UI */}
+                  {isTagging && (
+                    <div className="px-2 pb-2 pt-1 space-y-1.5">
+                      <p className="text-[10px] font-bold text-gray-500">Quem aparece?</p>
+                      <div className="flex flex-col gap-1">
+                        {myParticipants
+                          .filter(p => !alreadyTagged.has(p.id))
+                          .map(p => (
+                            <label key={p.id} className="flex items-center gap-1.5 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={taggingPids.includes(p.id)}
+                                onChange={e => setTaggingPids(prev =>
+                                  e.target.checked ? [...prev, p.id] : prev.filter(id => id !== p.id)
+                                )}
+                                className="accent-blue-500 w-3 h-3"
+                              />
+                              <span className="text-[11px] text-gray-700">{p.apelido}</span>
+                            </label>
+                          ))}
+                      </div>
+                      <div className="flex gap-2 pt-0.5">
+                        <button
+                          onClick={() => confirmTagging(photo)}
+                          disabled={tagging || taggingPids.length === 0}
+                          className="flex-1 rounded-lg bg-blue-600 text-white text-[11px] font-bold py-1 disabled:opacity-40"
+                        >
+                          {tagging ? '…' : 'Confirmar'}
+                        </button>
+                        <button
+                          onClick={() => setTaggingPhotoId(null)}
+                          className="text-[11px] text-gray-400 px-2"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -188,7 +269,7 @@ export function StadiumSection({
   )
 }
 
-function UploadBlock({ fileRef, uploading, uploadErr, caption, setCaption, selectedPids, setSelectedPids, participants, onFile }: {
+function UploadBlock({ fileRef, uploading, uploadErr, caption, setCaption, selectedPids, setSelectedPids, myParticipants, onFile }: {
   fileRef: React.RefObject<HTMLInputElement | null>
   uploading: boolean
   uploadErr: string
@@ -196,7 +277,7 @@ function UploadBlock({ fileRef, uploading, uploadErr, caption, setCaption, selec
   setCaption: (v: string) => void
   selectedPids: string[]
   setSelectedPids: (v: string[]) => void
-  participants: Participant[]
+  myParticipants: Participant[]   // only user's own participants
   onFile: (e: React.ChangeEvent<HTMLInputElement>) => void
 }) {
   return (
@@ -209,19 +290,21 @@ function UploadBlock({ fileRef, uploading, uploadErr, caption, setCaption, selec
         placeholder="Legenda (opcional)"
         className="w-full text-sm rounded-lg border border-gray-200 px-2.5 py-1.5 focus:outline-none focus:border-gray-400"
       />
-      <div className="flex flex-wrap gap-1.5">
-        {participants.map(p => (
-          <label key={p.id} className="flex items-center gap-1 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={selectedPids.includes(p.id)}
-              onChange={e => setSelectedPids(e.target.checked ? [...selectedPids, p.id] : selectedPids.filter(id => id !== p.id))}
-              className="accent-green-500 w-3 h-3"
-            />
-            <span className="text-[11px] text-gray-600">{p.apelido}</span>
-          </label>
-        ))}
-      </div>
+      {myParticipants.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {myParticipants.map(p => (
+            <label key={p.id} className="flex items-center gap-1 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selectedPids.includes(p.id)}
+                onChange={e => setSelectedPids(e.target.checked ? [...selectedPids, p.id] : selectedPids.filter(id => id !== p.id))}
+                className="accent-green-500 w-3 h-3"
+              />
+              <span className="text-[11px] text-gray-600">{p.apelido}</span>
+            </label>
+          ))}
+        </div>
+      )}
       <div>
         <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFile} />
         <button

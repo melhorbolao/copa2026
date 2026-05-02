@@ -64,6 +64,27 @@ export async function addStadiumPhoto(
   }
 }
 
+export async function tagStadiumPhoto(
+  photoId: string,
+  participantIds: string[],
+): Promise<{ error?: string }> {
+  try {
+    const ctx = await getUser()
+    if (!ctx) return { error: 'Não autenticado' }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAuthAdminClient() as any
+    const { data: photo } = await admin.from('stadium_photos').select('participant_ids').eq('id', photoId).single()
+    if (!photo) return { error: 'Foto não encontrada' }
+    const merged = [...new Set([...(photo.participant_ids ?? []), ...participantIds])]
+    const { error } = await admin.from('stadium_photos').update({ participant_ids: merged }).eq('id', photoId)
+    if (error) return { error: error.message }
+    revalidatePath('/jogos')
+    return {}
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Erro' }
+  }
+}
+
 export async function deleteStadiumPhoto(
   photoId: string,
 ): Promise<{ error?: string }> {

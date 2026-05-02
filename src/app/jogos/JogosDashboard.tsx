@@ -372,6 +372,7 @@ export function JogosDashboard({
           quase={quase}
           abbr={abbr}
           teamAbbrs={teamAbbrs}
+          isAdmin={isAdmin}
         />
 
         {match.phase === 'group' && groupStandings && (
@@ -397,6 +398,7 @@ export function JogosDashboard({
           })}
           onPhotoAdded={p => setPhotos(prev => [p, ...prev])}
           onPhotoDeleted={id => setPhotos(prev => prev.filter(p => p.id !== id))}
+          onPhotoUpdated={updated => setPhotos(prev => prev.map(p => p.id === updated.id ? updated : p))}
         />
       </div>
     </div>

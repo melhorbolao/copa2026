@@ -3,6 +3,15 @@
 import { useState } from 'react'
 import type { MatchFull, BetRaw, Participant } from './JogosDashboard'
 
+const EDIT_WINDOW_MS = 4 * 60 * 60 * 1000
+
+function canUseSecador(match: MatchFull, isAdmin: boolean): boolean {
+  if (isAdmin) return true
+  const now   = Date.now()
+  const start = new Date(match.match_datetime).getTime()
+  return now >= start && now <= start + EDIT_WINDOW_MS
+}
+
 interface Props {
   match: MatchFull
   matchBets: BetRaw[]
@@ -14,6 +23,7 @@ interface Props {
   quase: { home: string[]; away: string[] }
   abbr: (t: string) => string
   teamAbbrs: Record<string, string>
+  isAdmin: boolean
 }
 
 type SortKey = 'pos' | 'total' | 'match' | 'delta' | 'name'
@@ -21,9 +31,10 @@ type SortDir = 'asc' | 'desc'
 
 export function RankingPanel({
   match, matchBets, participants, matchPoints, ptsWithoutMatch,
-  rankBefore, rankAfter, quase, abbr,
+  rankBefore, rankAfter, quase, abbr, isAdmin,
 }: Props) {
   const [secador, setSecador] = useState(false)
+  const secadorAllowed = canUseSecador(match, isAdmin)
   const [sortKey, setSortKey] = useState<SortKey>('pos')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
 
@@ -92,7 +103,7 @@ export function RankingPanel({
         <div className="bg-emerald-50 border-b border-emerald-100 px-4 py-3">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wide">✓ Cravando agora</span>
-            {!secador && (
+            {!secador && secadorAllowed && (
               <button
                 onClick={() => setSecador(true)}
                 className="px-3 py-1 rounded-full text-[10px] font-bold text-gray-400 border border-gray-200 hover:border-gray-400 hover:text-gray-600 transition"
@@ -105,7 +116,7 @@ export function RankingPanel({
 
           <div className="flex items-center gap-2">
             {/* Secador to the left of chips, pointing right at the participants */}
-            {secador && (
+            {secador && secadorAllowed && (
               <button
                 onClick={() => setSecador(false)}
                 className="shrink-0 active:scale-95 transition"
