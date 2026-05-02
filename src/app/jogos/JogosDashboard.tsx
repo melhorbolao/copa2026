@@ -11,6 +11,8 @@ import { BetStats } from './BetStats'
 import { RankingPanel } from './RankingPanel'
 import { GroupStandings } from './GroupStandings'
 import { StadiumSection } from './StadiumSection'
+import { EstatisticasTab } from './EstatisticasTab'
+import type { TeamInfo } from './EstatisticasTab'
 
 export type MatchFull = {
   id: string; match_number: number; phase: string; round: number | null
@@ -23,6 +25,9 @@ export type BetRaw    = { participant_id: string; match_id: string; score_home: 
 export type Participant = { id: string; apelido: string }
 export type AttendanceRow = { id: string; match_id: string; user_id: string; participant_ids: string[] | null }
 export type PhotoRow = { id: string; match_id: string; user_id: string; storage_path: string; participant_ids: string[] | null; caption: string | null; created_at: string; url: string | null }
+export type GroupBetStat = { participant_id: string; group_name: string; first_place: string; second_place: string }
+export type ThirdBetStat = { participant_id: string; group_name: string; team: string }
+export type TournamentBetStat = { participant_id: string; champion: string; runner_up: string; semi1: string; semi2: string; top_scorer: string }
 
 const GOAL_ANIM_MS = 3 * 60 * 1000
 
@@ -48,6 +53,7 @@ interface Props {
   bets: BetRaw[]
   rules: Record<string, number>
   teamAbbrs: Record<string, string>
+  teamGroups: Record<string, string>
   storedTotals: Record<string, number>
   isAdmin: boolean
   userId: string
@@ -56,12 +62,16 @@ interface Props {
   userToParticipants: Record<string, string[]>
   attendance: AttendanceRow[]
   photos: PhotoRow[]
+  groupBets: GroupBetStat[]
+  thirdBets: ThirdBetStat[]
+  tournamentBets: TournamentBetStat[]
 }
 
 export function JogosDashboard({
   initialMatchId, matches: initialMatches, participants, bets: initialBets,
-  rules, teamAbbrs, storedTotals, isAdmin, userId, userName,
+  rules, teamAbbrs, teamGroups, storedTotals, isAdmin, userId, userName,
   activeParticipantId, userToParticipants, attendance: initialAttendance, photos: initialPhotos,
+  groupBets, thirdBets, tournamentBets,
 }: Props) {
   const router       = useRouter()
   const searchParams = useSearchParams()
@@ -70,6 +80,32 @@ export function JogosDashboard({
   const [bets, setBets]           = useState(initialBets)
   const [attendance, setAttendance] = useState(initialAttendance)
   const [photos, setPhotos]       = useState(initialPhotos)
+  const [activeTab, setActiveTab] = useState<'jogos' | 'stats'>('jogos')
+
+  const switchTab = (tab: 'jogos' | 'stats') => {
+    setActiveTab(tab)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const teamFlags = useMemo<Record<string, string>>(() => {
+    const m: Record<string, string> = {}
+    for (const match of matches) {
+      if (match.team_home && match.flag_home) m[match.team_home] = match.flag_home
+      if (match.team_away && match.flag_away) m[match.team_away] = match.flag_away
+    }
+    return m
+  }, [matches])
+
+  const teamsInfo = useMemo<TeamInfo[]>(() => {
+    return Object.entries(teamGroups)
+      .filter(([, g]) => !!g)
+      .map(([name, group]) => ({
+        name,
+        abbr:  teamAbbrs[name] ?? name.slice(0, 3).toUpperCase(),
+        group,
+        flag:  teamFlags[name] ?? '',
+      }))
+  }, [teamGroups, teamAbbrs, teamFlags])
 
   // Goal animation state — booleans cleared automatically after GOAL_ANIM_MS
   const [goalAnim, setGoalAnim]   = useState<{ home: boolean; away: boolean }>({ home: false, away: false })
@@ -352,54 +388,83 @@ export function JogosDashboard({
       {/* Page content — offset from fixed header */}
       <div className="pt-36 sm:pt-24 max-w-3xl mx-auto px-3 sm:px-4 space-y-4 py-4">
 
-        <BetStats
-          match={match}
-          matchBets={matchBets}
-          participants={participants}
-          isZebra={headerZebra}
-          rules={rules}
-          rankAfter={rankAfter}
-        />
+        {/* Tab bar */}
+        <div className="flex rounded-xl bg-gray-200/70 p-0.5">
+          <button
+            onClick={() => switchTab('jogos')}
+            className={`flex-1 rounded-[10px] py-1.5 text-xs font-bold transition-all ${activeTab === 'jogos' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+          >
+            Jogos
+          </button>
+          <button
+            onClick={() => switchTab('stats')}
+            className={`flex-1 rounded-[10px] py-1.5 text-xs font-bold transition-all ${activeTab === 'stats' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+          >
+            Estatísticas MB
+          </button>
+        </div>
 
-        <RankingPanel
-          match={match}
-          matchBets={matchBets}
-          participants={participants}
-          matchPoints={matchPoints}
-          ptsWithoutMatch={ptsWithoutMatch}
-          rankBefore={rankBefore}
-          rankAfter={rankAfter}
-          quase={quase}
-          abbr={abbr}
-          teamAbbrs={teamAbbrs}
-          isAdmin={isAdmin}
-        />
+        {activeTab === 'jogos' ? (
+          <>
+            <BetStats
+              match={match}
+              matchBets={matchBets}
+              participants={participants}
+              isZebra={headerZebra}
+              rules={rules}
+              rankAfter={rankAfter}
+            />
 
-        {match.phase === 'group' && groupStandings && (
-          <GroupStandings
-            group={match.group_name!}
-            standings={groupStandings}
-            teamAbbrs={teamAbbrs}
+            <RankingPanel
+              match={match}
+              matchBets={matchBets}
+              participants={participants}
+              matchPoints={matchPoints}
+              ptsWithoutMatch={ptsWithoutMatch}
+              rankBefore={rankBefore}
+              rankAfter={rankAfter}
+              quase={quase}
+              abbr={abbr}
+              teamAbbrs={teamAbbrs}
+              isAdmin={isAdmin}
+            />
+
+            {match.phase === 'group' && groupStandings && (
+              <GroupStandings
+                group={match.group_name!}
+                standings={groupStandings}
+                teamAbbrs={teamAbbrs}
+              />
+            )}
+
+            <StadiumSection
+              match={match}
+              matchAttendance={matchAttendance}
+              matchPhotos={matchPhotos}
+              participants={participants}
+              userId={userId}
+              isAdmin={isAdmin}
+              userToParticipants={userToParticipants}
+              activeParticipantId={activeParticipantId}
+              onAttendanceChange={updated => setAttendance(prev => {
+                const filtered = prev.filter(a => !(a.match_id === match.id && a.user_id === userId))
+                return updated ? [...filtered, updated] : filtered
+              })}
+              onPhotoAdded={p => setPhotos(prev => [p, ...prev])}
+              onPhotoDeleted={id => setPhotos(prev => prev.filter(p => p.id !== id))}
+              onPhotoUpdated={updated => setPhotos(prev => prev.map(p => p.id === updated.id ? updated : p))}
+            />
+          </>
+        ) : (
+          <EstatisticasTab
+            participants={participants}
+            teams={teamsInfo}
+            groupBets={groupBets}
+            thirdBets={thirdBets}
+            tournamentBets={tournamentBets}
+            zebraThreshold={threshold}
           />
         )}
-
-        <StadiumSection
-          match={match}
-          matchAttendance={matchAttendance}
-          matchPhotos={matchPhotos}
-          participants={participants}
-          userId={userId}
-          isAdmin={isAdmin}
-          userToParticipants={userToParticipants}
-          activeParticipantId={activeParticipantId}
-          onAttendanceChange={updated => setAttendance(prev => {
-            const filtered = prev.filter(a => !(a.match_id === match.id && a.user_id === userId))
-            return updated ? [...filtered, updated] : filtered
-          })}
-          onPhotoAdded={p => setPhotos(prev => [p, ...prev])}
-          onPhotoDeleted={id => setPhotos(prev => prev.filter(p => p.id !== id))}
-          onPhotoUpdated={updated => setPhotos(prev => prev.map(p => p.id === updated.id ? updated : p))}
-        />
       </div>
     </div>
   )

@@ -28,6 +28,7 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
   const [
     matchesRes, participantsRes, betsRes, rulesRes, scoresRes, teamAbbrRes,
     attendanceRes, photosRes, userParticipantsRes,
+    groupBetsRes, thirdBetsRes, tournamentBetsRes,
   ] = await Promise.all([
     supabase.from('matches')
       .select('id, match_number, phase, round, group_name, team_home, team_away, flag_home, flag_away, match_datetime, city, betting_deadline, score_home, score_away, penalty_winner, is_brazil')
@@ -36,16 +37,21 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
     admin.from('bets').select('participant_id, match_id, score_home, score_away, points'),
     supabase.from('scoring_rules').select('key, points'),
     admin.from('participant_scores').select('participant_id, pts_total'),
-    admin.from('teams').select('name, abbr_br'),
+    admin.from('teams').select('name, abbr_br, group_name'),
     admin.from('stadium_attendance').select('id, match_id, user_id, participant_ids'),
     admin.from('stadium_photos').select('id, match_id, user_id, storage_path, participant_ids, caption, created_at').order('created_at', { ascending: false }),
     supabase.from('user_participants').select('user_id, participant_id'),
+    admin.from('group_bets').select('participant_id, group_name, first_place, second_place'),
+    admin.from('third_place_bets').select('participant_id, group_name, team'),
+    admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer'),
   ])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rules: Record<string, number> = Object.fromEntries((rulesRes.data ?? []).map((r: any) => [r.key, r.points]))
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const teamAbbrs: Record<string, string> = Object.fromEntries((teamAbbrRes.data ?? []).map((t: any) => [t.name, t.abbr_br ?? '']))
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const teamGroups: Record<string, string> = Object.fromEntries((teamAbbrRes.data ?? []).map((t: any) => [t.name, t.group_name ?? '']))
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const storedTotals: Record<string, number> = Object.fromEntries((scoresRes.data ?? []).map((s: any) => [s.participant_id, s.pts_total ?? 0]))
 
@@ -72,6 +78,7 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
           bets={(betsRes.data ?? []) as any[]}
           rules={rules}
           teamAbbrs={teamAbbrs}
+          teamGroups={teamGroups}
           storedTotals={storedTotals}
           isAdmin={isAdmin}
           userId={user.id}
@@ -80,6 +87,9 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
           userToParticipants={userToParticipants}
           attendance={(attendanceRes.data ?? []) as any[]}
           photos={photos as any[]}
+          groupBets={(groupBetsRes.data ?? []) as any[]}
+          thirdBets={(thirdBetsRes.data ?? []) as any[]}
+          tournamentBets={(tournamentBetsRes.data ?? []) as any[]}
         />
       </Suspense>
     </>
