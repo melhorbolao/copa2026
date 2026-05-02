@@ -6,10 +6,10 @@ import type { MatchFull, BetRaw, Participant } from './JogosDashboard'
 
 const MEDAL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' }
 
-// These mirror ScoreHeader: ScoreBox min-w-[2rem]=32px, Copa logo w-9=36px
-const H_W = 'w-8'   // 32px — same as ScoreBox min-w-[2rem]
-const D_W = 'w-9'   // 36px — same as Copa logo w-9
-const A_W = 'w-8'   // 32px
+// Slightly wider than the score boxes (w-8/w-9) so percentage labels fit without overlap
+const H_W = 'w-10'  // 40px
+const D_W = 'w-11'  // 44px
+const A_W = 'w-10'  // 40px
 
 interface Props {
   match: MatchFull
@@ -125,9 +125,9 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
       {/* % column headers */}
       <div className="flex items-center px-3 pb-2 border-b border-gray-100">
         <div className="flex-1" />
-        <span className={`${H_W} text-center text-xs font-bold text-gray-400 tabular-nums`}>{fmtPct(colTotals.H)}</span>
-        <span className={`${D_W} text-center text-xs font-bold text-gray-400 tabular-nums`}>{fmtPct(colTotals.D)}</span>
-        <span className={`${A_W} text-center text-xs font-bold text-gray-400 tabular-nums`}>{fmtPct(colTotals.A)}</span>
+        <span className={`${H_W} text-center text-[10px] font-bold text-gray-400 tabular-nums`}>{fmtPct(colTotals.H)}</span>
+        <span className={`${D_W} text-center text-[10px] font-bold text-gray-400 tabular-nums`}>{fmtPct(colTotals.D)}</span>
+        <span className={`${A_W} text-center text-[10px] font-bold text-gray-400 tabular-nums`}>{fmtPct(colTotals.A)}</span>
         <div className="flex-1" />
       </div>
 
