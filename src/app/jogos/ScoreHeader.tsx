@@ -112,7 +112,7 @@ export function ScoreHeader({
           style={{ background: '#2a2a2a', border: '1px solid #3a3a3a' }}
         >
           {/* Top row: nav+phase | scoreboard | date+stadium */}
-          <div className="flex items-center gap-1 px-3 pt-2.5 pb-1">
+          <div className="flex items-center gap-1 px-3 pt-1.5 pb-2">
 
             {/* Left: stacked nav arrows + phase label */}
             <div className="flex items-center gap-0.5 flex-1 min-w-0">
@@ -132,37 +132,61 @@ export function ScoreHeader({
               </div>
             </div>
 
-            {/* Center: [team-col][score|logo|score][team-col] — items-start aligns tops */}
+            {/* Center: [team-col][score strip + edit link][team-col] */}
             <div className="flex items-start gap-0 shrink-0">
 
-              {/* Home column: black bar on top, goal ball below */}
+              {/* Home column: black bar + goal ball below */}
               <div className="flex flex-col items-center">
                 <div className="flex items-center gap-1 px-1.5 h-8 bg-black">
                   <Flag code={match.flag_home} size="sm" className="w-8 h-[26px] rounded-[2px] object-cover" />
                   <span className="text-[13px] font-black text-white tracking-wide">{abbr(match.team_home)}</span>
                 </div>
-                <div className="h-4 flex items-center justify-center mt-0.5">
+                <div className="w-full h-5 flex items-center justify-center">
                   {goalAnim.home && <span className="text-base leading-none select-none">⚽</span>}
                 </div>
               </div>
 
-              {/* Score strip: score | red-logo | score */}
-              <div className="flex items-stretch gap-0">
-                <ScoreBox score={match.score_home} editing={editing} inputVal={ih} onInput={setIh} />
-                <div className="relative flex items-center justify-center w-9" style={{ background: '#FD1111' }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/logoCopa.png" alt="" className="absolute z-10" style={{ height: '38px', width: 'auto' }} />
+              {/* Score strip + edit link stacked */}
+              <div className="flex flex-col items-center">
+                <div className="flex items-stretch gap-0">
+                  <ScoreBox score={match.score_home} editing={editing} inputVal={ih} onInput={setIh} />
+                  <div className="relative flex items-center justify-center w-9" style={{ background: '#FD1111' }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src="/logoCopa.png" alt="" className="absolute z-10" style={{ height: '38px', width: 'auto' }} />
+                  </div>
+                  <ScoreBox score={match.score_away} editing={editing} inputVal={ia} onInput={setIa} />
                 </div>
-                <ScoreBox score={match.score_away} editing={editing} inputVal={ia} onInput={setIa} />
+                {/* Edit controls directly below score */}
+                <div className="flex items-center justify-center gap-2 h-5">
+                  {editing ? (
+                    <>
+                      <button onClick={handleSave} disabled={saving}
+                        className="text-[10px] font-bold px-3 py-0.5 rounded-full"
+                        style={{ background: CYAN, color: '#000' }}>
+                        {saving ? '…' : 'Salvar'}
+                      </button>
+                      <button onClick={() => setEditing(false)}
+                        className="text-[10px] text-gray-500 hover:text-gray-300">Cancelar</button>
+                      {saveErr && <span className="text-[10px] text-red-400">{saveErr}</span>}
+                    </>
+                  ) : canEdit ? (
+                    <button onClick={startEdit}
+                      className="text-[10px] text-gray-500 hover:text-gray-300 underline underline-offset-2 leading-none">
+                      {match.score_home !== null ? 'Editar placar' : 'Registrar placar'}
+                    </button>
+                  ) : (
+                    <span className="text-[10px] text-gray-700 leading-none">J{match.match_number}</span>
+                  )}
+                </div>
               </div>
 
-              {/* Away column: black bar on top, goal ball below */}
+              {/* Away column: black bar + goal ball below */}
               <div className="flex flex-col items-center">
                 <div className="flex items-center gap-1 px-1.5 h-8 bg-black flex-row-reverse">
                   <Flag code={match.flag_away} size="sm" className="w-8 h-[26px] rounded-[2px] object-cover" />
                   <span className="text-[13px] font-black text-white tracking-wide">{abbr(match.team_away)}</span>
                 </div>
-                <div className="h-4 flex items-center justify-center mt-0.5">
+                <div className="w-full h-5 flex items-center justify-center">
                   {goalAnim.away && <span className="text-base leading-none select-none">⚽</span>}
                 </div>
               </div>
@@ -191,28 +215,6 @@ export function ScoreHeader({
             </div>
           </div>
 
-          {/* Edit bar */}
-          <div className="flex items-center justify-center gap-2 pb-2 px-3">
-            {editing ? (
-              <>
-                <button onClick={handleSave} disabled={saving}
-                  className="text-[10px] font-bold px-3 py-0.5 rounded-full"
-                  style={{ background: CYAN, color: '#000' }}>
-                  {saving ? '…' : 'Salvar'}
-                </button>
-                <button onClick={() => setEditing(false)}
-                  className="text-[10px] text-gray-500 hover:text-gray-300">Cancelar</button>
-                {saveErr && <span className="text-[10px] text-red-400">{saveErr}</span>}
-              </>
-            ) : canEdit ? (
-              <button onClick={startEdit}
-                className="text-[10px] text-gray-500 hover:text-gray-300 underline underline-offset-2">
-                {match.score_home !== null ? 'Editar placar' : 'Registrar placar'}
-              </button>
-            ) : (
-              <span className="text-[10px] text-gray-700">J{match.match_number}</span>
-            )}
-          </div>
         </div>
       </div>
 
@@ -288,7 +290,7 @@ function NavArrow({ dir, disabled, onClick }: { dir: 'left' | 'right'; disabled:
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`flex items-center justify-center w-9 h-9 transition ${disabled ? 'opacity-20 cursor-not-allowed' : 'active:scale-95'}`}
+      className={`flex items-center justify-center w-8 h-8 transition ${disabled ? 'opacity-20 cursor-not-allowed' : 'active:scale-95'}`}
     >
       <svg width="28" height="20" viewBox="0 0 28 20" fill="none">
         {dir === 'left'

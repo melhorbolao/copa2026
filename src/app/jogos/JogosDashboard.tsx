@@ -95,9 +95,18 @@ export function JogosDashboard({
     router.replace(`/jogos?${params.toString()}`, { scroll: false })
   }, [match?.id]) // eslint-disable-line
 
-  // Goal animation detection — triggered by Realtime score changes
+  const prevMatchIdRef = useRef<string | null>(null)
+
+  // Goal animation detection — triggered by score changes within the SAME match
   useEffect(() => {
     if (!match) return
+    // When navigating to a different match, reset refs without triggering animation
+    if (prevMatchIdRef.current !== match.id) {
+      prevMatchIdRef.current = match.id
+      prevScoreRef.current = { home: match.score_home, away: match.score_away }
+      setGoalAnim({ home: false, away: false })
+      return
+    }
     const prev = prevScoreRef.current
     if (prev.home !== null && match.score_home !== null && match.score_home > prev.home) {
       clearTimeout(goalTimersRef.current.home)
@@ -110,7 +119,7 @@ export function JogosDashboard({
       goalTimersRef.current.away = setTimeout(() => setGoalAnim(g => ({ ...g, away: false })), GOAL_ANIM_MS)
     }
     prevScoreRef.current = { home: match.score_home, away: match.score_away }
-  }, [match?.score_home, match?.score_away]) // eslint-disable-line
+  }, [match?.score_home, match?.score_away, match?.id]) // eslint-disable-line
 
   // Realtime: matches score updates
   useEffect(() => {
