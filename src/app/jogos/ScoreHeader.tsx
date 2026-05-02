@@ -135,13 +135,14 @@ export function ScoreHeader({
             {/* Center: [team-col][score strip + edit link][team-col] */}
             <div className="flex items-start gap-0 shrink-0">
 
-              {/* Home column: black bar + goal ball below */}
-              <div className="flex flex-col items-center">
+              {/* Home column: black bar + goal ball below abbreviation */}
+              <div className="flex flex-col">
                 <div className="flex items-center gap-1 px-1.5 h-8 bg-black">
                   <Flag code={match.flag_home} size="sm" className="w-8 h-[26px] rounded-[2px] object-cover" />
                   <span className="text-[13px] font-black text-white tracking-wide">{abbr(match.team_home)}</span>
                 </div>
-                <div className="w-full h-5 flex items-center justify-center">
+                {/* pl-[42px] = pl-1.5(6) + w-8(32) + gap-1(4) — centers ball under abbreviation */}
+                <div className="h-5 flex items-center justify-center pl-[42px] pr-1.5">
                   {goalAnim.home && <span className="text-base leading-none select-none">⚽</span>}
                 </div>
               </div>
@@ -180,13 +181,14 @@ export function ScoreHeader({
                 </div>
               </div>
 
-              {/* Away column: black bar + goal ball below */}
-              <div className="flex flex-col items-center">
+              {/* Away column: black bar + goal ball below abbreviation */}
+              <div className="flex flex-col">
                 <div className="flex items-center gap-1 px-1.5 h-8 bg-black flex-row-reverse">
                   <Flag code={match.flag_away} size="sm" className="w-8 h-[26px] rounded-[2px] object-cover" />
                   <span className="text-[13px] font-black text-white tracking-wide">{abbr(match.team_away)}</span>
                 </div>
-                <div className="w-full h-5 flex items-center justify-center">
+                {/* pr-[42px] = pr-1.5(6) + w-8(32) + gap-1(4) — centers ball under abbreviation (flag is on right) */}
+                <div className="h-5 flex items-center justify-center pr-[42px] pl-1.5">
                   {goalAnim.away && <span className="text-base leading-none select-none">⚽</span>}
                 </div>
               </div>

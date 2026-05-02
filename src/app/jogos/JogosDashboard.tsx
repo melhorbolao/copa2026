@@ -97,26 +97,60 @@ export function JogosDashboard({
 
   const prevMatchIdRef = useRef<string | null>(null)
 
-  // Goal animation detection — triggered by score changes within the SAME match
+  // Goal animation detection with sessionStorage persistence across page navigations
   useEffect(() => {
     if (!match) return
-    // When navigating to a different match, reset refs without triggering animation
+
+    const homeKey = `goalAnim_home_${match.id}`
+    const awayKey = `goalAnim_away_${match.id}`
+
+    // When match changes: reset and restore any persisted animation for new match
     if (prevMatchIdRef.current !== match.id) {
       prevMatchIdRef.current = match.id
       prevScoreRef.current = { home: match.score_home, away: match.score_away }
       setGoalAnim({ home: false, away: false })
+      const now = Date.now()
+      const homeEnd = sessionStorage.getItem(homeKey)
+      const awayEnd = sessionStorage.getItem(awayKey)
+      if (homeEnd && Number(homeEnd) > now) {
+        setGoalAnim(g => ({ ...g, home: true }))
+        clearTimeout(goalTimersRef.current.home)
+        goalTimersRef.current.home = setTimeout(() => {
+          setGoalAnim(g => ({ ...g, home: false }))
+          sessionStorage.removeItem(homeKey)
+        }, Number(homeEnd) - now)
+      }
+      if (awayEnd && Number(awayEnd) > now) {
+        setGoalAnim(g => ({ ...g, away: true }))
+        clearTimeout(goalTimersRef.current.away)
+        goalTimersRef.current.away = setTimeout(() => {
+          setGoalAnim(g => ({ ...g, away: false }))
+          sessionStorage.removeItem(awayKey)
+        }, Number(awayEnd) - now)
+      }
       return
     }
+
     const prev = prevScoreRef.current
     if (prev.home !== null && match.score_home !== null && match.score_home > prev.home) {
+      const endTime = Date.now() + GOAL_ANIM_MS
+      sessionStorage.setItem(homeKey, String(endTime))
       clearTimeout(goalTimersRef.current.home)
       setGoalAnim(g => ({ ...g, home: true }))
-      goalTimersRef.current.home = setTimeout(() => setGoalAnim(g => ({ ...g, home: false })), GOAL_ANIM_MS)
+      goalTimersRef.current.home = setTimeout(() => {
+        setGoalAnim(g => ({ ...g, home: false }))
+        sessionStorage.removeItem(homeKey)
+      }, GOAL_ANIM_MS)
     }
     if (prev.away !== null && match.score_away !== null && match.score_away > prev.away) {
+      const endTime = Date.now() + GOAL_ANIM_MS
+      sessionStorage.setItem(awayKey, String(endTime))
       clearTimeout(goalTimersRef.current.away)
       setGoalAnim(g => ({ ...g, away: true }))
-      goalTimersRef.current.away = setTimeout(() => setGoalAnim(g => ({ ...g, away: false })), GOAL_ANIM_MS)
+      goalTimersRef.current.away = setTimeout(() => {
+        setGoalAnim(g => ({ ...g, away: false }))
+        sessionStorage.removeItem(awayKey)
+      }, GOAL_ANIM_MS)
     }
     prevScoreRef.current = { home: match.score_home, away: match.score_away }
   }, [match?.score_home, match?.score_away, match?.id]) // eslint-disable-line
