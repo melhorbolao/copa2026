@@ -136,18 +136,18 @@ export function ScoreHeader({
             <div className="flex flex-col items-center shrink-0">
               <div className="flex items-stretch gap-0">
                 <div className="flex items-center gap-1 px-1.5 bg-black">
-                  <Flag code={match.flag_home} size="sm" className="w-7 h-[18px] rounded-[2px] object-cover" />
-                  <span className="text-[11px] font-black text-white tracking-wide">{abbr(match.team_home)}</span>
+                  <Flag code={match.flag_home} size="sm" className="w-8 h-[26px] rounded-[2px] object-cover" />
+                  <span className="text-[13px] font-black text-white tracking-wide">{abbr(match.team_home)}</span>
                 </div>
                 <ScoreBox score={match.score_home} editing={editing} inputVal={ih} onInput={setIh} />
-                <div className="flex items-center justify-center px-1" style={{ background: '#FD1111' }}>
+                <div className="relative flex items-center justify-center w-9" style={{ background: '#FD1111' }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/logoCopa.png" alt="" className="relative z-10" style={{ height: '44px', width: 'auto' }} />
+                  <img src="/logoCopa.png" alt="" className="absolute z-10" style={{ height: '38px', width: 'auto' }} />
                 </div>
                 <ScoreBox score={match.score_away} editing={editing} inputVal={ia} onInput={setIa} />
                 <div className="flex items-center gap-1 px-1.5 bg-black flex-row-reverse">
-                  <Flag code={match.flag_away} size="sm" className="w-7 h-[18px] rounded-[2px] object-cover" />
-                  <span className="text-[11px] font-black text-white tracking-wide">{abbr(match.team_away)}</span>
+                  <Flag code={match.flag_away} size="sm" className="w-8 h-[26px] rounded-[2px] object-cover" />
+                  <span className="text-[13px] font-black text-white tracking-wide">{abbr(match.team_away)}</span>
                 </div>
               </div>
               <div className="flex w-full justify-between h-3">
@@ -158,10 +158,6 @@ export function ScoreHeader({
                   {goalAnim.away && <span className="text-[11px] animate-bounce leading-none">⚽</span>}
                 </div>
               </div>
-              {isZebra && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src="/zebra.png" alt="zebra" width={12} height={12} className="object-contain" />
-              )}
             </div>
 
             {/* Right: date/city + stadium icon */}
@@ -180,7 +176,7 @@ export function ScoreHeader({
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/estou-aqui.png" alt="No Estádio" width={28} height={28} className="object-contain" />
                 {presentCount > 0 && (
-                  <span className="text-[9px] font-bold text-cyan-400 leading-none">{presentCount}</span>
+                  <span className="text-xs font-bold text-white leading-none">{presentCount}</span>
                 )}
               </button>
             </div>
@@ -302,7 +298,7 @@ function ScoreBox({ score, editing, inputVal, onInput }: {
 }) {
   return (
     <div
-      className="flex items-center justify-center font-black text-lg px-2 py-1 min-w-[2.2rem]"
+      className="flex items-center justify-center font-black text-base px-2 py-0.5 min-w-[2rem]"
       style={{ background: editing ? '#333' : CYAN, border: editing ? `2px solid ${CYAN}` : '2px solid transparent', color: editing ? CYAN : '#000' }}
     >
       {editing
