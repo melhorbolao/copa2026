@@ -7,7 +7,7 @@ import { saveOfficialScore } from '@/app/acopa/actions'
 import type { MatchFull, AttendanceRow, Participant } from './JogosDashboard'
 import { upsertAttendance } from './actions'
 
-const CYAN = '#00F2FF'
+const CYAN = '#04EFD0'
 const EDIT_WINDOW_MS = 4 * 60 * 60 * 1000
 
 function canEditScore(match: MatchFull, isAdmin: boolean): boolean {
@@ -132,27 +132,36 @@ export function ScoreHeader({
               </div>
             </div>
 
-            {/* Center: [team] [score|logo|score strip] [team] */}
-            <div className="flex items-start gap-0 shrink-0">
-              <TeamSide flag={match.flag_home} abbr={abbr(match.team_home)} side="home" goalAnim={goalAnim.home} />
-
-              <div className="flex flex-col items-center">
-                {/* Continuous strip: score | red-logo | score — all same height via items-stretch */}
-                <div className="flex items-stretch">
-                  <ScoreBox score={match.score_home} editing={editing} inputVal={ih} onInput={setIh} />
-                  <div className="flex items-center justify-center px-1" style={{ background: '#CC0000' }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src="/logoCopa.png" alt="" className="relative z-10" style={{ height: '44px', width: 'auto' }} />
-                  </div>
-                  <ScoreBox score={match.score_away} editing={editing} inputVal={ia} onInput={setIa} />
+            {/* Center: one items-stretch strip — all 5 elements share the same height */}
+            <div className="flex flex-col items-center shrink-0">
+              <div className="flex items-stretch gap-0">
+                <div className="flex items-center gap-1 px-1.5 bg-black">
+                  <Flag code={match.flag_home} size="sm" className="w-7 h-[18px] rounded-[2px] object-cover" />
+                  <span className="text-[11px] font-black text-white tracking-wide">{abbr(match.team_home)}</span>
                 </div>
-                {isZebra && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src="/zebra.png" alt="zebra" width={12} height={12} className="object-contain mt-0.5" />
-                )}
+                <ScoreBox score={match.score_home} editing={editing} inputVal={ih} onInput={setIh} />
+                <div className="flex items-center justify-center px-1" style={{ background: '#FD1111' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/logoCopa.png" alt="" className="relative z-10" style={{ height: '44px', width: 'auto' }} />
+                </div>
+                <ScoreBox score={match.score_away} editing={editing} inputVal={ia} onInput={setIa} />
+                <div className="flex items-center gap-1 px-1.5 bg-black flex-row-reverse">
+                  <Flag code={match.flag_away} size="sm" className="w-7 h-[18px] rounded-[2px] object-cover" />
+                  <span className="text-[11px] font-black text-white tracking-wide">{abbr(match.team_away)}</span>
+                </div>
               </div>
-
-              <TeamSide flag={match.flag_away} abbr={abbr(match.team_away)} side="away" goalAnim={goalAnim.away} />
+              <div className="flex w-full justify-between h-3">
+                <div className="flex items-center justify-center">
+                  {goalAnim.home && <span className="text-[11px] animate-bounce leading-none">⚽</span>}
+                </div>
+                <div className="flex items-center justify-center">
+                  {goalAnim.away && <span className="text-[11px] animate-bounce leading-none">⚽</span>}
+                </div>
+              </div>
+              {isZebra && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src="/zebra.png" alt="zebra" width={12} height={12} className="object-contain" />
+              )}
             </div>
 
             {/* Right: date/city + stadium icon */}
@@ -286,23 +295,6 @@ function NavArrow({ dir, disabled, onClick }: { dir: 'left' | 'right'; disabled:
   )
 }
 
-/** Bloco [bandeira + sigla] com ⚽ centralizado abaixo da sigla */
-function TeamSide({ flag, abbr, side, goalAnim }: {
-  flag: string; abbr: string; side: 'home' | 'away'; goalAnim: boolean
-}) {
-  return (
-    <div className="flex flex-col items-center">
-      <div className={`flex items-center gap-1 px-1.5 h-9 bg-black ${side === 'away' ? 'flex-row-reverse' : ''}`}>
-        <Flag code={flag} size="sm" className="w-7 h-[18px] rounded-[2px] object-cover" />
-        <span className="text-[11px] font-black text-white tracking-wide">{abbr}</span>
-      </div>
-      {/* ⚽ aparece centralizado abaixo da sigla, ocupa espaço fixo para não empurrar layout */}
-      <div className="h-3 flex items-center justify-center">
-        {goalAnim && <span className="text-[11px] animate-bounce leading-none">⚽</span>}
-      </div>
-    </div>
-  )
-}
 
 /** Retângulo ciano preenchido com o dígito do placar */
 function ScoreBox({ score, editing, inputVal, onInput }: {
