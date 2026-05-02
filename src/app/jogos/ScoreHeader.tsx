@@ -206,13 +206,16 @@ export function ScoreHeader({
               </div>
               <button
                 onClick={() => setShowPresence(v => !v)}
-                className="flex flex-col items-center gap-0 shrink-0"
+                className="relative shrink-0 flex items-center justify-center"
+                style={{ width: 28, height: 28 }}
                 title="No Estádio"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/estou-aqui.png" alt="No Estádio" width={28} height={28} className="object-contain" />
                 {presentCount > 0 && (
-                  <span className="text-xs font-bold text-white leading-none">{presentCount}</span>
+                  <span className="absolute top-full left-1/2 -translate-x-1/2 pt-0.5 text-xs font-bold text-white leading-none">
+                    {presentCount}
+                  </span>
                 )}
               </button>
             </div>
