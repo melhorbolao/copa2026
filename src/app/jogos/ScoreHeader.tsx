@@ -113,7 +113,7 @@ export function ScoreHeader({
           style={{ background: '#2a2a2a', border: '1px solid #3a3a3a' }}
         >
           {/* Top row: nav+phase | scoreboard | date+stadium */}
-          <div className="flex items-start gap-1 px-3 pt-1.5 pb-2">
+          <div className="flex items-center gap-1 px-3 pt-1.5 pb-2">
 
             {/* Left: stacked nav arrows + phase label */}
             <div className="flex items-center gap-0.5 flex-1 min-w-0">
@@ -196,27 +196,31 @@ export function ScoreHeader({
 
             </div>
 
-            {/* Right: date/city + stadium icon */}
-            <div className="flex items-center gap-1.5 flex-1 justify-end min-w-0">
-              <div className="min-w-0 text-right hidden sm:block">
-                <div className="text-xs text-gray-300 leading-tight truncate font-medium">
-                  {fmtDate(match.match_datetime)}
+            {/* Right: date/city + stadium icon — flex-col mirrors center section height */}
+            <div className="flex flex-col flex-1 items-end min-w-0">
+              <div className="flex items-center gap-1.5 justify-end w-full">
+                <div className="min-w-0 text-right hidden sm:block">
+                  <div className="text-xs text-gray-300 leading-tight truncate font-medium">
+                    {fmtDate(match.match_datetime)}
+                  </div>
+                  <div className="text-[10px] text-gray-500 leading-tight mt-0.5 truncate">{match.city}</div>
                 </div>
-                <div className="text-[10px] text-gray-500 leading-tight mt-0.5 truncate">{match.city}</div>
+                <button
+                  onClick={() => setShowPresence(v => !v)}
+                  className="relative shrink-0 flex items-center justify-center h-8 w-8"
+                  title="No Estádio"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/estou-aqui.png" alt="No Estádio" width={28} height={28} className="object-contain" />
+                  {presentCount > 0 && (
+                    <span className="absolute top-full left-1/2 -translate-x-1/2 pt-0.5 text-xs font-bold text-white leading-none whitespace-nowrap">
+                      {presentCount}
+                    </span>
+                  )}
+                </button>
               </div>
-              <button
-                onClick={() => setShowPresence(v => !v)}
-                className="relative shrink-0 flex items-center justify-center h-8 w-8"
-                title="No Estádio"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/estou-aqui.png" alt="No Estádio" width={28} height={28} className="object-contain" />
-                {presentCount > 0 && (
-                  <span className="absolute top-full left-1/2 -translate-x-1/2 pt-0.5 text-xs font-bold text-white leading-none">
-                    {presentCount}
-                  </span>
-                )}
-              </button>
+              {/* spacer mirrors the h-5 edit-link row so this column = 52px = same as center */}
+              <div className="h-5" />
             </div>
           </div>
 
