@@ -1086,9 +1086,9 @@ export function TabelaMBClient({
                 className="text-center text-gray-200 font-semibold">Oficial</th>
               {/* Colunas de estatísticas */}
               <th title="Pontuaram — acertaram ao menos o vencedor do evento" style={{ position: 'sticky', top: 0, ...(isMobile ? {} : { left: frozenTotal }), zIndex: isMobile ? 40 : 50, background: '#1f2937', borderRight: '1px solid #374151' }}
-                className="text-center text-[9px] font-semibold text-gray-400 px-0.5">Pont.</th>
+                className="text-center text-[9px] font-semibold text-gray-400 px-0.5">Pontuou</th>
               <th title="Cravaram — acertaram o placar exato" style={{ position: 'sticky', top: 0, ...(isMobile ? {} : { left: frozenTotal + STAT_COL_W }), zIndex: isMobile ? 40 : 50, background: '#1f2937', borderRight: '1px solid #374151' }}
-                className="text-center text-[9px] font-semibold text-gray-400 px-0.5">Crav.</th>
+                className="text-center text-[9px] font-semibold text-gray-400 px-0.5">Cravou</th>
               <th title="Média de pontos dos participantes" style={{ position: 'sticky', top: 0, ...(isMobile ? {} : { left: frozenTotal + 2 * STAT_COL_W }), zIndex: isMobile ? 40 : 50, background: '#1f2937', borderRight: '1px solid #374151' }}
                 className="text-center text-[9px] font-semibold text-gray-400 px-0.5">Méd.</th>
               <th style={{ position: 'sticky', top: 0, ...(isMobile ? {} : { left: frozenTotal + 3 * STAT_COL_W }), zIndex: isMobile ? 40 : 50, background: '#1f2937', borderRight: '2px solid #6b7280' }}

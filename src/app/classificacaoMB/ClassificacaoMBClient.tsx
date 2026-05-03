@@ -196,8 +196,8 @@ export function ClassificacaoMBClient({
                 )}
 
                 {/* Estatísticas de jogos */}
-                {th('Crav.', 'Jogos Cravados (placar exato)', 'hidden sm:table-cell w-10')}
-                {th('Pont.', 'Jogos Pontuados', 'hidden sm:table-cell w-10')}
+                {th('Cravou', 'Jogos Cravados (placar exato)', 'hidden sm:table-cell w-12')}
+                {th('Pontuou', 'Jogos Pontuados', 'hidden sm:table-cell w-14')}
                 {th('🦓 Apost.', '🦓 Apostada — número de apostas em resultados minoritários (possíveis zebras)', 'hidden sm:table-cell w-16')}
                 {th('🦓 Pont.', '🦓 Pontuada — zebras reais em que acertou o resultado', 'hidden sm:table-cell w-14')}
 
