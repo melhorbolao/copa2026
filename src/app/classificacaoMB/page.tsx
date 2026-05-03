@@ -6,7 +6,7 @@ import { getActiveParticipantId } from '@/lib/participant'
 import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { ClassificacaoMBClient } from './ClassificacaoMBClient'
-import { getMatchResult, detectMatchZebra, scoreTournamentBet } from '@/lib/scoring/engine'
+import { getMatchResult, detectMatchZebra, scoreTournamentBet, scoreMatchBet } from '@/lib/scoring/engine'
 import type { TournamentResults } from '@/lib/scoring/engine'
 
 export const metadata = {}
@@ -48,7 +48,7 @@ export default async function ClassificacaoMBPage() {
   const [participantsRes, matchesRes, betsRes, groupBetsRes, tournamentBetsRes, scoresRes, rulesRes] = await Promise.all([
     supabase.from('participants').select('id, apelido').order('apelido'),
     supabase.from('matches')
-      .select('id, match_number, match_datetime, team_home, team_away, score_home, score_away, phase, group_name, penalty_winner')
+      .select('id, match_number, match_datetime, team_home, team_away, score_home, score_away, phase, group_name, penalty_winner, is_brazil')
       .order('match_datetime', { ascending: true }),
     admin.from('bets').select('participant_id, match_id, score_home, score_away, points'),
     admin.from('group_bets').select('participant_id, points'),
@@ -137,6 +137,7 @@ export default async function ClassificacaoMBPage() {
     team_home: string; team_away: string
     score_home: number | null; score_away: number | null
     phase: string; group_name: string | null; penalty_winner: string | null
+    is_brazil: boolean
   }[]
   const allBets = (betsRes.data ?? []) as {
     participant_id: string; match_id: string
@@ -246,10 +247,17 @@ export default async function ClassificacaoMBPage() {
 
   for (const bet of allBets) {
     const pid = bet.participant_id
-    const pts = bet.points ?? 0
     const official = matchResultMap[bet.match_id]
 
     if (official) {
+      const match = matches.find(m => m.id === bet.match_id)
+      const pts = scoreMatchBet(
+        bet.score_home, bet.score_away,
+        official.score_home, official.score_away,
+        isZebraMatch[bet.match_id] ?? false,
+        match?.is_brazil ?? false,
+        rules,
+      )
       // Pontos e estatísticas de jogos encerrados
       ptsMatchesMap[pid] = (ptsMatchesMap[pid] ?? 0) + pts
       if (pts > 0) pontuadosMap[pid] = (pontuadosMap[pid] ?? 0) + 1

@@ -537,6 +537,31 @@ export function TabelaMBClient({
     })
   }, [participants, rules])
 
+  // Bulk-recompute livePoints for all completed matches on initial mount
+  useEffect(() => {
+    setBetMap(prev => {
+      let changed = false
+      const next = new Map(prev)
+      for (const m of matches) {
+        if (m.score_home === null || m.score_away === null) continue
+        const allBetsForMatch: Array<{ score_home: number; score_away: number }> = []
+        for (const [key, bet] of prev) {
+          if (key.endsWith(`:${m.id}`)) allBetsForMatch.push(bet)
+        }
+        const isZebra = detectMatchZebra(allBetsForMatch, getMatchResult(m.score_home, m.score_away), rules['percentual_zebra'] ?? 15)
+        for (const p of participants) {
+          const key = `${p.id}:${m.id}`
+          const bet = prev.get(key)
+          if (bet) {
+            next.set(key, { ...bet, livePoints: scoreMatchBet(bet.score_home, bet.score_away, m.score_home, m.score_away, isZebra, m.is_brazil, rules) })
+            changed = true
+          }
+        }
+      }
+      return changed ? next : prev
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Official group standings (computed from match scores via bracket engine)
   const officialStandings = useMemo(() => {
     const gms = matches.filter(m => m.phase === 'group')
