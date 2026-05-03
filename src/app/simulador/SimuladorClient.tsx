@@ -147,7 +147,7 @@ export function SimuladorClient({
     const dir = sortDir === 'desc' ? -1 : 1
     rows.sort((a, b) => {
       if (sortCol === 'apelido') return dir * a.apelido.localeCompare(b.apelido, 'pt-BR')
-      const diff = b[sortCol] - a[sortCol]
+      const diff = a[sortCol] - b[sortCol]   // ascending base; dir flips to desc
       if (diff !== 0) return dir * diff
       return a.apelido.localeCompare(b.apelido, 'pt-BR')
     })

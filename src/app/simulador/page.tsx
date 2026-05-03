@@ -11,6 +11,10 @@ import {
   getMatchResult, detectMatchZebra, scoreMatchBet, scoreTournamentBet,
 } from '@/lib/scoring/engine'
 import type { TournamentResults } from '@/lib/scoring/engine'
+import {
+  calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap,
+} from '@/lib/bracket/engine'
+import type { MatchSlim, BetSlim } from '@/lib/bracket/engine'
 
 export const metadata = {}
 
@@ -181,10 +185,45 @@ export default async function SimuladorPage() {
       (ptsG4Map[p.id]      ?? 0)
   }
 
-  // ── Filter visible matches ─────────────────────────────────────────────────
-  const visibleMatches = isAdmin
+  // ── Resolve knockout team names via bracket engine ────────────────────────
+  // Knockout matches in the DB often store placeholder names (e.g. "Vencedor Q1").
+  // The bracket engine derives the real teams from group standings + previous results.
+  const groupMatches = allMatches.filter((m: any) => m.phase === 'group')
+  const scoreMap = new Map<string, BetSlim>()
+  for (const m of groupMatches) {
+    if (m.score_home !== null && m.score_away !== null)
+      scoreMap.set(m.id, { match_id: m.id, score_home: m.score_home, score_away: m.score_away })
+  }
+  const matchSlims: MatchSlim[] = groupMatches.map((m: any) => ({
+    id: m.id, group_name: m.group_name, phase: m.phase,
+    team_home: m.team_home, team_away: m.team_away,
+    flag_home: m.flag_home, flag_away: m.flag_away,
+  }))
+  const officialStandings = calcGroupStandings(matchSlims, scoreMap)
+  const officialThirds    = rankThirds(officialStandings)
+  const thirdSlots        = resolveThirdSlots(officialThirds)
+  const knockoutTeamMap   = thirdSlots
+    ? buildKnockoutTeamMap(
+        buildR32Teams(officialStandings, officialThirds, thirdSlots),
+        allMatches.filter((m: any) => m.phase !== 'group'),
+      )
+    : new Map<string, { team_home: string; flag_home: string; team_away: string; flag_away: string }>()
+
+  // ── Filter visible matches and apply team overrides ───────────────────────
+  const visibleMatches = (isAdmin
     ? allMatches
     : allMatches.filter((m: any) => m.betting_deadline && m.betting_deadline <= now)
+  ).map((m: any) => {
+    const ov = knockoutTeamMap.get(m.id)
+    if (!ov) return m
+    return {
+      ...m,
+      team_home: ov.team_home || m.team_home,
+      team_away: ov.team_away || m.team_away,
+      flag_home: ov.flag_home || m.flag_home,
+      flag_away: ov.flag_away || m.flag_away,
+    }
+  })
 
   return (
     <>
