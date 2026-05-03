@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { memo, useMemo } from 'react'
 
 interface ParticipantRow {
@@ -96,6 +97,137 @@ function formatRenderedAt(iso: string): string {
   } catch { return '' }
 }
 
+// ── Compact ranking ────────────────────────────────────────────────────────────
+
+function calcCuts(n: number): { cut1: number; cut2: number } {
+  // Primeiro corte: 50% rounded up to next multiple of 10 (regulamento §28)
+  const cut1 = Math.min(Math.ceil((n * 0.5) / 10) * 10, n)
+  // Segundo corte: 50% of cut1 survivors, same rounding (regulamento §29)
+  const cut2 = Math.min(Math.ceil((cut1 * 0.5) / 10) * 10, cut1)
+  return { cut1, cut2 }
+}
+
+type Zone = 'premio' | 'corte2' | 'corte1' | 'out'
+
+const ZONE_ROW: Record<Zone, string> = {
+  premio: 'bg-green-50',
+  corte2: 'bg-sky-50',
+  corte1: 'bg-amber-50',
+  out:    'bg-white',
+}
+const ZONE_TEXT: Record<Zone, string> = {
+  premio: 'text-green-800 font-semibold',
+  corte2: 'text-sky-700 font-medium',
+  corte1: 'text-amber-700',
+  out:    'text-gray-400',
+}
+const ZONE_DOT: Record<Zone, string> = {
+  premio: 'bg-green-300',
+  corte2: 'bg-sky-300',
+  corte1: 'bg-amber-300',
+  out:    'bg-gray-200',
+}
+
+function CompactRanking({ ranked, premioSpots, renderedAt, matchesRegistered, groupsDefined }: {
+  ranked: RankedRow[]
+  premioSpots: number
+  renderedAt: string
+  matchesRegistered: number
+  groupsDefined: number
+}) {
+  const n = ranked.length
+  if (n === 0) return null
+
+  const { cut1, cut2 } = calcCuts(n)
+
+  // Use pts-based thresholds so ties at zone boundaries are included
+  const premioLine = ranked[Math.min(premioSpots, n) - 1]?.pts ?? Infinity
+  const cut2Line   = cut2 > premioSpots ? (ranked[cut2 - 1]?.pts ?? null) : null
+  const cut1Line   = cut1 > cut2 ? (ranked[cut1 - 1]?.pts ?? null) : null
+
+  function zone(pts: number): Zone {
+    if (pts >= premioLine)                            return 'premio'
+    if (cut2Line !== null && pts >= cut2Line)         return 'corte2'
+    if (cut1Line !== null && pts >= cut1Line)         return 'corte1'
+    return 'out'
+  }
+
+  const blockSize = Math.ceil(n / 4)
+  const blocks = [0, 1, 2, 3]
+    .map(i => ranked.slice(i * blockSize, (i + 1) * blockSize))
+    .filter(b => b.length > 0)
+
+  const dateStr = formatRenderedAt(renderedAt)
+
+  const legendItems: { zone: Zone; label: string }[] = [
+    { zone: 'premio', label: `Premiação (top ${premioSpots})` },
+    ...(cut2 > premioSpots ? [{ zone: 'corte2' as Zone, label: `2º corte (top ${cut2})` }] : []),
+    ...(cut1 > cut2        ? [{ zone: 'corte1' as Zone, label: `1º corte (top ${cut1})` }] : []),
+  ]
+
+  return (
+    <div className="mb-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      {/* Header */}
+      <div className="flex items-center gap-3 border-b border-gray-100 px-3 py-2.5">
+        <Image
+          src="/logo.png"
+          alt="Melhor Bolão"
+          width={72}
+          height={32}
+          className="shrink-0 object-contain"
+        />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-black text-gray-800 leading-tight">Classificação</p>
+          <p className="text-[10px] text-gray-400 leading-snug mt-0.5">
+            {dateStr}
+            {matchesRegistered > 0 && (
+              <> · {matchesRegistered} jogos registrados e {groupsDefined}/12 grupos definidos</>
+            )}
+          </p>
+        </div>
+      </div>
+
+      {/* 4 blocks */}
+      <div className="grid grid-cols-2 divide-x divide-y divide-gray-100">
+        {blocks.map((block, bi) => (
+          <div key={bi}>
+            <div className="grid grid-cols-[1.75rem_1fr_2.5rem] border-b border-gray-100 bg-gray-50 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-gray-400">
+              <span className="text-right pr-1">#</span>
+              <span>Participante</span>
+              <span className="text-right">PTS</span>
+            </div>
+            {block.map((r, ri) => {
+              const z = zone(r.pts)
+              const prevZ = ri > 0 ? zone(block[ri - 1].pts) : z
+              const boundary = ri > 0 && prevZ !== z
+              return (
+                <div
+                  key={r.id}
+                  className={`grid grid-cols-[1.75rem_1fr_2.5rem] px-2 py-[3px] text-[11px] ${ZONE_ROW[z]} ${boundary ? 'border-t border-gray-300' : ''}`}
+                >
+                  <span className={`text-right pr-1 tabular-nums ${ZONE_TEXT[z]}`}>{r.rank}</span>
+                  <span className={`truncate ${ZONE_TEXT[z]}`}>{r.apelido}</span>
+                  <span className={`text-right tabular-nums font-bold ${ZONE_TEXT[z]}`}>{r.pts}</span>
+                </div>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+
+      {/* Legend */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-gray-100 bg-gray-50 px-3 py-2">
+        {legendItems.map(({ zone: z, label }) => (
+          <span key={z} className="flex items-center gap-1 text-[9px] text-gray-500">
+            <span className={`inline-block h-2 w-2 rounded-sm ${ZONE_DOT[z]}`} />
+            {label}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function ClassificacaoMBClient({
   rows, lastMatch, nextMatch,
   eliminatedTeams, eliminatedStdScorers,
@@ -156,8 +288,17 @@ export function ClassificacaoMBClient({
 
   return (
     <div className="mx-auto max-w-full px-2 py-4 pb-32 sm:px-4 sm:py-6">
+
+      <CompactRanking
+        ranked={ranked}
+        premioSpots={premioSpots}
+        renderedAt={renderedAt}
+        matchesRegistered={matchesRegistered}
+        groupsDefined={groupsDefined}
+      />
+
       <div className="mb-3 flex items-baseline gap-3">
-        <h1 className="text-2xl font-black text-gray-900">Classificação Melhor Bolão</h1>
+        <h1 className="text-2xl font-black text-gray-900">Classificação Detalhada</h1>
         <span className="text-[10px] text-gray-400">{formatRenderedAt(renderedAt)}</span>
         <span className="text-[10px] text-gray-400">· {matchesRegistered} jogos registrados e {groupsDefined}/12 grupos definidos</span>
       </div>
