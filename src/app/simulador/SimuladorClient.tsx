@@ -136,6 +136,14 @@ export function SimuladorClient({
       ptsSim:      simPtsMap[p.id]    ?? 0,
       ptsTotal:    (storedTotals[p.id] ?? 0) + (simPtsMap[p.id] ?? 0),
     }))
+
+    // Rank is always fixed by ptsTotal desc (simulation position in the bolão)
+    const byTotal = [...rows].sort((a, b) =>
+      b.ptsTotal - a.ptsTotal || a.apelido.localeCompare(b.apelido, 'pt-BR')
+    )
+    const rankMap = new Map(byTotal.map((r, i) => [r.id, i + 1]))
+
+    // Display order follows sortCol/sortDir independently
     const dir = sortDir === 'desc' ? -1 : 1
     rows.sort((a, b) => {
       if (sortCol === 'apelido') return dir * a.apelido.localeCompare(b.apelido, 'pt-BR')
@@ -143,7 +151,8 @@ export function SimuladorClient({
       if (diff !== 0) return dir * diff
       return a.apelido.localeCompare(b.apelido, 'pt-BR')
     })
-    return rows.map((r, i) => ({ ...r, rank: i + 1 }))
+
+    return rows.map(r => ({ ...r, rank: rankMap.get(r.id)! }))
   }, [participants, storedTotals, simPtsMap, sortCol, sortDir])
 
   // ── Persist ───────────────────────────────────────────────────────────────────
@@ -337,7 +346,12 @@ export function SimuladorClient({
           <table className="text-xs w-full whitespace-nowrap">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-bold text-gray-400 uppercase tracking-wide">
-                <th className="pl-3 pr-2 py-2 text-left">#</th>
+                <th
+                  onClick={() => handleSort('ptsTotal')}
+                  className="pl-3 pr-2 py-2 text-left cursor-pointer select-none hover:text-gray-600"
+                >
+                  #{sortArrow('ptsTotal')}
+                </th>
                 <th
                   onClick={() => handleSort('apelido')}
                   className="px-2 py-2 text-left cursor-pointer select-none hover:text-gray-600"
