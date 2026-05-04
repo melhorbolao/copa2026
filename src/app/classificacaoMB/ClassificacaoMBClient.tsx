@@ -130,9 +130,10 @@ const ZONE_DOT: Record<Zone, string> = {
   last:   'bg-red-400',
 }
 
-function CompactRanking({ ranked, premioSpots, renderedAt, matchesRegistered, groupsDefined }: {
+function CompactRanking({ ranked, premioSpots, isUniqueLast, renderedAt, matchesRegistered, groupsDefined }: {
   ranked: RankedRow[]
   premioSpots: number
+  isUniqueLast: boolean
   renderedAt: string
   matchesRegistered: number
   groupsDefined: number
@@ -149,7 +150,7 @@ function CompactRanking({ ranked, premioSpots, renderedAt, matchesRegistered, gr
   const lastRank   = ranked[n - 1].rank
 
   function zoneOf(r: RankedRow): Zone {
-    if (r.rank === lastRank)                    return 'last'
+    if (isUniqueLast && r.rank === lastRank)    return 'last'
     const { pts } = r
     if (pts >= premioLine)                      return 'premio'
     if (cut2Line !== null && pts >= cut2Line)   return 'corte2'
@@ -168,7 +169,7 @@ function CompactRanking({ ranked, premioSpots, renderedAt, matchesRegistered, gr
     { zone: 'premio', label: `Premiação (top ${premioSpots})` },
     ...(cut2 > premioSpots ? [{ zone: 'corte2' as Zone, label: `2º corte (top ${cut2})` }] : []),
     ...(cut1 > cut2        ? [{ zone: 'corte1' as Zone, label: `1º corte (top ${cut1})` }] : []),
-    { zone: 'last', label: 'Lanterna' },
+    ...(isUniqueLast ? [{ zone: 'last' as Zone, label: 'Lanterna' }] : []),
   ]
 
   return (
@@ -206,7 +207,7 @@ function CompactRanking({ ranked, premioSpots, renderedAt, matchesRegistered, gr
                     className={`grid grid-cols-[1.5rem_1fr_2rem] px-2 py-[3px] text-[11px] ${ZONE_ROW[z]} ${boundary ? 'border-t border-gray-200' : ''}`}
                   >
                     <span className={`text-right pr-0.5 tabular-nums ${ZONE_TEXT[z]}`}>{r.rank}</span>
-                    <span className={`pl-1 truncate ${ZONE_TEXT[z]}`}>{r.apelido}</span>
+                    <span className={`pl-1 truncate ${ZONE_TEXT[z]}`}>{r.apelido}{z === 'last' && ' 🔦'}</span>
                     <span className={`text-right tabular-nums font-bold ${ZONE_TEXT[z]}`}>{r.pts}</span>
                   </div>
                 )
@@ -247,9 +248,10 @@ export function ClassificacaoMBClient({
   const showPtsCl       = colVisibility['pts_cl']       ?? true
   const showPtsG4       = colVisibility['pts_g4']       ?? true
 
-  const { ranked, cutPts, premioCutPts, lastRank, premioLine, cut2Line, cut1Line } = useMemo((): {
+  const { ranked, cutPts, premioCutPts, lastRank, isUniqueLast, premioLine, cut2Line, cut1Line } = useMemo((): {
     ranked: RankedRow[]; cutPts: number | null; premioCutPts: number | null
-    lastRank: number; premioLine: number; cut2Line: number | null; cut1Line: number | null
+    lastRank: number; isUniqueLast: boolean
+    premioLine: number; cut2Line: number | null; cut1Line: number | null
   } => {
     const sorted = [...rows].sort((a, b) => b.pts - a.pts)
     const n = sorted.length
@@ -273,17 +275,18 @@ export function ClassificacaoMBClient({
       diffCorte: cut !== null ? r.pts - cut : null,
     }))
 
-    const lastRankVal = n > 0 ? withRank[n - 1].rank : 0
+    const lastRankVal    = n > 0 ? withRank[n - 1].rank : 0
+    const isUniqueLastVal = n > 0 && out.filter(r => r.rank === lastRankVal).length === 1
     const { cut1, cut2 } = calcCuts(n)
     const premioLineVal = n > 0 ? (sorted[Math.min(premioSpots, n) - 1]?.pts ?? Infinity) : Infinity
     const cut2LineVal   = cut2 > premioSpots ? (sorted[cut2 - 1]?.pts ?? null) : null
     const cut1LineVal   = cut1 > cut2        ? (sorted[cut1 - 1]?.pts ?? null) : null
 
-    return { ranked: out, cutPts: cut, premioCutPts: premioCut, lastRank: lastRankVal, premioLine: premioLineVal, cut2Line: cut2LineVal, cut1Line: cut1LineVal }
+    return { ranked: out, cutPts: cut, premioCutPts: premioCut, lastRank: lastRankVal, isUniqueLast: isUniqueLastVal, premioLine: premioLineVal, cut2Line: cut2LineVal, cut1Line: cut1LineVal }
   }, [rows, prizeSpots, premioSpots])
 
   function zoneOf(r: RankedRow): Zone {
-    if (r.rank === lastRank)                      return 'last'
+    if (isUniqueLast && r.rank === lastRank)       return 'last'
     if (r.pts >= premioLine)                      return 'premio'
     if (cut2Line !== null && r.pts >= cut2Line)   return 'corte2'
     if (cut1Line !== null && r.pts >= cut1Line)   return 'corte1'
@@ -308,6 +311,7 @@ export function ClassificacaoMBClient({
       <CompactRanking
         ranked={ranked}
         premioSpots={premioSpots}
+        isUniqueLast={isUniqueLast}
         renderedAt={renderedAt}
         matchesRegistered={matchesRegistered}
         groupsDefined={groupsDefined}
@@ -412,7 +416,9 @@ export function ClassificacaoMBClient({
                       {boundary && <span className={`ml-0.5 ${z === 'last' ? 'text-white' : 'text-amber-500'}`} title="Empate no corte">⚠</span>}
                     </td>
                     <td className={`px-1.5 py-1 max-w-[120px] truncate ${z === 'last' ? 'text-white' : 'text-gray-900'}`}>
-                      {row.apelido}{isActive && <span className={`ml-1 text-[10px] ${z === 'last' ? 'text-white' : 'text-verde-600'}`}>◀</span>}
+                      {row.apelido}
+                      {z === 'last' && <span className="ml-1 text-[11px]">🔦</span>}
+                      {isActive && <span className={`ml-1 text-[10px] ${z === 'last' ? 'text-white' : 'text-verde-600'}`}>◀</span>}
                     </td>
                     <td className={`px-1.5 py-1 text-right font-mono font-bold tabular-nums ${z === 'last' ? 'text-white' : 'text-gray-900'}`}>
                       {row.pts}
