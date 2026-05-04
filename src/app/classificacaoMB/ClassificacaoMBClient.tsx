@@ -106,25 +106,28 @@ function calcCuts(n: number): { cut1: number; cut2: number } {
   return { cut1, cut2 }
 }
 
-type Zone = 'premio' | 'corte2' | 'corte1' | 'out'
+type Zone = 'premio' | 'corte2' | 'corte1' | 'out' | 'last'
 
 const ZONE_ROW: Record<Zone, string> = {
   premio: 'bg-green-50',
   corte2: 'bg-sky-50',
   corte1: 'bg-amber-50',
   out:    'bg-white',
+  last:   'bg-red-500',
 }
 const ZONE_TEXT: Record<Zone, string> = {
   premio: 'text-green-800 font-semibold',
   corte2: 'text-sky-700 font-medium',
   corte1: 'text-amber-700',
   out:    'text-gray-400',
+  last:   'text-white font-bold',
 }
 const ZONE_DOT: Record<Zone, string> = {
   premio: 'bg-green-300',
   corte2: 'bg-sky-300',
   corte1: 'bg-amber-300',
   out:    'bg-gray-200',
+  last:   'bg-red-400',
 }
 
 function CompactRanking({ ranked, premioSpots, renderedAt, matchesRegistered, groupsDefined }: {
@@ -143,11 +146,14 @@ function CompactRanking({ ranked, premioSpots, renderedAt, matchesRegistered, gr
   const premioLine = ranked[Math.min(premioSpots, n) - 1]?.pts ?? Infinity
   const cut2Line   = cut2 > premioSpots ? (ranked[cut2 - 1]?.pts ?? null) : null
   const cut1Line   = cut1 > cut2        ? (ranked[cut1 - 1]?.pts ?? null) : null
+  const lastRank   = ranked[n - 1].rank
 
-  function zone(pts: number): Zone {
-    if (pts >= premioLine)                    return 'premio'
-    if (cut2Line !== null && pts >= cut2Line) return 'corte2'
-    if (cut1Line !== null && pts >= cut1Line) return 'corte1'
+  function zoneOf(r: RankedRow): Zone {
+    if (r.rank === lastRank)                    return 'last'
+    const { pts } = r
+    if (pts >= premioLine)                      return 'premio'
+    if (cut2Line !== null && pts >= cut2Line)   return 'corte2'
+    if (cut1Line !== null && pts >= cut1Line)   return 'corte1'
     return 'out'
   }
 
@@ -162,6 +168,7 @@ function CompactRanking({ ranked, premioSpots, renderedAt, matchesRegistered, gr
     { zone: 'premio', label: `Premiação (top ${premioSpots})` },
     ...(cut2 > premioSpots ? [{ zone: 'corte2' as Zone, label: `2º corte (top ${cut2})` }] : []),
     ...(cut1 > cut2        ? [{ zone: 'corte1' as Zone, label: `1º corte (top ${cut1})` }] : []),
+    { zone: 'last', label: 'Lanterna' },
   ]
 
   return (
@@ -191,8 +198,8 @@ function CompactRanking({ ranked, premioSpots, renderedAt, matchesRegistered, gr
               </div>
               {/* linhas */}
               {block.map((r, ri) => {
-                const z = zone(r.pts)
-                const boundary = ri > 0 && zone(block[ri - 1].pts) !== z
+                const z = zoneOf(r)
+                const boundary = ri > 0 && zoneOf(block[ri - 1]) !== z
                 return (
                   <div
                     key={r.id}
@@ -240,16 +247,18 @@ export function ClassificacaoMBClient({
   const showPtsCl       = colVisibility['pts_cl']       ?? true
   const showPtsG4       = colVisibility['pts_g4']       ?? true
 
-  const { ranked, cutPts, premioCutPts } = useMemo((): {
+  const { ranked, cutPts, premioCutPts, lastRank, premioLine, cut2Line, cut1Line } = useMemo((): {
     ranked: RankedRow[]; cutPts: number | null; premioCutPts: number | null
+    lastRank: number; premioLine: number; cut2Line: number | null; cut1Line: number | null
   } => {
     const sorted = [...rows].sort((a, b) => b.pts - a.pts)
-    const leaderPts = sorted.length > 0 ? sorted[0].pts : 0
-    const effectiveZone = Math.min(prizeSpots, sorted.length)
-    const cut = sorted.length > 0 ? sorted[effectiveZone - 1].pts : null
+    const n = sorted.length
+    const leaderPts = n > 0 ? sorted[0].pts : 0
+    const effectiveZone = Math.min(prizeSpots, n)
+    const cut = n > 0 ? sorted[effectiveZone - 1].pts : null
 
-    const effectivePremio = Math.min(premioSpots, sorted.length)
-    const premioCut = sorted.length > 0 ? sorted[effectivePremio - 1].pts : null
+    const effectivePremio = Math.min(premioSpots, n)
+    const premioCut = n > 0 ? sorted[effectivePremio - 1].pts : null
 
     const withRank: (ParticipantRow & { rank: number })[] = []
     for (let i = 0; i < sorted.length; i++) {
@@ -263,10 +272,23 @@ export function ClassificacaoMBClient({
       diffPremio: premioCut !== null ? r.pts - premioCut : null,
       diffCorte: cut !== null ? r.pts - cut : null,
     }))
-    return { ranked: out, cutPts: cut, premioCutPts: premioCut }
+
+    const lastRankVal = n > 0 ? withRank[n - 1].rank : 0
+    const { cut1, cut2 } = calcCuts(n)
+    const premioLineVal = n > 0 ? (sorted[Math.min(premioSpots, n) - 1]?.pts ?? Infinity) : Infinity
+    const cut2LineVal   = cut2 > premioSpots ? (sorted[cut2 - 1]?.pts ?? null) : null
+    const cut1LineVal   = cut1 > cut2        ? (sorted[cut1 - 1]?.pts ?? null) : null
+
+    return { ranked: out, cutPts: cut, premioCutPts: premioCut, lastRank: lastRankVal, premioLine: premioLineVal, cut2Line: cut2LineVal, cut1Line: cut1LineVal }
   }, [rows, prizeSpots, premioSpots])
 
-  const inZone = (pts: number) => cutPts !== null && pts >= cutPts
+  function zoneOf(r: RankedRow): Zone {
+    if (r.rank === lastRank)                      return 'last'
+    if (r.pts >= premioLine)                      return 'premio'
+    if (cut2Line !== null && r.pts >= cut2Line)   return 'corte2'
+    if (cut1Line !== null && r.pts >= cut1Line)   return 'corte1'
+    return 'out'
+  }
 
   const tiedAtBoundary = useMemo(() => {
     if (cutPts === null) return false
@@ -364,17 +386,16 @@ export function ClassificacaoMBClient({
               )}
               {ranked.map(row => {
                 const isActive = row.id === activeParticipantId
-                const zone     = inZone(row.pts)
+                const z        = zoneOf(row)
                 const boundary = tiedAtBoundary && row.pts === cutPts
 
-                let bg = ''
-                if (isActive)  bg = 'bg-verde-50'
-                else if (zone) bg = boundary ? 'bg-amber-100' : 'bg-amber-50'
+                const rowBg   = z === 'last' ? ZONE_ROW.last : (isActive ? 'bg-verde-50' : ZONE_ROW[z])
+                const fontCls = z === 'last' ? 'font-bold' : (isActive ? 'font-semibold' : '')
 
                 return (
                   <tr
                     key={row.id}
-                    className={`border-b border-gray-100 last:border-0 ${bg} ${isActive ? 'font-semibold' : ''}`}
+                    className={`border-b border-gray-100 last:border-0 ${rowBg} ${fontCls} ${z === 'last' ? '[&_*]:!text-white' : ''}`}
                   >
                     {showPremio && (
                       <td className="px-1.5 py-1 text-center text-gray-400 tabular-nums">
@@ -386,25 +407,25 @@ export function ClassificacaoMBClient({
                       </td>
                     )}
 
-                    <td className="px-1.5 py-1 text-gray-500 tabular-nums">
+                    <td className={`px-1.5 py-1 tabular-nums ${z === 'last' ? 'text-white' : 'text-gray-500'}`}>
                       {row.rank}
-                      {boundary && <span className="ml-0.5 text-amber-500" title="Empate no corte">⚠</span>}
+                      {boundary && <span className={`ml-0.5 ${z === 'last' ? 'text-white' : 'text-amber-500'}`} title="Empate no corte">⚠</span>}
                     </td>
-                    <td className="px-1.5 py-1 text-gray-900 max-w-[120px] truncate">
-                      {row.apelido}{isActive && <span className="ml-1 text-verde-600 text-[10px]">◀</span>}
+                    <td className={`px-1.5 py-1 max-w-[120px] truncate ${z === 'last' ? 'text-white' : 'text-gray-900'}`}>
+                      {row.apelido}{isActive && <span className={`ml-1 text-[10px] ${z === 'last' ? 'text-white' : 'text-verde-600'}`}>◀</span>}
                     </td>
-                    <td className="px-1.5 py-1 text-right font-mono font-bold text-gray-900 tabular-nums">
+                    <td className={`px-1.5 py-1 text-right font-mono font-bold tabular-nums ${z === 'last' ? 'text-white' : 'text-gray-900'}`}>
                       {row.pts}
                     </td>
 
                     {/* Último / Próximo */}
                     {showLastMatch && (
-                      <td className="hidden lg:table-cell px-1.5 py-1 text-center text-gray-700">
+                      <td className={`hidden lg:table-cell px-1.5 py-1 text-center ${z === 'last' ? 'text-white' : 'text-gray-700'}`}>
                         <BetCell bet={row.lastMatchBet} />
                       </td>
                     )}
                     {showNextMatch && (
-                      <td className="hidden lg:table-cell px-1.5 py-1 text-center text-gray-700">
+                      <td className={`hidden lg:table-cell px-1.5 py-1 text-center ${z === 'last' ? 'text-white' : 'text-gray-700'}`}>
                         <BetCell bet={row.nextMatchBet} />
                       </td>
                     )}
@@ -440,17 +461,17 @@ export function ClassificacaoMBClient({
 
                     {/* Breakdown de pontos */}
                     {showPtsJg && (
-                      <td className="hidden md:table-cell px-1.5 py-1 text-right font-mono tabular-nums text-gray-600">
+                      <td className={`hidden md:table-cell px-1.5 py-1 text-right font-mono tabular-nums ${z === 'last' ? 'text-white' : 'text-gray-600'}`}>
                         {row.ptsMatches}
                       </td>
                     )}
                     {showPtsCl && (
-                      <td className="hidden md:table-cell px-1.5 py-1 text-right font-mono tabular-nums text-gray-600">
+                      <td className={`hidden md:table-cell px-1.5 py-1 text-right font-mono tabular-nums ${z === 'last' ? 'text-white' : 'text-gray-600'}`}>
                         {row.ptsClassif}
                       </td>
                     )}
                     {showPtsG4 && (
-                      <td className="hidden md:table-cell px-1.5 py-1 text-right font-mono tabular-nums text-gray-600">
+                      <td className={`hidden md:table-cell px-1.5 py-1 text-right font-mono tabular-nums ${z === 'last' ? 'text-white' : 'text-gray-600'}`}>
                         {row.ptsG4}
                       </td>
                     )}
