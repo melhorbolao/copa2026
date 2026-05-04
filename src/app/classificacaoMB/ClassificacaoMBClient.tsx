@@ -1,6 +1,5 @@
 'use client'
 
-import Image from 'next/image'
 import { memo, useMemo } from 'react'
 
 interface ParticipantRow {
@@ -140,15 +139,15 @@ function CompactRanking({ ranked, premioSpots, renderedAt, matchesRegistered, gr
 
   const { cut1, cut2 } = calcCuts(n)
 
-  // Use pts-based thresholds so ties at zone boundaries are included
+  // pts-based thresholds handle ties at zone boundaries
   const premioLine = ranked[Math.min(premioSpots, n) - 1]?.pts ?? Infinity
   const cut2Line   = cut2 > premioSpots ? (ranked[cut2 - 1]?.pts ?? null) : null
-  const cut1Line   = cut1 > cut2 ? (ranked[cut1 - 1]?.pts ?? null) : null
+  const cut1Line   = cut1 > cut2        ? (ranked[cut1 - 1]?.pts ?? null) : null
 
   function zone(pts: number): Zone {
-    if (pts >= premioLine)                            return 'premio'
-    if (cut2Line !== null && pts >= cut2Line)         return 'corte2'
-    if (cut1Line !== null && pts >= cut1Line)         return 'corte1'
+    if (pts >= premioLine)                    return 'premio'
+    if (cut2Line !== null && pts >= cut2Line) return 'corte2'
+    if (cut1Line !== null && pts >= cut1Line) return 'corte1'
     return 'out'
   }
 
@@ -167,56 +166,51 @@ function CompactRanking({ ranked, premioSpots, renderedAt, matchesRegistered, gr
 
   return (
     <div className="mb-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-      {/* Header */}
-      <div className="flex items-center gap-3 border-b border-gray-100 px-3 py-2.5">
-        <Image
-          src="/logo.png"
-          alt="Melhor Bolão"
-          width={72}
-          height={32}
-          className="shrink-0 object-contain"
-        />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-black text-gray-800 leading-tight">Classificação</p>
-          <p className="text-[10px] text-gray-400 leading-snug mt-0.5">
-            {dateStr}
-            {matchesRegistered > 0 && (
-              <> · {matchesRegistered} jogos registrados e {groupsDefined}/12 grupos definidos</>
-            )}
-          </p>
+
+      {/* Header — sem logo, texto simples */}
+      <div className="border-b border-gray-100 px-4 py-2.5">
+        <p className="text-sm font-black text-gray-800">Classificação Melhor Bolão</p>
+        <p className="text-[10px] text-gray-400 mt-0.5">
+          {dateStr}
+          {matchesRegistered > 0 && (
+            <> · {matchesRegistered} jogos registrados e {groupsDefined}/12 grupos definidos</>
+          )}
+        </p>
+      </div>
+
+      {/* 4 blocos lado a lado */}
+      <div className="overflow-x-auto">
+        <div className="grid grid-cols-4 divide-x divide-gray-100" style={{ minWidth: '480px' }}>
+          {blocks.map((block, bi) => (
+            <div key={bi}>
+              {/* cabeçalho do bloco */}
+              <div className="grid grid-cols-[1.5rem_1fr_2rem] border-b border-gray-100 bg-gray-50 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-gray-400">
+                <span className="text-right pr-0.5">#</span>
+                <span className="pl-1">Participante</span>
+                <span className="text-right">PTS</span>
+              </div>
+              {/* linhas */}
+              {block.map((r, ri) => {
+                const z = zone(r.pts)
+                const boundary = ri > 0 && zone(block[ri - 1].pts) !== z
+                return (
+                  <div
+                    key={r.id}
+                    className={`grid grid-cols-[1.5rem_1fr_2rem] px-2 py-[3px] text-[11px] ${ZONE_ROW[z]} ${boundary ? 'border-t border-gray-200' : ''}`}
+                  >
+                    <span className={`text-right pr-0.5 tabular-nums ${ZONE_TEXT[z]}`}>{r.rank}</span>
+                    <span className={`pl-1 truncate ${ZONE_TEXT[z]}`}>{r.apelido}</span>
+                    <span className={`text-right tabular-nums font-bold ${ZONE_TEXT[z]}`}>{r.pts}</span>
+                  </div>
+                )
+              })}
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* 4 blocks */}
-      <div className="grid grid-cols-2 divide-x divide-y divide-gray-100">
-        {blocks.map((block, bi) => (
-          <div key={bi}>
-            <div className="grid grid-cols-[1.75rem_1fr_2.5rem] border-b border-gray-100 bg-gray-50 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-gray-400">
-              <span className="text-right pr-1">#</span>
-              <span>Participante</span>
-              <span className="text-right">PTS</span>
-            </div>
-            {block.map((r, ri) => {
-              const z = zone(r.pts)
-              const prevZ = ri > 0 ? zone(block[ri - 1].pts) : z
-              const boundary = ri > 0 && prevZ !== z
-              return (
-                <div
-                  key={r.id}
-                  className={`grid grid-cols-[1.75rem_1fr_2.5rem] px-2 py-[3px] text-[11px] ${ZONE_ROW[z]} ${boundary ? 'border-t border-gray-300' : ''}`}
-                >
-                  <span className={`text-right pr-1 tabular-nums ${ZONE_TEXT[z]}`}>{r.rank}</span>
-                  <span className={`truncate ${ZONE_TEXT[z]}`}>{r.apelido}</span>
-                  <span className={`text-right tabular-nums font-bold ${ZONE_TEXT[z]}`}>{r.pts}</span>
-                </div>
-              )
-            })}
-          </div>
-        ))}
-      </div>
-
-      {/* Legend */}
-      <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-gray-100 bg-gray-50 px-3 py-2">
+      {/* Legenda */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-gray-100 bg-gray-50 px-4 py-2">
         {legendItems.map(({ zone: z, label }) => (
           <span key={z} className="flex items-center gap-1 text-[9px] text-gray-500">
             <span className={`inline-block h-2 w-2 rounded-sm ${ZONE_DOT[z]}`} />
