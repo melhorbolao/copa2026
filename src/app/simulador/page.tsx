@@ -15,6 +15,7 @@ import {
   calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap,
 } from '@/lib/bracket/engine'
 import type { MatchSlim, BetSlim } from '@/lib/bracket/engine'
+import { getVisibilitySettings, filterBetsByDeadline } from '@/lib/production-mode'
 
 export const metadata = {}
 
@@ -49,6 +50,8 @@ export default async function SimuladorPage() {
   const activeParticipantId = await getActiveParticipantId(supabase, user.id).catch(() => null)
   const admin = createAuthAdminClient() as any
   const now = new Date().toISOString()
+  const visibilitySettings = await getVisibilitySettings()
+  const isTestModeAdmin = isAdmin && !visibilitySettings.productionMode
 
   const [
     participantsRes, matchesRes, betsRes, groupBetsRes, tournamentBetsRes,
@@ -82,7 +85,17 @@ export default async function SimuladorPage() {
   )
 
   const allMatches    = (matchesRes.data ?? []) as any[]
-  const allBets       = (betsRes.data    ?? []) as any[]
+  // Filtrar palpites por prazo antes de expor ao cliente
+  const deadlineByMatch: Record<string, string> = Object.fromEntries(
+    allMatches.map((m: any) => [m.id, m.betting_deadline])
+  )
+  const allBets = filterBetsByDeadline(
+    (betsRes.data ?? []) as any[],
+    deadlineByMatch,
+    new Date(now),
+    isTestModeAdmin,
+    activeParticipantId,
+  )
   const allGroupBets  = (groupBetsRes.data       ?? []) as any[]
   const allTBets      = (tournamentBetsRes.data   ?? []) as any[]
   const thirdScores   = (thirdScoresRes.data      ?? []) as any[]

@@ -48,11 +48,11 @@ export default async function ClassificacaoPage() {
   const allMatches = (matchesRes.data ?? []) as MatchFull[]
 
   const bonusDeadlineStr = allMatches.find(m => m.phase === 'group' && m.round === 1)?.betting_deadline ?? null
-  const bonusViz = isBonusVisible(bonusDeadlineStr, now, visibilitySettings)
+  const bonusViz = isBonusVisible(bonusDeadlineStr, now, visibilitySettings, isAdmin)
 
   const visibleMatchIds = new Set<string>(
     allMatches
-      .filter(m => isMatchBetsVisible(m.phase, m.round ?? null, m.betting_deadline, now, visibilitySettings))
+      .filter(m => isMatchBetsVisible(m.phase, m.round ?? null, m.betting_deadline, now, visibilitySettings, isAdmin))
       .map(m => m.id),
   )
 

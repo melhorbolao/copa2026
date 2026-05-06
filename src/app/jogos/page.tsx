@@ -7,6 +7,7 @@ import { getActiveParticipantId } from '@/lib/participant'
 import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { JogosDashboard } from './JogosDashboard'
+import { getVisibilitySettings, filterBetsByDeadline } from '@/lib/production-mode'
 
 export const metadata = {}
 
@@ -24,6 +25,8 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAuthAdminClient() as any
   const { m: initialMatchId } = await searchParams
+  const visibilitySettings = await getVisibilitySettings()
+  const isTestModeAdmin = isAdmin && !visibilitySettings.productionMode
 
   const [
     matchesRes, participantsRes, betsRes, rulesRes, scoresRes, teamAbbrRes,
@@ -49,6 +52,21 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const storedTotals: Record<string, number> = Object.fromEntries((scoresRes.data ?? []).map((s: any) => [s.participant_id, s.pts_total ?? 0]))
 
+  // Filtrar palpites: só expõe ao cliente após o prazo da partida (ou próprios do usuário ativo)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allMatches = (matchesRes.data ?? []) as any[]
+  const deadlineByMatch: Record<string, string> = Object.fromEntries(
+    allMatches.map((m: any) => [m.id, m.betting_deadline])
+  )
+  const safeBets = filterBetsByDeadline(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (betsRes.data ?? []) as any[],
+    deadlineByMatch,
+    new Date(),
+    isTestModeAdmin,
+    activeParticipantId,
+  )
+
   // Map user_id → participant_ids for the attendance feature
   const userToParticipants: Record<string, string[]> = {}
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -69,7 +87,7 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
           initialMatchId={initialMatchId ?? null}
           matches={(matchesRes.data ?? []) as any[]}
           participants={(participantsRes.data ?? []) as any[]}
-          bets={(betsRes.data ?? []) as any[]}
+          bets={safeBets}
           rules={rules}
           teamAbbrs={teamAbbrs}
           storedTotals={storedTotals}

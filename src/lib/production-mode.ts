@@ -96,15 +96,17 @@ export function buildAvailableRounds(
 }
 
 // Returns true if this match's bets should be visible given current settings.
+// isAdmin: when true AND productionMode=false (test mode), bypass all filters.
 export function isMatchBetsVisible(
   phase: string,
   round: number | null,
   betting_deadline: string,
   now: Date,
   settings: VisibilitySettings,
+  isAdmin = false,
 ): boolean {
-  if (!settings.productionMode) return true
-  if (new Date(betting_deadline) > now) return false
+  if (isAdmin && !settings.productionMode) return true   // test-mode admin: vê tudo
+  if (new Date(betting_deadline) > now) return false     // prazo não passou: oculto
   return settings.releasedRounds.has(getRoundKey(phase, round))
 }
 
@@ -113,8 +115,29 @@ export function isBonusVisible(
   bonusDeadline: string | null,
   now: Date,
   settings: VisibilitySettings,
+  isAdmin = false,
 ): boolean {
-  if (!settings.productionMode) return true
+  if (isAdmin && !settings.productionMode) return true
   if (!bonusDeadline || new Date(bonusDeadline) > now) return false
   return settings.releasedRounds.has('bonus')
+}
+
+// Filtra palpites pelo prazo da partida.
+// - Test-mode admin (isAdmin && !productionMode): vê todos.
+// - Demais: vê só palpites de partidas cujo prazo já passou,
+//   mais os seus próprios (ownParticipantId) para qualquer partida.
+export function filterBetsByDeadline<T extends { match_id: string; participant_id?: string }>(
+  bets: T[],
+  deadlineByMatch: Record<string, string>,   // match_id → betting_deadline ISO string
+  now: Date,
+  isTestModeAdmin: boolean,
+  ownParticipantId?: string | null,
+): T[] {
+  if (isTestModeAdmin) return bets
+  return bets.filter(bet => {
+    const dl = deadlineByMatch[bet.match_id]
+    if (!dl) return false
+    if (new Date(dl) <= now) return true            // prazo passou: público
+    return !!ownParticipantId && bet.participant_id === ownParticipantId
+  })
 }

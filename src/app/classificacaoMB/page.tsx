@@ -8,6 +8,7 @@ import { Navbar } from '@/components/layout/Navbar'
 import { ClassificacaoMBClient } from './ClassificacaoMBClient'
 import { getMatchResult, detectMatchZebra, scoreTournamentBet, scoreMatchBet } from '@/lib/scoring/engine'
 import type { TournamentResults } from '@/lib/scoring/engine'
+import { getVisibilitySettings } from '@/lib/production-mode'
 
 export const metadata = {}
 
@@ -44,11 +45,14 @@ export default async function ClassificacaoMBPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAuthAdminClient() as any
 
+  const [visibilitySettings] = await Promise.all([getVisibilitySettings()])
+  const isTestModeAdmin = isAdmin && !visibilitySettings.productionMode
+
   // ── Fetch #1: dados base ───────────────────────────────────────────────────
   const [participantsRes, matchesRes, betsRes, groupBetsRes, tournamentBetsRes, scoresRes, rulesRes] = await Promise.all([
     supabase.from('participants').select('id, apelido').order('apelido'),
     supabase.from('matches')
-      .select('id, match_number, match_datetime, team_home, team_away, score_home, score_away, phase, group_name, penalty_winner, is_brazil')
+      .select('id, match_number, match_datetime, betting_deadline, team_home, team_away, score_home, score_away, phase, group_name, penalty_winner, is_brazil')
       .order('match_datetime', { ascending: true }),
     admin.from('bets').select('participant_id, match_id, score_home, score_away, points'),
     admin.from('group_bets').select('participant_id, points'),
@@ -133,7 +137,7 @@ export default async function ClassificacaoMBPage() {
   // ── Processar dados base ───────────────────────────────────────────────────
   const participants = (participantsRes.data ?? []) as { id: string; apelido: string }[]
   const matches = (matchesRes.data ?? []) as {
-    id: string; match_number: number; match_datetime: string
+    id: string; match_number: number; match_datetime: string; betting_deadline: string
     team_home: string; team_away: string
     score_home: number | null; score_away: number | null
     phase: string; group_name: string | null; penalty_winner: string | null
@@ -281,7 +285,11 @@ export default async function ClassificacaoMBPage() {
     }
 
     if (lastMatch && bet.match_id === lastMatch.id) lastMatchBets[pid] = bet
-    if (nextMatch && bet.match_id === nextMatch.id) nextMatchBets[pid] = bet
+    // nextMatchBet: só mostra se prazo passou ou admin em modo teste
+    const now = new Date()
+    if (nextMatch && bet.match_id === nextMatch.id
+        && (isTestModeAdmin || new Date(nextMatch.betting_deadline) <= now))
+      nextMatchBets[pid] = bet
   }
 
   const ptsGroupsMap: Record<string, number> = {}
