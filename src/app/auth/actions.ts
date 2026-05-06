@@ -1,19 +1,75 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient, createAuthAdminClient } from '@/lib/supabase/server'
 import { notifyAdminNewUser } from '@/lib/email'
 import { isEmailEnabled } from '@/lib/email-settings'
 
-// ── Verifica se e-mail já existe na tabela de usuários ───────────────────────
-export async function checkEmailExists(email: string): Promise<boolean> {
-  const supabase = await createAdminClient()
-  const { data } = await supabase
-    .from('users')
-    .select('id')
-    .eq('email', email.toLowerCase().trim())
-    .maybeSingle()
-  return !!data
+// ── Cadastro completo via admin (sem e-mail de confirmação do Supabase) ───────
+export async function signUpAndCreateProfile(params: {
+  email: string
+  password: string
+  name: string
+  phone: string
+  padrinho: string
+  apelido: string
+  bio: string
+}): Promise<{ error?: string }> {
+  const adminDb   = await createAdminClient()
+  const adminAuth = createAuthAdminClient()
+
+  const email = params.email.toLowerCase().trim()
+
+  // Verifica duplicidade
+  const { data: existing } = await adminDb
+    .from('users').select('id').eq('email', email).maybeSingle()
+  if (existing) return { error: 'Este e-mail já está cadastrado. Tente entrar ou use outro e-mail.' }
+
+  // Cria o usuário sem enviar e-mail de confirmação
+  const { data, error: authError } = await adminAuth.auth.admin.createUser({
+    email,
+    password: params.password,
+    email_confirm: true,
+    user_metadata: {
+      full_name: params.name.trim(),
+      name:      params.name.trim(),
+      phone:     params.phone.trim(),
+      apelido:   params.apelido.trim(),
+    },
+  })
+
+  if (authError) {
+    const msg = authError.message.toLowerCase()
+    if (msg.includes('already registered') || msg.includes('already been registered')) {
+      return { error: 'Este e-mail já está cadastrado.' }
+    }
+    return { error: 'Erro ao criar conta. Tente novamente.' }
+  }
+  if (!data.user) return { error: 'Erro ao criar conta. Tente novamente.' }
+
+  // Cria perfil com status pendente
+  await adminDb.from('users').insert({
+    id:        data.user.id,
+    name:      params.name.trim(),
+    email,
+    whatsapp:  params.phone.trim(),
+    padrinho:  params.padrinho || null,
+    apelido:   params.apelido.trim() || null,
+    provider:  'email',
+    status:    'email_pendente',
+    approved:  false,
+    paid:      false,
+    is_admin:  false,
+    is_manual: false,
+    bio:       params.bio.trim() || null,
+  })
+
+  // Notifica admin
+  if (await isEmailEnabled('notify_new_user')) {
+    try { await notifyAdminNewUser({ name: params.name.trim(), email }) } catch { /* silent */ }
+  }
+
+  return {}
 }
 
 // ── Cria perfil imediatamente após signUp (antes da confirmação de e-mail)

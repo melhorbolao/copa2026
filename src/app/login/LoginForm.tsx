@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { createPendingUserProfile, checkEmailExists } from '@/app/auth/actions'
+import { signUpAndCreateProfile } from '@/app/auth/actions'
 
 type Mode = 'login' | 'signup' | 'forgot'
 
@@ -68,40 +68,23 @@ export function LoginForm() {
 
     setLoading(true)
 
-    // Verifica duplicidade de e-mail antes de criar conta
-    const emailTaken = await checkEmailExists(email)
-    if (emailTaken) {
-      setError('Este e-mail já está cadastrado. Tente entrar ou use outro e-mail.')
-      setLoading(false)
-      return
-    }
-
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email,
+    const result = await signUpAndCreateProfile({
+      email: email.trim(),
       password,
-      options: {
-        data: { full_name: name.trim(), name: name.trim(), phone: phone.trim(), apelido: apelido.trim() },
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
+      name:    name.trim(),
+      phone:   phone.trim(),
+      padrinho,
+      apelido: apelido.trim(),
+      bio:     bio.trim(),
     })
 
-    if (signUpError) {
-      setError(signUpError.message === 'User already registered'
-        ? 'Este e-mail já está cadastrado.'
-        : signUpError.message)
+    if (result.error) {
+      setError(result.error)
       setLoading(false)
       return
     }
 
-    // Cria perfil imediatamente para aparecer no painel admin com status "e-mail pendente"
-    if (data.user) {
-      try {
-        await createPendingUserProfile(data.user.id, name.trim(), email, phone.trim(), padrinho, apelido.trim(), bio.trim())
-      } catch { /* silent */ }
-    }
-
-    setInfo('Após o cadastro, aguarde aprovação do administrador para acessar o Melhor Bolão.')
-    router.push('/confirmar-email')
+    router.push('/aguardando-aprovacao')
   }
 
   // ── Recuperação de senha ──────────────────────────────────────
