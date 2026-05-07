@@ -47,7 +47,7 @@ export async function signUpAndCreateProfile(params: {
   }
   if (!data.user) return { error: 'Erro ao criar conta. Tente novamente.' }
 
-  // Cria perfil com status pendente
+  // Cria perfil com aprovacao_pendente (e-mail já confirmado via admin.createUser)
   await adminDb.from('users').insert({
     id:        data.user.id,
     name:      params.name.trim(),
@@ -56,7 +56,7 @@ export async function signUpAndCreateProfile(params: {
     padrinho:  params.padrinho || null,
     apelido:   params.apelido.trim() || null,
     provider:  'email',
-    status:    'email_pendente',
+    status:    'aprovacao_pendente',
     approved:  false,
     paid:      false,
     is_admin:  false,

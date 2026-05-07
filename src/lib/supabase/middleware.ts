@@ -69,10 +69,11 @@ export async function updateSession(request: NextRequest) {
     const status = profile?.status ?? 'aprovacao_pendente'
     const bypassPaths = ['/completar-perfil', '/aguardando-aprovacao', '/confirmar-email']
 
-    // 3. E-mail pendente de confirmação
+    // 3. E-mail pendente → usuário autenticado significa e-mail confirmado no auth;
+    //    redireciona para aguardando aprovação (não para confirmar-email)
     if (status === 'email_pendente' && !bypassPaths.includes(pathname)) {
       const url = request.nextUrl.clone()
-      url.pathname = '/confirmar-email'
+      url.pathname = '/aguardando-aprovacao'
       return NextResponse.redirect(url)
     }
 
