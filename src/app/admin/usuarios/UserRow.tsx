@@ -3,7 +3,7 @@
 import { useTransition, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
-import { toggleApproved, deleteUser, updateObservacao, updateApelido, updatePadrinho, toggleAdmin } from '../actions'
+import { toggleApproved, deleteUser, updateObservacao, updateApelido, updatePadrinho, toggleAdmin, updateUserEmail, resendActivationEmail, activateUser } from '../actions'
 import { formatBrasilia } from '@/utils/date'
 
 type Status = 'email_pendente' | 'aprovacao_pendente' | 'aprovado'
@@ -44,16 +44,22 @@ export function UserRow({ user, index }: UserRowProps) {
   const [pendingApelido,  startApelido]  = useTransition()
   const [pendingPadrinho, startPadrinho] = useTransition()
   const [pendingAdmin,    startAdmin]    = useTransition()
+  const [pendingEmail,    startEmail]    = useTransition()
+  const [pendingResend,   startResend]   = useTransition()
+  const [pendingActivate, startActivate] = useTransition()
 
   const [confirming,     setConfirming]     = useState(false)
   const [editingObs,     setEditingObs]     = useState(false)
   const [editingApelido, setEditingApelido] = useState(false)
+  const [editingEmail,   setEditingEmail]   = useState(false)
 
   const obsRef     = useRef<HTMLInputElement>(null)
   const apelidoRef = useRef<HTMLInputElement>(null)
+  const emailRef   = useRef<HTMLInputElement>(null)
 
   const obsLatest     = useRef(user.observacao ?? '')
   const apelidoLatest = useRef(user.apelido ?? '')
+  const emailLatest   = useRef(user.email)
 
   const [padrinhoValue, setPadrinhoValue] = useState(user.padrinho ?? '')
   const canApprove = !!padrinhoValue
@@ -87,6 +93,33 @@ export function UserRow({ user, index }: UserRowProps) {
       void updatePadrinho(user.id, val)
         .then(() => router.refresh())
         .catch(() => toast.error('Erro ao salvar padrinho'))
+    })
+  }
+
+  const handleEmailSave = () => {
+    setEditingEmail(false)
+    const val = emailLatest.current.toLowerCase().trim()
+    if (val === user.email || !val) return
+    startEmail(() => {
+      void updateUserEmail(user.id, val)
+        .then(() => router.refresh())
+        .catch((e: unknown) => toast.error(e instanceof Error ? e.message : 'Erro ao alterar e-mail'))
+    })
+  }
+
+  const handleResendActivation = () => {
+    startResend(() => {
+      void resendActivationEmail(user.id)
+        .then(() => toast.success('E-mail de ativação reenviado'))
+        .catch((e: unknown) => toast.error(e instanceof Error ? e.message : 'Erro ao reenviar e-mail'))
+    })
+  }
+
+  const handleActivateUser = () => {
+    startActivate(() => {
+      void activateUser(user.id)
+        .then(() => router.refresh())
+        .catch((e: unknown) => toast.error(e instanceof Error ? e.message : 'Erro ao ativar usuário'))
     })
   }
 
@@ -144,8 +177,33 @@ export function UserRow({ user, index }: UserRowProps) {
         ) : <span className="text-gray-300">—</span>}
       </td>
 
-      {/* E-mail */}
-      <td className="px-3 py-2.5 text-xs text-gray-600">{user.email}</td>
+      {/* E-mail — editável inline */}
+      <td className="px-3 py-2.5 min-w-[160px]">
+        {editingEmail ? (
+          <input
+            ref={emailRef}
+            defaultValue={user.email}
+            onChange={e => { emailLatest.current = e.target.value }}
+            onBlur={handleEmailSave}
+            onKeyDown={e => {
+              if (e.key === 'Enter') emailRef.current?.blur()
+              if (e.key === 'Escape') { emailLatest.current = user.email; setEditingEmail(false) }
+            }}
+            autoFocus
+            className="w-full rounded border border-verde-300 px-1.5 py-1 text-xs focus:outline-none"
+          />
+        ) : (
+          <button
+            onClick={() => { emailLatest.current = user.email; setEditingEmail(true) }}
+            title="Clique para editar e-mail"
+            className={`w-full text-left text-xs rounded px-1.5 py-1 hover:bg-gray-100 transition truncate ${
+              pendingEmail ? 'opacity-50' : 'text-gray-600'
+            }`}
+          >
+            {user.email}
+          </button>
+        )}
+      </td>
 
       {/* Login */}
       <td className="hidden px-3 py-2.5 sm:table-cell">
@@ -269,6 +327,26 @@ export function UserRow({ user, index }: UserRowProps) {
           </div>
         ) : (
           <div className="flex items-center gap-1.5 flex-wrap">
+            {user.status === 'email_pendente' && (
+              <>
+                <button
+                  onClick={handleResendActivation}
+                  disabled={pendingResend}
+                  title="Reenviar e-mail de ativação"
+                  className="rounded-full px-2.5 py-1 text-xs font-semibold bg-yellow-50 text-yellow-700 hover:bg-yellow-100 disabled:opacity-50 transition whitespace-nowrap"
+                >
+                  {pendingResend ? '…' : '✉ Reenviar'}
+                </button>
+                <button
+                  onClick={handleActivateUser}
+                  disabled={pendingActivate}
+                  title="Ativar e-mail sem link de confirmação"
+                  className="rounded-full px-2.5 py-1 text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50 transition whitespace-nowrap"
+                >
+                  {pendingActivate ? '…' : '⚡ Ativar'}
+                </button>
+              </>
+            )}
             {user.status === 'aprovacao_pendente' && (
               <span title={!canApprove ? 'Selecione o padrinho primeiro' : undefined}>
                 <button

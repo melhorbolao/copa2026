@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient, createAdminClient, createAuthAdminClient } from '@/lib/supabase/server'
-import { notifyUserApproved, sendReminderEmail } from '@/lib/email'
+import { notifyUserApproved, notifyUserRegistered, sendReminderEmail } from '@/lib/email'
 import { buildPalpitesBuffer } from '@/app/api/palpites/_workbook'
 import { buildTabelaMBBuffer } from '@/app/api/admin/dados/export/_builder'
 import { getVisibilitySettings } from '@/lib/production-mode'
@@ -413,6 +413,52 @@ export async function toggleAdmin(userId: string, current: boolean) {
   if (target?.email === MASTER_ADMIN_EMAIL) throw new Error('O Admin Master não pode ser alterado')
 
   await supabase.from('users').update({ is_admin: !current }).eq('id', userId)
+  revalidatePath('/admin/usuarios')
+}
+
+// ── Alterar e-mail do usuário ─────────────────────────────────
+export async function updateUserEmail(userId: string, newEmail: string) {
+  await requireAdmin()
+  const admin = createAuthAdminClient()
+
+  const email = newEmail.toLowerCase().trim()
+  if (!email) throw new Error('E-mail inválido')
+
+  const { data: u } = await admin.from('users').select('is_manual').eq('id', userId).single()
+
+  if (!u?.is_manual) {
+    const { error } = await admin.auth.admin.updateUserById(userId, { email })
+    if (error) throw new Error(error.message)
+  }
+
+  await admin.from('users').update({ email }).eq('id', userId)
+  revalidatePath('/admin/usuarios')
+}
+
+// ── Reenviar e-mail de ativação ───────────────────────────────
+export async function resendActivationEmail(userId: string) {
+  await requireAdmin()
+  const admin = createAuthAdminClient()
+
+  const { data: u } = await admin.from('users').select('name, email').eq('id', userId).single()
+  if (!u) throw new Error('Usuário não encontrado')
+
+  await notifyUserRegistered({ name: u.name, email: u.email })
+}
+
+// ── Ativar usuário diretamente (sem clique no link) ───────────
+export async function activateUser(userId: string) {
+  await requireAdmin()
+  const admin = createAuthAdminClient()
+
+  const { error } = await admin.auth.admin.updateUserById(userId, { email_confirm: true })
+  if (error) throw new Error(error.message)
+
+  await admin.from('users')
+    .update({ status: 'aprovacao_pendente' })
+    .eq('id', userId)
+    .eq('status', 'email_pendente')
+
   revalidatePath('/admin/usuarios')
 }
 
