@@ -57,6 +57,30 @@ export async function notifyAdminNewUser({ name, email }: { name: string; email:
   })
 }
 
+// ── 1b. Confirmação para o usuário: cadastro recebido, aguardando aprovação ──
+export async function notifyUserRegistered({ name, email }: { name: string; email: string }) {
+  await resend.emails.send({
+    from: `Melhor Bolão <${FROM}>`,
+    to:   email,
+    subject: 'Cadastro recebido — Melhor Bolão Copa 2026',
+    html: htmlWrapper(`
+      <h2 style="margin:0 0 8px;color:#111827;font-size:20px">Olá, ${name}! 👋</h2>
+      <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.6">
+        Seu cadastro no <strong>Melhor Bolão Copa do Mundo 2026</strong> foi recebido com sucesso.
+      </p>
+      <div style="background:#f0fdf4;border-left:4px solid #009c3b;padding:12px 16px;border-radius:4px;margin-bottom:20px">
+        <p style="margin:0 0 4px;font-size:13px;color:#166534;font-weight:700">⏳ Próximo passo</p>
+        <p style="margin:0;font-size:13px;color:#166534">
+          Seu cadastro está em análise. Você receberá outro e-mail assim que o administrador aprovar sua participação.
+        </p>
+      </div>
+      <p style="margin:0;font-size:12px;color:#9ca3af">
+        Dúvidas? Fale com o admin pelo WhatsApp ou responda este e-mail.
+      </p>
+    `),
+  })
+}
+
 // ── 2. Boas-vindas ao usuário aprovado ────────────────────────
 export async function notifyUserApproved({ name, email }: { name: string; email: string }) {
   await resend.emails.send({

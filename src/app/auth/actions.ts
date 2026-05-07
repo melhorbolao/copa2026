@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient, createAdminClient, createAuthAdminClient } from '@/lib/supabase/server'
-import { notifyAdminNewUser } from '@/lib/email'
+import { notifyAdminNewUser, notifyUserRegistered } from '@/lib/email'
 import { isEmailEnabled } from '@/lib/email-settings'
 
 // ── Cadastro completo via admin (sem e-mail de confirmação do Supabase) ───────
@@ -64,9 +64,13 @@ export async function signUpAndCreateProfile(params: {
     bio:       params.bio.trim() || null,
   })
 
-  // Notifica admin
-  if (await isEmailEnabled('notify_new_user')) {
-    try { await notifyAdminNewUser({ name: params.name.trim(), email }) } catch { /* silent */ }
+  // Notifica admin e envia confirmação ao usuário
+  const emailEnabled = await isEmailEnabled('notify_new_user')
+  if (emailEnabled) {
+    await Promise.allSettled([
+      notifyAdminNewUser({ name: params.name.trim(), email }),
+      notifyUserRegistered({ name: params.name.trim(), email }),
+    ])
   }
 
   return {}
