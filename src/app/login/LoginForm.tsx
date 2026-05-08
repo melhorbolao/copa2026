@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { signUpAndCreateProfile } from '@/app/auth/actions'
 
@@ -24,7 +23,6 @@ export function LoginForm() {
   const [apelido,  setApelido]  = useState('')
   const [bio,      setBio]      = useState('')
 
-  const router   = useRouter()
   const supabase = createClient()
 
   const switchMode = (m: Mode) => { setMode(m); setError(''); setInfo('') }
@@ -53,7 +51,8 @@ export function LoginForm() {
       }
       setLoading(false)
     } else {
-      router.refresh()
+      // Hard navigation: evita cadeia de redirecionamentos RSC que causa ERR_TOO_MANY_REDIRECTS
+      window.location.assign('/palpites')
     }
   }
 
@@ -84,7 +83,9 @@ export function LoginForm() {
       return
     }
 
-    router.push('/aguardando-aprovacao')
+    // Faz login automático (e-mail já confirmado via admin.createUser)
+    await supabase.auth.signInWithPassword({ email: email.trim(), password })
+    window.location.assign('/aguardando-aprovacao')
   }
 
   // ── Recuperação de senha ──────────────────────────────────────
