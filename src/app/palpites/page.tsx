@@ -259,6 +259,23 @@ export default async function PalpitesPage() {
   const alreadyFilled   = (groupBets ?? []).filter(b => b.first_place && b.second_place).length > 0
     || thirdBets.length > 0
 
+  // ── Dados para a aba "Minha Tabela" ──────────────────────────────
+  const groupBetsOverride: Record<string, { first_place: string; second_place: string }> =
+    Object.fromEntries((groupBets ?? []).map(gb => [gb.group_name, { first_place: gb.first_place, second_place: gb.second_place }]))
+  const thirdBetsOverride: Record<string, { team: string }> =
+    Object.fromEntries(thirdBets.map(tb => [tb.group_name, { team: tb.team }]))
+  const g4Deadline = groupMatches.map(m => m.betting_deadline).sort()[0] ?? ''
+  const hasTournamentBet = !!(tBet?.champion)
+  const groupAllBetsFilled: Record<string, boolean> = {}
+  const groupBetSet = new Set((bets ?? []).map(b => b.match_id))
+  for (const m of groupMatches) {
+    if (!m.group_name) continue
+    if (!(m.group_name in groupAllBetsFilled)) groupAllBetsFilled[m.group_name] = true
+    if (!groupBetSet.has(m.id)) groupAllBetsFilled[m.group_name] = false
+  }
+  const filledBets        = groupBetCount
+  const totalGroupMatches = groupMatches.length
+
   const now = new Date()
   const nextMatch = (matches ?? [])
     .filter(m => new Date(m.betting_deadline) > now)
@@ -302,6 +319,14 @@ export default async function PalpitesPage() {
     allGroupsFilled,
     alreadyFilled,
     nextDeadline,
+    calculatedStandings,
+    groupBetsOverride,
+    thirdBetsOverride,
+    g4Deadline,
+    hasTournamentBet,
+    groupAllBetsFilled,
+    filledBets,
+    totalGroupMatches,
   }
 
   return (
