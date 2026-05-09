@@ -125,16 +125,16 @@ export function UsuariosClient({ users }: Props) {
                   >
                     Nome<SortIcon field="name" />
                   </th>
-                  <th className="px-3 py-3">WhatsApp</th>
-                  <th className="px-3 py-3">E-mail</th>
-                  <th className="hidden px-3 py-3 sm:table-cell">Login</th>
-                  <th className="hidden whitespace-nowrap px-3 py-3 lg:table-cell">Cadastro</th>
-                  <th className="px-3 py-3">Padrinho</th>
-                  <th className="px-3 py-3">Status</th>
                   <th className="whitespace-nowrap px-3 py-3">Nome no Bolão</th>
-                  <th className="px-3 py-3">Obs.</th>
-                  <th className="px-3 py-3">Participantes</th>
+                  <th className="px-3 py-3">Status</th>
                   <th className="px-3 py-3">Ações</th>
+                  <th className="px-3 py-3">WhatsApp</th>
+                  <th className="px-3 py-3">Participantes</th>
+                  <th className="px-3 py-3">Padrinho</th>
+                  <th className="px-3 py-3">E-mail</th>
+                  <th className="hidden whitespace-nowrap px-3 py-3 lg:table-cell">Cadastro</th>
+                  <th className="hidden px-3 py-3 sm:table-cell">Login</th>
+                  <th className="px-3 py-3">Obs.</th>
                 </tr>
               </thead>
               <tbody>

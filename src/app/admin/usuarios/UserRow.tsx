@@ -164,77 +164,6 @@ export function UserRow({ user, index }: UserRowProps) {
         </div>
       </td>
 
-      {/* WhatsApp */}
-      <td className="px-3 py-2.5 text-xs text-gray-600 whitespace-nowrap">
-        {user.whatsapp ? (
-          <a
-            href={whatsappLink(user.whatsapp)}
-            target="_blank" rel="noopener noreferrer"
-            className="text-[#25D366] hover:underline"
-          >
-            {user.whatsapp}
-          </a>
-        ) : <span className="text-gray-300">—</span>}
-      </td>
-
-      {/* E-mail — editável inline */}
-      <td className="px-3 py-2.5 min-w-[160px]">
-        {editingEmail ? (
-          <input
-            ref={emailRef}
-            defaultValue={user.email}
-            onChange={e => { emailLatest.current = e.target.value }}
-            onBlur={handleEmailSave}
-            onKeyDown={e => {
-              if (e.key === 'Enter') emailRef.current?.blur()
-              if (e.key === 'Escape') { emailLatest.current = user.email; setEditingEmail(false) }
-            }}
-            autoFocus
-            className="w-full rounded border border-verde-300 px-1.5 py-1 text-xs focus:outline-none"
-          />
-        ) : (
-          <button
-            onClick={() => { emailLatest.current = user.email; setEditingEmail(true) }}
-            title="Clique para editar e-mail"
-            className={`w-full text-left text-xs rounded px-1.5 py-1 hover:bg-gray-100 transition truncate ${
-              pendingEmail ? 'opacity-50' : 'text-gray-600'
-            }`}
-          >
-            {user.email}
-          </button>
-        )}
-      </td>
-
-      {/* Login */}
-      <td className="hidden px-3 py-2.5 sm:table-cell">
-        <ProviderBadge provider={user.provider} />
-      </td>
-
-      {/* Cadastro */}
-      <td className="hidden px-3 py-2.5 text-xs text-gray-500 lg:table-cell whitespace-nowrap">
-        {formatBrasilia(user.created_at, 'dd/MM/yy HH:mm')}
-      </td>
-
-      {/* Padrinho */}
-      <td className="px-3 py-2.5">
-        <select
-          value={padrinhoValue}
-          onChange={e => handlePadrinhoChange(e.target.value)}
-          disabled={pendingPadrinho}
-          className={`rounded border py-0.5 px-1 text-xs focus:outline-none focus:border-verde-400 transition ${
-            padrinhoValue ? 'border-gray-200 text-gray-700' : 'border-red-200 text-red-400'
-          } disabled:opacity-50`}
-        >
-          <option value="">— sem padrinho —</option>
-          {PADRINHOS.map(p => <option key={p} value={p}>{p}</option>)}
-        </select>
-      </td>
-
-      {/* Status */}
-      <td className="px-3 py-2.5">
-        <StatusBadge status={user.status} />
-      </td>
-
       {/* Nome no Bolão — editável inline */}
       <td className="px-3 py-2.5 min-w-[110px]">
         {editingApelido ? (
@@ -263,47 +192,9 @@ export function UserRow({ user, index }: UserRowProps) {
         )}
       </td>
 
-      {/* Obs — editável inline */}
-      <td className="px-3 py-2.5 min-w-[120px]">
-        {editingObs ? (
-          <input
-            ref={obsRef}
-            defaultValue={user.observacao ?? ''}
-            onChange={e => { obsLatest.current = e.target.value }}
-            onBlur={handleObsSave}
-            onKeyDown={e => {
-              if (e.key === 'Enter') obsRef.current?.blur()
-              if (e.key === 'Escape') { obsLatest.current = user.observacao ?? ''; setEditingObs(false) }
-            }}
-            autoFocus
-            className="w-full rounded border border-verde-300 px-1.5 py-1 text-xs focus:outline-none"
-          />
-        ) : (
-          <button
-            onClick={() => { obsLatest.current = user.observacao ?? ''; setEditingObs(true) }}
-            title="Clique para editar"
-            className={`w-full text-left text-xs rounded px-1.5 py-1 hover:bg-gray-100 transition ${
-              pendingObs ? 'opacity-50' : ''
-            } ${user.observacao ? 'text-gray-700' : 'text-gray-300 italic'}`}
-          >
-            {user.observacao || 'adicionar…'}
-          </button>
-        )}
-      </td>
-
-      {/* Participantes vinculados */}
+      {/* Status */}
       <td className="px-3 py-2.5">
-        <div className="flex flex-col gap-0.5">
-          {user.user_participants.length === 0 && (
-            <span className="text-xs text-gray-300 italic">nenhum</span>
-          )}
-          {user.user_participants.map((up, i) => (
-            <span key={i} className="text-xs text-gray-600 whitespace-nowrap">
-              {up.participants?.apelido ?? '?'}
-              {up.is_primary && <span className="ml-1 text-[10px] text-verde-600 font-bold">★</span>}
-            </span>
-          ))}
-        </div>
+        <StatusBadge status={user.status} />
       </td>
 
       {/* Ações */}
@@ -393,6 +284,115 @@ export function UserRow({ user, index }: UserRowProps) {
               <TrashIcon />
             </button>
           </div>
+        )}
+      </td>
+
+      {/* WhatsApp */}
+      <td className="px-3 py-2.5 text-xs text-gray-600 whitespace-nowrap">
+        {user.whatsapp ? (
+          <a
+            href={whatsappLink(user.whatsapp)}
+            target="_blank" rel="noopener noreferrer"
+            className="text-[#25D366] hover:underline"
+          >
+            {user.whatsapp}
+          </a>
+        ) : <span className="text-gray-300">—</span>}
+      </td>
+
+      {/* Participantes vinculados */}
+      <td className="px-3 py-2.5">
+        <div className="flex flex-col gap-0.5">
+          {user.user_participants.length === 0 && (
+            <span className="text-xs text-gray-300 italic">nenhum</span>
+          )}
+          {user.user_participants.map((up, i) => (
+            <span key={i} className="text-xs text-gray-600 whitespace-nowrap">
+              {up.participants?.apelido ?? '?'}
+              {up.is_primary && <span className="ml-1 text-[10px] text-verde-600 font-bold">★</span>}
+            </span>
+          ))}
+        </div>
+      </td>
+
+      {/* Padrinho */}
+      <td className="px-3 py-2.5">
+        <select
+          value={padrinhoValue}
+          onChange={e => handlePadrinhoChange(e.target.value)}
+          disabled={pendingPadrinho}
+          className={`rounded border py-0.5 px-1 text-xs focus:outline-none focus:border-verde-400 transition ${
+            padrinhoValue ? 'border-gray-200 text-gray-700' : 'border-red-200 text-red-400'
+          } disabled:opacity-50`}
+        >
+          <option value="">— sem padrinho —</option>
+          {PADRINHOS.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+      </td>
+
+      {/* E-mail — editável inline */}
+      <td className="px-3 py-2.5 min-w-[160px]">
+        {editingEmail ? (
+          <input
+            ref={emailRef}
+            defaultValue={user.email}
+            onChange={e => { emailLatest.current = e.target.value }}
+            onBlur={handleEmailSave}
+            onKeyDown={e => {
+              if (e.key === 'Enter') emailRef.current?.blur()
+              if (e.key === 'Escape') { emailLatest.current = user.email; setEditingEmail(false) }
+            }}
+            autoFocus
+            className="w-full rounded border border-verde-300 px-1.5 py-1 text-xs focus:outline-none"
+          />
+        ) : (
+          <button
+            onClick={() => { emailLatest.current = user.email; setEditingEmail(true) }}
+            title="Clique para editar e-mail"
+            className={`w-full text-left text-xs rounded px-1.5 py-1 hover:bg-gray-100 transition truncate ${
+              pendingEmail ? 'opacity-50' : 'text-gray-600'
+            }`}
+          >
+            {user.email}
+          </button>
+        )}
+      </td>
+
+      {/* Cadastro */}
+      <td className="hidden px-3 py-2.5 text-xs text-gray-500 lg:table-cell whitespace-nowrap">
+        {formatBrasilia(user.created_at, 'dd/MM/yy HH:mm')}
+      </td>
+
+      {/* Login */}
+      <td className="hidden px-3 py-2.5 sm:table-cell">
+        <ProviderBadge provider={user.provider} />
+      </td>
+
+      {/* Obs — editável inline */}
+      <td className="px-3 py-2.5 min-w-[120px]">
+        {editingObs ? (
+          <input
+            ref={obsRef}
+            defaultValue={user.observacao ?? ''}
+            onChange={e => { obsLatest.current = e.target.value }}
+            onBlur={handleObsSave}
+            onKeyDown={e => {
+              if (e.key === 'Enter') obsRef.current?.blur()
+              if (e.key === 'Escape') { obsLatest.current = user.observacao ?? ''; setEditingObs(false) }
+            }}
+            autoFocus
+            className="w-full rounded border border-verde-300 px-1.5 py-1 text-xs focus:outline-none"
+          />
+        ) : (
+          <button
+            onClick={() => { obsLatest.current = user.observacao ?? ''; setEditingObs(true) }}
+            title="Clique para editar"
+            className={`w-full text-left text-xs rounded px-1.5 py-1 hover:bg-gray-100 transition ${
+              pendingObs ? 'opacity-50' : ''
+            } ${user.observacao ? 'text-gray-700' : 'text-gray-300 italic'}`}
+          >
+            {user.observacao || 'adicionar…'}
+          </button>
         )}
       </td>
     </tr>
