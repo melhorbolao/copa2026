@@ -1,5 +1,5 @@
 import { createAuthAdminClient } from '@/lib/supabase/server'
-import { UserRow } from './UserRow'
+import { UsuariosClient } from './UsuariosClient'
 
 export default async function AdminUsuariosPage() {
   const supabase = createAuthAdminClient()
@@ -25,47 +25,7 @@ export default async function AdminUsuariosPage() {
         <StatCard label="Aguard. aprovação" value={pendentes} color="orange" />
       </div>
 
-      {/* Tabela */}
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-        {total === 0 ? (
-          <div className="py-16 text-center text-sm text-gray-400">Nenhum usuário cadastrado ainda.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="border-b border-gray-100 bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                <tr>
-                  <th className="px-3 py-3">#</th>
-                  <th className="px-3 py-3">Nome</th>
-                  <th className="px-3 py-3">WhatsApp</th>
-                  <th className="px-3 py-3">E-mail</th>
-                  <th className="hidden px-3 py-3 sm:table-cell">Login</th>
-                  <th className="hidden px-3 py-3 lg:table-cell">Cadastro</th>
-                  <th className="px-3 py-3">Padrinho</th>
-                  <th className="px-3 py-3">Status</th>
-                  <th className="px-3 py-3">Nome no Bolão</th>
-                  <th className="px-3 py-3">Obs.</th>
-                  <th className="px-3 py-3">Participantes</th>
-                  <th className="px-3 py-3">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(users ?? []).map((user, i) => (
-                  <UserRow
-                    key={user.id}
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    user={user as any}
-                    index={i}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      <p className="mt-3 text-right text-xs text-gray-400">
-        {aprovados}/{total} aprovados
-      </p>
+      <UsuariosClient users={users ?? []} />
     </div>
   )
 }
