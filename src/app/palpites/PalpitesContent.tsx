@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { StickyStats } from './StickyStats'
 import { Countdown } from './Countdown'
@@ -13,6 +14,8 @@ import { TournamentSection } from './TournamentSection'
 import { ThirdPlaceSection } from './ThirdPlaceSection'
 import { ThirdPlaceProvider } from './ThirdPlaceContext'
 import { AutoFillButton } from './AutoFillButton'
+import { TabelaClient } from '@/app/tabela/TabelaClient'
+import type { CalcGroupStanding } from '@/lib/bracket/engine'
 import { formatBrasilia } from '@/utils/date'
 import type { MatchPhase } from '@/types/database'
 import type { TournamentBetBreakdown } from '@/lib/scoring/engine'
@@ -64,6 +67,15 @@ export interface PalpitesContentProps {
   allGroupsFilled: boolean
   alreadyFilled: boolean
   nextDeadline: { iso: string; label: string } | null
+  // Aba "Minha Tabela"
+  calculatedStandings: CalcGroupStanding[]
+  groupBetsOverride: Record<string, { first_place: string; second_place: string }>
+  thirdBetsOverride: Record<string, { team: string }>
+  g4Deadline: string
+  hasTournamentBet: boolean
+  groupAllBetsFilled: Record<string, boolean>
+  filledBets: number
+  totalGroupMatches: number
 }
 
 const GROUP_ORDER = ['A','B','C','D','E','F','G','H','I','J','K','L']
@@ -118,10 +130,64 @@ export function PalpitesContent({
   liveScore, liveBreakdown, scorerMapping, thirdPts, participantId,
   totalMatches, totalBets, totalGroupBets,
   thirdCount, bonusCount, allGroupsFilled, alreadyFilled, nextDeadline,
+  calculatedStandings, groupBetsOverride, thirdBetsOverride,
+  g4Deadline, hasTournamentBet, groupAllBetsFilled,
+  filledBets, totalGroupMatches,
 }: PalpitesContentProps) {
   const sp    = useSearchParams()
+  const tab   = sp.get('tab') === 'tabela' ? 'tabela' : 'palpites'
   const etapa = sp.get('etapa') ?? ''
   const grupo = sp.get('grupo') ?? ''
+
+  if (tab === 'tabela') {
+    return (
+      <div className="mx-auto max-w-4xl px-4 py-8">
+        <PageHeader activeTab="tabela" />
+
+        <div className="mb-4 mt-4">
+          <p className="text-sm text-gray-500">
+            Calculada com base em Meus Palpites
+          </p>
+          <div className="mt-3 flex items-center gap-3">
+            <div className="flex-1 overflow-hidden rounded-full bg-gray-200 h-2">
+              <div
+                className="h-2 rounded-full bg-verde-600 transition-all"
+                style={{ width: `${totalGroupMatches > 0 ? (filledBets / totalGroupMatches) * 100 : 0}%` }}
+              />
+            </div>
+            <span className="text-xs text-gray-500 whitespace-nowrap">
+              {filledBets}/{totalGroupMatches} palpites
+            </span>
+          </div>
+          {filledBets < totalGroupMatches && (
+            <p className="mt-2 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 border border-amber-200">
+              ⚠️ Partidas sem palpite não são contabilizadas na classificação.{' '}
+              <Link href="/palpites" className="font-semibold underline">Complete seus palpites →</Link>
+            </p>
+          )}
+        </div>
+
+        <TabelaClient
+          standings={calculatedStandings}
+          groupBetsOverride={groupBetsOverride}
+          thirdBetsOverride={thirdBetsOverride}
+          userId={participantId}
+          g4Deadline={g4Deadline}
+          hasTournamentBet={hasTournamentBet}
+          groupAllBetsFilled={groupAllBetsFilled}
+        />
+
+        <div className="mt-4 text-center">
+          <Link
+            href="/palpites"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-azul-escuro hover:underline"
+          >
+            📊 Veja aqui seus palpites
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
   const isKnockoutEtapa = etapa ? KNOCKOUT_ETAPAS.has(etapa) : false
   const isGroupEtapa    = !etapa || etapa === 'r1' || etapa === 'r2' || etapa === 'r3'
@@ -195,10 +261,11 @@ export function PalpitesContent({
       />
       <div className="mx-auto max-w-5xl px-4 py-6 pb-32">
 
-        <div className="mb-4 flex items-start justify-between gap-4 flex-wrap">
+        <PageHeader activeTab="palpites" />
+
+        <div className="mb-4 mt-4 flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-2xl font-black text-gray-900">Meus Palpites</h1>
-            <div className="mt-2"><ExcelActions /></div>
+            <ExcelActions />
           </div>
           <div className="flex flex-col items-end gap-2">
             {nextDeadline && <Countdown deadline={nextDeadline.iso} label={nextDeadline.label} />}
@@ -321,17 +388,44 @@ export function PalpitesContent({
               )}
 
               <div className="mt-2 text-center">
-                <a
-                  href="/tabela"
+                <Link
+                  href="/palpites?tab=tabela"
                   className="inline-flex items-center gap-1.5 text-sm font-medium text-azul-escuro hover:underline"
                 >
                   📊 Veja aqui a classificação com base nos seus palpites
-                </a>
+                </Link>
               </div>
             </div>
           )}
         </ThirdPlaceProvider>
       </div>
     </>
+  )
+}
+
+function PageHeader({ activeTab }: { activeTab: 'palpites' | 'tabela' }) {
+  return (
+    <div>
+      <h1 className="text-2xl font-black text-gray-900">Meus Palpites</h1>
+      <div className="mt-3 flex gap-1 border-b border-gray-200">
+        <TabLink href="/palpites" label="Palpites" active={activeTab === 'palpites'} />
+        <TabLink href="/palpites?tab=tabela" label="Minha Tabela" active={activeTab === 'tabela'} />
+      </div>
+    </div>
+  )
+}
+
+function TabLink({ href, label, active }: { href: string; label: string; active: boolean }) {
+  return (
+    <Link
+      href={href}
+      className={`px-4 py-2 text-sm font-semibold transition border-b-2 -mb-px ${
+        active
+          ? 'border-verde-600 text-verde-700'
+          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+      }`}
+    >
+      {label}
+    </Link>
   )
 }
