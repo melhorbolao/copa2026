@@ -1,9 +1,22 @@
 import { Resend } from 'resend'
+import { getPageVisibility, isPageVisible } from './page-visibility'
 
 const resend   = new Resend(process.env.RESEND_API_KEY)
 const FROM     = process.env.EMAIL_FROM    ?? 'admin@melhorbolao.app.br'
 const ADMIN_TO = process.env.ADMIN_EMAIL   ?? 'gmousinho@gmail.com'
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://melhorbolao.app.br'
+
+// Aprovados acessam como usuário comum: cai em /pontuacao quando palpites
+// está oculto para users (admin pode ocultar a página entre rodadas).
+async function userLandingPath(): Promise<{ path: string; palpitesOn: boolean }> {
+  try {
+    const rows = await getPageVisibility()
+    const palpitesOn = isPageVisible(rows, 'palpites', false)
+    return { path: palpitesOn ? '/palpites' : '/pontuacao', palpitesOn }
+  } catch {
+    return { path: '/palpites', palpitesOn: true }
+  }
+}
 
 // ── Cabeçalho HTML compartilhado ─────────────────────────────
 const htmlHeader = `
@@ -83,6 +96,12 @@ export async function notifyUserRegistered({ name, email }: { name: string; emai
 
 // ── 2. Boas-vindas ao usuário aprovado ────────────────────────
 export async function notifyUserApproved({ name, email }: { name: string; email: string }) {
+  const { path, palpitesOn } = await userLandingPath()
+  const intro = palpitesOn
+    ? 'Você já pode começar a fazer seus palpites no link abaixo.'
+    : 'Você já pode acessar o bolão no link abaixo.'
+  const cta = palpitesOn ? 'Fazer meus palpites →' : 'Acessar o bolão →'
+
   await resend.emails.send({
     from: `Melhor Bolão <${FROM}>`,
     to:   email,
@@ -91,7 +110,7 @@ export async function notifyUserApproved({ name, email }: { name: string; email:
       <h2 style="margin:0 0 8px;color:#111827;font-size:20px">Olá, ${name}! 🎉</h2>
       <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.6">
         Sua participação no <strong>Melhor Bolão Copa do Mundo 2026</strong> foi aprovada.
-        Você já pode começar a fazer seus palpites no link abaixo.
+        ${intro}
       </p>
       <div style="background:#f0fdf4;border-left:4px solid #009c3b;padding:12px 16px;border-radius:4px;margin-bottom:20px">
         <p style="margin:0 0 4px;font-size:13px;color:#166534;font-weight:700">⚠️ Atenção ao prazo</p>
@@ -99,9 +118,9 @@ export async function notifyUserApproved({ name, email }: { name: string; email:
           Rodada 1: <strong>10/06 às 23h59</strong> (horário de Brasília)
         </p>
       </div>
-      <a href="${BASE_URL}/palpites"
+      <a href="${BASE_URL}${path}"
          style="display:inline-block;background:#009c3b;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px">
-        Fazer meus palpites →
+        ${cta}
       </a>
       <p style="margin:20px 0 0;font-size:12px;color:#9ca3af">
         Dúvidas? Fale com o admin pelo WhatsApp ou responda este e-mail.
