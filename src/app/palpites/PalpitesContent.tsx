@@ -468,7 +468,7 @@ function PageHeader({ activeTab }: { activeTab: 'palpites' | 'tabela' }) {
     <div>
       <h1 className="text-2xl font-black text-gray-900">Meus Palpites</h1>
       <div className="mt-3 flex gap-1 border-b border-gray-200">
-        <TabLink href="/palpites" label="Palpites" active={activeTab === 'palpites'} />
+        <TabLink href="/palpites" label="Meus Palpites" active={activeTab === 'palpites'} />
         <TabLink href="/palpites?tab=tabela" label="Minha Tabela" active={activeTab === 'tabela'} />
       </div>
     </div>
