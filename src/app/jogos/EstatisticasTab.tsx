@@ -54,7 +54,7 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
       const g4Z    = inG4  > 0 && tBetsN > 0 && (inG4  / tBetsN) * 100 < zebraThreshold
 
       return { ...team, first, second, third, elim, champ, vice, third4, fourth, inG4, nemSemi, firstZ, g4Z }
-    }).sort((a, b) => a.group.localeCompare(b.group) || a.name.localeCompare(b.name, 'pt-BR'))
+    }).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
   }, [teams, groupBets, thirdBets, tournamentBets, n, tBetsN, zebraThreshold])
 
   const rows = selGroup ? allStats.filter(t => t.group === selGroup) : allStats
