@@ -13,38 +13,44 @@ const STAGES = [
   { label: '3º e Final',value: 'final' },
 ]
 
-export function StageFilter() {
+interface Props {
+  /** Default filter applied when no `etapa` param exists in the URL. */
+  defaultActiveRound: number | null
+}
+
+export function StageFilter({ defaultActiveRound }: Props) {
   const router = useRouter()
   const sp     = useSearchParams()
-  const active = sp.get('etapa') ?? ''
+
+  // Resolve qual valor está ativo agora (mesma lógica de PalpitesContent).
+  const param = sp.get('etapa')
+  const active = param === 'todos'
+    ? 'todos'
+    : (param ?? (defaultActiveRound !== null ? `r${defaultActiveRound}` : 'todos'))
 
   const set = (v: string) => {
     const params = new URLSearchParams(sp.toString())
-    if (v) params.set('etapa', v)
-    else   params.delete('etapa')
+    params.set('etapa', v)
     router.replace(`/palpites?${params.toString()}`)
   }
 
-  const btn = (label: string, value: string) => {
-    const isActive = active === value
-    return (
-      <button
-        key={value}
-        onClick={() => set(value)}
-        className={`rounded-lg px-3 py-1.5 text-sm font-bold transition ${
-          isActive
-            ? 'bg-azul-escuro text-white shadow-sm'
-            : 'bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50'
-        }`}
-      >
-        {label}
-      </button>
-    )
-  }
+  const btn = (label: string, value: string) => (
+    <button
+      key={value}
+      onClick={() => set(value)}
+      className={`rounded-lg px-3 py-1.5 text-sm font-bold transition ${
+        active === value
+          ? 'bg-azul-escuro text-white shadow-sm'
+          : 'bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50'
+      }`}
+    >
+      {label}
+    </button>
+  )
 
   return (
     <div className="flex flex-wrap gap-1.5">
-      {btn('Todos', '')}
+      {btn('Todos', 'todos')}
       {STAGES.map(s => btn(s.label, s.value))}
     </div>
   )

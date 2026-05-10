@@ -1,11 +1,11 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { StickyStats } from './StickyStats'
 import { Countdown } from './Countdown'
 import { RoundProgress } from './RoundProgress'
-import { ExcelActions } from './ExcelActions'
 import { StageFilter } from './StageFilter'
 import { GroupFilter } from './GroupFilter'
 import { MatchBetRow } from './MatchBetRow'
@@ -14,11 +14,21 @@ import { TournamentSection } from './TournamentSection'
 import { ThirdPlaceSection } from './ThirdPlaceSection'
 import { ThirdPlaceProvider } from './ThirdPlaceContext'
 import { AutoFillButton } from './AutoFillButton'
-import { TabelaClient } from '@/app/tabela/TabelaClient'
 import type { CalcGroupStanding } from '@/lib/bracket/engine'
 import { formatBrasilia } from '@/utils/date'
 import type { MatchPhase } from '@/types/database'
 import type { TournamentBetBreakdown } from '@/lib/scoring/engine'
+
+// Lazy: TabelaClient só baixa quando o usuário entra na aba "Minha Tabela"
+const TabelaClient = dynamic(
+  () => import('@/app/tabela/TabelaClient').then(m => ({ default: m.TabelaClient })),
+  { loading: () => <div className="py-10 text-center text-sm text-gray-400">Carregando classificação…</div> },
+)
+// Lazy: ExcelActions tem ~5kB de SVG inline + util de download; não é caminho crítico
+const ExcelActions = dynamic(
+  () => import('./ExcelActions').then(m => ({ default: m.ExcelActions })),
+  { loading: () => <div className="h-7 w-44 animate-pulse rounded bg-gray-100" /> },
+)
 
 interface MatchRow {
   id: string
@@ -76,6 +86,9 @@ export interface PalpitesContentProps {
   groupAllBetsFilled: Record<string, boolean>
   filledBets: number
   totalGroupMatches: number
+  /** Rodada da fase de grupos com prazo ainda aberto (1/2/3 ou null). Usado como
+   *  filtro default quando a URL não tem `?etapa=`. */
+  defaultActiveRound: number | null
 }
 
 const GROUP_ORDER = ['A','B','C','D','E','F','G','H','I','J','K','L']
@@ -132,11 +145,16 @@ export function PalpitesContent({
   thirdCount, bonusCount, allGroupsFilled, alreadyFilled, nextDeadline,
   calculatedStandings, groupBetsOverride, thirdBetsOverride,
   g4Deadline, hasTournamentBet, groupAllBetsFilled,
-  filledBets, totalGroupMatches,
+  filledBets, totalGroupMatches, defaultActiveRound,
 }: PalpitesContentProps) {
   const sp    = useSearchParams()
   const tab   = sp.get('tab') === 'tabela' ? 'tabela' : 'palpites'
-  const etapa = sp.get('etapa') ?? ''
+  // Default etapa = rodada ativa (se URL não trouxer `?etapa=`).
+  // `?etapa=todos` é o sentinel para "ver tudo"; internamente vira ''.
+  const etapaParam = sp.get('etapa')
+  const etapa = etapaParam === 'todos'
+    ? ''
+    : (etapaParam ?? (defaultActiveRound !== null ? `r${defaultActiveRound}` : ''))
   const grupo = sp.get('grupo') ?? ''
 
   if (tab === 'tabela') {
@@ -276,7 +294,7 @@ export function PalpitesContent({
         </div>
 
         <div className="mb-2 space-y-1.5">
-          <StageFilter />
+          <StageFilter defaultActiveRound={defaultActiveRound} />
           {isGroupEtapa && <GroupFilter />}
         </div>
 

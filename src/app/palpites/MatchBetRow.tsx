@@ -1,6 +1,6 @@
 'use client'
 
-import { useTransition, useState, useEffect, useRef } from 'react'
+import { memo, useTransition, useState, useEffect, useRef } from 'react'
 import { saveBet, deleteBet } from './actions'
 import { Flag } from '@/components/ui/Flag'
 import { formatBrasilia, isDeadlinePassed } from '@/utils/date'
@@ -27,7 +27,7 @@ interface Props {
   slotLabelAway?: string
 }
 
-export function MatchBetRow({ match, bet, slotLabelHome, slotLabelAway }: Props) {
+function MatchBetRowImpl({ match, bet, slotLabelHome, slotLabelAway }: Props) {
   const [pending, startTransition] = useTransition()
   const [home, setHome] = useState(bet?.score_home?.toString() ?? '')
   const [away, setAway] = useState(bet?.score_away?.toString() ?? '')
@@ -227,6 +227,22 @@ export function MatchBetRow({ match, bet, slotLabelHome, slotLabelAway }: Props)
     </tr>
   )
 }
+
+export const MatchBetRow = memo(MatchBetRowImpl, (prev, next) => {
+  // Re-render somente quando algo visualmente relevante muda.
+  // Identidades das props vindas do servidor são estáveis dentro do mesmo render.
+  if (prev.bet !== next.bet) return false
+  if (prev.slotLabelHome !== next.slotLabelHome || prev.slotLabelAway !== next.slotLabelAway) return false
+  const a = prev.match, b = next.match
+  return (
+    a.id === b.id &&
+    a.score_home === b.score_home &&
+    a.score_away === b.score_away &&
+    a.betting_deadline === b.betting_deadline &&
+    a.team_home === b.team_home && a.team_away === b.team_away &&
+    a.flag_home === b.flag_home && a.flag_away === b.flag_away
+  )
+})
 
 function PointsBadge({ points }: { points: number | null }) {
   if (points === null) return <span className="text-xs text-gray-300">⌛</span>
