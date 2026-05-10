@@ -55,7 +55,7 @@ export default async function SimuladorPage() {
 
   const [
     participantsRes, matchesRes, betsRes, groupBetsRes, tournamentBetsRes,
-    thirdScoresRes, rulesRes, teamAbbrRes,
+    thirdScoresRes, thirdBetsRes, rulesRes, teamAbbrRes,
     scorerRes, scorerSettingRes, simRes,
   ] = await Promise.all([
     supabase.from('participants').select('id, apelido').order('apelido'),
@@ -63,9 +63,10 @@ export default async function SimuladorPage() {
       .select('id, match_number, phase, round, group_name, team_home, team_away, flag_home, flag_away, score_home, score_away, penalty_winner, is_brazil, match_datetime, betting_deadline, city')
       .order('match_datetime', { ascending: true }),
     admin.from('bets').select('participant_id, match_id, score_home, score_away'),
-    admin.from('group_bets').select('participant_id, points'),
+    admin.from('group_bets').select('participant_id, group_name, first_place, second_place, points'),
     admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer'),
     admin.from('participant_scores').select('participant_id, pts_thirds'),
+    admin.from('third_place_bets').select('participant_id, group_name, team'),
     supabase.from('scoring_rules').select('key, points'),
     admin.from('teams').select('name, abbr_br'),
     admin.from('top_scorer_mapping').select('raw_name, standardized_name'),
@@ -99,6 +100,7 @@ export default async function SimuladorPage() {
   const allGroupBets  = (groupBetsRes.data       ?? []) as any[]
   const allTBets      = (tournamentBetsRes.data   ?? []) as any[]
   const thirdScores   = (thirdScoresRes.data      ?? []) as any[]
+  const allThirdBets  = (thirdBetsRes.data        ?? []) as any[]
 
   // ── Compute PTS Oficial live (mirrors ClassificacaoMB) ─────────────────────
 
@@ -223,20 +225,30 @@ export default async function SimuladorPage() {
     : new Map<string, { team_home: string; flag_home: string; team_away: string; flag_away: string }>()
 
   // ── Filter visible matches and apply team overrides ───────────────────────
-  const visibleMatches = (isAdmin
-    ? allMatches
-    : allMatches.filter((m: any) => m.betting_deadline && m.betting_deadline <= now)
-  ).map((m: any) => {
-    const ov = knockoutTeamMap.get(m.id)
-    if (!ov) return m
-    return {
-      ...m,
-      team_home: ov.team_home || m.team_home,
-      team_away: ov.team_away || m.team_away,
-      flag_home: ov.flag_home || m.flag_home,
-      flag_away: ov.flag_away || m.flag_away,
-    }
-  })
+  // Regra: só aparece para simulação se o prazo de envio de palpite já passou.
+  // Vale para todos (inclusive admin).
+  const visibleMatches = allMatches
+    .filter((m: any) => m.betting_deadline && m.betting_deadline <= now)
+    .map((m: any) => {
+      const ov = knockoutTeamMap.get(m.id)
+      if (!ov) return m
+      return {
+        ...m,
+        team_home: ov.team_home || m.team_home,
+        team_away: ov.team_away || m.team_away,
+        flag_home: ov.flag_home || m.flag_home,
+        flag_away: ov.flag_away || m.flag_away,
+      }
+    })
+
+  // Prazo dos palpites bonus (group_bets, third_place_bets, tournament_bets)
+  // = menor betting_deadline dos jogos da rodada 1 da fase de grupos.
+  // Quando passa, abre simulação de 1º/2º, 3os e G4 + artilheiro.
+  const round1Group = allMatches.filter((m: any) => m.phase === 'group' && m.round === 1)
+  const bonusDeadlineIso: string | null = round1Group.length > 0
+    ? round1Group.map((m: any) => m.betting_deadline as string).sort()[0]
+    : null
+  const bonusUnlocked = !!(bonusDeadlineIso && bonusDeadlineIso <= now)
 
   return (
     <>
@@ -249,11 +261,18 @@ export default async function SimuladorPage() {
             activeParticipantId={activeParticipantId ?? null}
             participants={participants as any[]}
             visibleMatches={visibleMatches}
+            allMatches={allMatches}
             allBets={allBets}
+            allGroupBets={allGroupBets}
+            allThirdBets={allThirdBets}
+            allTournamentBets={allTBets}
             rules={rules}
             teamAbbrs={teamAbbrs}
             storedTotals={storedTotals}
             existingSimulations={(simRes.data ?? []) as any[]}
+            bonusUnlocked={bonusUnlocked}
+            officialScorers={officialScorers}
+            scorerMapping={scorerMapping}
           />
         </div>
       </div>
