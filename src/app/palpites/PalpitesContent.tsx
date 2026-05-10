@@ -145,7 +145,73 @@ export function PalpitesContent(props: PalpitesContentProps) {
   )
 }
 
-function PalpitesContentInner({
+// Decide qual aba renderizar. Precisa de subcomponentes separados pois
+// cada aba chama um conjunto diferente de hooks (ex: vários useMemo na
+// aba Palpites). Misturar via early-return causaria "Rendered fewer
+// hooks than expected" ao alternar de aba.
+function PalpitesContentInner(props: PalpitesContentProps) {
+  const sp  = useSearchParams()
+  const tab = sp.get('tab') === 'tabela' ? 'tabela' : 'palpites'
+
+  if (tab === 'tabela') return <TabelaTabPane {...props} />
+  return <PalpitesTabPane {...props} />
+}
+
+function TabelaTabPane({
+  participantId, calculatedStandings, groupBetsOverride, thirdBetsOverride,
+  g4Deadline, hasTournamentBet, groupAllBetsFilled,
+  filledBets, totalGroupMatches,
+}: PalpitesContentProps) {
+  return (
+    <div className="mx-auto max-w-4xl px-4 py-8">
+      <PageHeader activeTab="tabela" />
+
+      <div className="mb-4 mt-4">
+        <p className="text-sm text-gray-500">
+          Calculada com base em Meus Palpites
+        </p>
+        <div className="mt-3 flex items-center gap-3">
+          <div className="flex-1 overflow-hidden rounded-full bg-gray-200 h-2">
+            <div
+              className="h-2 rounded-full bg-verde-600 transition-all"
+              style={{ width: `${totalGroupMatches > 0 ? (filledBets / totalGroupMatches) * 100 : 0}%` }}
+            />
+          </div>
+          <span className="text-xs text-gray-500 whitespace-nowrap">
+            {filledBets}/{totalGroupMatches} palpites
+          </span>
+        </div>
+        {filledBets < totalGroupMatches && (
+          <p className="mt-2 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 border border-amber-200">
+            ⚠️ Partidas sem palpite não são contabilizadas na classificação.{' '}
+            <Link href="/palpites" className="font-semibold underline">Complete seus palpites →</Link>
+          </p>
+        )}
+      </div>
+
+      <TabelaClient
+        standings={calculatedStandings}
+        groupBetsOverride={groupBetsOverride}
+        thirdBetsOverride={thirdBetsOverride}
+        userId={participantId}
+        g4Deadline={g4Deadline}
+        hasTournamentBet={hasTournamentBet}
+        groupAllBetsFilled={groupAllBetsFilled}
+      />
+
+      <div className="mt-4 text-center">
+        <Link
+          href="/palpites"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-azul-escuro hover:underline"
+        >
+          📊 Veja aqui seus palpites
+        </Link>
+      </div>
+    </div>
+  )
+}
+
+function PalpitesTabPane({
   groupMatches, resolvedKnockoutByPhase, r32Labels,
   betMap, groupBetMap, tBet, thirdBets,
   groupTeams, allTeams, tournamentDeadline,
@@ -153,12 +219,9 @@ function PalpitesContentInner({
   liveScore, liveBreakdown, scorerMapping, thirdPts, participantId,
   totalMatches, totalBets, totalGroupBets,
   thirdCount, bonusCount, allGroupsFilled, alreadyFilled, nextDeadline,
-  calculatedStandings, groupBetsOverride, thirdBetsOverride,
-  g4Deadline, hasTournamentBet, groupAllBetsFilled,
-  filledBets, totalGroupMatches, defaultActiveRound,
+  defaultActiveRound,
 }: PalpitesContentProps) {
-  const sp    = useSearchParams()
-  const tab   = sp.get('tab') === 'tabela' ? 'tabela' : 'palpites'
+  const sp = useSearchParams()
   // Default etapa = rodada ativa (se URL não trouxer `?etapa=`).
   // `?etapa=todos` é o sentinel para "ver tudo"; internamente vira ''.
   const etapaParam = sp.get('etapa')
@@ -166,56 +229,6 @@ function PalpitesContentInner({
     ? ''
     : (etapaParam ?? (defaultActiveRound !== null ? `r${defaultActiveRound}` : ''))
   const grupo = sp.get('grupo') ?? ''
-
-  if (tab === 'tabela') {
-    return (
-      <div className="mx-auto max-w-4xl px-4 py-8">
-        <PageHeader activeTab="tabela" />
-
-        <div className="mb-4 mt-4">
-          <p className="text-sm text-gray-500">
-            Calculada com base em Meus Palpites
-          </p>
-          <div className="mt-3 flex items-center gap-3">
-            <div className="flex-1 overflow-hidden rounded-full bg-gray-200 h-2">
-              <div
-                className="h-2 rounded-full bg-verde-600 transition-all"
-                style={{ width: `${totalGroupMatches > 0 ? (filledBets / totalGroupMatches) * 100 : 0}%` }}
-              />
-            </div>
-            <span className="text-xs text-gray-500 whitespace-nowrap">
-              {filledBets}/{totalGroupMatches} palpites
-            </span>
-          </div>
-          {filledBets < totalGroupMatches && (
-            <p className="mt-2 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 border border-amber-200">
-              ⚠️ Partidas sem palpite não são contabilizadas na classificação.{' '}
-              <Link href="/palpites" className="font-semibold underline">Complete seus palpites →</Link>
-            </p>
-          )}
-        </div>
-
-        <TabelaClient
-          standings={calculatedStandings}
-          groupBetsOverride={groupBetsOverride}
-          thirdBetsOverride={thirdBetsOverride}
-          userId={participantId}
-          g4Deadline={g4Deadline}
-          hasTournamentBet={hasTournamentBet}
-          groupAllBetsFilled={groupAllBetsFilled}
-        />
-
-        <div className="mt-4 text-center">
-          <Link
-            href="/palpites"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-azul-escuro hover:underline"
-          >
-            📊 Veja aqui seus palpites
-          </Link>
-        </div>
-      </div>
-    )
-  }
 
   const isKnockoutEtapa = etapa ? KNOCKOUT_ETAPAS.has(etapa) : false
   const isGroupEtapa    = !etapa || etapa === 'r1' || etapa === 'r2' || etapa === 'r3'
