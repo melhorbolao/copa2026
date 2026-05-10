@@ -15,6 +15,7 @@ import { TournamentSection } from './TournamentSection'
 import { ThirdPlaceSection } from './ThirdPlaceSection'
 import { ThirdPlaceProvider } from './ThirdPlaceContext'
 import { AutoFillButton } from './AutoFillButton'
+import { BetSaveQueueProvider, useBetSaveQueue } from './BetSaveQueueContext'
 import type { CalcGroupStanding } from '@/lib/bracket/engine'
 import { formatBrasilia } from '@/utils/date'
 import type { MatchPhase } from '@/types/database'
@@ -136,7 +137,15 @@ function SectionRow({ label, deadline, sub }: { label: string; deadline?: string
   )
 }
 
-export function PalpitesContent({
+export function PalpitesContent(props: PalpitesContentProps) {
+  return (
+    <BetSaveQueueProvider>
+      <PalpitesContentInner {...props} />
+    </BetSaveQueueProvider>
+  )
+}
+
+function PalpitesContentInner({
   groupMatches, resolvedKnockoutByPhase, r32Labels,
   betMap, groupBetMap, tBet, thirdBets,
   groupTeams, allTeams, tournamentDeadline,
@@ -301,8 +310,9 @@ export function PalpitesContent({
         <PageHeader activeTab="palpites" />
 
         <div className="mb-4 mt-4 flex items-start justify-between gap-4 flex-wrap">
-          <div>
+          <div className="flex items-center gap-3">
             <ExcelActions />
+            <SaveStatus />
           </div>
           <div className="flex flex-col items-end gap-2">
             {nextDeadline && <Countdown deadline={nextDeadline.iso} label={nextDeadline.label} />}
@@ -450,6 +460,18 @@ function PageHeader({ activeTab }: { activeTab: 'palpites' | 'tabela' }) {
       </div>
     </div>
   )
+}
+
+function SaveStatus() {
+  const { status, pendingCount } = useBetSaveQueue()
+  if (status === 'idle' && pendingCount === 0) return null
+  let text = ''
+  let cls  = ''
+  if (status === 'saving')      { text = 'Salvando…'; cls = 'text-amarelo-600' }
+  else if (status === 'saved')  { text = 'Salvo ✓';   cls = 'text-verde-600'    }
+  else if (status === 'error')  { text = 'Erro ao salvar'; cls = 'text-red-500' }
+  else if (pendingCount > 0)    { text = `${pendingCount} alteração${pendingCount === 1 ? '' : 'ões'} pendente${pendingCount === 1 ? '' : 's'}`; cls = 'text-gray-400' }
+  return <span className={`text-xs font-medium ${cls}`}>{text}</span>
 }
 
 function TabLink({ href, label, active }: { href: string; label: string; active: boolean }) {

@@ -70,6 +70,50 @@ export async function saveBet(matchId: string, scoreHome: number, scoreAway: num
   if (error) throw new Error(error.message)
 }
 
+// ── Batch save de palpites de placar ──────────────────────────
+export interface BatchBetItem {
+  matchId:    string
+  scoreHome?: number
+  scoreAway?: number
+  delete?:    boolean
+}
+
+export async function saveBetsBatch(
+  items: BatchBetItem[],
+): Promise<{ saved: number; deleted: number; skippedExpired: number }> {
+  if (items.length === 0) return { saved: 0, deleted: 0, skippedExpired: 0 }
+  const { supabase, participantId } = await resolveParticipant()
+
+  const payload = items.map(it => it.delete
+    ? { match_id: it.matchId, delete: true }
+    : { match_id: it.matchId, score_home: it.scoreHome, score_away: it.scoreAway },
+  )
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rpc = await supabase.rpc('save_bets_batch', { p_participant_id: participantId, p_bets: payload as any })
+  if (rpc.error) {
+    if (isMissingRpc(rpc.error)) {
+      // Fallback: dispara saves individuais (caminho lento até a migration rodar)
+      let saved = 0, deleted = 0
+      for (const it of items) {
+        try {
+          if (it.delete) { await deleteBet(it.matchId); deleted++ }
+          else if (it.scoreHome != null && it.scoreAway != null) {
+            await saveBet(it.matchId, it.scoreHome, it.scoreAway); saved++
+          }
+        } catch (e) {
+          console.error('[saveBetsBatch fallback]', it.matchId, e)
+        }
+      }
+      return { saved, deleted, skippedExpired: 0 }
+    }
+    throw new Error(rpc.error.message)
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data = rpc.data as any
+  return { saved: data?.saved ?? 0, deleted: data?.deleted ?? 0, skippedExpired: data?.skipped_expired ?? 0 }
+}
+
 // ── Classificação de grupo ────────────────────────────────────
 export async function deleteGroupBet(
   groupName: string,
