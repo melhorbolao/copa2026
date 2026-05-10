@@ -13,6 +13,7 @@ import {
 import type { TournamentResults } from '@/lib/scoring/engine'
 import {
   calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap,
+  computeGroupCompletion,
 } from '@/lib/bracket/engine'
 import type { MatchSlim, BetSlim } from '@/lib/bracket/engine'
 import { getVisibilitySettings, filterBetsByDeadline } from '@/lib/production-mode'
@@ -231,9 +232,14 @@ export default async function SimuladorPage() {
   const officialStandings = calcGroupStandings(matchSlims, scoreMap)
   const officialThirds    = rankThirds(officialStandings)
   const thirdSlots        = resolveThirdSlots(officialThirds)
+  const officialCompletion = computeGroupCompletion(matchSlims, scoreMap)
   const knockoutTeamMap   = thirdSlots
     ? buildKnockoutTeamMap(
-        buildR32Teams(officialStandings, officialThirds, thirdSlots),
+        buildR32Teams(
+          officialStandings, officialThirds, thirdSlots, undefined,
+          officialCompletion.completeGroups,
+          officialCompletion.allGroupsComplete,
+        ),
         allMatches.filter((m: any) => m.phase !== 'group'),
       )
     : new Map<string, { team_home: string; flag_home: string; team_away: string; flag_away: string }>()

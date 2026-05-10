@@ -22,6 +22,9 @@ interface Props {
   g4Deadline:          string
   hasTournamentBet:    boolean
   groupAllBetsFilled:  Record<string, boolean>
+  // Quais grupos têm TODOS os jogos com palpite do usuário (guard do bracket).
+  userCompleteGroups:  string[]
+  userAllGroupsComplete: boolean
 }
 
 export function TabelaClient({
@@ -32,6 +35,8 @@ export function TabelaClient({
   g4Deadline,
   hasTournamentBet,
   groupAllBetsFilled,
+  userCompleteGroups,
+  userAllGroupsComplete,
 }: Props) {
   const [manualOrders, setManualOrders] = useState<Record<string, string[]>>({})
   const [mounted, setMounted] = useState(false)
@@ -93,6 +98,8 @@ export function TabelaClient({
     })
   }, [thirds, localThirdBets, effectiveStandings])
 
+  const completeGroupsSet = useMemo(() => new Set(userCompleteGroups), [userCompleteGroups])
+
   // Monta o override completo: palpite formal > ordem efetiva
   const r32Slots = useMemo(() => {
     const merged = new Map<string, { first_place: string; second_place: string }>()
@@ -102,8 +109,11 @@ export function TabelaClient({
       const second = formal?.second_place || standing.teams[1]?.team || ''
       merged.set(standing.group, { first_place: first, second_place: second })
     }
-    return buildR32Teams(effectiveStandings, thirdsForBracket, thirdSlots, merged)
-  }, [effectiveStandings, thirdsForBracket, thirdSlots, localGroupBets])
+    return buildR32Teams(
+      effectiveStandings, thirdsForBracket, thirdSlots, merged,
+      completeGroupsSet, userAllGroupsComplete,
+    )
+  }, [effectiveStandings, thirdsForBracket, thirdSlots, localGroupBets, completeGroupsSet, userAllGroupsComplete])
 
   const advancingThirdGroups = useMemo(
     () => new Set(thirds.filter(t => t.advances).map(t => t.group)),

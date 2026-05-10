@@ -15,6 +15,7 @@ import {
 import {
   calcGroupStandings, rankThirds, resolveThirdSlots,
   buildR32Teams, buildKnockoutTeamMap, R32_MATCHES,
+  computeGroupCompletion,
 } from '@/lib/bracket/engine'
 import type { BetSlim, MatchSlim } from '@/lib/bracket/engine'
 import { scoreTournamentBetBreakdown } from '@/lib/scoring/engine'
@@ -137,24 +138,10 @@ async function PalpitesData({ participantId }: { participantId: string }) {
   const officialThirds     = rankThirds(officialStandings)
   const officialThirdSlots = resolveThirdSlots(officialThirds)
 
-  // Detecta quais grupos têm TODOS os jogos com placar oficial. Sem isso,
-  // buildR32Teams cai no fallback "primeiro do standings" — que com zero
-  // placares vira ordem alfabética. /acopa já faz essa proteção; agora
-  // /palpites também.
-  const groupTotalAndScored = new Map<string, { total: number; scored: number }>()
-  for (const m of groupMatches) {
-    if (!m.group_name) continue
-    const e = groupTotalAndScored.get(m.group_name) ?? { total: 0, scored: 0 }
-    e.total++
-    if (m.score_home !== null && m.score_away !== null) e.scored++
-    groupTotalAndScored.set(m.group_name, e)
-  }
-  const completeGroups = new Set<string>()
-  for (const [g, { total, scored }] of groupTotalAndScored) {
-    if (total > 0 && scored === total) completeGroups.add(g)
-  }
-  const allGroupsComplete =
-    groupTotalAndScored.size > 0 && completeGroups.size === groupTotalAndScored.size
+  // Guard contra fallback alfabético: só preenche slots do bracket quando os
+  // grupos relevantes têm TODOS os jogos com placar registrado em betMap.
+  const { completeGroups, allGroupsComplete } =
+    computeGroupCompletion(groupMatches, officialScoreMap)
 
   const officialR32Slots = officialThirdSlots
     ? buildR32Teams(officialStandings, officialThirds, officialThirdSlots, undefined, completeGroups, allGroupsComplete)
@@ -298,6 +285,11 @@ async function PalpitesData({ participantId }: { participantId: string }) {
   const filledBets        = groupBetCount
   const totalGroupMatches = groupMatches.length
 
+  // Mesma guarda do bracket oficial, mas baseada nos PALPITES do usuário:
+  // só preenche slots da Minha Tabela quando os grupos relevantes estão
+  // 100% palpitados — caso contrário cai no fallback alfabético.
+  const userCompletion = computeGroupCompletion(slimGroupMatches, slimBetMap)
+
   // ── Default etapa = rodada ativa (item A) ─────────────────────────
   // O servidor calcula o default para o cliente saber qual etapa exibir
   // quando a URL não tem `?etapa=...`. Cliente continua reativo a mudanças.
@@ -359,6 +351,8 @@ async function PalpitesData({ participantId }: { participantId: string }) {
     filledBets,
     totalGroupMatches,
     defaultActiveRound,
+    userCompleteGroups: [...userCompletion.completeGroups],
+    userAllGroupsComplete: userCompletion.allGroupsComplete,
   }
 
   return <PalpitesContent {...props} />

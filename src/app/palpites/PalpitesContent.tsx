@@ -91,6 +91,9 @@ export interface PalpitesContentProps {
   /** Rodada da fase de grupos com prazo ainda aberto (1/2/3 ou null). Usado como
    *  filtro default quando a URL não tem `?etapa=`. */
   defaultActiveRound: number | null
+  /** Grupos com TODOS os jogos palpitados pelo usuário — guard do bracket pessoal. */
+  userCompleteGroups: string[]
+  userAllGroupsComplete: boolean
 }
 
 const GROUP_ORDER = ['A','B','C','D','E','F','G','H','I','J','K','L']
@@ -161,6 +164,7 @@ function TabelaTabPane({
   participantId, calculatedStandings, groupBetsOverride, thirdBetsOverride,
   g4Deadline, hasTournamentBet, groupAllBetsFilled,
   filledBets, totalGroupMatches,
+  userCompleteGroups, userAllGroupsComplete,
 }: PalpitesContentProps) {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -197,6 +201,8 @@ function TabelaTabPane({
         g4Deadline={g4Deadline}
         hasTournamentBet={hasTournamentBet}
         groupAllBetsFilled={groupAllBetsFilled}
+        userCompleteGroups={userCompleteGroups}
+        userAllGroupsComplete={userAllGroupsComplete}
       />
 
       <div className="mt-4 text-center">

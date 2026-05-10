@@ -313,6 +313,35 @@ export function calcGroupStandings(
   })
 }
 
+/**
+ * Detecta quais grupos têm TODOS os jogos com placar registrado em `betMap`.
+ * Usado como guard para `buildR32Teams`: sem isso o engine cai no fallback
+ * "1º time do standings" — que com zero placares vira ordem alfabética.
+ *
+ * Para o bracket oficial, passe `betMap` derivado dos placares oficiais.
+ * Para o bracket do palpite do usuário, passe o `betMap` dos palpites dele.
+ */
+export function computeGroupCompletion(
+  matches: { phase: string; group_name: string | null; id: string }[],
+  betMap: Map<string, unknown>,
+): { completeGroups: Set<string>; allGroupsComplete: boolean } {
+  const totals = new Map<string, { total: number; scored: number }>()
+  for (const m of matches) {
+    if (m.phase !== 'group' || !m.group_name) continue
+    const e = totals.get(m.group_name) ?? { total: 0, scored: 0 }
+    e.total++
+    if (betMap.has(m.id)) e.scored++
+    totals.set(m.group_name, e)
+  }
+  const completeGroups = new Set<string>()
+  for (const [g, { total, scored }] of totals) {
+    if (total > 0 && scored === total) completeGroups.add(g)
+  }
+  const allGroupsComplete =
+    totals.size > 0 && completeGroups.size === totals.size
+  return { completeGroups, allGroupsComplete }
+}
+
 // ── Melhores 8 terceiros (Art. 13) ───────────────────────────────────────────
 
 /**
