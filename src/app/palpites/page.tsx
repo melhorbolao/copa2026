@@ -21,6 +21,10 @@ import type { BetSlim, MatchSlim } from '@/lib/bracket/engine'
 import { scoreTournamentBetBreakdown } from '@/lib/scoring/engine'
 import type { TournamentResults, TournamentBetBreakdown } from '@/lib/scoring/engine'
 import type { MatchPhase } from '@/types/database'
+import {
+  getPhaseSettings, getQualifiedSets, canFillStage, STAGE_KEYS,
+} from '@/lib/phase-availability'
+import type { StageKey } from '@/lib/phase-availability'
 
 const GROUP_ORDER = ['A','B','C','D','E','F','G','H','I','J','K','L']
 
@@ -70,7 +74,11 @@ async function PalpitesData({ participantId }: { participantId: string }) {
     getCachedOfficialScorers(),
   ])
 
-  // 5 queries dinâmicas em paralelo (eram 8 — caímos pra 5)
+  // 5 queries dinâmicas em paralelo (eram 8 — caímos pra 5) +
+  // configurações de disponibilidade e qualificados pelos cortes (regulamento 27–30).
+  const phaseSettingsP = getPhaseSettings()
+  const qualifiedP     = getQualifiedSets()
+
   const [
     { data: matches },
     { data: bets },
@@ -95,6 +103,11 @@ async function PalpitesData({ participantId }: { participantId: string }) {
       .select('group_name, team, points')
       .eq('participant_id', participantId),
   ])
+
+  const [phaseSettings, qualified] = await Promise.all([phaseSettingsP, qualifiedP])
+  const fillableStages: Record<StageKey, boolean> = Object.fromEntries(
+    STAGE_KEYS.map(s => [s, canFillStage(s, participantId, phaseSettings, qualified)]),
+  ) as Record<StageKey, boolean>
 
   let thirdBets: { group_name: string; team: string; points: number | null }[] = []
   if (thirdBetsResult.error) {
@@ -353,6 +366,7 @@ async function PalpitesData({ participantId }: { participantId: string }) {
     defaultActiveRound,
     userCompleteGroups: [...userCompletion.completeGroups],
     userAllGroupsComplete: userCompletion.allGroupsComplete,
+    fillableStages,
   }
 
   return <PalpitesContent {...props} />

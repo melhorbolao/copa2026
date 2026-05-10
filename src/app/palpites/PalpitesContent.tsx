@@ -20,6 +20,7 @@ import type { CalcGroupStanding } from '@/lib/bracket/engine'
 import { formatBrasilia } from '@/utils/date'
 import type { MatchPhase } from '@/types/database'
 import type { TournamentBetBreakdown } from '@/lib/scoring/engine'
+import type { StageKey } from '@/lib/phase-availability'
 
 // Lazy: TabelaClient só baixa quando o usuário entra na aba "Minha Tabela"
 const TabelaClient = dynamic(
@@ -94,6 +95,9 @@ export interface PalpitesContentProps {
   /** Grupos com TODOS os jogos palpitados pelo usuário — guard do bracket pessoal. */
   userCompleteGroups: string[]
   userAllGroupsComplete: boolean
+  /** Por etapa: se ESTE participante pode preencher palpites ali (admin marcou
+   *  "Disponível p/ preenchimento" + ele passou no corte da regulamentação). */
+  fillableStages: Record<StageKey, boolean>
 }
 
 const GROUP_ORDER = ['A','B','C','D','E','F','G','H','I','J','K','L']
@@ -225,7 +229,7 @@ function PalpitesTabPane({
   liveScore, liveBreakdown, scorerMapping, thirdPts, participantId,
   totalMatches, totalBets, totalGroupBets,
   thirdCount, bonusCount, allGroupsFilled, alreadyFilled, nextDeadline,
-  defaultActiveRound,
+  defaultActiveRound, fillableStages,
 }: PalpitesContentProps) {
   const sp = useSearchParams()
   // Default etapa = rodada ativa (se URL não trouxer `?etapa=`).
@@ -241,15 +245,21 @@ function PalpitesTabPane({
   const groupRound      = etapa === 'r1' ? 1 : etapa === 'r2' ? 2 : etapa === 'r3' ? 3 : null
   const showBonusBets   = !etapa || etapa === 'r1'
 
+  // Etapa específica selecionada e indisponível para este participante:
+  // não monta nada e exibe um aviso. 'todos' (etapa vazia) sempre passa —
+  // mostra apenas o que estiver disponível.
+  const etapaIsBlocked = !!etapa && !fillableStages[etapa as StageKey]
+
   // Memoizar O(matches) — ~104 entradas. Sem isso, todo re-render do pai
   // (mudança de URL, context de terceiros etc.) refazia esses filtros.
   const visibleGroupMatches = useMemo(() => {
+    if (etapaIsBlocked) return []
     if (isKnockoutEtapa) return []
     let v = groupMatches
     if (groupRound !== null) v = v.filter(m => m.round === groupRound)
     if (grupo)               v = v.filter(m => m.group_name === grupo)
     return v
-  }, [groupMatches, groupRound, grupo, isKnockoutEtapa])
+  }, [groupMatches, groupRound, grupo, isKnockoutEtapa, etapaIsBlocked])
 
   const visibleGroupOrder = useMemo(
     () => grupo ? GROUP_ORDER.filter(g => g === grupo) : GROUP_ORDER,
@@ -257,10 +267,20 @@ function PalpitesTabPane({
   )
 
   const visibleKnockoutPhases = useMemo(() => {
+    if (etapaIsBlocked) return []
     if (isKnockoutEtapa && etapa) return ETAPA_TO_PHASES[etapa] ?? []
     if (isGroupEtapa) return []
-    return KNOCKOUT_PHASES
-  }, [etapa, isKnockoutEtapa, isGroupEtapa])
+    // 'todos': mostra apenas etapas em que o participante pode preencher
+    return KNOCKOUT_PHASES.filter(p => {
+      const stage = (
+        p === 'round_of_32' ? 'r32' :
+        p === 'round_of_16' ? 'r16' :
+        p === 'quarterfinal' ? 'qf' :
+        p === 'semifinal' ? 'sf' : 'final'
+      ) as StageKey
+      return fillableStages[stage]
+    })
+  }, [etapa, isKnockoutEtapa, isGroupEtapa, etapaIsBlocked, fillableStages])
 
   const activeRound = useMemo<number | null>(() => {
     if (groupRound !== null) return groupRound
@@ -342,7 +362,7 @@ function PalpitesTabPane({
         </div>
 
         <div className="mb-2 space-y-1.5">
-          <StageFilter defaultActiveRound={defaultActiveRound} />
+          <StageFilter defaultActiveRound={defaultActiveRound} fillableStages={fillableStages} />
           {isGroupEtapa && <GroupFilter />}
         </div>
 
@@ -416,7 +436,19 @@ function PalpitesTabPane({
                       )
                     })}
 
-                    {!hasAnything && (
+                    {etapaIsBlocked && (
+                      <tr>
+                        <td colSpan={7} className="py-10 text-center text-sm text-gray-500">
+                          <div className="mx-auto max-w-md rounded-lg bg-amber-50 px-4 py-3 ring-1 ring-amber-200">
+                            <p className="font-semibold text-amber-800">Esta etapa ainda não está disponível para você.</p>
+                            <p className="mt-1 text-xs text-amber-700">
+                              Pode ser que o admin ainda não tenha liberado o preenchimento, ou que você não esteja entre os classificados desta fase (regras 27–30 do regulamento).
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    {!etapaIsBlocked && !hasAnything && (
                       <tr>
                         <td colSpan={7} className="py-10 text-center text-sm text-gray-400">
                           Nenhuma partida nesta etapa.

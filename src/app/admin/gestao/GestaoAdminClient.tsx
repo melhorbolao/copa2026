@@ -1,23 +1,26 @@
 'use client'
 
 import { useState, useRef, useTransition } from 'react'
-import { setProductionMode, setRoundReleased, clearAllBets, clearAllResults } from './actions'
+import { setProductionMode, setRoundReleased, setRoundAvailable, clearAllBets, clearAllResults } from './actions'
 import type { RoundInfo } from '@/lib/production-mode'
 
 interface Props {
   productionMode: boolean
   releasedRounds: string[]
+  fillableRoundKeys: string[]
   availableRounds: RoundInfo[]
 }
 
 type Msg = { type: 'ok' | 'error'; text: string }
 type ConflictState = { conflicts: string[]; file: File }
 
-export function GestaoAdminClient({ productionMode: initProdMode, releasedRounds: initReleased, availableRounds }: Props) {
+export function GestaoAdminClient({ productionMode: initProdMode, releasedRounds: initReleased, fillableRoundKeys, availableRounds }: Props) {
   const [productionMode, setMode]       = useState(initProdMode)
   const [releasedRounds, setReleased]   = useState<Set<string>>(new Set(initReleased))
-  const [modePending, startModeTransition]   = useTransition()
-  const [roundPending, startRoundTransition] = useTransition()
+  const [fillableRounds, setFillable]   = useState<Set<string>>(new Set(fillableRoundKeys))
+  const [modePending, startModeTransition]    = useTransition()
+  const [roundPending, startRoundTransition]  = useTransition()
+  const [fillPending, startFillTransition]    = useTransition()
 
   // ── Clear bets ────────────────────────────────────────────────
   const [confirmBets, setConfirmBets]   = useState(false)
@@ -57,6 +60,18 @@ export function GestaoAdminClient({ productionMode: initProdMode, releasedRounds
         return s
       })
       await setRoundReleased(roundKey, next)
+    })
+  }
+
+  const handleToggleFillable = (roundKey: string, currentlyFillable: boolean) => {
+    const next = !currentlyFillable
+    startFillTransition(async () => {
+      setFillable(prev => {
+        const s = new Set(prev)
+        next ? s.add(roundKey) : s.delete(roundKey)
+        return s
+      })
+      await setRoundAvailable(roundKey, next)
     })
   }
 
@@ -176,10 +191,16 @@ export function GestaoAdminClient({ productionMode: initProdMode, releasedRounds
       {/* ── ROUND RELEASE ── */}
       <section>
         <h3 className="text-sm font-semibold text-gray-900 mb-1">Controle de Liberação por Rodada</h3>
-        <p className="mb-3 text-xs text-gray-500">
+        <p className="mb-1 text-xs text-gray-500">
+          <strong>Visível a todos:</strong>{' '}
           {productionMode
-            ? 'Em Modo Produção, os palpites só ficam visíveis quando o prazo expirar E a rodada estiver liberada abaixo.'
-            : 'Em Modo Teste, estas configurações não têm efeito — todos os palpites são visíveis.'}
+            ? 'em Modo Produção, palpites alheios da rodada só aparecem após o prazo E quando este toggle estiver ligado.'
+            : 'em Modo Teste, esta configuração não tem efeito — todos os palpites são visíveis.'}
+        </p>
+        <p className="mb-3 text-xs text-gray-500">
+          <strong>Disponível para preenchimento:</strong> libera a aba da etapa em &quot;Meus Palpites&quot;,
+          mas apenas para os participantes ainda classificados (1º corte: top 50% após fase de grupos,
+          arredondado p/ cima a múltiplo de 10; 2º corte: 50% dos habilitados após oitavas).
         </p>
         {availableRounds.length === 0 ? (
           <p className="text-xs text-gray-400">Nenhuma partida encontrada no banco de dados.</p>
@@ -190,15 +211,17 @@ export function GestaoAdminClient({ productionMode: initProdMode, releasedRounds
                 <tr>
                   <th className="px-3 py-2">Rodada / Fase</th>
                   <th className="px-3 py-2">Prazo</th>
-                  <th className="px-3 py-2 text-center">Liberado</th>
+                  <th className="px-3 py-2 text-center">Visível a todos</th>
+                  <th className="px-3 py-2 text-center">Disponível p/ preenchimento</th>
                 </tr>
               </thead>
               <tbody>
                 {availableRounds.map(round => {
                   const isReleased = releasedRounds.has(round.key)
+                  const isFillable = fillableRounds.has(round.key)
                   const deadlineExpired = round.deadline ? new Date(round.deadline) <= new Date() : false
                   return (
-                    <tr key={round.key} className={`border-b border-gray-50 last:border-0 ${!productionMode ? 'opacity-50' : ''}`}>
+                    <tr key={round.key} className="border-b border-gray-50 last:border-0">
                       <td className="px-3 py-2.5 font-medium text-gray-700">{round.label}</td>
                       <td className={`px-3 py-2.5 ${deadlineExpired ? 'text-gray-500' : 'font-semibold text-amber-600'}`}>
                         {formatDeadline(round.deadline)}
@@ -206,16 +229,28 @@ export function GestaoAdminClient({ productionMode: initProdMode, releasedRounds
                           <span className="ml-1 text-[10px] text-amber-500">(em aberto)</span>
                         )}
                       </td>
-                      <td className="px-3 py-2.5 text-center">
+                      <td className={`px-3 py-2.5 text-center ${!productionMode ? 'opacity-50' : ''}`}>
                         <button
                           onClick={() => handleToggleRound(round.key, isReleased)}
                           disabled={roundPending || !productionMode}
-                          title={!productionMode ? 'Ativo apenas no Modo Produção' : isReleased ? 'Clique para bloquear' : 'Clique para liberar'}
+                          title={!productionMode ? 'Ativo apenas no Modo Produção' : isReleased ? 'Clique para ocultar dos demais' : 'Clique para tornar visível a todos'}
                           className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:cursor-not-allowed ${
                             isReleased ? 'bg-verde-600' : 'bg-gray-200'
                           }`}
                         >
                           <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ${isReleased ? 'translate-x-4' : 'translate-x-0'}`} />
+                        </button>
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        <button
+                          onClick={() => handleToggleFillable(round.key, isFillable)}
+                          disabled={fillPending}
+                          title={isFillable ? 'Clique para fechar a aba para todos' : 'Clique para liberar a aba (só para classificados)'}
+                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:cursor-not-allowed ${
+                            isFillable ? 'bg-azul-escuro' : 'bg-gray-200'
+                          }`}
+                        >
+                          <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ${isFillable ? 'translate-x-4' : 'translate-x-0'}`} />
                         </button>
                       </td>
                     </tr>
