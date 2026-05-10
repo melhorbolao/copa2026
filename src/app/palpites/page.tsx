@@ -136,8 +136,28 @@ async function PalpitesData({ participantId }: { participantId: string }) {
   }
   const officialThirds     = rankThirds(officialStandings)
   const officialThirdSlots = resolveThirdSlots(officialThirds)
-  const officialR32Slots   = officialThirdSlots
-    ? buildR32Teams(officialStandings, officialThirds, officialThirdSlots)
+
+  // Detecta quais grupos têm TODOS os jogos com placar oficial. Sem isso,
+  // buildR32Teams cai no fallback "primeiro do standings" — que com zero
+  // placares vira ordem alfabética. /acopa já faz essa proteção; agora
+  // /palpites também.
+  const groupTotalAndScored = new Map<string, { total: number; scored: number }>()
+  for (const m of groupMatches) {
+    if (!m.group_name) continue
+    const e = groupTotalAndScored.get(m.group_name) ?? { total: 0, scored: 0 }
+    e.total++
+    if (m.score_home !== null && m.score_away !== null) e.scored++
+    groupTotalAndScored.set(m.group_name, e)
+  }
+  const completeGroups = new Set<string>()
+  for (const [g, { total, scored }] of groupTotalAndScored) {
+    if (total > 0 && scored === total) completeGroups.add(g)
+  }
+  const allGroupsComplete =
+    groupTotalAndScored.size > 0 && completeGroups.size === groupTotalAndScored.size
+
+  const officialR32Slots = officialThirdSlots
+    ? buildR32Teams(officialStandings, officialThirds, officialThirdSlots, undefined, completeGroups, allGroupsComplete)
     : []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const knockoutTeamMap = buildKnockoutTeamMap(officialR32Slots, knockoutMatches as any)
