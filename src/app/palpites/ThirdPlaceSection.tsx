@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useEffect } from 'react'
+import { useState, useTransition, useEffect, useMemo, useRef } from 'react'
 import { saveThirdPlaceBet, deleteThirdPlaceBet } from './actions'
 import { isDeadlinePassed, formatBrasilia } from '@/utils/date'
 import { useThirdPlace } from './ThirdPlaceContext'
@@ -42,14 +42,23 @@ export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBet
 
   const { setThirdSelections } = useThirdPlace()
 
+  // Hash leve da prop de servidor — substitui JSON.stringify em cada render
+  const existingHash = useMemo(() => {
+    const arr = (existingBets ?? []).map(b => b.group_name + '=' + b.team).sort()
+    return arr.join(';')
+  }, [existingBets])
+  const lastSyncedHash = useRef(existingHash)
+
   // Sincroniza quando o servidor revalida (ex: auto-preenchimento)
   useEffect(() => {
+    if (existingHash === lastSyncedHash.current) return
+    lastSyncedHash.current = existingHash
     setSelections(Object.fromEntries((existingBets ?? []).map(b => [b.group_name, b.team])))
-  }, [JSON.stringify(existingBets)]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [existingHash, existingBets])
 
   useEffect(() => {
     setThirdSelections(selections)
-  }, [selections]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selections, setThirdSelections])
 
   const deadlinePassed  = isDeadlinePassed(deadline)
   const selectedGroups  = Object.keys(selections)

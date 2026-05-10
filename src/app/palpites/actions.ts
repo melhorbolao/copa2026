@@ -12,62 +12,62 @@ async function resolveParticipant() {
   return { supabase, participantId }
 }
 
+/**
+ * Erros do PostgREST quando a função RPC não existe ainda. Permite que
+ * o action faça fallback para o caminho antigo (2 roundtrips) até a
+ * migration `add_save_bet_rpcs.sql` rodar em produção.
+ */
+function isMissingRpc(err: { code?: string; message?: string } | null | undefined): boolean {
+  if (!err) return false
+  return err.code === 'PGRST202' || /could not find the function/i.test(err.message ?? '')
+}
+
 // ── Palpite de placar ─────────────────────────────────────────
 export async function deleteBet(matchId: string) {
-  let participantId: string
-  let supabase: Awaited<ReturnType<typeof createClient>>
-  try {
-    ;({ supabase, participantId } = await resolveParticipant())
-  } catch (e) {
-    console.error('[deleteBet] resolveParticipant falhou:', e)
-    throw e
-  }
+  const { supabase, participantId } = await resolveParticipant()
 
-  const { data: match, error: matchError } = await supabase.from('matches').select('betting_deadline').eq('id', matchId).single()
-  if (matchError) console.error('[deleteBet] erro ao buscar partida:', matchError)
+  // Caminho rápido: 1 roundtrip via RPC (deadline-check + delete)
+  const rpc = await supabase.rpc('delete_bet', { p_participant_id: participantId, p_match_id: matchId })
+  if (rpc.error && !isMissingRpc(rpc.error)) {
+    throw new Error(rpc.error.message)
+  }
+  if (!rpc.error) return
+
+  // Fallback (migration ainda não rodou)
+  const { data: match } = await supabase.from('matches').select('betting_deadline').eq('id', matchId).single()
   if (!match) throw new Error('Partida não encontrada')
   if (new Date() > new Date(match.betting_deadline)) throw new Error('Prazo encerrado')
-
   const admin = createAuthAdminClient()
-  const { error } = await admin.from('bets')
-    .delete()
-    .eq('participant_id', participantId)
-    .eq('match_id', matchId)
-  if (error) {
-    console.error('[deleteBet] erro no delete:', error)
-    throw new Error(error.message)
-  }
+  const { error } = await admin.from('bets').delete().eq('participant_id', participantId).eq('match_id', matchId)
+  if (error) throw new Error(error.message)
 }
 
 export async function saveBet(matchId: string, scoreHome: number, scoreAway: number) {
   if (!Number.isInteger(scoreHome) || !Number.isInteger(scoreAway) || scoreHome < 0 || scoreAway < 0) {
     throw new Error('Placar inválido')
   }
+  const { supabase, participantId } = await resolveParticipant()
 
-  let participantId: string
-  let supabase: Awaited<ReturnType<typeof createClient>>
-  try {
-    ;({ supabase, participantId } = await resolveParticipant())
-  } catch (e) {
-    console.error('[saveBet] resolveParticipant falhou:', e)
-    throw e
+  // Caminho rápido: 1 roundtrip via RPC
+  const rpc = await supabase.rpc('save_bet', {
+    p_participant_id: participantId, p_match_id: matchId,
+    p_score_home: scoreHome, p_score_away: scoreAway,
+  })
+  if (rpc.error && !isMissingRpc(rpc.error)) {
+    throw new Error(rpc.error.message)
   }
+  if (!rpc.error) return
 
-  const { data: match, error: matchError } = await supabase.from('matches').select('betting_deadline').eq('id', matchId).single()
-  if (matchError) console.error('[saveBet] erro ao buscar partida:', matchError)
+  // Fallback (migration ainda não rodou)
+  const { data: match } = await supabase.from('matches').select('betting_deadline').eq('id', matchId).single()
   if (!match) throw new Error('Partida não encontrada')
   if (new Date() > new Date(match.betting_deadline)) throw new Error('Prazo encerrado')
-
-  // Usa admin client para contornar possíveis restrições de RLS na tabela bets
   const admin = createAuthAdminClient()
   const { error } = await admin.from('bets').upsert(
     { participant_id: participantId, match_id: matchId, score_home: scoreHome, score_away: scoreAway },
     { onConflict: 'participant_id,match_id' },
   )
-  if (error) {
-    console.error('[saveBet] erro no upsert:', error)
-    throw new Error(error.message)
-  }
+  if (error) throw new Error(error.message)
 }
 
 // ── Classificação de grupo ────────────────────────────────────
@@ -111,16 +111,24 @@ export async function saveGroupBet(groupName: string, firstPlace: string, second
   if (firstPlace === secondPlace) throw new Error('1º e 2º devem ser times diferentes.')
 
   const { supabase, participantId } = await resolveParticipant()
-  const admin = createAuthAdminClient()
 
+  // Caminho rápido: 1 roundtrip via RPC
+  const rpc = await supabase.rpc('save_group_bet', {
+    p_participant_id: participantId, p_group_name: groupName,
+    p_first_place: firstPlace, p_second_place: secondPlace,
+  })
+  if (rpc.error && !isMissingRpc(rpc.error)) {
+    throw new Error(rpc.error.message)
+  }
+  if (!rpc.error) return
+
+  // Fallback (migration ainda não rodou)
+  const admin = createAuthAdminClient()
   const { error } = await admin.from('group_bets').upsert(
     { participant_id: participantId, group_name: groupName, first_place: firstPlace, second_place: secondPlace },
     { onConflict: 'participant_id,group_name' },
   )
-  if (error) {
-    console.error('[saveGroupBet] erro no upsert:', error)
-    throw new Error(error.message)
-  }
+  if (error) throw new Error(error.message)
 }
 
 // ── Terceiros classificados ───────────────────────────────────
@@ -158,15 +166,24 @@ export async function saveThirdPlaceBets(
 // ── Terceiro classificado individual (autosave) ───────────────
 export async function saveThirdPlaceBet(groupName: string, team: string) {
   const { supabase, participantId } = await resolveParticipant()
-  const admin = createAuthAdminClient()
 
+  // Caminho rápido: 1 roundtrip via RPC
+  const rpc = await supabase.rpc('save_third_place_bet', {
+    p_participant_id: participantId, p_group_name: groupName, p_team: team,
+  })
+  if (rpc.error && !isMissingRpc(rpc.error)) {
+    throw new Error(rpc.error.message)
+  }
+  if (!rpc.error) return
+
+  // Fallback (migration ainda não rodou)
   const { data: dl } = await supabase
     .from('matches').select('betting_deadline')
     .eq('phase', 'group').eq('round', 1)
     .order('betting_deadline', { ascending: true }).limit(1).single()
   if (dl && new Date() > new Date(dl.betting_deadline))
     throw new Error('Prazo encerrado.')
-
+  const admin = createAuthAdminClient()
   const { error } = await admin.from('third_place_bets').upsert(
     { participant_id: participantId, group_name: groupName, team },
     { onConflict: 'participant_id,group_name' }
@@ -176,8 +193,18 @@ export async function saveThirdPlaceBet(groupName: string, team: string) {
 
 export async function deleteThirdPlaceBet(groupName: string) {
   const { supabase, participantId } = await resolveParticipant()
-  const admin = createAuthAdminClient()
 
+  // Caminho rápido: 1 roundtrip via RPC
+  const rpc = await supabase.rpc('delete_third_place_bet', {
+    p_participant_id: participantId, p_group_name: groupName,
+  })
+  if (rpc.error && !isMissingRpc(rpc.error)) {
+    throw new Error(rpc.error.message)
+  }
+  if (!rpc.error) return
+
+  // Fallback
+  const admin = createAuthAdminClient()
   const { error } = await admin.from('third_place_bets')
     .delete().eq('participant_id', participantId).eq('group_name', groupName)
   if (error) throw new Error(error.message)

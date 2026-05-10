@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
@@ -210,34 +211,50 @@ export function PalpitesContent({
   const isKnockoutEtapa = etapa ? KNOCKOUT_ETAPAS.has(etapa) : false
   const isGroupEtapa    = !etapa || etapa === 'r1' || etapa === 'r2' || etapa === 'r3'
   const groupRound      = etapa === 'r1' ? 1 : etapa === 'r2' ? 2 : etapa === 'r3' ? 3 : null
+  const showBonusBets   = !etapa || etapa === 'r1'
 
-  let visibleGroupMatches = groupMatches
-  if (groupRound !== null) visibleGroupMatches = visibleGroupMatches.filter(m => m.round === groupRound)
-  if (grupo)               visibleGroupMatches = visibleGroupMatches.filter(m => m.group_name === grupo)
-  if (isKnockoutEtapa)     visibleGroupMatches = []
+  // Memoizar O(matches) — ~104 entradas. Sem isso, todo re-render do pai
+  // (mudança de URL, context de terceiros etc.) refazia esses filtros.
+  const visibleGroupMatches = useMemo(() => {
+    if (isKnockoutEtapa) return []
+    let v = groupMatches
+    if (groupRound !== null) v = v.filter(m => m.round === groupRound)
+    if (grupo)               v = v.filter(m => m.group_name === grupo)
+    return v
+  }, [groupMatches, groupRound, grupo, isKnockoutEtapa])
 
-  const showBonusBets     = !etapa || etapa === 'r1'
-  const visibleGroupOrder = grupo ? GROUP_ORDER.filter(g => g === grupo) : GROUP_ORDER
+  const visibleGroupOrder = useMemo(
+    () => grupo ? GROUP_ORDER.filter(g => g === grupo) : GROUP_ORDER,
+    [grupo],
+  )
 
-  const visibleKnockoutPhases = isKnockoutEtapa && etapa
-    ? ETAPA_TO_PHASES[etapa] ?? []
-    : isGroupEtapa
-      ? []
-      : KNOCKOUT_PHASES
+  const visibleKnockoutPhases = useMemo(() => {
+    if (isKnockoutEtapa && etapa) return ETAPA_TO_PHASES[etapa] ?? []
+    if (isGroupEtapa) return []
+    return KNOCKOUT_PHASES
+  }, [etapa, isKnockoutEtapa, isGroupEtapa])
 
-  const now = new Date()
-  const activeRound: number | null = groupRound ?? (() => {
+  const activeRound = useMemo<number | null>(() => {
+    if (groupRound !== null) return groupRound
+    const now = Date.now()
     for (const r of [1, 2, 3]) {
-      const m = groupMatches.find(m => m.round === r)
-      if (m && new Date(m.betting_deadline) > now) return r
+      const m = groupMatches.find(gm => gm.round === r)
+      if (m && new Date(m.betting_deadline).getTime() > now) return r
     }
     return null
-  })()
-  const activeRoundIds   = activeRound
-    ? new Set(groupMatches.filter(m => m.round === activeRound).map(m => m.id))
-    : new Set<string>()
+  }, [groupRound, groupMatches])
+
+  const activeRoundIds = useMemo(
+    () => activeRound !== null
+      ? new Set(groupMatches.filter(m => m.round === activeRound).map(m => m.id))
+      : new Set<string>(),
+    [activeRound, groupMatches],
+  )
   const activeRoundTotal = activeRoundIds.size
-  const activeRoundBets  = Object.keys(betMap).filter(id => activeRoundIds.has(id)).length
+  const activeRoundBets  = useMemo(
+    () => Object.keys(betMap).filter(id => activeRoundIds.has(id)).length,
+    [betMap, activeRoundIds],
+  )
 
   const r1ProgressFilled = activeRound === 1
     ? activeRoundBets + bonusCount + Math.min(totalGroupBets, 12) + Math.min(thirdCount, 8)
@@ -246,10 +263,12 @@ export function PalpitesContent({
     ? activeRoundTotal + 5 + 12 + 8
     : activeRoundTotal
 
-  const hasAnything =
-    visibleGroupMatches.length > 0 ||
-    (showBonusBets && visibleGroupOrder.some(g => groupTeams[g])) ||
-    visibleKnockoutPhases.some(p => resolvedKnockoutByPhase[p]?.length)
+  const hasAnything = useMemo(
+    () => visibleGroupMatches.length > 0
+      || (showBonusBets && visibleGroupOrder.some(g => groupTeams[g]))
+      || visibleKnockoutPhases.some(p => resolvedKnockoutByPhase[p]?.length),
+    [visibleGroupMatches, showBonusBets, visibleGroupOrder, groupTeams, visibleKnockoutPhases, resolvedKnockoutByPhase],
+  )
 
   const tableHead = (
     <thead className="sticky top-0 z-10 border-b border-gray-200 bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-400">

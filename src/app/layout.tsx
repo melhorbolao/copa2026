@@ -34,6 +34,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR" className={font.variable}>
+      <head>
+        {/* Antecipa DNS+TLS handshake para o CDN das bandeiras (~250 flags em /palpites). */}
+        <link rel="preconnect" href="https://flagcdn.com" crossOrigin="" />
+        <link rel="dns-prefetch" href="https://flagcdn.com" />
+      </head>
       <body className="min-h-screen bg-gray-50 font-sans">
         <AdminViewProvider>
           <Sidebar />
