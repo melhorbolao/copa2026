@@ -8,12 +8,16 @@ import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { PalpitesContent } from './PalpitesContent'
 import type { PalpitesContentProps } from './PalpitesContent'
+import { PalpitesSkeleton } from './PalpitesSkeleton'
+import {
+  getCachedScoringRules, getCachedScorerMapping, getCachedOfficialScorers,
+} from './cached'
 import {
   calcGroupStandings, rankThirds, resolveThirdSlots,
   buildR32Teams, buildKnockoutTeamMap, R32_MATCHES,
 } from '@/lib/bracket/engine'
 import type { BetSlim, MatchSlim } from '@/lib/bracket/engine'
-import { scoreTournamentBet, scoreTournamentBetBreakdown } from '@/lib/scoring/engine'
+import { scoreTournamentBetBreakdown } from '@/lib/scoring/engine'
 import type { TournamentResults, TournamentBetBreakdown } from '@/lib/scoring/engine'
 import type { MatchPhase } from '@/types/database'
 
@@ -26,14 +30,11 @@ const DEADLINE_LABELS: Record<string, string> = {
 }
 
 export default async function PalpitesPage() {
+  // ── Auth + access (rápido, sem queries pesadas) ────────────────────────
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const admin = createAuthAdminClient() as any
-
-  // Parallel: participantId lookup + admin profile fetch
   const [participantId, { data: userProfile }] = await Promise.all([
     getActiveParticipantId(supabase, user.id).catch(() => null),
     supabase.from('users').select('is_admin').eq('id', user.id).single(),
@@ -41,16 +42,40 @@ export default async function PalpitesPage() {
   if (!participantId) redirect('/aguardando-aprovacao')
   await requirePageAccess('palpites', userProfile?.is_admin ?? false)
 
-  // All DB queries in a single parallel batch (8 concurrent)
+  // Stream: o Navbar já vai. Os dados pesados ficam dentro do Suspense.
+  return (
+    <>
+      <Navbar />
+      <Suspense fallback={<PalpitesSkeleton />}>
+        <PalpitesData participantId={participantId} />
+      </Suspense>
+    </>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Componente assíncrono que carrega TUDO o que /palpites precisa para
+// renderizar PalpitesContent. Suspende enquanto as queries rodam.
+// ─────────────────────────────────────────────────────────────────────────────
+async function PalpitesData({ participantId }: { participantId: string }) {
+  const supabase = await createClient()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAuthAdminClient() as any
+
+  // Config cacheada (1h TTL) — não conta como query a cada request
+  const [rulesMap, scorerMapping, officialTopScorers] = await Promise.all([
+    getCachedScoringRules(),
+    getCachedScorerMapping(),
+    getCachedOfficialScorers(),
+  ])
+
+  // 5 queries dinâmicas em paralelo (eram 8 — caímos pra 5)
   const [
     { data: matches },
     { data: bets },
     { data: groupBets },
     { data: tBet },
-    scorerMappingsRaw,
-    { data: rulesData },
     thirdBetsResult,
-    officialScorerResult,
   ] = await Promise.all([
     supabase.from('matches')
       .select('id, match_number, phase, group_name, round, team_home, team_away, flag_home, flag_away, match_datetime, city, betting_deadline, score_home, score_away, is_brazil, penalty_winner')
@@ -65,21 +90,14 @@ export default async function PalpitesPage() {
       .select('champion, runner_up, semi1, semi2, top_scorer, points')
       .eq('participant_id', participantId)
       .maybeSingle(),
-    supabase.from('top_scorer_mapping').select('raw_name, standardized_name')
-      .then(r => r.data ?? [], () => []),
-    supabase.from('scoring_rules').select('key, points'),
     admin.from('third_place_bets')
       .select('group_name, team, points')
       .eq('participant_id', participantId),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    admin.from('tournament_settings').select('value').eq('key', 'official_top_scorer').maybeSingle()
-      .then((r: any) => r, () => null),
   ])
 
   let thirdBets: { group_name: string; team: string; points: number | null }[] = []
   if (thirdBetsResult.error) {
     console.error('[palpites/page] third_place_bets error:', thirdBetsResult.error?.message)
-    // Fallback: points column may not exist yet in production (migration not run)
     const r2 = await admin.from('third_place_bets').select('group_name, team').eq('participant_id', participantId)
     if (r2.error) console.error('[palpites/page] third_place_bets fallback error:', r2.error?.message)
     thirdBets = (r2.data ?? []) as typeof thirdBets
@@ -87,20 +105,7 @@ export default async function PalpitesPage() {
     thirdBets = (thirdBetsResult.data ?? []) as typeof thirdBets
   }
 
-  const rulesMap: Record<string, number> = Object.fromEntries(
-    (rulesData ?? []).map((r: { key: string; points: number }) => [r.key, r.points])
-  )
   const thirdPts = rulesMap['terceiro_classificado'] ?? 3
-
-  const scorerMapping: Record<string, string> = Object.fromEntries(
-    (scorerMappingsRaw as { raw_name: string; standardized_name: string }[]).map(m => [m.raw_name, m.standardized_name])
-  )
-
-  let officialTopScorers: string[] = []
-  if (officialScorerResult?.data?.value) {
-    try { officialTopScorers = JSON.parse(officialScorerResult.data.value) }
-    catch { officialTopScorers = [officialScorerResult.data.value] }
-  }
 
   // ── Derived bracket data ─────────────────────────────────────────
   const groupMatches    = (matches ?? []).filter(m => m.phase === 'group')
@@ -137,7 +142,6 @@ export default async function PalpitesPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const knockoutTeamMap = buildKnockoutTeamMap(officialR32Slots, knockoutMatches as any)
 
-  // Pre-resolve knockout team names so client gets serializable plain objects
   const resolvedKnockoutByPhase: Partial<Record<string, object[]>> = {}
   for (const m of knockoutMatches) {
     const p = m.phase as MatchPhase
@@ -145,7 +149,6 @@ export default async function PalpitesPage() {
     resolvedKnockoutByPhase[p]!.push({ ...m, ...(knockoutTeamMap.get(m.id) ?? {}) })
   }
 
-  // R32 labels as plain object (Map is not serializable as a prop)
   const r32Labels: Record<number, { labelA: string; labelB: string }> = {}
   R32_MATCHES.forEach((m, i) => {
     const num  = parseInt(m.matchNum.slice(1), 10)
@@ -186,7 +189,6 @@ export default async function PalpitesPage() {
       }])
     )
 
-  // Bet maps as plain objects (Map is not serializable as a prop)
   const betMap: Record<string, { score_home: number; score_away: number; points: number | null }> =
     Object.fromEntries((bets ?? []).map(b => [b.match_id, { score_home: b.score_home ?? 0, score_away: b.score_away ?? 0, points: b.points }]))
 
@@ -276,7 +278,16 @@ export default async function PalpitesPage() {
   const filledBets        = groupBetCount
   const totalGroupMatches = groupMatches.length
 
+  // ── Default etapa = rodada ativa (item A) ─────────────────────────
+  // O servidor calcula o default para o cliente saber qual etapa exibir
+  // quando a URL não tem `?etapa=...`. Cliente continua reativo a mudanças.
   const now = new Date()
+  let defaultActiveRound: number | null = null
+  for (const r of [1, 2, 3]) {
+    const m = groupMatches.find(gm => gm.round === r)
+    if (m && new Date(m.betting_deadline) > now) { defaultActiveRound = r; break }
+  }
+
   const nextMatch = (matches ?? [])
     .filter(m => new Date(m.betting_deadline) > now)
     .sort((a, b) => new Date(a.betting_deadline).getTime() - new Date(b.betting_deadline).getTime())[0]
@@ -327,14 +338,8 @@ export default async function PalpitesPage() {
     groupAllBetsFilled,
     filledBets,
     totalGroupMatches,
+    defaultActiveRound,
   }
 
-  return (
-    <>
-      <Navbar />
-      <Suspense fallback={null}>
-        <PalpitesContent {...props} />
-      </Suspense>
-    </>
-  )
+  return <PalpitesContent {...props} />
 }
