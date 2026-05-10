@@ -9,7 +9,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { createClient } from '@/lib/supabase/client'
 import { saveOfficialScore, saveOfficialTopScorer } from '@/app/acopa/actions'
 import { scoreMatchBet, detectMatchZebra, detectGroupZebra, getMatchResult, scoreTournamentBet } from '@/lib/scoring/engine'
-import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap } from '@/lib/bracket/engine'
+import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap, computeGroupCompletion } from '@/lib/bracket/engine'
 import type { KnockoutTeamOverride } from '@/lib/bracket/engine'
 import { useAdminView } from '@/contexts/AdminViewContext'
 import { Flag } from '@/components/ui/Flag'
@@ -563,7 +563,7 @@ export function TabelaMBClient({
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Official group standings (computed from match scores via bracket engine)
-  const officialStandings = useMemo(() => {
+  const officialContext = useMemo(() => {
     const gms = matches.filter(m => m.phase === 'group')
     const scoreMap = new Map<string, BetSlim>()
     for (const m of gms) {
@@ -576,18 +576,25 @@ export function TabelaMBClient({
       team_home: m.team_home, team_away: m.team_away,
       flag_home: m.flag_home, flag_away: m.flag_away,
     }))
-    return calcGroupStandings(slim, scoreMap)
+    const standings = calcGroupStandings(slim, scoreMap)
+    const completion = computeGroupCompletion(slim, scoreMap)
+    return { standings, completion }
   }, [matches])
 
+  const officialStandings = officialContext.standings
   const officialThirds = useMemo(() => rankThirds(officialStandings), [officialStandings])
 
   const knockoutTeamMap = useMemo(() => {
     const thirdSlots = resolveThirdSlots(officialThirds)
     if (!thirdSlots) return new Map<string, KnockoutTeamOverride>()
-    const r32Slots = buildR32Teams(officialStandings, officialThirds, thirdSlots)
+    const r32Slots = buildR32Teams(
+      officialStandings, officialThirds, thirdSlots, undefined,
+      officialContext.completion.completeGroups,
+      officialContext.completion.allGroupsComplete,
+    )
     const knockoutMatches = matches.filter(m => m.phase !== 'group')
     return buildKnockoutTeamMap(r32Slots, knockoutMatches)
-  }, [officialStandings, officialThirds, matches])
+  }, [officialStandings, officialThirds, matches, officialContext.completion])
 
   // Tournament results derived from actual match scores
   const knockoutResults = useMemo((): TournamentResults => {
