@@ -28,32 +28,49 @@ export async function setProductionMode(enabled: boolean): Promise<void> {
 
 // ── Liberação de rodadas ───────────────────────────────────────
 
-export async function setRoundReleased(roundKey: string, released: boolean): Promise<void> {
-  await requireAdmin()
+async function toggleRoundKeyInSetting(
+  settingKey: 'released_rounds' | 'available_rounds',
+  roundKey: string,
+  add: boolean,
+): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAuthAdminClient() as any
-
-  // Read current released list
   const { data: row } = await admin
-    .from('tournament_settings')
-    .select('value')
-    .eq('key', 'released_rounds')
-    .maybeSingle()
+    .from('tournament_settings').select('value').eq('key', settingKey).maybeSingle()
 
   let current: string[] = []
   if (row?.value) {
     try { current = JSON.parse(row.value) } catch { /* ignore */ }
   }
 
-  const next = released
+  const next = add
     ? [...new Set([...current, roundKey])]
     : current.filter((k: string) => k !== roundKey)
 
   await admin
     .from('tournament_settings')
-    .upsert({ key: 'released_rounds', value: JSON.stringify(next) }, { onConflict: 'key' })
+    .upsert({ key: settingKey, value: JSON.stringify(next) }, { onConflict: 'key' })
+}
 
+export async function setRoundReleased(roundKey: string, released: boolean): Promise<void> {
+  await requireAdmin()
+  await toggleRoundKeyInSetting('released_rounds', roundKey, released)
   revalidatePath('/tabelaMB')
+  revalidatePath('/admin/gestao')
+}
+
+/**
+ * Marca uma etapa como "Disponível para preenchimento" (visível em /palpites
+ * apenas para participantes classificados naquela fase). Persiste em
+ * `tournament_settings.available_rounds`. Aceita o roundKey canônico do
+ * production-mode (ex.: 'round_of_32') OU a StageKey direta ('r32') — ambas
+ * são desserializadas corretamente em `getPhaseSettings`.
+ */
+export async function setRoundAvailable(roundKey: string, available: boolean): Promise<void> {
+  await requireAdmin()
+  await toggleRoundKeyInSetting('available_rounds', roundKey, available)
+  revalidatePath('/palpites')
+  revalidatePath('/participantes')
   revalidatePath('/admin/gestao')
 }
 

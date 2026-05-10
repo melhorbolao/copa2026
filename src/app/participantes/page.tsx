@@ -5,6 +5,11 @@ import { formatBrasilia } from '@/utils/date'
 import { Countdown } from '@/app/palpites/Countdown'
 import { Suspense } from 'react'
 import { ParticipantesFilter } from './ParticipantesFilter'
+import {
+  getPhaseSettings, getQualifiedSets, canFillStage, isCutFromStage,
+  isParticipantEliminated, STAGE_KEYS,
+} from '@/lib/phase-availability'
+import type { StageKey as PhaseStageKey } from '@/lib/phase-availability'
 
 type MatchPhase = 'group' | 'round_of_32' | 'round_of_16' | 'quarterfinal' | 'semifinal' | 'third_place' | 'final'
 interface Match { id: string; phase: MatchPhase; round: number | null; betting_deadline: string }
@@ -20,8 +25,7 @@ function getStageKey(m: Match): string | null {
   return map[m.phase] ?? null
 }
 
-type StageKey = 'r1' | 'r2' | 'r3' | 'r32' | 'r16' | 'qf' | 'sf' | 'final'
-const STAGE_KEYS: StageKey[] = ['r1','r2','r3','r32','r16','qf','sf','final']
+type StageKey = PhaseStageKey
 const STAGE_LABELS: Record<StageKey, string> = {
   r1:'R1', r2:'R2', r3:'R3', r32:'16av', r16:'Oit', qf:'Qrt', sf:'Semi', final:'Final'
 }
@@ -48,6 +52,8 @@ export default async function ControlePage({
     { data: trnBets },
     { data: groupBets },
     { data: thirdBets },
+    phaseSettings,
+    qualified,
   ] = await Promise.all([
     supabase.from('participants')
       .select('id, apelido, paid')
@@ -57,6 +63,8 @@ export default async function ControlePage({
     supabase.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer'),
     supabase.from('group_bets').select('participant_id, group_name'),
     supabase.from('third_place_bets').select('participant_id, group_name'),
+    getPhaseSettings(),
+    getQualifiedSets(),
   ])
 
   // Valida duplicidade G4 por participante
@@ -178,11 +186,48 @@ export default async function ControlePage({
     a.apelido.localeCompare(b.apelido, 'pt-BR', { sensitivity: 'base' })
   )
 
+  // Eliminação: depende dos cortes vigentes. Se nenhum corte foi aplicado
+  // ainda (admin não marcou nenhuma etapa pós-grupos como disponível), ninguém
+  // está eliminado e o filtro "apenas ativos" não é exibido.
+  const eliminatedSet = new Set<string>(
+    allSorted
+      .filter(p => isParticipantEliminated(p.id, phaseSettings, qualified))
+      .map(p => p.id),
+  )
+  const hasAnyEliminated = eliminatedSet.size > 0
+
+  // Default = "apenas ativos" quando há eliminados; senão, "todos".
+  // O usuário pode alternar via filter='todos' explícito.
+  const isActivesView =
+    filter === 'ativos' ||
+    (filter === '' && hasAnyEliminated) ||
+    (filter === undefined && hasAnyEliminated)
+
   const sorted = allSorted.filter(p => {
     if (filter === 'pendente')   return !p.paid
     if (filter === 'incompleto') return nextStageKey !== null && calcPct(p.id, nextStageKey) < 100
+    if (isActivesView)           return !eliminatedSet.has(p.id)
     return true
   })
+
+  // Estado de uma célula (participante, etapa) na tabela:
+  //  - 'unavailable': admin não liberou OU é etapa de grupos sem total — mostra '—'
+  //  - 'cut':         admin liberou, mas participante foi cortado — mostra ✗
+  //  - 'open':        pode preencher — mostra %
+  type CellStatus = { kind: 'unavailable' | 'cut' | 'open'; pct: number }
+  const cellStatus = (pid: string, k: StageKey): CellStatus => {
+    const v = calcPct(pid, k)
+    // Etapas de grupos: a "disponibilidade" é sempre verdadeira do ponto de vista
+    // de regulamento (todos podem palpitar). Mas o admin pode bloquear via flag.
+    // Se não há total de partidas mapeado, exibe '—' como antes.
+    if (v === -1) return { kind: 'unavailable', pct: -1 }
+    if (!canFillStage(k, pid, phaseSettings, qualified)) {
+      // Distingue "não disponível" de "cortado" pra UI usar ícones diferentes.
+      if (isCutFromStage(k, pid, phaseSettings, qualified)) return { kind: 'cut', pct: v }
+      return { kind: 'unavailable', pct: v }
+    }
+    return { kind: 'open', pct: v }
+  }
 
   const pct    = (v: number) => v === -1 ? '—' : `${v}%`
   const pctCls = (v: number) =>
@@ -211,7 +256,10 @@ export default async function ControlePage({
 
       <div className="mb-6">
         <Suspense fallback={null}>
-          <ParticipantesFilter nextStageLabel={nextStageLabel} />
+          <ParticipantesFilter
+            nextStageLabel={nextStageLabel}
+            hasAnyEliminated={hasAnyEliminated}
+          />
         </Suspense>
       </div>
 
@@ -237,11 +285,23 @@ export default async function ControlePage({
               </tr>
             </thead>
             <tbody>
-              {sorted.map((p, i) => (
-                <tr key={p.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+              {sorted.map((p, i) => {
+                const eliminated = eliminatedSet.has(p.id)
+                return (
+                <tr key={p.id} className={`border-b border-gray-100 last:border-0 hover:bg-gray-50 ${eliminated ? 'bg-gray-50/70' : ''}`}>
                   <td className="px-3 py-2.5 text-xs text-gray-400">{i + 1}</td>
-                  <td className="px-3 py-2.5 font-medium text-gray-900 whitespace-nowrap">
-                    {p.apelido}
+                  <td className={`px-3 py-2.5 whitespace-nowrap font-medium ${eliminated ? 'text-gray-400 line-through decoration-gray-300' : 'text-gray-900'}`}>
+                    <span className="inline-flex items-center gap-1.5">
+                      {p.apelido}
+                      {eliminated && (
+                        <span
+                          title="Eliminado: não classificado para a fase atual (regulamento 27–30)"
+                          className="inline-block rounded-full bg-gray-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-gray-600"
+                        >
+                          Cortado
+                        </span>
+                      )}
+                    </span>
                   </td>
                   <td className="px-3 py-2.5 text-center">
                     {p.paid ? (
@@ -263,8 +323,33 @@ export default async function ControlePage({
                     )}
                   </td>
                   {STAGE_KEYS.map(k => {
-                    const v    = calcPct(p.id, k)
-                    const ts   = getLastSaved(p.id, k)
+                    const status = cellStatus(p.id, k)
+                    const ts     = getLastSaved(p.id, k)
+                    if (status.kind === 'unavailable') {
+                      return (
+                        <td key={k} className="px-2 py-2 text-center">
+                          <div
+                            className="text-xs tabular-nums text-gray-300"
+                            title="Etapa ainda não disponível para preenchimento"
+                          >
+                            —
+                          </div>
+                        </td>
+                      )
+                    }
+                    if (status.kind === 'cut') {
+                      return (
+                        <td key={k} className="px-2 py-2 text-center">
+                          <div
+                            className="text-xs tabular-nums text-gray-400"
+                            title="Participante cortado nesta fase (regulamento 27–30)"
+                          >
+                            ✗
+                          </div>
+                        </td>
+                      )
+                    }
+                    const v = status.pct
                     return (
                       <td key={k} className="px-2 py-2 text-center">
                         <div className={`text-xs tabular-nums ${pctCls(v)}`}>{pct(v)}</div>
@@ -273,7 +358,8 @@ export default async function ControlePage({
                     )
                   })}
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>

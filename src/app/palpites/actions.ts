@@ -3,6 +3,7 @@
 import { createClient, createAuthAdminClient } from '@/lib/supabase/server'
 import { getActiveParticipantId } from '@/lib/participant'
 import { calcGroupStandings, rankThirds } from '@/lib/bracket/engine'
+import { assertCanFillForMatch } from '@/lib/phase-availability'
 
 async function resolveParticipant() {
   const supabase = await createClient()
@@ -22,9 +23,22 @@ function isMissingRpc(err: { code?: string; message?: string } | null | undefine
   return err.code === 'PGRST202' || /could not find the function/i.test(err.message ?? '')
 }
 
+// ── Helper: valida disponibilidade da etapa do match para o participante ──
+async function assertStageOpen(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  matchId: string,
+  participantId: string,
+): Promise<void> {
+  const { data: m } = await supabase.from('matches').select('phase, round').eq('id', matchId).maybeSingle()
+  if (!m) throw new Error('Partida não encontrada')
+  await assertCanFillForMatch(m.phase, m.round ?? null, participantId)
+}
+
 // ── Palpite de placar ─────────────────────────────────────────
 export async function deleteBet(matchId: string) {
   const { supabase, participantId } = await resolveParticipant()
+  await assertStageOpen(supabase, matchId, participantId)
 
   // Caminho rápido: 1 roundtrip via RPC (deadline-check + delete)
   const rpc = await supabase.rpc('delete_bet', { p_participant_id: participantId, p_match_id: matchId })
@@ -47,6 +61,7 @@ export async function saveBet(matchId: string, scoreHome: number, scoreAway: num
     throw new Error('Placar inválido')
   }
   const { supabase, participantId } = await resolveParticipant()
+  await assertStageOpen(supabase, matchId, participantId)
 
   // Caminho rápido: 1 roundtrip via RPC
   const rpc = await supabase.rpc('save_bet', {
@@ -83,6 +98,20 @@ export async function saveBetsBatch(
 ): Promise<{ saved: number; deleted: number; skippedExpired: number }> {
   if (items.length === 0) return { saved: 0, deleted: 0, skippedExpired: 0 }
   const { supabase, participantId } = await resolveParticipant()
+
+  // Valida etapas dos matches do batch (1 query agregada)
+  const matchIds = items.map(it => it.matchId)
+  const { data: phaseRows } = await supabase
+    .from('matches').select('id, phase, round').in('id', matchIds)
+  const stagesToCheck = new Set<string>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const r of (phaseRows ?? []) as any[]) {
+    stagesToCheck.add(`${r.phase}|${r.round ?? ''}`)
+  }
+  for (const sig of stagesToCheck) {
+    const [phase, round] = sig.split('|')
+    await assertCanFillForMatch(phase, round ? parseInt(round, 10) : null, participantId)
+  }
 
   const payload = items.map(it => it.delete
     ? { match_id: it.matchId, delete: true }
