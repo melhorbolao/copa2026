@@ -102,7 +102,10 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
   )
 
   return (
-    <tr className="border-b border-gray-100 bg-blue-50/30 hover:bg-blue-50/50">
+    <tr
+      style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 80px' }}
+      className="border-b border-gray-100 bg-blue-50/30 hover:bg-blue-50/50"
+    >
       <td colSpan={7} className="px-2 py-2 sm:px-3">
         {/*
           Mobile (< sm): duas linhas — rótulo+bandeiras em cima, seletores embaixo.

@@ -1,9 +1,9 @@
 'use client'
 
-import { memo, useTransition, useState, useEffect, useRef } from 'react'
-import { saveBet, deleteBet } from './actions'
+import { memo, useState, useEffect, useRef } from 'react'
 import { Flag } from '@/components/ui/Flag'
 import { formatBrasilia, isDeadlinePassed } from '@/utils/date'
+import { useBetSaveQueue } from './BetSaveQueueContext'
 
 interface Bet { score_home: number; score_away: number; points: number | null }
 
@@ -28,7 +28,7 @@ interface Props {
 }
 
 function MatchBetRowImpl({ match, bet, slotLabelHome, slotLabelAway }: Props) {
-  const [pending, startTransition] = useTransition()
+  const { enqueueSave, enqueueDelete } = useBetSaveQueue()
   const [home, setHome] = useState(bet?.score_home?.toString() ?? '')
   const [away, setAway] = useState(bet?.score_away?.toString() ?? '')
   const [error, setError] = useState('')
@@ -54,40 +54,14 @@ function MatchBetRowImpl({ match, bet, slotLabelHome, slotLabelAway }: Props) {
   const hasResult = match.score_home !== null && match.score_away !== null
   const rowBg = match.is_brazil ? 'bg-verde-50/60' : ''
 
-  const doSave = (hNum: number, aNum: number) => {
-    setError('')
-    startTransition(async () => {
-      try {
-        await saveBet(match.id, hNum, aNum)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Erro')
-      }
-    })
-  }
-
-  const doDelete = () => {
-    setError('')
-    startTransition(async () => {
-      try {
-        await deleteBet(match.id)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Erro ao apagar')
-        // Restaura valores anteriores se falhar
-        if (bet) {
-          const h = bet.score_home.toString()
-          const a = bet.score_away.toString()
-          setHome(h); setAway(a)
-          homeRef.current = h; awayRef.current = a
-        }
-      }
-    })
-  }
-
+  // Fila centralizada: digitar enfileira; flush real acontece em batch
+  // após 1.5s de inatividade global (ver BetSaveQueueContext).
   const triggerSave = (h: string, a: string) => {
     clearTimeout(timerRef.current)
+    setError('')
     // Ambos vazios com palpite existente → apagar
     if (h === '' && a === '' && bet !== null) {
-      timerRef.current = setTimeout(() => doDelete(), 800)
+      timerRef.current = setTimeout(() => enqueueDelete(match.id), 400)
       return
     }
     const hNum = parseInt(h, 10)
@@ -97,9 +71,9 @@ function MatchBetRowImpl({ match, bet, slotLabelHome, slotLabelAway }: Props) {
       if (hNum >= 10 || aNum >= 10) {
         setConfirmScore({ h: hNum, a: aNum })
       } else {
-        doSave(hNum, aNum)
+        enqueueSave(match.id, hNum, aNum)
       }
-    }, 800)
+    }, 400)
   }
 
   const handleHomeChange = (val: string) => {
@@ -115,7 +89,13 @@ function MatchBetRowImpl({ match, bet, slotLabelHome, slotLabelAway }: Props) {
   }
 
   return (
-    <tr className={`border-b border-gray-100 last:border-0 ${rowBg} hover:bg-gray-50/60`}>
+    <tr
+      // Virtualização nativa: browsers modernos pulam layout/paint de linhas
+      // fora da viewport. containIntrinsicSize reserva espaço para evitar CLS.
+      // Suporte: Chrome 85+, Safari 16+, Firefox 125+.
+      style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 56px' }}
+      className={`border-b border-gray-100 last:border-0 ${rowBg} hover:bg-gray-50/60`}
+    >
       {/* # */}
       <td className="py-2.5 text-xs text-gray-400 whitespace-nowrap">
         <div className={`flex items-center gap-1 pl-1.5 sm:gap-1.5 sm:pl-3 ${match.is_brazil ? 'border-l-4 border-verde-500' : 'border-l-4 border-transparent'}`}>
@@ -178,7 +158,7 @@ function MatchBetRowImpl({ match, bet, slotLabelHome, slotLabelAway }: Props) {
             </p>
             <div className="flex gap-1.5">
               <button
-                onClick={() => { doSave(confirmScore.h, confirmScore.a); setConfirmScore(null) }}
+                onClick={() => { enqueueSave(match.id, confirmScore.h, confirmScore.a); setConfirmScore(null) }}
                 className="rounded bg-amber-500 px-2 py-0.5 text-xs font-bold text-white hover:bg-amber-600"
               >
                 Confirmar
@@ -220,8 +200,6 @@ function MatchBetRowImpl({ match, bet, slotLabelHome, slotLabelAway }: Props) {
           <PointsBadge points={bet.points} />
         ) : hasResult && !bet ? (
           <span className="text-xs text-gray-300">—</span>
-        ) : pending ? (
-          <span className="text-xs text-gray-400">…</span>
         ) : null}
       </td>
     </tr>
