@@ -396,14 +396,29 @@ export function resolveThirdSlots(
  * @param thirdSlots  resultado de resolveThirdSlots (ex: { "1A": "3E", ... })
  * @param matchNum    ex: "M74" (para saber qual slot usar)
  */
-/** Formata o label de exibição de um slot: "1A" → "(1A)", "3rd:XYZ" → "(3X)" */
+/**
+ * Formata o label de exibição de um slot:
+ *  - "1A"             → "(1A)"
+ *  - "2C"             → "(2C)"
+ *  - "3rd:ABCDF"      → "(3ABCDF)"  (enquanto fase de grupos não termina —
+ *                       mostra a lista de grupos candidatos do Anexo C, em
+ *                       vez de um terceiro resolvido por fallback alfabético)
+ *  - "3rd:ABCDF" + dados completos → "(3X)" onde X é o grupo resolvido.
+ */
 function slotDisplayLabel(
   slot: string,
   matchNum: string,
   thirdSlots: Record<string, string> | null,
+  allGroupsComplete: boolean,
 ): string {
   if (slot.startsWith('1') || slot.startsWith('2')) return `(${slot})`
-  if (slot.startsWith('3rd:') && thirdSlots) {
+  if (slot.startsWith('3rd:')) {
+    // Enquanto fase de grupos não terminou (ou sem dados), exibe as
+    // possibilidades — não um terceiro resolvido por fallback alfabético.
+    if (!allGroupsComplete || !thirdSlots) {
+      const candidates = slot.slice(4)  // 'ABCDF'
+      return `(3${candidates})`
+    }
     const ref = resolveR32ThirdSlot(matchNum, thirdSlots)
     if (ref) return `(3${ref[1]})`
   }
@@ -472,12 +487,17 @@ export function buildR32Teams(
     return null
   }
 
+  // Default explícito: quando o chamador não passa `allGroupsComplete`, assume
+  // que sim — preserva o comportamento histórico (callers em /tabelaMB e
+  // /simulador, onde standings vêm dos placares oficiais já finalizados).
+  const groupsComplete = allGroupsComplete !== false
+
   return R32_MATCHES.map(m => ({
     matchNum: m.matchNum,
     teamA:  resolveSlot(m.slotA, m.matchNum),
     teamB:  resolveSlot(m.slotB, m.matchNum),
-    labelA: slotDisplayLabel(m.slotA, m.matchNum, thirdSlots),
-    labelB: slotDisplayLabel(m.slotB, m.matchNum, thirdSlots),
+    labelA: slotDisplayLabel(m.slotA, m.matchNum, thirdSlots, groupsComplete),
+    labelB: slotDisplayLabel(m.slotB, m.matchNum, thirdSlots, groupsComplete),
   }))
 }
 
