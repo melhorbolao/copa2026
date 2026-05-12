@@ -33,6 +33,56 @@ function emptyPicks(): Picks {
 
 // ── Lógica de picks ───────────────────────────────────────────────────────────
 
+/**
+ * Sanitiza picks vindos do localStorage contra os r32Slots atuais. Sem isso,
+ * picks de Oitavas/Quartas/Semi/Final salvos quando o bracket estava
+ * preenchido indevidamente (fallback alfabético — corrigido em #47) ficam
+ * presos no localStorage para sempre, mesmo depois do bracket ficar vazio.
+ *
+ * Regras:
+ *  - r32[i]: só sobrevive se for o time A OU B do slot i atual; senão null.
+ *  - r16/qf/sf/final/third: só sobrevivem se o pick vier de um pick válido na
+ *    rodada anterior; senão null. Cascade descendente automática.
+ */
+function sanitizePicks(picks: Picks, r32Slots: R32Slot[]): Picks {
+  const r32 = picks.r32.map((p, i) => {
+    if (!p) return null
+    const slot = r32Slots[i]
+    if (!slot) return null
+    if (slot.teamA?.team === p || slot.teamB?.team === p) return p
+    return null
+  })
+  const r16 = picks.r16.map((p, i) => {
+    if (!p) return null
+    const a = r32[i * 2], b = r32[i * 2 + 1]
+    return p === a || p === b ? p : null
+  })
+  const qf = picks.qf.map((p, i) => {
+    if (!p) return null
+    const a = r16[i * 2], b = r16[i * 2 + 1]
+    return p === a || p === b ? p : null
+  })
+  const sf = picks.sf.map((p, i) => {
+    if (!p) return null
+    const a = qf[i * 2], b = qf[i * 2 + 1]
+    return p === a || p === b ? p : null
+  })
+  const final = picks.final && (picks.final === sf[0] || picks.final === sf[1]) ? picks.final : null
+  // third = perdedor da SF: pode ser o "outro" do par QF.
+  const thirdValid = (() => {
+    if (!picks.third) return false
+    for (let i = 0; i < 2; i++) {
+      const a = qf[i * 2], b = qf[i * 2 + 1]
+      const sfi = sf[i]
+      if (!sfi) continue
+      const loser = sfi === a ? b : sfi === b ? a : null
+      if (loser && picks.third === loser) return true
+    }
+    return false
+  })()
+  return { r32, r16, qf, sf, final, third: thirdValid ? picks.third : null }
+}
+
 function makePick(picks: Picks, round: string, idx: number, team: string): Picks {
   const n: Picks = {
     r32: [...picks.r32], r16: [...picks.r16],
@@ -101,7 +151,12 @@ function buildFlagMap(r32Slots: R32Slot[]): Map<string, string> {
 // ── Componente principal ──────────────────────────────────────────────────────
 
 export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: Props) {
-  const storageKey = `bracket_v2_${userId}`
+  // v3: bump após #47. Invalida picks salvos quando o R32 vinha preenchido
+  // indevidamente (fallback alfabético) — esses picks descendentes ficavam
+  // presos no localStorage mesmo depois do R32 ficar vazio. Limpeza imediata
+  // do v2 antigo no carregamento.
+  const storageKey = `bracket_v3_${userId}`
+  const legacyKey  = `bracket_v2_${userId}`
 
   const [picks,   setPicks]   = useState<Picks>(emptyPicks)
   const [mounted, setMounted] = useState(false)
@@ -109,10 +164,15 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
   useEffect(() => {
     setMounted(true)
     try {
+      // Remove o snapshot antigo (v2) — picks pré-#47 não são confiáveis.
+      localStorage.removeItem(legacyKey)
       const raw = localStorage.getItem(storageKey)
-      if (raw) setPicks(JSON.parse(raw))
+      if (raw) {
+        const parsed = JSON.parse(raw) as Picks
+        setPicks(sanitizePicks(parsed, r32Slots))
+      }
     } catch { /* ignore */ }
-  }, [storageKey])
+  }, [storageKey, legacyKey, r32Slots])
 
   useEffect(() => {
     if (!mounted) return
