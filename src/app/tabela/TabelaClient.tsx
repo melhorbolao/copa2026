@@ -10,7 +10,7 @@ import {
   buildR32Teams,
   findAnnexeCOption,
 } from '@/lib/bracket/engine'
-import type { CalcGroupStanding } from '@/lib/bracket/engine'
+import type { CalcGroupStanding, ThirdTeam } from '@/lib/bracket/engine'
 
 const GROUP_ORDER = ['A','B','C','D','E','F','G','H','I','J','K','L']
 
@@ -232,21 +232,36 @@ function MataMataView({
     return groupsFilled === 12 && thirdsFilled === 8
   }, [localGroupBets, localThirdBets])
 
-  // Aplica palpites de terceiro ao array de thirds — substitui o time calculado pelo apostado
-  const thirdsForBracket = useMemo(() => {
-    if (mode !== 'from-classificados') return thirds
-    return thirds.map(t => {
-      const betTeam = localThirdBets[t.group]?.team
-      if (!betTeam || betTeam === t.team) return t
-      const flag = effectiveStandings
-        .find(s => s.group === t.group)
-        ?.teams.find(tm => tm.team === betTeam)?.flag ?? t.flag
-      return { ...t, team: betTeam, flag }
-    })
-  }, [thirds, localThirdBets, effectiveStandings, mode])
-
   // Slots do R32 conforme o mode escolhido
   const completeGroupsSet = useMemo(() => new Set(userCompleteGroups), [userCompleteGroups])
+
+  // Para o modo "from-classificados", os 8 grupos cujos terceiros avançam vêm
+  // dos PALPITES do usuário (localThirdBets), não da ordenação por pontos.
+  // Construímos um array ThirdTeam sintético com advances=true apenas nesses
+  // 8 grupos, para que resolveThirdSlots aplique o Anexo C corretamente.
+  const findFlag = useCallback((group: string, teamName: string): string => {
+    const s = effectiveStandings.find(st => st.group === group)
+    return s?.teams.find(t => t.team === teamName)?.flag ?? ''
+  }, [effectiveStandings])
+
+  const classificadosThirds = useMemo<ThirdTeam[]>(() => {
+    return GROUP_ORDER.map((g, idx) => {
+      const bet = localThirdBets[g]
+      const team = bet?.team ?? ''
+      return {
+        team,
+        flag: team ? findFlag(g, team) : '',
+        gp: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, gd: 0, pts: 0,
+        group: g, rank: idx + 1,
+        advances: !!team,
+      }
+    })
+  }, [localThirdBets, findFlag])
+
+  const classificadosThirdSlots = useMemo(
+    () => resolveThirdSlots(classificadosThirds),
+    [classificadosThirds],
+  )
 
   const r32Slots = useMemo(() => {
     if (mode === 'empty') {
@@ -255,12 +270,16 @@ function MataMataView({
     }
     if (mode === 'from-jogos') {
       // Usa effectiveStandings (palpites de placar) sem override de classificados.
+      // thirds/thirdSlots derivam dos pontos calculados — Anexo C aplicado
+      // sobre os 8 melhores terceiros por pontuação.
       return buildR32Teams(
         effectiveStandings, thirds, thirdSlots, undefined,
         completeGroupsSet, userAllGroupsComplete,
       )
     }
-    // mode === 'from-classificados': monta override com 1º/2º palpitados.
+    // mode === 'from-classificados': monta override com 1º/2º palpitados,
+    // e usa os terceiros sintéticos (apenas os 8 grupos palpitados avançam)
+    // para que o Anexo C posicione corretamente cada terceiro nos slots do R32.
     const merged = new Map<string, { first_place: string; second_place: string }>()
     for (const standing of effectiveStandings) {
       const formal = localGroupBets[standing.group]
@@ -268,14 +287,13 @@ function MataMataView({
         merged.set(standing.group, formal)
       }
     }
-    // Aqui, all-groups-complete é "true" do ponto de vista de palpite formal —
-    // os 12 group_bets já foram conferidos pelo canFromClassificados.
     return buildR32Teams(
-      effectiveStandings, thirdsForBracket, thirdSlots, merged,
+      effectiveStandings, classificadosThirds, classificadosThirdSlots, merged,
       new Set(GROUP_ORDER), true,
     )
   }, [
-    mode, effectiveStandings, thirds, thirdSlots, thirdsForBracket,
+    mode, effectiveStandings, thirds, thirdSlots,
+    classificadosThirds, classificadosThirdSlots,
     localGroupBets, completeGroupsSet, userAllGroupsComplete,
   ])
 
