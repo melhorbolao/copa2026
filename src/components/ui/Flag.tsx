@@ -5,7 +5,7 @@ interface FlagProps {
   code: string
   /** Nome da seleção (acessibilidade). */
   name?: string
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'xs' | 'sm' | 'md' | 'lg'
   className?: string
   title?: string
 }
@@ -17,7 +17,12 @@ const SPRITE_ROWS   = positions.rows
 const SPRITE_W = SPRITE_COLS * SPRITE_TILE_W
 const SPRITE_H = SPRITE_ROWS * SPRITE_TILE_H
 
+// Tamanhos em proporção 4:3 (mesma proporção dos tiles do sprite). Se você
+// quiser uma bandeira menor que `sm` no bracket, use `xs` — NÃO sobrescreva
+// width/height via className/!important, pois o backgroundSize do sprite é
+// calculado a partir do width fixado aqui e descasaria, recortando o tile.
 const sizes = {
+  xs: { width: 16, height: 12 },
   sm: { width: 20, height: 15 },
   md: { width: 32, height: 24 },
   lg: { width: 48, height: 36 },

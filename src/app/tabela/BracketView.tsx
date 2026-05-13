@@ -348,7 +348,7 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
             <div style={{ position: 'absolute', left: COL_STEP * 4, top: finalTop - 34, width: MATCH_W }}
               className="flex items-center justify-center gap-1 rounded-lg bg-amarelo-100 px-2 py-1"
             >
-              <Flag code={flagMap.get(picks.final) ?? ''} size="sm" className="!h-2.5 !w-3.5 shrink-0" />
+              <Flag code={flagMap.get(picks.final) ?? ''} size="xs" className="shrink-0"/>
               <span className="text-[11px] font-black text-amarelo-800">{picks.final}</span>
               <span className="text-[10px]">🏆</span>
             </div>
@@ -500,7 +500,7 @@ function TeamSlot({
     >
       {team ? (
         <>
-          <Flag code={team.flag} size="sm" className="!h-2.5 !w-3.5 shrink-0" />
+          <Flag code={team.flag} size="xs" className="shrink-0"/>
           <span className="min-w-0 flex-1 truncate">{team.team}</span>
           {posLabel && <span className="hidden sm:inline shrink-0 text-[9px] font-medium text-gray-400">{posLabel}</span>}
           {isWinner && <span className="ml-auto shrink-0 text-[10px] text-verde-500">✓</span>}
