@@ -157,10 +157,17 @@ export function PalpitesContent(props: PalpitesContentProps) {
 // aba Palpites). Misturar via early-return causaria "Rendered fewer
 // hooks than expected" ao alternar de aba.
 function PalpitesContentInner(props: PalpitesContentProps) {
-  const sp  = useSearchParams()
-  const tab = sp.get('tab') === 'tabela' ? 'tabela' : 'palpites'
+  const sp = useSearchParams()
+  const raw = sp.get('tab')
+  // Compat: tab=tabela legado → Minha Classificação (mesmo conteúdo de grupos)
+  const tab: 'palpites' | 'classificacao' | 'mata-mata' =
+    raw === 'mata-mata'         ? 'mata-mata' :
+    raw === 'classificacao'     ? 'classificacao' :
+    raw === 'tabela'            ? 'classificacao' :
+                                  'palpites'
 
-  if (tab === 'tabela') return <TabelaTabPane {...props} />
+  if (tab === 'classificacao') return <TabelaTabPane {...props} view="classificacao" />
+  if (tab === 'mata-mata')     return <TabelaTabPane {...props} view="mata-mata" />
   return <PalpitesTabPane {...props} />
 }
 
@@ -169,35 +176,45 @@ function TabelaTabPane({
   g4Deadline, hasTournamentBet, groupAllBetsFilled,
   filledBets, totalGroupMatches,
   userCompleteGroups, userAllGroupsComplete,
-}: PalpitesContentProps) {
+  view,
+}: PalpitesContentProps & { view: 'classificacao' | 'mata-mata' }) {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
-      <PageHeader activeTab="tabela" />
+      <PageHeader activeTab={view} />
 
-      <div className="mb-4 mt-4">
-        <p className="text-sm text-gray-500">
-          Calculada com base em Meus Palpites
-        </p>
-        <div className="mt-3 flex items-center gap-3">
-          <div className="flex-1 overflow-hidden rounded-full bg-gray-200 h-2">
-            <div
-              className="h-2 rounded-full bg-verde-600 transition-all"
-              style={{ width: `${totalGroupMatches > 0 ? (filledBets / totalGroupMatches) * 100 : 0}%` }}
-            />
-          </div>
-          <span className="text-xs text-gray-500 whitespace-nowrap">
-            {filledBets}/{totalGroupMatches} palpites
-          </span>
-        </div>
-        {filledBets < totalGroupMatches && (
-          <p className="mt-2 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 border border-amber-200">
-            ⚠️ Partidas sem palpite não são contabilizadas na classificação.{' '}
-            <Link href="/palpites" className="font-semibold underline">Complete seus palpites →</Link>
+      {view === 'classificacao' && (
+        <div className="mb-4 mt-4">
+          <p className="text-sm text-gray-500">
+            Calculada com base em Meus Palpites
           </p>
-        )}
-      </div>
+          <div className="mt-3 flex items-center gap-3">
+            <div className="flex-1 overflow-hidden rounded-full bg-gray-200 h-2">
+              <div
+                className="h-2 rounded-full bg-verde-600 transition-all"
+                style={{ width: `${totalGroupMatches > 0 ? (filledBets / totalGroupMatches) * 100 : 0}%` }}
+              />
+            </div>
+            <span className="text-xs text-gray-500 whitespace-nowrap">
+              {filledBets}/{totalGroupMatches} palpites
+            </span>
+          </div>
+          {filledBets < totalGroupMatches && (
+            <p className="mt-2 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 border border-amber-200">
+              ⚠️ Partidas sem palpite não são contabilizadas na classificação.{' '}
+              <Link href="/palpites" className="font-semibold underline">Complete seus palpites →</Link>
+            </p>
+          )}
+        </div>
+      )}
+
+      {view === 'mata-mata' && (
+        <div className="mb-4 mt-4 text-sm text-gray-500">
+          Monte seu chaveamento do mata-mata e marque os vencedores de cada confronto.
+        </div>
+      )}
 
       <TabelaClient
+        view={view}
         standings={calculatedStandings}
         groupBetsOverride={groupBetsOverride}
         thirdBetsOverride={thirdBetsOverride}
@@ -487,7 +504,7 @@ function PalpitesTabPane({
 
               <div className="mt-2 text-center">
                 <Link
-                  href="/palpites?tab=tabela"
+                  href="/palpites?tab=classificacao"
                   className="inline-flex items-center gap-1.5 text-sm font-medium text-azul-escuro hover:underline"
                 >
                   📊 Veja aqui a classificação com base nos seus palpites
@@ -501,13 +518,14 @@ function PalpitesTabPane({
   )
 }
 
-function PageHeader({ activeTab }: { activeTab: 'palpites' | 'tabela' }) {
+function PageHeader({ activeTab }: { activeTab: 'palpites' | 'classificacao' | 'mata-mata' }) {
   return (
     <div>
       <h1 className="text-2xl font-black text-gray-900">Meus Palpites</h1>
-      <div className="mt-3 flex gap-1 border-b border-gray-200">
-        <TabLink href="/palpites" label="Meus Palpites" active={activeTab === 'palpites'} />
-        <TabLink href="/palpites?tab=tabela" label="Minha Tabela" active={activeTab === 'tabela'} />
+      <div className="mt-3 flex gap-1 border-b border-gray-200 overflow-x-auto">
+        <TabLink href="/palpites"                       label="Meus Palpites"      active={activeTab === 'palpites'} />
+        <TabLink href="/palpites?tab=classificacao"     label="Minha Classificação" active={activeTab === 'classificacao'} />
+        <TabLink href="/palpites?tab=mata-mata"         label="Meu Mata-Mata"      active={activeTab === 'mata-mata'} />
       </div>
     </div>
   )
