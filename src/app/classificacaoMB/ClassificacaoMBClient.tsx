@@ -1,6 +1,12 @@
 'use client'
 
 import { memo, useMemo } from 'react'
+import {
+  useSobeDesce,
+  SobeDesceSelector,
+  EvoCell,
+  DeltaPtsCell,
+} from './SobeDesce'
 
 interface ParticipantRow {
   id: string
@@ -37,6 +43,10 @@ interface Props {
   renderedAt: string
   matchesRegistered: number
   groupsDefined: number
+  /** ISO date (YYYY-MM-DD) do jogo mais recente com resultado */
+  lastResultDate: string | null
+  /** ISO date (YYYY-MM-DD) do primeiro jogo da fase atual */
+  currentPhaseStartDate: string | null
 }
 
 type RankedRow = ParticipantRow & { rank: number; diffLider: number; diffPremio: number | null; diffCorte: number | null }
@@ -235,6 +245,7 @@ export function ClassificacaoMBClient({
   eliminatedTeams, eliminatedStdScorers,
   scorerMapping, teamAbbrs, prizeSpots, premioSpots,
   activeParticipantId, colVisibility, renderedAt, matchesRegistered, groupsDefined,
+  lastResultDate, currentPhaseStartDate,
 }: Props) {
   const elTeams = useMemo(() => new Set(eliminatedTeams), [eliminatedTeams])
   const elStd   = useMemo(() => new Set(eliminatedStdScorers), [eliminatedStdScorers])
@@ -285,6 +296,19 @@ export function ClassificacaoMBClient({
     return { ranked: out, cutPts: cut, premioCutPts: premioCut, lastRank: lastRankVal, isUniqueLast: isUniqueLastVal, premioLine: premioLineVal, cut2Line: cut2LineVal, cut1Line: cut1LineVal }
   }, [rows, prizeSpots, premioSpots])
 
+  // ── Sobe e Desce ───────────────────────────────────────────────────────────
+  const rankedRowsForSD = useMemo(
+    () => ranked.map(r => ({ id: r.id, pts: r.pts, rank: r.rank })),
+    [ranked],
+  )
+  const {
+    mode: sdMode, setMode: setSdMode,
+    customFrom: sdCustomFrom, setCustomFrom: setSdCustomFrom,
+    deltaMap, loading: sdLoading,
+    highlights, refDateLabel, hasData: sdHasData,
+  } = useSobeDesce({ lastResultDate, currentPhaseStartDate, rankedRows: rankedRowsForSD })
+  const sdActive = sdMode !== 'hidden'
+
   function zoneOf(r: RankedRow): Zone {
     if (isUniqueLast && r.rank === lastRank)       return 'last'
     if (r.pts >= premioLine)                      return 'premio'
@@ -307,6 +331,19 @@ export function ClassificacaoMBClient({
 
   return (
     <div className="mx-auto max-w-full px-2 py-4 pb-32 sm:px-4 sm:py-6">
+
+      {/* Sobe e Desce — seletor de modo */}
+      <SobeDesceSelector
+        mode={sdMode}
+        setMode={setSdMode}
+        customFrom={sdCustomFrom}
+        setCustomFrom={setSdCustomFrom}
+        loading={sdLoading}
+        refDateLabel={refDateLabel}
+        hasData={sdHasData}
+        lastResultDate={lastResultDate}
+        currentPhaseStartDate={currentPhaseStartDate}
+      />
 
       <CompactRanking
         ranked={ranked}
@@ -335,8 +372,19 @@ export function ClassificacaoMBClient({
 
                 {/* Identidade */}
                 <th className="px-1.5 py-2 text-left w-8">#</th>
+
+                {/* Sobe e Desce — evolução de posição */}
+                {sdActive && (
+                  <th className="px-1.5 py-2 text-center w-9" title="Evolução de posições no período">↑↓</th>
+                )}
+
                 <th className="px-1.5 py-2 text-left min-w-[90px]">Participante</th>
                 <th className="px-1.5 py-2 text-right w-10" title="Pontuação total">Pts</th>
+
+                {/* Sobe e Desce — pontos na janela */}
+                {sdActive && (
+                  <th className="px-1.5 py-2 text-center w-12" title="Pontos conquistados no período">Pts↗</th>
+                )}
 
                 {/* Último / Próximo jogo */}
                 {showLastMatch && (
@@ -383,7 +431,7 @@ export function ClassificacaoMBClient({
             <tbody>
               {ranked.length === 0 && (
                 <tr>
-                  <td colSpan={22} className="py-12 text-center text-sm text-gray-400">
+                  <td colSpan={99} className="py-12 text-center text-sm text-gray-400">
                     Nenhum participante cadastrado ainda.
                   </td>
                 </tr>
@@ -415,14 +463,50 @@ export function ClassificacaoMBClient({
                       {row.rank}
                       {boundary && <span className={`ml-0.5 ${z === 'last' ? 'text-white' : 'text-amber-500'}`} title="Empate no corte">⚠</span>}
                     </td>
+
+                    {/* Sobe e Desce — evolução de posição */}
+                    {sdActive && (
+                      <td className="px-1.5 py-1 text-center">
+                        <EvoCell
+                          delta={deltaMap?.get(row.id)}
+                          isMaxUp={highlights.maxUpId === row.id}
+                          isMaxDown={highlights.maxDownId === row.id}
+                        />
+                      </td>
+                    )}
+
                     <td className={`px-1.5 py-1 max-w-[120px] truncate ${z === 'last' ? 'text-white' : 'text-gray-900'}`}>
                       {row.apelido}
                       {z === 'last' && <span className="ml-1 text-[11px]">🔦</span>}
                       {isActive && <span className={`ml-1 text-[10px] ${z === 'last' ? 'text-white' : 'text-verde-600'}`}>◀</span>}
+                      {/* Destaques Sobe e Desce */}
+                      {sdActive && highlights.maxUpId === row.id && (
+                        <span className="ml-1 rounded bg-verde-100 px-0.5 text-[9px] font-bold text-verde-700" title="Maior subida do período">🚀 Escalador</span>
+                      )}
+                      {sdActive && highlights.maxDownId === row.id && (
+                        <span className="ml-1 rounded bg-red-100 px-0.5 text-[9px] font-bold text-red-600" title="Maior queda do período">📉 Queda Livre</span>
+                      )}
+                      {sdActive && highlights.maxPtsId === row.id && (
+                        <span className="ml-1 rounded bg-amber-100 px-0.5 text-[9px] font-bold text-amber-700" title="Maior pontuação do período">🔥</span>
+                      )}
+                      {sdActive && highlights.minPtsId === row.id && (
+                        <span className="ml-1 rounded bg-gray-100 px-0.5 text-[9px] font-medium text-gray-500" title="Menor pontuação do período">🥶</span>
+                      )}
                     </td>
                     <td className={`px-1.5 py-1 text-right font-mono font-bold tabular-nums ${z === 'last' ? 'text-white' : 'text-gray-900'}`}>
                       {row.pts}
                     </td>
+
+                    {/* Sobe e Desce — pontos conquistados na janela */}
+                    {sdActive && (
+                      <td className="px-1.5 py-1 text-center">
+                        <DeltaPtsCell
+                          delta={deltaMap?.get(row.id)}
+                          isMaxPts={highlights.maxPtsId === row.id}
+                          isMinPts={highlights.minPtsId === row.id}
+                        />
+                      </td>
+                    )}
 
                     {/* Último / Próximo */}
                     {showLastMatch && (

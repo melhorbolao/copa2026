@@ -335,6 +335,29 @@ export default async function ClassificacaoMBPage() {
 
   const abbr = (team: string) => teamAbbrs[team] ?? team.slice(0, 3).toUpperCase()
 
+  // ── Datas para "Sobe e Desce" ─────────────────────────────────────────────
+  const toBRDate = (isoStr: string) =>
+    new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date(isoStr))
+
+  // Data do resultado mais recente (para modo "Último dia")
+  const lastResultDate = completedMatches.length > 0
+    ? toBRDate(completedMatches[completedMatches.length - 1].match_datetime)
+    : null
+
+  // Fase mais avançada com resultados (para modo "Rodada em andamento")
+  const PHASE_ORDER = ['group', 'round_of_32', 'round_of_16', 'quarterfinal', 'semifinal', 'third_place', 'final']
+  const phasesWithResults = new Set(completedMatches.map(m => m.phase))
+  let currentPhase = completedMatches.length > 0 ? completedMatches[completedMatches.length - 1].phase : null
+  for (const ph of PHASE_ORDER) {
+    if (phasesWithResults.has(ph)) currentPhase = ph
+  }
+  const currentPhaseMatches = currentPhase
+    ? completedMatches.filter(m => m.phase === currentPhase)
+    : []
+  const currentPhaseStartDate = currentPhaseMatches.length > 0
+    ? toBRDate(currentPhaseMatches[0].match_datetime) // já ordenado por match_datetime asc
+    : null
+
   return (
     <>
       <Navbar />
@@ -361,6 +384,8 @@ export default async function ClassificacaoMBPage() {
         renderedAt={new Date().toISOString()}
         matchesRegistered={matchesRegistered}
         groupsDefined={groupsDefined}
+        lastResultDate={lastResultDate}
+        currentPhaseStartDate={currentPhaseStartDate}
       />
     </>
   )
