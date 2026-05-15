@@ -522,7 +522,7 @@ function PageHeader({ activeTab }: { activeTab: 'palpites' | 'classificacao' | '
   return (
     <div>
       <h1 className="text-2xl font-black text-gray-900">Meus Palpites</h1>
-      <div className="mt-3 flex gap-1 border-b border-gray-200 overflow-x-auto">
+      <div className="mt-3 flex gap-1 border-b border-gray-200 overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         <TabLink href="/palpites"                       label="Meus Palpites"      active={activeTab === 'palpites'} />
         <TabLink href="/palpites?tab=classificacao"     label="Minha Classificação" active={activeTab === 'classificacao'} />
         <TabLink href="/palpites?tab=mata-mata"         label="Meu Mata-Mata"      active={activeTab === 'mata-mata'} />

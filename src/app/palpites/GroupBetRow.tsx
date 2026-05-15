@@ -8,14 +8,14 @@ import { useThirdPlace } from './ThirdPlaceContext'
 
 interface Team { team: string; flag: string }
 
-const CONFLICT_TITLE = 'Alerta informativo: o palpite de classificado(s) está divergente da classificação decorrente dos palpites dos jogos. A regra do Melhor Bolão permite essa "incoerência".'
+const CONFLICT_TITLE = 'Informativo: o palpite de classificado(s) está divergente da classificação decorrente dos palpites dos jogos. A regra do Melhor Bolão permite essa divergência.'
 
 function ConflictDot() {
   return (
     <span
       title={CONFLICT_TITLE}
-      className="ml-1 inline-flex h-4 w-4 shrink-0 cursor-help items-center justify-center rounded-full bg-red-500 text-[10px] font-black text-white"
-    >!</span>
+      className="ml-1 inline-flex h-3.5 w-3.5 shrink-0 cursor-help items-center justify-center rounded-full border border-amber-400 bg-amber-50 text-[9px] font-bold text-amber-600"
+    >i</span>
   )
 }
 
