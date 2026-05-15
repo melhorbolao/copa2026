@@ -3,6 +3,42 @@ import ExcelJS from 'exceljs'
 import { toZonedTime } from 'date-fns-tz'
 type AnySupabase = any
 
+// ── Workbook-level structure protection (ExcelJS doesn't expose this natively) ─
+
+/**
+ * Legacy XOR hash used by Excel for workbook/sheet password attributes.
+ * Reference: ECMA-376 §18.2.29 / openpyxl implementation.
+ */
+function hashXor(password: string): string {
+  const bytes = [...password].map(c => c.charCodeAt(0))
+  const ror15 = (v: number) => ((v >> 14) & 1) | ((v << 1) & 0x7FFF)
+  let key = 0
+  for (let i = bytes.length - 1; i >= 0; i--) key = ror15(key) ^ bytes[i]
+  key = ror15(key) ^ (bytes.length + 0x8000) ^ 0xCE4B
+  return key.toString(16).toUpperCase().padStart(4, '0')
+}
+
+/**
+ * Post-processes an xlsx buffer to inject <workbookProtection lockStructure="1"/>
+ * into xl/workbook.xml, preventing users from adding / deleting / moving sheets.
+ */
+async function addWorkbookProtection(raw: Buffer, password: string): Promise<Buffer> {
+  // jszip is a direct dependency of exceljs and is available in node_modules
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const JSZip = require('jszip') as typeof import('jszip')
+  const zip = await JSZip.loadAsync(raw)
+  const wbFile = zip.file('xl/workbook.xml')
+  if (!wbFile) return raw
+  const wbXml = await wbFile.async('string')
+  const pwdHash = hashXor(password)
+  const tag = `<workbookProtection workbookPassword="${pwdHash}" lockStructure="1"/>`
+  const modified = wbXml.includes('<workbookProtection')
+    ? wbXml  // already present — leave as-is
+    : wbXml.replace('</workbook>', `${tag}</workbook>`)
+  zip.file('xl/workbook.xml', modified)
+  return Buffer.from(await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }))
+}
+
 // Colunas
 const COL_KEY    = 1
 const COL_VAL_A  = 7
@@ -417,6 +453,7 @@ export async function buildPalpitesBuffer(
     sort: false, autoFilter: false,
   })
 
-  const buffer = Buffer.from(await wb.xlsx.writeBuffer())
+  const rawBuffer = Buffer.from(await wb.xlsx.writeBuffer())
+  const buffer = await addWorkbookProtection(rawBuffer, sheetPassword)
   return { buffer, displayName, fileName }
 }

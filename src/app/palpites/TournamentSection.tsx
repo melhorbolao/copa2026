@@ -2,7 +2,6 @@
 
 import { useTransition, useState, useEffect, useRef } from 'react'
 import { saveTournamentBet } from './actions'
-import { Combobox } from '@/components/ui/Combobox'
 import { isDeadlinePassed, formatBrasilia } from '@/utils/date'
 import type { TournamentBetBreakdown } from '@/lib/scoring/engine'
 
@@ -177,12 +176,18 @@ export function TournamentSection({ allTeams, deadline, existingBet, scorerMappi
                   <span>{label}{hasConflict && ' ⚠️'}</span>
                   {liveBreakdown && form[field] && <ScoreBadge pts={pts} compact />}
                 </label>
-                <Combobox
+                <select
                   value={form[field] as string}
-                  onChange={v => handleSelect(field, v)}
-                  options={teams.map(t => ({ value: t.team, label: t.team, disabled: others.includes(t.team) }))}
-                  className={`w-full ${hasConflict ? 'ring-1 ring-red-400 rounded' : ''}`}
-                />
+                  onChange={e => handleSelect(field, e.target.value)}
+                  className={`w-full rounded border border-gray-200 bg-white py-1.5 pl-1.5 pr-5 text-xs focus:border-verde-400 focus:outline-none${hasConflict ? ' ring-1 ring-red-400' : ''}`}
+                >
+                  <option value="">— selecione —</option>
+                  {teams.map(t => (
+                    <option key={t.team} value={t.team} disabled={others.includes(t.team)}>
+                      {t.team}
+                    </option>
+                  ))}
+                </select>
               </div>
             )
           })}
