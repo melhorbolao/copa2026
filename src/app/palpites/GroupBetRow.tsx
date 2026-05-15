@@ -103,7 +103,6 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
 
   return (
     <tr
-      style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 80px' }}
       className="border-b border-gray-100 bg-blue-50/30 hover:bg-blue-50/50"
     >
       <td colSpan={7} className="px-2 py-2 sm:px-3">
@@ -122,7 +121,7 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
             <div className="hidden sm:flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
               {teams.map(t => (
                 <span key={t.team} className="flex items-center gap-1 whitespace-nowrap text-xs text-gray-600">
-                  <Flag code={t.flag} size="sm" className="!h-3 !w-4 shrink-0" />
+                  <Flag code={t.flag} size="xs" className="shrink-0" />
                   <span>{t.team}</span>
                 </span>
               ))}
@@ -130,7 +129,7 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
             {/* Mobile: só bandeiras */}
             <div className="flex sm:hidden min-w-0 flex-1 flex-wrap items-center gap-1">
               {teams.map(t => (
-                <Flag key={t.team} code={t.flag} size="sm" className="!h-3 !w-4 shrink-0" title={t.team} />
+                <Flag key={t.team} code={t.flag} size="xs" className="shrink-0" title={t.team} />
               ))}
             </div>
           </div>
