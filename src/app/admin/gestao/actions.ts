@@ -14,6 +14,18 @@ async function requireAdmin() {
 
 // ── Modo Produção ─────────────────────────────────────────────
 
+export async function setSobeDesceVisible(visible: boolean): Promise<void> {
+  await requireAdmin()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAuthAdminClient() as any
+  await admin
+    .from('tournament_settings')
+    .upsert({ key: 'sobe_desce_visible', value: String(visible) }, { onConflict: 'key' })
+
+  revalidatePath('/classificacaoMB')
+  revalidatePath('/admin/gestao')
+}
+
 export async function setProductionMode(enabled: boolean): Promise<void> {
   await requireAdmin()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

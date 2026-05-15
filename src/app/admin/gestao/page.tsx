@@ -7,11 +7,14 @@ export default async function GestaoAdminPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAuthAdminClient() as any
 
-  const [{ productionMode, releasedRounds }, phaseSettings, { data: matchesRaw }] = await Promise.all([
+  const [{ productionMode, releasedRounds }, phaseSettings, { data: matchesRaw }, sobeDesceRow] = await Promise.all([
     getVisibilitySettings(),
     getPhaseSettings(),
     admin.from('matches').select('phase, round, betting_deadline').order('match_datetime', { ascending: true }),
+    admin.from('tournament_settings').select('value').eq('key', 'sobe_desce_visible').maybeSingle(),
   ])
+  // padrão: visível (true) se a chave ainda não existir
+  const sobeDesceVisible = sobeDesceRow?.data?.value !== 'false'
 
   const availableRounds = buildAvailableRounds(matchesRaw ?? [])
 
@@ -35,6 +38,7 @@ export default async function GestaoAdminPage() {
         releasedRounds={[...releasedRounds]}
         fillableRoundKeys={fillableRoundKeys}
         availableRounds={availableRounds}
+        sobeDesceVisible={sobeDesceVisible}
       />
     </>
   )

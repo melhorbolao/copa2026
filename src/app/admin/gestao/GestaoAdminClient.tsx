@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useTransition } from 'react'
-import { setProductionMode, setRoundReleased, setRoundAvailable, clearAllBets, clearAllResults } from './actions'
+import { setProductionMode, setRoundReleased, setRoundAvailable, clearAllBets, clearAllResults, setSobeDesceVisible } from './actions'
 import type { RoundInfo } from '@/lib/production-mode'
 
 interface Props {
@@ -9,18 +9,21 @@ interface Props {
   releasedRounds: string[]
   fillableRoundKeys: string[]
   availableRounds: RoundInfo[]
+  sobeDesceVisible: boolean
 }
 
 type Msg = { type: 'ok' | 'error'; text: string }
 type ConflictState = { conflicts: string[]; file: File }
 
-export function GestaoAdminClient({ productionMode: initProdMode, releasedRounds: initReleased, fillableRoundKeys, availableRounds }: Props) {
+export function GestaoAdminClient({ productionMode: initProdMode, releasedRounds: initReleased, fillableRoundKeys, availableRounds, sobeDesceVisible: initSobeDesce }: Props) {
   const [productionMode, setMode]       = useState(initProdMode)
   const [releasedRounds, setReleased]   = useState<Set<string>>(new Set(initReleased))
   const [fillableRounds, setFillable]   = useState<Set<string>>(new Set(fillableRoundKeys))
+  const [sobeDesce, setSobeDesce]             = useState(initSobeDesce)
   const [modePending, startModeTransition]    = useTransition()
   const [roundPending, startRoundTransition]  = useTransition()
   const [fillPending, startFillTransition]    = useTransition()
+  const [sdPending, startSdTransition]        = useTransition()
 
   // ── Clear bets ────────────────────────────────────────────────
   const [confirmBets, setConfirmBets]   = useState(false)
@@ -46,6 +49,14 @@ export function GestaoAdminClient({ productionMode: initProdMode, releasedRounds
     startModeTransition(async () => {
       setMode(next)
       await setProductionMode(next)
+    })
+  }
+
+  const handleToggleSobeDesce = () => {
+    const next = !sobeDesce
+    startSdTransition(async () => {
+      setSobeDesce(next)
+      await setSobeDesceVisible(next)
     })
   }
 
@@ -187,6 +198,32 @@ export function GestaoAdminClient({ productionMode: initProdMode, releasedRounds
           </button>
         </div>
       </div>
+
+      {/* ── SOBE E DESCE VISIBILITY ── */}
+      <section>
+        <h3 className="text-sm font-semibold text-gray-900 mb-1">Sobe e Desce na Classificação</h3>
+        <p className="mb-3 text-xs text-gray-500">
+          Controla se os usuários comuns veem o painel de Sobe e Desce (evolução de posição/pontos no período).
+          O admin sempre visualiza, independente desta configuração.
+        </p>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleToggleSobeDesce}
+            disabled={sdPending}
+            title={sobeDesce ? 'Clique para ocultar dos usuários' : 'Clique para exibir aos usuários'}
+            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:cursor-not-allowed ${
+              sobeDesce ? 'bg-verde-600' : 'bg-gray-200'
+            }`}
+          >
+            <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ${sobeDesce ? 'translate-x-4' : 'translate-x-0'}`} />
+          </button>
+          <span className={`text-xs font-medium ${sobeDesce ? 'text-verde-700' : 'text-gray-500'}`}>
+            {sobeDesce ? 'Visível para todos' : 'Oculto para usuários (só admin vê)'}
+          </span>
+        </div>
+      </section>
+
+      <hr className="border-gray-100" />
 
       {/* ── ROUND RELEASE ── */}
       <section>

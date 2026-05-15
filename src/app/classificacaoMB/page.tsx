@@ -69,6 +69,7 @@ export default async function ClassificacaoMBPage() {
   let officialScorers: string[] = []
   let prizeSpots = 8
   let premioSpots = 10
+  let sobeDesceVisible = true
   const colVisibility: Record<string, boolean> = {
     premio:       false,
     last_match:   true,
@@ -98,13 +99,16 @@ export default async function ClassificacaoMBPage() {
       'classif_col_delta_premio', 'classif_col_delta_corte',
       'classif_col_pts_jg', 'classif_col_pts_cl', 'classif_col_pts_g4',
     ]
-    const [scorerRes, scorerSetting, settingsRes, premioSpotsRes, colSettingsRes] = await Promise.all([
+    const [scorerRes, scorerSetting, settingsRes, premioSpotsRes, colSettingsRes, sobeDesceRow] = await Promise.all([
       admin.from('top_scorer_mapping').select('raw_name, standardized_name, is_eliminated'),
       admin.from('tournament_settings').select('value').eq('key', 'official_top_scorer').maybeSingle(),
       admin.from('tournament_settings').select('value').eq('key', 'prize_spots').maybeSingle(),
       admin.from('tournament_settings').select('value').eq('key', 'premio_spots').maybeSingle(),
       admin.from('tournament_settings').select('key, value').in('key', COL_KEYS),
+      admin.from('tournament_settings').select('value').eq('key', 'sobe_desce_visible').maybeSingle(),
     ])
+    // padrão: visível (true) se a chave ainda não existir
+    sobeDesceVisible = sobeDesceRow?.data?.value !== 'false'
     if (scorerRes.data) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const row of scorerRes.data as any[]) {
@@ -394,6 +398,8 @@ export default async function ClassificacaoMBPage() {
         groupsDefined={groupsDefined}
         lastResultDate={lastResultDate}
         currentPhaseStartDate={currentPhaseStartDate}
+        sobeDesceVisible={sobeDesceVisible}
+        isAdmin={isAdmin}
       />
     </>
   )

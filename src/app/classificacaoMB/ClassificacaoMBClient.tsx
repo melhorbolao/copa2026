@@ -49,6 +49,9 @@ interface Props {
   lastResultDate: string | null
   /** ISO date (YYYY-MM-DD) do primeiro jogo da fase atual */
   currentPhaseStartDate: string | null
+  /** Controle admin: se false, usuários comuns não veem o Sobe e Desce */
+  sobeDesceVisible: boolean
+  isAdmin: boolean
 }
 
 type RankedRow = ParticipantRow & { rank: number; diffLider: number; diffPremio: number | null; diffCorte: number | null }
@@ -187,8 +190,8 @@ function CompactRanking({
   }
 
   const colsGrid  = sdActive
-    ? 'grid-cols-[1.4rem_1.6rem_1fr_2.2rem_2.5rem]'
-    : 'grid-cols-[1.5rem_1fr_2rem]'
+    ? 'grid grid-cols-[1.4rem_1.6rem_1fr_2.2rem_2.5rem]'
+    : 'grid grid-cols-[1.5rem_1fr_2rem]'
   const minW = sdActive ? 600 : 480
 
   const blockSize = Math.ceil(n / 4)
@@ -315,6 +318,7 @@ export function ClassificacaoMBClient({
   scorerMapping, teamAbbrs, prizeSpots, premioSpots,
   activeParticipantId, colVisibility, renderedAt, matchesRegistered, groupsDefined,
   lastResultDate, currentPhaseStartDate,
+  sobeDesceVisible, isAdmin,
 }: Props) {
   const elTeams = useMemo(() => new Set(eliminatedTeams), [eliminatedTeams])
   const elStd   = useMemo(() => new Set(eliminatedStdScorers), [eliminatedStdScorers])
@@ -377,7 +381,9 @@ export function ClassificacaoMBClient({
     deltaMap, loading: sdLoading,
     highlights, refDateLabel, refToDateLabel, hasData: sdHasData,
   } = useSobeDesce({ lastResultDate, currentPhaseStartDate, rankedRows: rankedRowsForSD })
-  const sdActive = sdMode !== 'hidden'
+  // Usuários comuns só veem se o admin habilitou; admins sempre veem
+  const sdAllowed = sobeDesceVisible || isAdmin
+  const sdActive = sdAllowed && sdMode !== 'hidden'
 
   function zoneOf(r: RankedRow): Zone {
     if (isUniqueLast && r.rank === lastRank)       return 'last'
@@ -402,21 +408,23 @@ export function ClassificacaoMBClient({
   return (
     <div className="mx-auto max-w-full px-2 py-4 pb-32 sm:px-4 sm:py-6">
 
-      {/* Sobe e Desce — seletor de modo */}
-      <SobeDesceSelector
-        mode={sdMode}
-        setMode={setSdMode}
-        customFrom={sdCustomFrom}
-        setCustomFrom={setSdCustomFrom}
-        customTo={sdCustomTo}
-        setCustomTo={setSdCustomTo}
-        loading={sdLoading}
-        refDateLabel={refDateLabel}
-        refToDateLabel={refToDateLabel}
-        hasData={sdHasData}
-        lastResultDate={lastResultDate}
-        currentPhaseStartDate={currentPhaseStartDate}
-      />
+      {/* Sobe e Desce — seletor de modo (oculto para usuários quando admin desabilitou) */}
+      {sdAllowed && (
+        <SobeDesceSelector
+          mode={sdMode}
+          setMode={setSdMode}
+          customFrom={sdCustomFrom}
+          setCustomFrom={setSdCustomFrom}
+          customTo={sdCustomTo}
+          setCustomTo={setSdCustomTo}
+          loading={sdLoading}
+          refDateLabel={refDateLabel}
+          refToDateLabel={refToDateLabel}
+          hasData={sdHasData}
+          lastResultDate={lastResultDate}
+          currentPhaseStartDate={currentPhaseStartDate}
+        />
+      )}
 
       {/* Classificação Melhor Bolão — tabela compacta com Sobe e Desce */}
       <CompactRanking
