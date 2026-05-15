@@ -1,0 +1,206 @@
+export const dynamic = 'force-dynamic'
+
+import { redirect } from 'next/navigation'
+import { createClient, createAuthAdminClient } from '@/lib/supabase/server'
+import { getActiveParticipantId } from '@/lib/participant'
+import { requirePageAccess } from '@/lib/page-visibility'
+import { Navbar } from '@/components/layout/Navbar'
+import { ComparadorClient } from './ComparadorClient'
+import { getMatchResult, detectMatchZebra } from '@/lib/scoring/engine'
+import type { MatchInfo, FlatBet, ColPop } from './engine'
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function groupBy<T>(arr: T[], key: (item: T) => string): Record<string, T[]> {
+  const out: Record<string, T[]> = {}
+  for (const item of arr) {
+    const k = key(item)
+    ;(out[k] ??= []).push(item)
+  }
+  return out
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
+export default async function ComparadorPage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('users').select('is_admin').eq('id', user.id).single()
+  const isAdmin = profile?.is_admin ?? false
+  await requirePageAccess('comparador', isAdmin)
+
+  const participantId = await getActiveParticipantId(supabase, user.id).catch(() => null)
+  if (!participantId) redirect('/aguardando-aprovacao')
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAuthAdminClient() as any
+
+  // ── Parallel data load ────────────────────────────────────────────────────
+  const [
+    participantsRes,
+    matchesRes,
+    allBetsRes,
+    allGroupBetsRes,
+    allThirdBetsRes,
+    allTBetsRes,
+    scoresRes,
+    rulesRes,
+  ] = await Promise.all([
+    admin.from('participants').select('id, apelido').order('apelido'),
+    supabase.from('matches')
+      .select('id, match_number, phase, group_name, round, team_home, team_away, flag_home, flag_away, match_datetime, betting_deadline, score_home, score_away, is_brazil')
+      .order('match_datetime', { ascending: true }),
+    admin.from('bets').select('participant_id, match_id, score_home, score_away, points'),
+    admin.from('group_bets').select('participant_id, group_name, first_place, second_place, points'),
+    admin.from('third_place_bets').select('participant_id, group_name, team'),
+    admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer'),
+    admin.from('participant_scores')
+      .select('participant_id, pts_matches, pts_groups, pts_thirds, pts_tournament, pts_total'),
+    supabase.from('scoring_rules').select('key, points'),
+  ])
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const participants: { id: string; apelido: string }[] = participantsRes.data ?? []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rawMatches: any[] = matchesRes.data ?? []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allBets: any[]    = allBetsRes.data ?? []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allGroupBets: any[] = allGroupBetsRes.data ?? []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allThirdBets: any[] = allThirdBetsRes.data ?? []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allTBets: any[]   = allTBetsRes.data ?? []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const scores: any[]     = scoresRes.data ?? []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rulesRaw: any[]   = rulesRes.data ?? []
+
+  // ── Build scoring rules map ───────────────────────────────────────────────
+  const rulesMap: Record<string, number> = {}
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const r of rulesRaw as any[]) rulesMap[r.key] = r.points ?? 0
+  const zebraThreshold = rulesMap['percentual_zebra'] ?? 15
+
+  // ── Bets grouped by match ─────────────────────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const betsByMatch = groupBy(allBets as any[], b => b.match_id)
+
+  // ── matchZebraMap: was the result a zebra? ────────────────────────────────
+  const matchZebraMap: Record<string, boolean> = {}
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const m of rawMatches as any[]) {
+    if (m.score_home === null || m.score_away === null) continue
+    const realResult = getMatchResult(m.score_home, m.score_away)
+    const bets = betsByMatch[m.id] ?? []
+    matchZebraMap[m.id] = detectMatchZebra(bets, realResult, zebraThreshold)
+  }
+
+  // ── colPopMap: bet distribution per match ────────────────────────────────
+  const colPopMap: Record<string, ColPop> = {}
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const [matchId, bets] of Object.entries(betsByMatch) as [string, any[]][]) {
+    const counts: ColPop = { H: 0, D: 0, A: 0, total: bets.length }
+    for (const b of bets) {
+      const col = getMatchResult(b.score_home, b.score_away)
+      counts[col]++
+    }
+    colPopMap[matchId] = counts
+  }
+
+  // ── Build MatchInfo[] ─────────────────────────────────────────────────────
+  const matches: MatchInfo[] = rawMatches.map(m => ({
+    id:             m.id,
+    matchNumber:    m.match_number,
+    phase:          m.phase,
+    groupName:      m.group_name ?? null,
+    round:          m.round ?? null,
+    teamHome:       m.team_home,
+    teamAway:       m.team_away,
+    flagHome:       m.flag_home ?? '',
+    flagAway:       m.flag_away ?? '',
+    matchDatetime:  m.match_datetime,
+    bettingDeadline: m.betting_deadline,
+    scoreHome:      m.score_home ?? null,
+    scoreAway:      m.score_away ?? null,
+    isBrazil:       !!m.is_brazil,
+    isZebra:        matchZebraMap[m.id] ?? false,
+  }))
+
+  // ── betsByParticipant: participantId → matchId → FlatBet ─────────────────
+  const betsByParticipant: Record<string, Record<string, FlatBet>> = {}
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const b of allBets as any[]) {
+    ;(betsByParticipant[b.participant_id] ??= {})[b.match_id] = {
+      scoreHome: b.score_home,
+      scoreAway: b.score_away,
+      points: b.points,
+    }
+  }
+
+  // ── groupBetsByParticipant ────────────────────────────────────────────────
+  const groupBetsByParticipant: Record<string, Record<string, { first: string; second: string; points: number | null }>> = {}
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const b of allGroupBets as any[]) {
+    ;(groupBetsByParticipant[b.participant_id] ??= {})[b.group_name] = {
+      first: b.first_place ?? '',
+      second: b.second_place ?? '',
+      points: b.points,
+    }
+  }
+
+  // ── thirdBetsByParticipant ────────────────────────────────────────────────
+  const thirdBetsByParticipant: Record<string, Record<string, string>> = {}
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const b of allThirdBets as any[]) {
+    ;(thirdBetsByParticipant[b.participant_id] ??= {})[b.group_name] = b.team ?? ''
+  }
+
+  // ── tBetByParticipant ─────────────────────────────────────────────────────
+  const tBetByParticipant: Record<string, { champion: string; runner_up: string; semi1: string; semi2: string; top_scorer: string }> = {}
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const b of allTBets as any[]) {
+    tBetByParticipant[b.participant_id] = {
+      champion:   b.champion ?? '',
+      runner_up:  b.runner_up ?? '',
+      semi1:      b.semi1 ?? '',
+      semi2:      b.semi2 ?? '',
+      top_scorer: b.top_scorer ?? '',
+    }
+  }
+
+  // ── scoresByParticipant ───────────────────────────────────────────────────
+  const scoresByParticipant: Record<string, { ptsMatches: number; ptsGroups: number; ptsThirds: number; ptsTournament: number; ptsTotal: number }> = {}
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const s of scores as any[]) {
+    scoresByParticipant[s.participant_id] = {
+      ptsMatches:    s.pts_matches    ?? 0,
+      ptsGroups:     s.pts_groups     ?? 0,
+      ptsThirds:     s.pts_thirds     ?? 0,
+      ptsTournament: s.pts_tournament ?? 0,
+      ptsTotal:      s.pts_total      ?? 0,
+    }
+  }
+
+  return (
+    <>
+      <Navbar />
+      <ComparadorClient
+        participants={participants}
+        matches={matches}
+        betsByParticipant={betsByParticipant}
+        groupBetsByParticipant={groupBetsByParticipant}
+        thirdBetsByParticipant={thirdBetsByParticipant}
+        tBetByParticipant={tBetByParticipant}
+        scoresByParticipant={scoresByParticipant}
+        colPopMap={colPopMap}
+        rulesMap={rulesMap}
+        zebraThreshold={zebraThreshold}
+        currentParticipantId={participantId}
+      />
+    </>
+  )
+}
