@@ -3,11 +3,16 @@ import ExcelJS from 'exceljs'
 import { toZonedTime } from 'date-fns-tz'
 type AnySupabase = any
 
-// ── Workbook-level structure protection (ExcelJS doesn't expose this natively) ─
+// ── Workbook-level structure protection (ExcelJS não expõe isso nativamente) ───
+//
+// Estratégia: monkey-patch cirúrgico em WorkbookXform.prototype.toXml.
+// O ExcelJS chama xform.toXml(model) de forma *síncrona* dentro de
+// wb.xlsx.writeBuffer() para gerar o XML que é depois empacotado no zip.
+// Ao interceptar apenas essa string, evitamos qualquer recompressão do zip
+// (que corrompia o arquivo quando feita via JSZip).
 
 /**
- * Legacy XOR hash used by Excel for workbook/sheet password attributes.
- * Reference: ECMA-376 §18.2.29 / openpyxl implementation.
+ * Legacy XOR hash para o atributo workbookPassword do OOXML (ECMA-376 §18.2.29).
  */
 function hashXor(password: string): string {
   const bytes = [...password].map(c => c.charCodeAt(0))
@@ -19,24 +24,32 @@ function hashXor(password: string): string {
 }
 
 /**
- * Post-processes an xlsx buffer to inject <workbookProtection lockStructure="1"/>
- * into xl/workbook.xml, preventing users from adding / deleting / moving sheets.
+ * Escreve o buffer xlsx com proteção de estrutura do workbook.
+ * Patcha WorkbookXform.prototype.toXml antes de writeBuffer() e restaura
+ * em um bloco finally — garante que o protótipo nunca fica sujo.
  */
-async function addWorkbookProtection(raw: Buffer, password: string): Promise<Buffer> {
-  // jszip is a direct dependency of exceljs and is available in node_modules
+async function writeBufferWithProtection(wb: ExcelJS.Workbook, password: string): Promise<Buffer> {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const JSZip = require('jszip') as typeof import('jszip')
-  const zip = await JSZip.loadAsync(raw)
-  const wbFile = zip.file('xl/workbook.xml')
-  if (!wbFile) return raw
-  const wbXml = await wbFile.async('string')
+  const WorkbookXform = require('exceljs/lib/xlsx/xform/book/workbook-xform')
   const pwdHash = hashXor(password)
   const tag = `<workbookProtection workbookPassword="${pwdHash}" lockStructure="1"/>`
-  const modified = wbXml.includes('<workbookProtection')
-    ? wbXml  // already present — leave as-is
-    : wbXml.replace('</workbook>', `${tag}</workbook>`)
-  zip.file('xl/workbook.xml', modified)
-  return Buffer.from(await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }))
+
+  // WorkbookXform herda toXml de BaseXform; sobrescrevemos apenas no protótipo
+  // de WorkbookXform para não afetar outros xforms.
+  WorkbookXform.prototype.toXml = function (model: unknown) {
+    // Chama o método original via prototype chain (BaseXform)
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const BaseXform = require('exceljs/lib/xlsx/xform/base-xform')
+    const xml: string = BaseXform.prototype.toXml.call(this, model)
+    return xml.replace('</workbook>', `${tag}</workbook>`)
+  }
+
+  try {
+    return Buffer.from(await wb.xlsx.writeBuffer())
+  } finally {
+    // Remove nossa sobrescrita — o método herdado de BaseXform volta a ser usado
+    delete WorkbookXform.prototype.toXml
+  }
 }
 
 // Colunas
@@ -453,7 +466,6 @@ export async function buildPalpitesBuffer(
     sort: false, autoFilter: false,
   })
 
-  const rawBuffer = Buffer.from(await wb.xlsx.writeBuffer())
-  const buffer = await addWorkbookProtection(rawBuffer, sheetPassword)
+  const buffer = await writeBufferWithProtection(wb, sheetPassword)
   return { buffer, displayName, fileName }
 }
