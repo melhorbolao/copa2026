@@ -8,7 +8,7 @@ import { Navbar } from '@/components/layout/Navbar'
 import { ClassificacaoMBClient } from './ClassificacaoMBClient'
 import { getMatchResult, detectMatchZebra, scoreTournamentBet, scoreMatchBet } from '@/lib/scoring/engine'
 import type { TournamentResults } from '@/lib/scoring/engine'
-import { getVisibilitySettings } from '@/lib/production-mode'
+import { getVisibilitySettings, isBonusVisible, isMatchBetsVisible } from '@/lib/production-mode'
 
 export const metadata = {}
 
@@ -52,7 +52,7 @@ export default async function ClassificacaoMBPage() {
   const [participantsRes, matchesRes, betsRes, groupBetsRes, tournamentBetsRes, scoresRes, rulesRes] = await Promise.all([
     supabase.from('participants').select('id, apelido').order('apelido'),
     supabase.from('matches')
-      .select('id, match_number, match_datetime, betting_deadline, team_home, team_away, score_home, score_away, phase, group_name, penalty_winner, is_brazil')
+      .select('id, match_number, match_datetime, betting_deadline, team_home, team_away, score_home, score_away, phase, round, group_name, penalty_winner, is_brazil')
       .order('match_datetime', { ascending: true }),
     admin.from('bets').select('participant_id, match_id, score_home, score_away, points'),
     admin.from('group_bets').select('participant_id, points'),
@@ -140,7 +140,7 @@ export default async function ClassificacaoMBPage() {
     id: string; match_number: number; match_datetime: string; betting_deadline: string
     team_home: string; team_away: string
     score_home: number | null; score_away: number | null
-    phase: string; group_name: string | null; penalty_winner: string | null
+    phase: string; round: number | null; group_name: string | null; penalty_winner: string | null
     is_brazil: boolean
   }[]
   const allBets = (betsRes.data ?? []) as {
@@ -156,6 +156,11 @@ export default async function ClassificacaoMBPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rules: Record<string, number> = Object.fromEntries((rulesRes.data ?? []).map((r: any) => [r.key, r.points]))
   const zebraThreshold = rules['percentual_zebra'] ?? 15
+
+  // ── Visibilidade em Modo Produção ─────────────────────────────────────────
+  const now = new Date()
+  const bonusDeadline = matches.find(m => m.phase === 'group' && m.round === 1)?.betting_deadline ?? null
+  const bonusVis = isBonusVisible(bonusDeadline, now, visibilitySettings, isAdmin)
 
   // ── Resultados do torneio (G4) ─────────────────────────────────────────────
   const completedMatches = matches.filter(m => m.score_home !== null)
@@ -284,12 +289,15 @@ export default async function ClassificacaoMBPage() {
         zebraApostMap[pid] = (zebraApostMap[pid] ?? 0) + 1
     }
 
-    if (lastMatch && bet.match_id === lastMatch.id) lastMatchBets[pid] = bet
-    // nextMatchBet: só mostra se prazo passou ou admin em modo teste
-    const now = new Date()
-    if (nextMatch && bet.match_id === nextMatch.id
-        && (isTestModeAdmin || new Date(nextMatch.betting_deadline) <= now))
-      nextMatchBets[pid] = bet
+    if (lastMatch && bet.match_id === lastMatch.id) {
+      const vis = isMatchBetsVisible(lastMatch.phase, lastMatch.round, lastMatch.betting_deadline, now, visibilitySettings, isAdmin)
+      if (vis || pid === activeParticipantId) lastMatchBets[pid] = bet
+    }
+    // nextMatchBet: só mostra se rodada liberada ou próprio palpite
+    if (nextMatch && bet.match_id === nextMatch.id) {
+      const vis = isMatchBetsVisible(nextMatch.phase, nextMatch.round, nextMatch.betting_deadline, now, visibilitySettings, isAdmin)
+      if (vis || pid === activeParticipantId) nextMatchBets[pid] = bet
+    }
   }
 
   const ptsGroupsMap: Record<string, number> = {}
@@ -315,7 +323,7 @@ export default async function ClassificacaoMBPage() {
       pontuados:      pontuadosMap[p.id]   ?? 0,
       zebraApostada:  zebraApostMap[p.id]  ?? 0,
       zebraPontuada:  zebraPontMap[p.id]   ?? 0,
-      tournamentBet:  tBetMap[p.id] ?? null,
+      tournamentBet:  (bonusVis || p.id === activeParticipantId) ? (tBetMap[p.id] ?? null) : null,
       lastMatchBet:   lastMatchBets[p.id]  ?? null,
       nextMatchBet:   nextMatchBets[p.id]  ?? null,
     }

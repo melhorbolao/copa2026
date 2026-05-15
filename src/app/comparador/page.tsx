@@ -7,6 +7,7 @@ import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { ComparadorClient } from './ComparadorClient'
 import { getMatchResult, detectMatchZebra } from '@/lib/scoring/engine'
+import { getVisibilitySettings, isBonusVisible, filterBetsByDeadline } from '@/lib/production-mode'
 import type { MatchInfo, FlatBet, ColPop } from './engine'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -48,6 +49,7 @@ export default async function ComparadorPage() {
     allTBetsRes,
     scoresRes,
     rulesRes,
+    visibilitySettings,
   ] = await Promise.all([
     admin.from('participants').select('id, apelido').order('apelido'),
     supabase.from('matches')
@@ -60,6 +62,7 @@ export default async function ComparadorPage() {
     admin.from('participant_scores')
       .select('participant_id, pts_matches, pts_groups, pts_thirds, pts_tournament, pts_total'),
     supabase.from('scoring_rules').select('key, points'),
+    getVisibilitySettings(),
   ])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -85,9 +88,19 @@ export default async function ComparadorPage() {
   for (const r of rulesRaw as any[]) rulesMap[r.key] = r.points ?? 0
   const zebraThreshold = rulesMap['percentual_zebra'] ?? 15
 
+  // ── Visibilidade em Modo Produção ─────────────────────────────────────────
+  const isTestModeAdmin = isAdmin && !visibilitySettings.productionMode
+  const now = new Date()
+  const bonusDeadline = rawMatches.find((m: any) => m.phase === 'group' && m.round === 1)?.betting_deadline ?? null
+  const bonusVis = isBonusVisible(bonusDeadline, now, visibilitySettings, isAdmin)
+  const deadlineByMatch: Record<string, string> = {}
+  for (const m of rawMatches as any[]) deadlineByMatch[m.id] = m.betting_deadline
+  const filteredMatchBets = filterBetsByDeadline(
+    allBets as any[], deadlineByMatch, now, isTestModeAdmin, participantId,
+  )
+
   // ── Bets grouped by match ─────────────────────────────────────────────────
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const betsByMatch = groupBy(allBets as any[], b => b.match_id)
+  const betsByMatch = groupBy(filteredMatchBets, b => b.match_id)
 
   // ── matchZebraMap: was the result a zebra? ────────────────────────────────
   const matchZebraMap: Record<string, boolean> = {}
@@ -133,7 +146,7 @@ export default async function ComparadorPage() {
   // ── betsByParticipant: participantId → matchId → FlatBet ─────────────────
   const betsByParticipant: Record<string, Record<string, FlatBet>> = {}
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const b of allBets as any[]) {
+  for (const b of filteredMatchBets) {
     ;(betsByParticipant[b.participant_id] ??= {})[b.match_id] = {
       scoreHome: b.score_home,
       scoreAway: b.score_away,
@@ -145,6 +158,7 @@ export default async function ComparadorPage() {
   const groupBetsByParticipant: Record<string, Record<string, { first: string; second: string; points: number | null }>> = {}
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const b of allGroupBets as any[]) {
+    if (!bonusVis && b.participant_id !== participantId) continue
     ;(groupBetsByParticipant[b.participant_id] ??= {})[b.group_name] = {
       first: b.first_place ?? '',
       second: b.second_place ?? '',
@@ -156,6 +170,7 @@ export default async function ComparadorPage() {
   const thirdBetsByParticipant: Record<string, Record<string, string>> = {}
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const b of allThirdBets as any[]) {
+    if (!bonusVis && b.participant_id !== participantId) continue
     ;(thirdBetsByParticipant[b.participant_id] ??= {})[b.group_name] = b.team ?? ''
   }
 
@@ -163,6 +178,7 @@ export default async function ComparadorPage() {
   const tBetByParticipant: Record<string, { champion: string; runner_up: string; semi1: string; semi2: string; top_scorer: string }> = {}
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const b of allTBets as any[]) {
+    if (!bonusVis && b.participant_id !== participantId) continue
     tBetByParticipant[b.participant_id] = {
       champion:   b.champion ?? '',
       runner_up:  b.runner_up ?? '',
