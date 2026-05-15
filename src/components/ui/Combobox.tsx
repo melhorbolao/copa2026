@@ -15,11 +15,13 @@ interface Props {
   options: Option[]
   placeholder?: string
   className?: string
+  /** Prevent virtual keyboard on mobile (ideal when list is short / no typing needed) */
+  noKeyboard?: boolean
 }
 
 const MAX_H = 240 // max dropdown height in px
 
-export function Combobox({ value, onChange, options, placeholder = '— selecione —', className = '' }: Props) {
+export function Combobox({ value, onChange, options, placeholder = '— selecione —', className = '', noKeyboard = false }: Props) {
   const [query,    setQuery]    = useState('')
   const [open,     setOpen]     = useState(false)
   const [dropStyle, setDropStyle] = useState<React.CSSProperties>({})
@@ -177,6 +179,9 @@ export function Combobox({ value, onChange, options, placeholder = '— selecion
         onChange={handleChange}
         onFocus={handleFocus}
         onKeyDown={handleKeyDown}
+        // inputMode="none" tells mobile browsers not to open the virtual keyboard;
+        // the dropdown itself is sufficient for selection on touch devices.
+        inputMode={noKeyboard ? 'none' : undefined}
         className="w-full rounded border border-gray-200 py-1 px-1.5 text-xs focus:border-verde-400 focus:outline-none"
       />
       {open && mounted && createPortal(dropdown, document.body)}

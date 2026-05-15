@@ -3,7 +3,6 @@
 import { useTransition, useState, useEffect } from 'react'
 import { saveGroupBet, deleteGroupBet } from './actions'
 import { Flag } from '@/components/ui/Flag'
-import { Combobox } from '@/components/ui/Combobox'
 import { formatBrasilia, isDeadlinePassed } from '@/utils/date'
 import { useThirdPlace } from './ThirdPlaceContext'
 
@@ -42,6 +41,10 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
 
   const deadlinePassed = isDeadlinePassed(deadline)
 
+  // Chave do rascunho local — persiste o pick parcial (só 1º, ou ambos)
+  // para recuperar caso o usuário navegue para outra tela antes do save.
+  const draftKey = `gbet_${userId}_${groupName}`
+
   // Lê a ordem manual do localStorage (mesma chave usada pelo GroupCard em Minha Tabela)
   useEffect(() => {
     try {
@@ -50,24 +53,64 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
     } catch { /* ignore */ }
   }, [userId, groupName])
 
+  // Sincroniza estado local com existingBet vindo do servidor (ex: revalidação)
   useEffect(() => {
     if (existingBet) { setFirst(existingBet.first_place); setSecond(existingBet.second_place) }
   }, [existingBet?.first_place, existingBet?.second_place])
 
+  // Na montagem: se não há palpite salvo no servidor, tenta restaurar o
+  // rascunho do localStorage e, se ambos os times estiverem presentes,
+  // dispara o save automaticamente (cobre o caso de navegação antes do save).
+  useEffect(() => {
+    if (existingBet) return            // servidor já tem dados — não precisa do rascunho
+    try {
+      const raw = localStorage.getItem(draftKey)
+      if (!raw) return
+      const { f, s } = JSON.parse(raw) as { f?: string; s?: string }
+      if (f) setFirst(f)
+      if (s) setSecond(s)
+      if (f && s && f !== s) {
+        // Ambos os times estavam no rascunho → salva no servidor agora
+        startTransition(async () => {
+          try {
+            await saveGroupBet(groupName, f, s)
+            localStorage.removeItem(draftKey)
+          } catch { /* ignora — tentará novamente na próxima montagem */ }
+        })
+      }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])  // só na montagem
+
+  // ── Helpers ──────────────────────────────────────────────────────────────────
+
+  /** Persiste o rascunho parcial no localStorage imediatamente. */
+  const saveDraft = (f: string, s: string) => {
+    try {
+      if (f || s) localStorage.setItem(draftKey, JSON.stringify({ f, s }))
+      else        localStorage.removeItem(draftKey)
+    } catch { /* ignore */ }
+  }
+
+  /** Salva no servidor (requer os dois campos preenchidos e distintos). */
   const doSave = (f: string, s: string) => {
     if (!f || !s || f === s) return
     setError('')
     startTransition(async () => {
-      try { await saveGroupBet(groupName, f, s) }
-      catch (err) { setError(err instanceof Error ? err.message : 'Erro') }
+      try {
+        await saveGroupBet(groupName, f, s)
+        localStorage.removeItem(draftKey)          // rascunho cumprido
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Erro')
+      }
     })
   }
 
   const doClear = (clearFirst: boolean) => {
     setError('')
     const otherValue = clearFirst ? second : first
-    if (clearFirst) setFirst('')
-    else setSecond('')
+    if (clearFirst) { setFirst('');  saveDraft('', second) }
+    else            { setSecond(''); saveDraft(first, '') }
     startTransition(async () => {
       const r = await deleteGroupBet(groupName, clearFirst ? 'first' : 'second', otherValue)
       if (r.error) setError(r.error)
@@ -76,35 +119,36 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
 
   const handleFirst = (val: string) => {
     setFirst(val)
+    saveDraft(val, second)              // salva rascunho imediatamente
     if (val && second && val !== second) doSave(val, second)
   }
 
   const handleSecond = (val: string) => {
     setSecond(val)
+    saveDraft(first, val)               // salva rascunho imediatamente
     if (first && val && first !== val) doSave(first, val)
   }
 
-  const calcFirst  = calculatedTop?.first  ?? ''
-  const calcSecond = calculatedTop?.second ?? ''
+  // ── Conflitos ────────────────────────────────────────────────────────────────
+
+  const calcFirst    = calculatedTop?.first  ?? ''
+  const calcSecond   = calculatedTop?.second ?? ''
   const manualFirst  = manualOrder?.[0] ?? ''
   const manualSecond = manualOrder?.[1] ?? ''
 
-  // Conflito: palpite formal diverge da classificação calculada pelos placares
-  // OU da ordem manual salva em Minha Tabela (drag-and-drop no GroupCard).
-  // O alerta é apenas informativo — a regra do bolão permite a incoerência.
   const firstConflict  = !!first  && (
-    (!!calcFirst  && first  !== calcFirst)  ||
-    (!!manualFirst  && first  !== manualFirst)
+    (!!calcFirst   && first  !== calcFirst)  ||
+    (!!manualFirst && first  !== manualFirst)
   )
   const secondConflict = !!second && (
-    (!!calcSecond && second !== calcSecond) ||
+    (!!calcSecond   && second !== calcSecond) ||
     (!!manualSecond && second !== manualSecond)
   )
 
+  // ── Render ───────────────────────────────────────────────────────────────────
+
   return (
-    <tr
-      className="border-b border-gray-100 bg-blue-50/30 hover:bg-blue-50/50"
-    >
+    <tr className="border-b border-gray-100 bg-blue-50/30 hover:bg-blue-50/50">
       <td colSpan={7} className="px-2 py-2 sm:px-3">
         {/*
           Mobile (< sm): duas linhas — rótulo+bandeiras em cima, seletores embaixo.
@@ -155,19 +199,25 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
             </div>
           ) : (
             <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
-              {/* 1º lugar — flex-1 no mobile, w-36 fixo no desktop */}
+
+              {/* 1º lugar — native <select> (sem teclado virtual no mobile) */}
               <div className="flex flex-1 sm:w-36 sm:flex-none items-center gap-1">
-                <Combobox
+                <select
                   value={first}
-                  onChange={handleFirst}
-                  placeholder="1º lugar"
-                  options={teams.map(t => ({
-                    value: t.team,
-                    label: t.team,
-                    disabled: t.team === second || (!!thirdTeam && t.team === thirdTeam),
-                  }))}
-                  className="flex-1 min-w-0"
-                />
+                  onChange={e => handleFirst(e.target.value)}
+                  className="flex-1 min-w-0 rounded border border-gray-200 bg-white py-1.5 pl-1.5 pr-5 text-xs focus:border-verde-400 focus:outline-none"
+                >
+                  <option value="">1º lugar</option>
+                  {teams.map(t => (
+                    <option
+                      key={t.team}
+                      value={t.team}
+                      disabled={t.team === second || (!!thirdTeam && t.team === thirdTeam)}
+                    >
+                      {t.team}
+                    </option>
+                  ))}
+                </select>
                 {firstConflict && <ConflictDot />}
                 {first && (
                   <button
@@ -182,19 +232,24 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
                 )}
               </div>
 
-              {/* 2º lugar — flex-1 no mobile, w-36 fixo no desktop */}
+              {/* 2º lugar — native <select> */}
               <div className="flex flex-1 sm:w-36 sm:flex-none items-center gap-1">
-                <Combobox
+                <select
                   value={second}
-                  onChange={handleSecond}
-                  placeholder="2º lugar"
-                  options={teams.map(t => ({
-                    value: t.team,
-                    label: t.team,
-                    disabled: t.team === first || (!!thirdTeam && t.team === thirdTeam),
-                  }))}
-                  className="flex-1 min-w-0"
-                />
+                  onChange={e => handleSecond(e.target.value)}
+                  className="flex-1 min-w-0 rounded border border-gray-200 bg-white py-1.5 pl-1.5 pr-5 text-xs focus:border-verde-400 focus:outline-none"
+                >
+                  <option value="">2º lugar</option>
+                  {teams.map(t => (
+                    <option
+                      key={t.team}
+                      value={t.team}
+                      disabled={t.team === first || (!!thirdTeam && t.team === thirdTeam)}
+                    >
+                      {t.team}
+                    </option>
+                  ))}
+                </select>
                 {secondConflict && <ConflictDot />}
                 {second && (
                   <button
@@ -209,7 +264,7 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
                 )}
               </div>
 
-              {/* Status / points */}
+              {/* Status / pontos */}
               <div className="shrink-0 text-right">
                 {pending
                   ? <span className="text-xs text-gray-400">…</span>
