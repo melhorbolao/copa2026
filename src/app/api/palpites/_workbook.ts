@@ -41,6 +41,12 @@ async function writeBufferWithProtection(wb: ExcelJS.Workbook, password: string)
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const BaseXform = require('exceljs/lib/xlsx/xform/base-xform')
     const xml: string = BaseXform.prototype.toXml.call(this, model)
+    // Injeta ANTES de <sheets> — posição correta no schema OOXML (CT_Workbook).
+    // Injetar antes de </workbook> colocava o elemento após <calcPr>, quebrando a
+    // ordem esperada pelo Excel e disparando o diálogo de "reparar pasta de trabalho".
+    if (xml.includes('<sheets>')) {
+      return xml.replace('<sheets>', `${tag}<sheets>`)
+    }
     return xml.replace('</workbook>', `${tag}</workbook>`)
   }
 

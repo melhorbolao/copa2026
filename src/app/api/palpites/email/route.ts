@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { createClient } from '@/lib/supabase/server'
+import { getActiveParticipantId } from '@/lib/participant'
 import { buildPalpitesBuffer } from '../_workbook'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
@@ -14,7 +15,8 @@ export async function POST() {
   const email = user.email
   if (!email) return NextResponse.json({ error: 'Usuário sem e-mail cadastrado.' }, { status: 400 })
 
-  const { buffer, displayName, fileName } = await buildPalpitesBuffer(supabase, user.id)
+  const participantId = await getActiveParticipantId(supabase, user.id)
+  const { buffer, displayName, fileName } = await buildPalpitesBuffer(supabase, participantId)
 
   const now = new Date()
   const dataHora = now.toLocaleString('pt-BR', {
