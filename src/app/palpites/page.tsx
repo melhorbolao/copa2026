@@ -144,17 +144,22 @@ async function PalpitesData({ participantId }: { participantId: string }) {
       .map((m: any) => [m.id, { match_id: m.id, score_home: m.score_home, score_away: m.score_away }])
   )
   const officialStandings  = calcGroupStandings(slimGroupMatches, officialScoreMap)
+
+  // Guard contra fallback: só considera resultado oficial quando TODOS os
+  // jogos do grupo têm placar registrado — evita que classificações com todos
+  // os times em 0 pts (sem resultados) gerem pontuações espúrias de terceiros.
+  const { completeGroups, allGroupsComplete } =
+    computeGroupCompletion(groupMatches, officialScoreMap)
+
   const officialThirdTeams: Record<string, string> = {}
   for (const s of officialStandings) {
-    if (s.teams[2]?.team) officialThirdTeams[s.group] = s.teams[2].team
+    // Só expõe o 3º oficial quando o grupo está 100% apurado
+    if (completeGroups.has(s.group) && s.teams[2]?.team) {
+      officialThirdTeams[s.group] = s.teams[2].team
+    }
   }
   const officialThirds     = rankThirds(officialStandings)
   const officialThirdSlots = resolveThirdSlots(officialThirds)
-
-  // Guard contra fallback alfabético: só preenche slots do bracket quando os
-  // grupos relevantes têm TODOS os jogos com placar registrado em betMap.
-  const { completeGroups, allGroupsComplete } =
-    computeGroupCompletion(groupMatches, officialScoreMap)
 
   const officialR32Slots = officialThirdSlots
     ? buildR32Teams(officialStandings, officialThirds, officialThirdSlots, undefined, completeGroups, allGroupsComplete)
