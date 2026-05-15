@@ -4,5 +4,8 @@
       "source": "/(.*)",
       "destination": "https://melhorbolao.app.br//$1"
     }
+  ],
+  "crons": [
+    { "path": "/api/cron/snapshot", "schedule": "0 9 * * *" }
   ]
 }
