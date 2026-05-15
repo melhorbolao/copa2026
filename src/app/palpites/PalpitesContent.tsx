@@ -383,7 +383,12 @@ function PalpitesTabPane({
           {isGroupEtapa && <GroupFilter />}
         </div>
 
-        <ThirdPlaceProvider initial={Object.fromEntries(thirdBets.map(b => [b.group_name, b.team]))}>
+        <ThirdPlaceProvider
+          initial={Object.fromEntries(thirdBets.map(b => [b.group_name, b.team]))}
+          initialGroupBets={Object.fromEntries(
+            Object.entries(groupBetMap).map(([g, v]) => [g, { first: v.first_place, second: v.second_place }])
+          )}
+        >
           {totalMatches === 0 ? (
             <div className="rounded-2xl border border-dashed border-gray-300 bg-white py-20 text-center">
               <p className="text-4xl mb-3">⚽</p>

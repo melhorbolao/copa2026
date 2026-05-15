@@ -40,7 +40,7 @@ export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBet
     () => Object.fromEntries((existingBets ?? []).map(b => [b.group_name, b.team]))
   )
 
-  const { setThirdSelections } = useThirdPlace()
+  const { setThirdSelections, groupBetSelections } = useThirdPlace()
 
   // Hash leve da prop de servidor — substitui JSON.stringify em cada render
   const existingHash = useMemo(() => {
@@ -60,16 +60,42 @@ export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBet
     setThirdSelections(selections)
   }, [selections, setThirdSelections])
 
+  // Ref para ler selections sem re-derivar no effect abaixo
+  const selectionsRef = useRef(selections)
+  selectionsRef.current = selections
+
+  // Limpa a seleção de 3º se aquele time passou a ser 1º ou 2º do grupo
+  // (ocorre quando o usuário muda a aposta de grupo manualmente após o auto-fill)
+  useEffect(() => {
+    const toRemove = Object.keys(selectionsRef.current).filter(g => {
+      const live = groupBetSelections[g]
+      if (!live) return false
+      const sel = selectionsRef.current[g]
+      return sel && (sel === live.first || sel === live.second)
+    })
+    if (toRemove.length === 0) return
+    setSelections(prev => {
+      const next = { ...prev }
+      for (const g of toRemove) delete next[g]
+      return next
+    })
+  }, [groupBetSelections])
+
   const deadlinePassed  = isDeadlinePassed(deadline)
   const selectedGroups  = Object.keys(selections)
   const selectedCount   = selectedGroups.length
 
-  // Times disponíveis para 3º lugar: exclui 1º e 2º apostados
+  // Times disponíveis para 3º lugar: exclui 1º e 2º apostados.
+  // Usa o estado vivo do contexto (atualizado pelo GroupBetRow) em vez da prop
+  // estática do servidor, para refletir mudanças manuais sem precisar de refresh.
   const availableTeams = (g: string): Team[] => {
     const all = groupTeams[g]?.teams ?? []
-    const bet = groupBets?.[g]
-    if (!bet) return all
-    return all.filter(t => t.team !== bet.first_place && t.team !== bet.second_place)
+    const live   = groupBetSelections[g]
+    const server = groupBets?.[g]
+    const firstTeam  = live?.first  ?? server?.first_place
+    const secondTeam = live?.second ?? server?.second_place
+    if (!firstTeam && !secondTeam) return all
+    return all.filter(t => t.team !== firstTeam && t.team !== secondTeam)
   }
 
   const toggleGroup = (g: string) => {

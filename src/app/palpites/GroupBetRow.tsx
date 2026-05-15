@@ -36,7 +36,7 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
   const [error,  setError]  = useState('')
   const [manualOrder, setManualOrder] = useState<string[] | null>(null)
 
-  const { thirdSelections } = useThirdPlace()
+  const { thirdSelections, setGroupBetSelection } = useThirdPlace()
   const thirdTeam = thirdSelections[groupName] ?? ''
 
   const deadlinePassed = isDeadlinePassed(deadline)
@@ -109,8 +109,15 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
   const doClear = (clearFirst: boolean) => {
     setError('')
     const otherValue = clearFirst ? second : first
-    if (clearFirst) { setFirst('');  saveDraft('', second) }
-    else            { setSecond(''); saveDraft(first, '') }
+    if (clearFirst) {
+      setFirst('')
+      setGroupBetSelection(groupName, '', second)
+      saveDraft('', second)
+    } else {
+      setSecond('')
+      setGroupBetSelection(groupName, first, '')
+      saveDraft(first, '')
+    }
     startTransition(async () => {
       const r = await deleteGroupBet(groupName, clearFirst ? 'first' : 'second', otherValue)
       if (r.error) setError(r.error)
@@ -118,22 +125,21 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
   }
 
   const handleFirst = (val: string) => {
-    // Se o usuário escolher o time que já está em 2º, faz o swap automaticamente
-    // (isso é impedido pelo disabled da <option> sem este tratamento especial)
     const newFirst  = val
     const newSecond = val === second ? first : second   // troca se conflito
     setFirst(newFirst)
     setSecond(newSecond)
+    setGroupBetSelection(groupName, newFirst, newSecond)
     saveDraft(newFirst, newSecond)
     if (newFirst && newSecond && newFirst !== newSecond) doSave(newFirst, newSecond)
   }
 
   const handleSecond = (val: string) => {
-    // Se o usuário escolher o time que já está em 1º, faz o swap automaticamente
     const newSecond = val
     const newFirst  = val === first ? second : first    // troca se conflito
     setFirst(newFirst)
     setSecond(newSecond)
+    setGroupBetSelection(groupName, newFirst, newSecond)
     saveDraft(newFirst, newSecond)
     if (newFirst && newSecond && newFirst !== newSecond) doSave(newFirst, newSecond)
   }
