@@ -40,15 +40,18 @@ export interface SobeDesceHighlights {
 }
 
 export interface UseSobeDesceReturn {
-  mode:          SobeDesceMode
-  setMode:       (m: SobeDesceMode) => void
-  customFrom:    string
-  setCustomFrom: (d: string) => void
-  deltaMap:      Map<string, DeltaEntry> | null
-  loading:       boolean
-  highlights:    SobeDesceHighlights
-  refDateLabel:  string
-  hasData:       boolean
+  mode:           SobeDesceMode
+  setMode:        (m: SobeDesceMode) => void
+  customFrom:     string
+  setCustomFrom:  (d: string) => void
+  customTo:       string
+  setCustomTo:    (d: string) => void
+  deltaMap:       Map<string, DeltaEntry> | null
+  loading:        boolean
+  highlights:     SobeDesceHighlights
+  refDateLabel:   string
+  refToDateLabel: string
+  hasData:        boolean
 }
 
 // ── Utilidades internas ────────────────────────────────────────────────────────
@@ -96,10 +99,13 @@ export function useSobeDesce({
 
   const [mode,        setMode]        = useState<SobeDesceMode>('hidden')
   const [customFrom,  setCustomFrom]  = useState(() => subtractDays(todayBR(), 7))
+  const [customTo,    setCustomTo]    = useState(() => todayBR())
   const [snapshots,   setSnapshots]   = useState<SnapshotEntry[] | null>(null)
+  const [snapshotsTo, setSnapshotsTo] = useState<SnapshotEntry[] | null>(null)
   const [loading,     setLoading]     = useState(false)
+  const [loadingTo,   setLoadingTo]   = useState(false)
 
-  // Data de referência derivada do modo
+  // Data de referência FROM derivada do modo
   const refDate = useMemo((): string | null => {
     switch (mode) {
       case 'last_day':
@@ -113,9 +119,17 @@ export function useSobeDesce({
     }
   }, [mode, lastResultDate, currentPhaseStartDate, customFrom])
 
-  const refDateLabel = refDate ? formatDateBR(refDate) : ''
+  // Data TO: só modo custom com data anterior a hoje
+  const refDateTo = useMemo((): string | null => {
+    if (mode !== 'custom') return null
+    const today = todayBR()
+    return (customTo && customTo < today) ? customTo : null
+  }, [mode, customTo])
 
-  // Busca snapshot quando a data de referência muda
+  const refDateLabel   = refDate   ? formatDateBR(refDate)   : ''
+  const refToDateLabel = refDateTo ? formatDateBR(refDateTo) : ''
+
+  // Busca snapshot FROM quando a data de referência muda
   useEffect(() => {
     if (!refDate || mode === 'hidden') {
       setSnapshots(null)
@@ -128,6 +142,20 @@ export function useSobeDesce({
       .catch(()   => { if (!cancelled) { setSnapshots([]);   setLoading(false) } })
     return () => { cancelled = true }
   }, [refDate, mode])
+
+  // Busca snapshot TO para modo custom com data fim passada
+  useEffect(() => {
+    if (!refDateTo) {
+      setSnapshotsTo(null)
+      return
+    }
+    let cancelled = false
+    setLoadingTo(true)
+    fetchSnapshotAtDate(refDateTo)
+      .then(data => { if (!cancelled) { setSnapshotsTo(data); setLoadingTo(false) } })
+      .catch(()   => { if (!cancelled) { setSnapshotsTo([]);   setLoadingTo(false) } })
+    return () => { cancelled = true }
+  }, [refDateTo])
 
   // Supabase Realtime — recarrega dados do server quando "Rodada em andamento"
   useEffect(() => {
@@ -147,19 +175,35 @@ export function useSobeDesce({
   // Mapa de deltas
   const deltaMap = useMemo((): Map<string, DeltaEntry> | null => {
     if (!snapshots || snapshots.length === 0 || mode === 'hidden') return null
-    const byPid = new Map(snapshots.map(s => [s.participant_id, s]))
-    const map   = new Map<string, DeltaEntry>()
-    for (const row of rankedRows) {
-      const ref = byPid.get(row.id)
-      if (ref) {
-        map.set(row.id, {
-          deltaRank: ref.rank   - row.rank,     // positivo = subiu
-          deltaPts:  row.pts    - ref.pts_total, // positivo = ganhou
-        })
+    const byPidFrom = new Map(snapshots.map(s => [s.participant_id, s]))
+    const map = new Map<string, DeltaEntry>()
+
+    if (snapshotsTo && snapshotsTo.length > 0) {
+      // Comparação entre dois snapshots passados
+      const byPidTo = new Map(snapshotsTo.map(s => [s.participant_id, s]))
+      for (const [pid, fromEntry] of byPidFrom) {
+        const toEntry = byPidTo.get(pid)
+        if (toEntry) {
+          map.set(pid, {
+            deltaRank: fromEntry.rank    - toEntry.rank,
+            deltaPts:  toEntry.pts_total - fromEntry.pts_total,
+          })
+        }
+      }
+    } else {
+      // Comparação do snapshot FROM com o ranking atual
+      for (const row of rankedRows) {
+        const ref = byPidFrom.get(row.id)
+        if (ref) {
+          map.set(row.id, {
+            deltaRank: ref.rank   - row.rank,
+            deltaPts:  row.pts    - ref.pts_total,
+          })
+        }
       }
     }
     return map.size > 0 ? map : null
-  }, [snapshots, rankedRows, mode])
+  }, [snapshots, snapshotsTo, rankedRows, mode])
 
   // Destaques
   const highlights = useMemo((): SobeDesceHighlights => {
@@ -189,8 +233,12 @@ export function useSobeDesce({
   return {
     mode, setMode,
     customFrom, setCustomFrom,
-    deltaMap, loading,
-    highlights, refDateLabel,
+    customTo, setCustomTo,
+    deltaMap,
+    loading: loading || loadingTo,
+    highlights,
+    refDateLabel,
+    refToDateLabel,
     hasData: deltaMap !== null,
   }
 }
@@ -202,8 +250,11 @@ interface SobeDesceSelectorProps {
   setMode:               (m: SobeDesceMode) => void
   customFrom:            string
   setCustomFrom:         (d: string) => void
+  customTo:              string
+  setCustomTo:           (d: string) => void
   loading:               boolean
   refDateLabel:          string
+  refToDateLabel:        string
   hasData:               boolean
   lastResultDate:        string | null
   currentPhaseStartDate: string | null
@@ -212,33 +263,38 @@ interface SobeDesceSelectorProps {
 export function SobeDesceSelector({
   mode, setMode,
   customFrom, setCustomFrom,
-  loading, refDateLabel, hasData,
+  customTo, setCustomTo,
+  loading, refDateLabel, refToDateLabel, hasData,
   lastResultDate, currentPhaseStartDate,
 }: SobeDesceSelectorProps) {
   const options: { value: SobeDesceMode; label: string; title: string; disabled?: boolean }[] = [
     {
       value: 'hidden',
-      label: 'Ocultar Sobe e Desce',
+      label: 'Ocultar',
       title: 'Remove as colunas de evolução',
     },
     {
       value:    'last_day',
-      label:    'Último dia de resultados',
+      label:    'Último dia',
       title:    'Comparação com o estado antes dos últimos resultados',
       disabled: !lastResultDate,
     },
     {
       value:    'current_round',
-      label:    'Rodada em andamento',
+      label:    'Rodada atual',
       title:    'Evolução desde o início da fase atual',
       disabled: !currentPhaseStartDate,
     },
     {
       value: 'custom',
-      label: 'Período Personalizado',
-      title: 'Escolha a data de início da comparação',
+      label: 'Período',
+      title: 'Escolha o intervalo de datas da comparação',
     },
   ]
+
+  const dateRangeLabel = refToDateLabel
+    ? `de ${refDateLabel} até ${refToDateLabel}`
+    : refDateLabel ? `desde ${refDateLabel}` : ''
 
   return (
     <div className="mb-3 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -271,9 +327,9 @@ export function SobeDesceSelector({
             Carregando...
           </span>
         )}
-        {!loading && refDateLabel && mode !== 'hidden' && (
+        {!loading && dateRangeLabel && mode !== 'hidden' && (
           <span className="ml-1 text-[10px] text-gray-400">
-            desde {refDateLabel}
+            {dateRangeLabel}
           </span>
         )}
         {mode === 'current_round' && (
@@ -291,23 +347,31 @@ export function SobeDesceSelector({
           <input
             type="date"
             value={customFrom}
-            max={todayBR()}
+            max={customTo || todayBR()}
             onChange={e => setCustomFrom(e.target.value)}
             className="rounded-lg border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-verde-400"
           />
-          <span className="text-xs text-gray-400">Até: agora</span>
+          <label className="shrink-0 text-xs font-medium text-gray-600">Até:</label>
+          <input
+            type="date"
+            value={customTo}
+            min={customFrom}
+            max={todayBR()}
+            onChange={e => setCustomTo(e.target.value)}
+            className="rounded-lg border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-verde-400"
+          />
 
           {/* Atalhos */}
           <button
             type="button"
-            onClick={() => setCustomFrom(subtractDays(todayBR(), 1))}
+            onClick={() => { setCustomFrom(subtractDays(todayBR(), 1)); setCustomTo(todayBR()) }}
             className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700 transition hover:bg-amber-200"
           >
             Últimas 24h
           </button>
           <button
             type="button"
-            onClick={() => setCustomFrom(subtractDays(todayBR(), 7))}
+            onClick={() => { setCustomFrom(subtractDays(todayBR(), 7)); setCustomTo(todayBR()) }}
             className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700 transition hover:bg-amber-200"
           >
             Últimos 7 dias
@@ -318,7 +382,7 @@ export function SobeDesceSelector({
       {/* Aviso: sem snapshot */}
       {!loading && mode !== 'hidden' && refDateLabel && !hasData && (
         <p className="border-t border-amber-100 bg-amber-50 px-3 py-2 text-[10px] font-medium text-amber-700">
-          ⚠️ Sem snapshot disponível para {refDateLabel}.
+          ⚠️ Sem snapshot disponível para o período selecionado.
           Use o botão <strong>&quot;Capturar Snapshot Diário&quot;</strong> no painel Admin → Classificação para iniciar o histórico.
         </p>
       )}

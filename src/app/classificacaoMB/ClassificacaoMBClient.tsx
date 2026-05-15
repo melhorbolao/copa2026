@@ -6,6 +6,8 @@ import {
   SobeDesceSelector,
   EvoCell,
   DeltaPtsCell,
+  type DeltaEntry,
+  type SobeDesceHighlights,
 } from './SobeDesce'
 
 interface ParticipantRow {
@@ -140,13 +142,19 @@ const ZONE_DOT: Record<Zone, string> = {
   last:   'bg-red-400',
 }
 
-function CompactRanking({ ranked, premioSpots, isUniqueLast, renderedAt, matchesRegistered, groupsDefined }: {
+function CompactRanking({
+  ranked, premioSpots, isUniqueLast, renderedAt, matchesRegistered, groupsDefined,
+  deltaMap, highlights, sdActive,
+}: {
   ranked: RankedRow[]
   premioSpots: number
   isUniqueLast: boolean
   renderedAt: string
   matchesRegistered: number
   groupsDefined: number
+  deltaMap: Map<string, DeltaEntry> | null
+  highlights: SobeDesceHighlights
+  sdActive: boolean
 }) {
   const n = ranked.length
   if (n === 0) return null
@@ -168,6 +176,21 @@ function CompactRanking({ ranked, premioSpots, isUniqueLast, renderedAt, matches
     return 'out'
   }
 
+  // Destaque via borda esquerda colorida (prioridade: subida > queda > max pts > min pts)
+  function sdBorder(rowId: string): string {
+    if (!sdActive) return ''
+    if (highlights.maxUpId   === rowId) return 'border-l-2 border-verde-500'
+    if (highlights.maxDownId === rowId) return 'border-l-2 border-red-500'
+    if (highlights.maxPtsId  === rowId) return 'border-l-2 border-amber-400'
+    if (highlights.minPtsId  === rowId) return 'border-l-2 border-slate-300'
+    return 'border-l-2 border-transparent'
+  }
+
+  const colsGrid  = sdActive
+    ? 'grid-cols-[1.4rem_1.6rem_1fr_2.2rem_2.5rem]'
+    : 'grid-cols-[1.5rem_1fr_2rem]'
+  const minW = sdActive ? 600 : 480
+
   const blockSize = Math.ceil(n / 4)
   const blocks = [0, 1, 2, 3]
     .map(i => ranked.slice(i * blockSize, (i + 1) * blockSize))
@@ -185,7 +208,7 @@ function CompactRanking({ ranked, premioSpots, isUniqueLast, renderedAt, matches
   return (
     <div className="mb-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
 
-      {/* Header — sem logo, texto simples */}
+      {/* Header */}
       <div className="border-b border-gray-100 px-4 py-2.5">
         <p className="text-sm font-black text-gray-800">Classificação Melhor Bolão</p>
         <p className="text-[10px] text-gray-400 mt-0.5">
@@ -198,14 +221,16 @@ function CompactRanking({ ranked, premioSpots, isUniqueLast, renderedAt, matches
 
       {/* 4 blocos lado a lado */}
       <div className="overflow-x-auto">
-        <div className="grid grid-cols-4 divide-x divide-gray-100" style={{ minWidth: '480px' }}>
+        <div className="grid grid-cols-4 divide-x divide-gray-100" style={{ minWidth: `${minW}px` }}>
           {blocks.map((block, bi) => (
             <div key={bi}>
               {/* cabeçalho do bloco */}
-              <div className="grid grid-cols-[1.5rem_1fr_2rem] border-b border-gray-100 bg-gray-50 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-gray-400">
+              <div className={`${colsGrid} border-b border-gray-100 bg-gray-50 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-gray-400`}>
                 <span className="text-right pr-0.5">#</span>
+                {sdActive && <span className="text-center" title="Evolução de posição">↑↓</span>}
                 <span className="pl-1">Participante</span>
                 <span className="text-right">PTS</span>
+                {sdActive && <span className="text-right" title="Pontos no período">↗</span>}
               </div>
               {/* linhas */}
               {block.map((r, ri) => {
@@ -214,11 +239,39 @@ function CompactRanking({ ranked, premioSpots, isUniqueLast, renderedAt, matches
                 return (
                   <div
                     key={r.id}
-                    className={`grid grid-cols-[1.5rem_1fr_2rem] px-2 py-[3px] text-[11px] ${ZONE_ROW[z]} ${boundary ? 'border-t border-gray-200' : ''}`}
+                    className={`${colsGrid} px-2 py-[3px] text-[11px] ${ZONE_ROW[z]} ${boundary ? 'border-t border-gray-200' : ''} ${sdBorder(r.id)}`}
                   >
                     <span className={`text-right pr-0.5 tabular-nums ${ZONE_TEXT[z]}`}>{r.rank}</span>
-                    <span className={`pl-1 truncate ${ZONE_TEXT[z]}`}>{r.apelido}{z === 'last' && ' 🔦'}</span>
+
+                    {sdActive && (
+                      <span className="flex items-center justify-center">
+                        <EvoCell
+                          delta={deltaMap?.get(r.id)}
+                          isMaxUp={highlights.maxUpId === r.id}
+                          isMaxDown={highlights.maxDownId === r.id}
+                        />
+                      </span>
+                    )}
+
+                    <span className={`pl-1 truncate ${ZONE_TEXT[z]}`}>
+                      {r.apelido}{z === 'last' && ' 🔦'}
+                      {sdActive && highlights.maxUpId   === r.id && <span className="ml-0.5 text-[8px]" title="Maior subida do período">🚀</span>}
+                      {sdActive && highlights.maxDownId === r.id && <span className="ml-0.5 text-[8px]" title="Maior queda do período">📉</span>}
+                      {sdActive && highlights.maxPtsId  === r.id && <span className="ml-0.5 text-[8px]" title="Maior pontuação do período">🔥</span>}
+                      {sdActive && highlights.minPtsId  === r.id && <span className="ml-0.5 text-[8px]" title="Menor pontuação do período">🥶</span>}
+                    </span>
+
                     <span className={`text-right tabular-nums font-bold ${ZONE_TEXT[z]}`}>{r.pts}</span>
+
+                    {sdActive && (
+                      <span className="flex items-center justify-end">
+                        <DeltaPtsCell
+                          delta={deltaMap?.get(r.id)}
+                          isMaxPts={highlights.maxPtsId === r.id}
+                          isMinPts={highlights.minPtsId === r.id}
+                        />
+                      </span>
+                    )}
                   </div>
                 )
               })}
@@ -235,6 +288,22 @@ function CompactRanking({ ranked, premioSpots, isUniqueLast, renderedAt, matches
             {label}
           </span>
         ))}
+        {sdActive && (
+          <>
+            <span className="flex items-center gap-1 text-[9px] text-gray-500">
+              <span className="inline-block h-3 w-0.5 rounded-sm bg-verde-500" />🚀 Maior subida
+            </span>
+            <span className="flex items-center gap-1 text-[9px] text-gray-500">
+              <span className="inline-block h-3 w-0.5 rounded-sm bg-red-500" />📉 Maior queda
+            </span>
+            <span className="flex items-center gap-1 text-[9px] text-gray-500">
+              <span className="inline-block h-3 w-0.5 rounded-sm bg-amber-400" />🔥 Maior pontuação
+            </span>
+            <span className="flex items-center gap-1 text-[9px] text-gray-500">
+              <span className="inline-block h-3 w-0.5 rounded-sm bg-slate-300" />🥶 Menor pontuação
+            </span>
+          </>
+        )}
       </div>
     </div>
   )
@@ -304,8 +373,9 @@ export function ClassificacaoMBClient({
   const {
     mode: sdMode, setMode: setSdMode,
     customFrom: sdCustomFrom, setCustomFrom: setSdCustomFrom,
+    customTo: sdCustomTo, setCustomTo: setSdCustomTo,
     deltaMap, loading: sdLoading,
-    highlights, refDateLabel, hasData: sdHasData,
+    highlights, refDateLabel, refToDateLabel, hasData: sdHasData,
   } = useSobeDesce({ lastResultDate, currentPhaseStartDate, rankedRows: rankedRowsForSD })
   const sdActive = sdMode !== 'hidden'
 
@@ -338,13 +408,17 @@ export function ClassificacaoMBClient({
         setMode={setSdMode}
         customFrom={sdCustomFrom}
         setCustomFrom={setSdCustomFrom}
+        customTo={sdCustomTo}
+        setCustomTo={setSdCustomTo}
         loading={sdLoading}
         refDateLabel={refDateLabel}
+        refToDateLabel={refToDateLabel}
         hasData={sdHasData}
         lastResultDate={lastResultDate}
         currentPhaseStartDate={currentPhaseStartDate}
       />
 
+      {/* Classificação Melhor Bolão — tabela compacta com Sobe e Desce */}
       <CompactRanking
         ranked={ranked}
         premioSpots={premioSpots}
@@ -352,6 +426,9 @@ export function ClassificacaoMBClient({
         renderedAt={renderedAt}
         matchesRegistered={matchesRegistered}
         groupsDefined={groupsDefined}
+        deltaMap={deltaMap}
+        highlights={highlights}
+        sdActive={sdActive}
       />
 
       <div className="mb-3 flex items-baseline gap-3">
@@ -372,19 +449,8 @@ export function ClassificacaoMBClient({
 
                 {/* Identidade */}
                 <th className="px-1.5 py-2 text-left w-8">#</th>
-
-                {/* Sobe e Desce — evolução de posição */}
-                {sdActive && (
-                  <th className="px-1.5 py-2 text-center w-9" title="Evolução de posições no período">↑↓</th>
-                )}
-
                 <th className="px-1.5 py-2 text-left min-w-[90px]">Participante</th>
                 <th className="px-1.5 py-2 text-right w-10" title="Pontuação total">Pts</th>
-
-                {/* Sobe e Desce — pontos na janela */}
-                {sdActive && (
-                  <th className="px-1.5 py-2 text-center w-12" title="Pontos conquistados no período">Pts↗</th>
-                )}
 
                 {/* Último / Próximo jogo */}
                 {showLastMatch && (
@@ -464,49 +530,14 @@ export function ClassificacaoMBClient({
                       {boundary && <span className={`ml-0.5 ${z === 'last' ? 'text-white' : 'text-amber-500'}`} title="Empate no corte">⚠</span>}
                     </td>
 
-                    {/* Sobe e Desce — evolução de posição */}
-                    {sdActive && (
-                      <td className="px-1.5 py-1 text-center">
-                        <EvoCell
-                          delta={deltaMap?.get(row.id)}
-                          isMaxUp={highlights.maxUpId === row.id}
-                          isMaxDown={highlights.maxDownId === row.id}
-                        />
-                      </td>
-                    )}
-
                     <td className={`px-1.5 py-1 max-w-[120px] truncate ${z === 'last' ? 'text-white' : 'text-gray-900'}`}>
                       {row.apelido}
                       {z === 'last' && <span className="ml-1 text-[11px]">🔦</span>}
                       {isActive && <span className={`ml-1 text-[10px] ${z === 'last' ? 'text-white' : 'text-verde-600'}`}>◀</span>}
-                      {/* Destaques Sobe e Desce */}
-                      {sdActive && highlights.maxUpId === row.id && (
-                        <span className="ml-1 rounded bg-verde-100 px-0.5 text-[9px] font-bold text-verde-700" title="Maior subida do período">🚀 Escalador</span>
-                      )}
-                      {sdActive && highlights.maxDownId === row.id && (
-                        <span className="ml-1 rounded bg-red-100 px-0.5 text-[9px] font-bold text-red-600" title="Maior queda do período">📉 Queda Livre</span>
-                      )}
-                      {sdActive && highlights.maxPtsId === row.id && (
-                        <span className="ml-1 rounded bg-amber-100 px-0.5 text-[9px] font-bold text-amber-700" title="Maior pontuação do período">🔥</span>
-                      )}
-                      {sdActive && highlights.minPtsId === row.id && (
-                        <span className="ml-1 rounded bg-gray-100 px-0.5 text-[9px] font-medium text-gray-500" title="Menor pontuação do período">🥶</span>
-                      )}
                     </td>
                     <td className={`px-1.5 py-1 text-right font-mono font-bold tabular-nums ${z === 'last' ? 'text-white' : 'text-gray-900'}`}>
                       {row.pts}
                     </td>
-
-                    {/* Sobe e Desce — pontos conquistados na janela */}
-                    {sdActive && (
-                      <td className="px-1.5 py-1 text-center">
-                        <DeltaPtsCell
-                          delta={deltaMap?.get(row.id)}
-                          isMaxPts={highlights.maxPtsId === row.id}
-                          isMinPts={highlights.minPtsId === row.id}
-                        />
-                      </td>
-                    )}
 
                     {/* Último / Próximo */}
                     {showLastMatch && (
