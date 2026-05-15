@@ -13,14 +13,15 @@ export interface PageVisibilityRow {
 
 const PAGE_ORDER = [
   'jogos', 'palpites', 'acopa', 'tabelaMB', 'classificacaoMB',
-  'estatisticas', 'simulador', 'participantes', 'pontuacao', 'regulamento',
+  'estatisticas', 'simulador', 'comparador', 'participantes', 'pontuacao', 'regulamento',
 ]
 
 // Pages that always appear in nav when missing from DB (admin can override once row exists)
 const DEFAULT_PAGES: PageVisibilityRow[] = [
-  { id: '__default_jogos',        page_name: 'jogos',        label: 'Jogos',            show_for_admin: true, show_for_users: true, sort_order: 0 },
-  { id: '__default_estatisticas', page_name: 'estatisticas', label: 'Estatísticas MB',  show_for_admin: true, show_for_users: true, sort_order: 60 },
-  { id: '__default_simulador',    page_name: 'simulador',    label: 'Simulador MB',     show_for_admin: true, show_for_users: true, sort_order: 65 },
+  { id: '__default_jogos',        page_name: 'jogos',        label: 'Jogos',            show_for_admin: true, show_for_users: true,  sort_order: 0  },
+  { id: '__default_estatisticas', page_name: 'estatisticas', label: 'Estatísticas MB',  show_for_admin: true, show_for_users: true,  sort_order: 60 },
+  { id: '__default_simulador',    page_name: 'simulador',    label: 'Simulador MB',     show_for_admin: true, show_for_users: true,  sort_order: 65 },
+  { id: '__default_comparador',   page_name: 'comparador',   label: 'Comparador MB',    show_for_admin: true, show_for_users: false, sort_order: 70 },
 ]
 
 // Memoized per request — deduplicates calls from Sidebar, Navbar, and page components
