@@ -493,7 +493,10 @@ function TeamSlot({
       className={[
         'flex h-7 items-center gap-1 px-1.5 text-[11px] leading-none select-none',
         isWinner  ? 'bg-verde-50 font-bold text-verde-800' : '',
-        !isWinner && team && onClick ? 'cursor-pointer text-gray-700 hover:bg-gray-50' : '',
+        // iOS Safari só dispara onClick em divs com cursor-pointer; touch-manipulation
+        // evita que o overflow-x-auto capture o toque como gesto de scroll.
+        onClick   ? 'cursor-pointer touch-manipulation' : '',
+        !isWinner && team && onClick ? 'text-gray-700 hover:bg-gray-50' : '',
         !isWinner && team && !onClick ? 'text-gray-700' : '',
         !team ? 'text-gray-300' : '',
       ].filter(Boolean).join(' ')}
