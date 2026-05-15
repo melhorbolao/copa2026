@@ -118,15 +118,24 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
   }
 
   const handleFirst = (val: string) => {
-    setFirst(val)
-    saveDraft(val, second)              // salva rascunho imediatamente
-    if (val && second && val !== second) doSave(val, second)
+    // Se o usuário escolher o time que já está em 2º, faz o swap automaticamente
+    // (isso é impedido pelo disabled da <option> sem este tratamento especial)
+    const newFirst  = val
+    const newSecond = val === second ? first : second   // troca se conflito
+    setFirst(newFirst)
+    setSecond(newSecond)
+    saveDraft(newFirst, newSecond)
+    if (newFirst && newSecond && newFirst !== newSecond) doSave(newFirst, newSecond)
   }
 
   const handleSecond = (val: string) => {
-    setSecond(val)
-    saveDraft(first, val)               // salva rascunho imediatamente
-    if (first && val && first !== val) doSave(first, val)
+    // Se o usuário escolher o time que já está em 1º, faz o swap automaticamente
+    const newSecond = val
+    const newFirst  = val === first ? second : first    // troca se conflito
+    setFirst(newFirst)
+    setSecond(newSecond)
+    saveDraft(newFirst, newSecond)
+    if (newFirst && newSecond && newFirst !== newSecond) doSave(newFirst, newSecond)
   }
 
   // ── Conflitos ────────────────────────────────────────────────────────────────
@@ -212,7 +221,10 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
                     <option
                       key={t.team}
                       value={t.team}
-                      disabled={t.team === second || (!!thirdTeam && t.team === thirdTeam)}
+                      // Não bloqueia o time do 2º (selecionar ele faz swap automático).
+                      // Só bloqueia o time apostado como 3º colocado avançante —
+                      // ele não pode ser simultaneamente 1º ou 2º do grupo.
+                      disabled={!!thirdTeam && t.team === thirdTeam && t.team !== first && t.team !== second}
                     >
                       {t.team}
                     </option>
@@ -244,7 +256,8 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
                     <option
                       key={t.team}
                       value={t.team}
-                      disabled={t.team === first || (!!thirdTeam && t.team === thirdTeam)}
+                      // Não bloqueia o time do 1º (selecionar ele faz swap automático).
+                      disabled={!!thirdTeam && t.team === thirdTeam && t.team !== first && t.team !== second}
                     >
                       {t.team}
                     </option>
