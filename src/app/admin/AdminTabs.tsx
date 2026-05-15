@@ -20,8 +20,8 @@ export function AdminTabs() {
   const pathname = usePathname()
 
   return (
-    <div className="mb-6 overflow-x-auto border-b border-gray-200">
-      <div className="flex min-w-max gap-1">
+    <div className="mb-6 border-b border-gray-200">
+      <div className="flex flex-wrap gap-1">
         {tabs.map((tab) => {
           const active = pathname.startsWith(tab.href)
           return (
