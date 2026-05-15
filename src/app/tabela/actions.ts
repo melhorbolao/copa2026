@@ -67,6 +67,15 @@ export async function updateGroupBetFromReorder(
         { onConflict: 'participant_id,group_name' },
       )
     if (error) throw new Error(error.message)
+
+    // Remove terceiro conflitante se o thirdBet não será sobrescrito explicitamente
+    if (!thirdBetUpdate) {
+      await admin.from('third_place_bets')
+        .delete()
+        .eq('participant_id', participantId)
+        .eq('group_name', groupName)
+        .in('team', [groupBetUpdate.firstPlace, groupBetUpdate.secondPlace])
+    }
   }
 
   if (thirdBetUpdate) {

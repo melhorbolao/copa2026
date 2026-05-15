@@ -193,15 +193,25 @@ export async function saveGroupBet(groupName: string, firstPlace: string, second
   if (rpc.error && !isMissingRpc(rpc.error)) {
     throw new Error(rpc.error.message)
   }
-  if (!rpc.error) return
 
-  // Fallback (migration ainda não rodou)
   const admin = createAuthAdminClient()
-  const { error } = await admin.from('group_bets').upsert(
-    { participant_id: participantId, group_name: groupName, first_place: firstPlace, second_place: secondPlace },
-    { onConflict: 'participant_id,group_name' },
-  )
-  if (error) throw new Error(error.message)
+
+  if (rpc.error) {
+    // Fallback (migration ainda não rodou)
+    const { error } = await admin.from('group_bets').upsert(
+      { participant_id: participantId, group_name: groupName, first_place: firstPlace, second_place: secondPlace },
+      { onConflict: 'participant_id,group_name' },
+    )
+    if (error) throw new Error(error.message)
+  }
+
+  // Remove terceiro conflitante: se o time apostado como 3º passou a ser 1º ou 2º
+  // (ex: autofill colocou X como 3º, usuário mudou manualmente X para 2º)
+  await admin.from('third_place_bets')
+    .delete()
+    .eq('participant_id', participantId)
+    .eq('group_name', groupName)
+    .in('team', [firstPlace, secondPlace])
 }
 
 // ── Terceiros classificados ───────────────────────────────────
