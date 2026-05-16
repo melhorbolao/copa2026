@@ -76,8 +76,9 @@ export function stageToRoundKeys(stage: StageKey): string[] {
 // ── Settings (released + available) ───────────────────────────────────────
 
 export interface PhaseSettings {
-  visibleStages: Set<StageKey>     // antes "released_rounds"
-  availableStages: Set<StageKey>   // novo
+  visibleStages: Set<StageKey>       // antes "released_rounds"
+  availableStages: Set<StageKey>     // novo
+  availableRawKeys: Set<string>      // raw keys persistidos em available_rounds (inclui 'bonus')
 }
 
 /**
@@ -114,9 +115,16 @@ export async function getPhaseSettings(): Promise<PhaseSettings> {
     }
   }
 
+  let availableRawKeys = new Set<string>()
+  try {
+    const arr = JSON.parse(map['available_rounds'] ?? '[]') as string[]
+    availableRawKeys = new Set(arr)
+  } catch { /* ignore */ }
+
   return {
     visibleStages: parse(map['released_rounds']),
     availableStages: parse(map['available_rounds']),
+    availableRawKeys,
   }
 }
 

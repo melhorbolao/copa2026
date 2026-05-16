@@ -22,6 +22,8 @@ export default async function GestaoAdminPage() {
   // permitir que o GestaoAdminClient acompanhe o mesmo conjunto de toggles.
   const fillableRoundKeys = availableRounds
     .filter(r => {
+      // 'bonus' não tem StageKey — verifica diretamente nos raw keys persistidos
+      if (r.key === 'bonus') return phaseSettings.availableRawKeys.has('bonus')
       const stage = roundKeyToStage(r.key)
       return stage ? phaseSettings.availableStages.has(stage) : false
     })
