@@ -388,7 +388,7 @@ export async function sendReminderEmails(
 
 // ── Alertas manuais de palpites (com Excel anexado) ──────────
 export async function sendBonusAlert(
-  type: 'all' | 'incomplete' | 'receipt',
+  type: 'alert_all' | 'alert_incomplete' | 'alert_receipt',
   subject: string,
   body: string,
 ): Promise<{ sent: number }> {
@@ -416,7 +416,7 @@ export async function sendBonusAlert(
 
   let targets = users
 
-  if (type === 'incomplete') {
+  if (type === 'alert_incomplete') {
     const allParticipantIds = [...new Set((userParticipants ?? []).map(r => r.participant_id))]
     const { data: completeBets } = await supabase
       .from('tournament_bets')
@@ -457,6 +457,18 @@ export async function sendBonusAlert(
   }
 
   return { sent }
+}
+
+export async function saveAlertTemplate(
+  key: 'alert_all' | 'alert_incomplete' | 'alert_receipt',
+  subject: string,
+  body: string,
+): Promise<void> {
+  await requireAdmin()
+  const supabase = await createAdminClient()
+  await supabase
+    .from('email_settings')
+    .upsert({ key, subject, body, updated_at: new Date().toISOString() }, { onConflict: 'key' })
 }
 
 function buildStageFilter(stage: string): { phases: string[]; match?: Record<string, unknown> } {

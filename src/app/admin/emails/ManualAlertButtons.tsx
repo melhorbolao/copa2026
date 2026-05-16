@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { sendBonusAlert } from '../actions'
+import { sendBonusAlert, saveAlertTemplate } from '../actions'
 
-type AlertType = 'all' | 'incomplete' | 'receipt'
+type AlertType = 'alert_all' | 'alert_incomplete' | 'alert_receipt'
 
 const ALERTS: Array<{
   type: AlertType
@@ -13,7 +13,7 @@ const ALERTS: Array<{
   defaultBody: string
 }> = [
   {
-    type: 'all',
+    type: 'alert_all',
     label: 'Aviso do prazo a todos',
     description: 'Envia a todos os participantes (completos e incompletos) com Excel de palpites em anexo. Recomendado ~24h antes do prazo.',
     defaultSubject: '⏰ Prazo se encerrando — envie seus palpites até 08/06',
@@ -28,7 +28,7 @@ Seus palpites atuais estão no arquivo Excel em anexo. Confira se está tudo com
 Boa sorte! 🏆`,
   },
   {
-    type: 'incomplete',
+    type: 'alert_incomplete',
     label: 'Aviso de palpites incompletos',
     description: 'Envia somente aos participantes sem campeão preenchido, com Excel em anexo. Recomendado ~24h antes do prazo.',
     defaultSubject: '⚠️ Seus palpites estão incompletos — prazo em 08/06',
@@ -43,7 +43,7 @@ O arquivo Excel em anexo mostra o que já foi registrado até agora. Acesse o si
 Não perca esta chance! ⚽`,
   },
   {
-    type: 'receipt',
+    type: 'alert_receipt',
     label: 'Comprovante de palpites',
     description: 'Envia a todos com o Excel de palpites como comprovante. Recomendado imediatamente após o encerramento do prazo.',
     defaultSubject: '✅ Seus palpites foram registrados — Copa do Mundo 2026',
@@ -57,21 +57,41 @@ Que vença o melhor! 🏆🎉`,
   },
 ]
 
-function AlertCard({ type, label, description, defaultSubject, defaultBody }: typeof ALERTS[number]) {
+type SavedTemplates = Record<AlertType, { subject: string | null; body: string | null }>
+
+function AlertCard({
+  type, label, description, defaultSubject, defaultBody, saved,
+}: typeof ALERTS[number] & { saved: { subject: string | null; body: string | null } }) {
   const [open,    setOpen]   = useState(false)
-  const [subject, setSubject] = useState(defaultSubject)
-  const [body,    setBody]   = useState(defaultBody)
-  const [result,  setResult] = useState<string | null>(null)
-  const [pending, startTransition] = useTransition()
+  const [subject, setSubject] = useState(saved.subject ?? defaultSubject)
+  const [body,    setBody]   = useState(saved.body    ?? defaultBody)
+  const [sendMsg,  setSendMsg]  = useState<string | null>(null)
+  const [saveMsg,  setSaveMsg]  = useState<string | null>(null)
+  const [sending,  startSend]  = useTransition()
+  const [saving,   startSave]  = useTransition()
+
+  const isDirty = subject !== (saved.subject ?? defaultSubject) || body !== (saved.body ?? defaultBody)
 
   const handleSend = () => {
-    setResult(null)
-    startTransition(async () => {
+    setSendMsg(null)
+    startSend(async () => {
       try {
         const { sent } = await sendBonusAlert(type, subject, body)
-        setResult(`✓ ${sent} e-mail${sent !== 1 ? 's' : ''} enviado${sent !== 1 ? 's' : ''} com sucesso.`)
+        setSendMsg(`✓ ${sent} e-mail${sent !== 1 ? 's' : ''} enviado${sent !== 1 ? 's' : ''} com sucesso.`)
       } catch (err) {
-        setResult(`Erro: ${err instanceof Error ? err.message : 'Falha ao enviar.'}`)
+        setSendMsg(`Erro: ${err instanceof Error ? err.message : 'Falha ao enviar.'}`)
+      }
+    })
+  }
+
+  const handleSave = () => {
+    setSaveMsg(null)
+    startSave(async () => {
+      try {
+        await saveAlertTemplate(type, subject, body)
+        setSaveMsg('✓ Padrão salvo.')
+      } catch {
+        setSaveMsg('Erro ao salvar.')
       }
     })
   }
@@ -82,6 +102,9 @@ function AlertCard({ type, label, description, defaultSubject, defaultBody }: ty
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-gray-900">{label}</p>
           <p className="mt-0.5 text-xs text-gray-500 leading-relaxed">{description}</p>
+          {(saved.subject || saved.body) && (
+            <p className="mt-1 text-[11px] text-green-700 font-medium">✓ Template personalizado salvo</p>
+          )}
         </div>
         <button
           onClick={() => setOpen(true)}
@@ -99,7 +122,7 @@ function AlertCard({ type, label, description, defaultSubject, defaultBody }: ty
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-bold text-gray-800">{label}</h3>
         <button
-          onClick={() => { setOpen(false); setResult(null) }}
+          onClick={() => { setOpen(false); setSendMsg(null); setSaveMsg(null) }}
           className="text-gray-400 hover:text-gray-600 text-lg leading-none"
         >×</button>
       </div>
@@ -133,22 +156,37 @@ function AlertCard({ type, label, description, defaultSubject, defaultBody }: ty
       <div className="mt-4 flex items-center gap-3 flex-wrap">
         <button
           onClick={handleSend}
-          disabled={pending || !body.trim() || !subject.trim()}
+          disabled={sending || saving || !body.trim() || !subject.trim()}
           className="rounded-lg px-5 py-2 text-sm font-bold text-white disabled:opacity-40 transition"
           style={{ backgroundColor: '#002776' }}
         >
-          {pending ? 'Enviando…' : 'Confirmar envio'}
+          {sending ? 'Enviando…' : 'Confirmar envio'}
         </button>
+
         <button
-          onClick={() => { setOpen(false); setResult(null) }}
-          disabled={pending}
+          onClick={handleSave}
+          disabled={saving || sending || !isDirty}
+          className="rounded-lg px-4 py-2 text-sm font-semibold border border-gray-300 bg-white text-gray-700 disabled:opacity-40 transition hover:bg-gray-50"
+        >
+          {saving ? 'Salvando…' : 'Salvar como padrão'}
+        </button>
+
+        <button
+          onClick={() => { setOpen(false); setSendMsg(null); setSaveMsg(null) }}
+          disabled={sending || saving}
           className="text-sm text-gray-500 hover:text-gray-700"
         >
           Cancelar
         </button>
-        {result && (
-          <span className={`text-sm font-medium ${result.startsWith('✓') ? 'text-verde-600' : 'text-red-500'}`}>
-            {result}
+
+        {sendMsg && (
+          <span className={`text-sm font-medium ${sendMsg.startsWith('✓') ? 'text-green-700' : 'text-red-500'}`}>
+            {sendMsg}
+          </span>
+        )}
+        {saveMsg && !sendMsg && (
+          <span className={`text-sm font-medium ${saveMsg.startsWith('✓') ? 'text-green-700' : 'text-red-500'}`}>
+            {saveMsg}
           </span>
         )}
       </div>
@@ -156,10 +194,12 @@ function AlertCard({ type, label, description, defaultSubject, defaultBody }: ty
   )
 }
 
-export function ManualAlertButtons() {
+export function ManualAlertButtons({ savedTemplates }: { savedTemplates: SavedTemplates }) {
   return (
     <div className="space-y-3">
-      {ALERTS.map(a => <AlertCard key={a.type} {...a} />)}
+      {ALERTS.map(a => (
+        <AlertCard key={a.type} {...a} saved={savedTemplates[a.type]} />
+      ))}
     </div>
   )
 }

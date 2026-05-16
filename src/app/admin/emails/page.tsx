@@ -4,6 +4,7 @@ import { ManualAlertButtons } from './ManualAlertButtons'
 import { ReminderSection } from '../usuarios/ReminderSection'
 import { CopyEmailsButton } from '../usuarios/CopyEmailsButton'
 
+const ALERT_KEYS = ['alert_all', 'alert_incomplete', 'alert_receipt'] as const
 const EVENT_KEYS = new Set(['notify_approved', 'notify_new_user'])
 const KEY_ORDER  = ['notify_approved', 'notify_new_user']
 
@@ -16,8 +17,9 @@ export default async function AdminEmailsPage() {
   const supabase  = await createAdminClient()
   const authAdmin = createAuthAdminClient()
 
+  type SettingsRow = { key: string; enabled: boolean; label: string; description: string | null; subject: string | null; body: string | null; updated_at: string | null }
   const [{ data: settingsRows }, { data: logRows }, { data: approvedUsers }] = await Promise.all([
-    supabase.from('email_settings').select('key, enabled, label, description, updated_at'),
+    (supabase.from('email_settings').select('key, enabled, label, description, subject, body, updated_at') as unknown as Promise<{ data: SettingsRow[] | null }>),
     supabase.from('email_logs')
       .select('job_type, status, sent_at, etapa_key, email')
       .gte('sent_at', new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString())
@@ -49,6 +51,13 @@ export default async function AdminEmailsPage() {
       }
     })
 
+  const alertTemplates = Object.fromEntries(
+    ALERT_KEYS.map(key => {
+      const row = settingsMap.get(key)
+      return [key, { subject: row?.subject ?? null, body: row?.body ?? null }]
+    })
+  ) as Record<typeof ALERT_KEYS[number], { subject: string | null; body: string | null }>
+
   const approvedEmails = (approvedUsers ?? []).map(u => u.email)
   const recentLogs = (logRows ?? []).slice(0, 20)
 
@@ -58,7 +67,7 @@ export default async function AdminEmailsPage() {
       {/* ── Alertas de palpites ── */}
       <section>
         <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-gray-500">Alertas de palpites</h2>
-        <ManualAlertButtons />
+        <ManualAlertButtons savedTemplates={alertTemplates} />
       </section>
 
       {/* ── Envio personalizado ── */}
