@@ -27,23 +27,22 @@ export async function GET(request: Request) {
       if (user) {
         const { data: existing } = await supabase
           .from('users')
-          .select('id, status, phone, name')
+          .select('id, status, whatsapp, padrinho, name')
           .eq('id', user.id)
           .single()
 
         if (!existing) {
           // ── Primeiro acesso via OAuth (sem perfil pré-criado) ─────────
           const name     = user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email ?? 'Usuário'
-          const phone    = user.user_metadata?.phone ?? null
           const provider = user.app_metadata?.provider ?? 'email'
 
           await supabase.from('users').insert({
-            id: user.id, name, email: user.email!, phone, provider,
+            id: user.id, name, email: user.email!, provider,
             status: 'aprovacao_pendente', approved: false, paid: false, is_admin: false,
           })
 
-          if (!phone) return NextResponse.redirect(`${requestUrl.origin}/completar-perfil`)
-          return NextResponse.redirect(`${requestUrl.origin}/aguardando-aprovacao`)
+          // OAuth nunca fornece whatsapp/padrinho — sempre exige completar perfil
+          return NextResponse.redirect(`${requestUrl.origin}/completar-perfil`)
         }
 
         // ── Confirmação de e-mail (status transita de email_pendente) ──
@@ -60,8 +59,8 @@ export async function GET(request: Request) {
           return NextResponse.redirect(`${requestUrl.origin}/aguardando-aprovacao`)
         }
 
-        // Usuário já existente e com status avançado
-        if (!existing.phone) {
+        // Usuário já existente — verifica se perfil está completo (whatsapp + padrinho)
+        if (!existing.whatsapp || !existing.padrinho) {
           return NextResponse.redirect(`${requestUrl.origin}/completar-perfil`)
         }
 

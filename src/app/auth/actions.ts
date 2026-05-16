@@ -117,6 +117,10 @@ export async function saveUserProfile(
   apelido = '',
   bio = '',
 ) {
+  if (!name.trim())     throw new Error('Nome é obrigatório.')
+  if (!whatsapp.trim()) throw new Error('WhatsApp é obrigatório.')
+  if (!padrinho.trim()) throw new Error('Selecione o padrinho no bolão.')
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Não autenticado')
