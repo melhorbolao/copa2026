@@ -16,7 +16,8 @@ interface DayRow {
   pts_tournament: number
 }
 
-export async function recalculateDailyPoints(): Promise<{ count: number }> {
+export async function recalculateDailyPoints(options?: { upToDate?: string }): Promise<{ count: number }> {
+  const upToDate = options?.upToDate
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAuthAdminClient() as any
 
@@ -112,7 +113,10 @@ export async function recalculateDailyPoints(): Promise<{ count: number }> {
     }
   }
 
-  const rows = [...acc.values()]
+  // Se upToDate fornecido, descarta linhas de datas futuras (evita dados parciais do dia)
+  const rows = upToDate
+    ? [...acc.values()].filter(r => r.event_date <= upToDate)
+    : [...acc.values()]
 
   // Full replace
   await admin.from('participant_points_by_day').delete().gte('event_date', '1900-01-01')

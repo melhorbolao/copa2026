@@ -9,6 +9,7 @@ import { ClassificacaoMBClient } from './ClassificacaoMBClient'
 import { getMatchResult, detectMatchZebra, scoreTournamentBet, scoreMatchBet } from '@/lib/scoring/engine'
 import type { TournamentResults } from '@/lib/scoring/engine'
 import { getVisibilitySettings, isBonusVisible, isMatchBetsVisible } from '@/lib/production-mode'
+import { recalculateDailyPoints } from '@/lib/scoring/daily-points'
 
 export const metadata = {}
 
@@ -70,6 +71,7 @@ export default async function ClassificacaoMBPage() {
   let prizeSpots = 8
   let premioSpots = 10
   let sobeDesceVisible = true
+  let lastDataDate: string | null = null
   const colVisibility: Record<string, boolean> = {
     premio:       false,
     last_match:   true,
@@ -99,16 +101,43 @@ export default async function ClassificacaoMBPage() {
       'classif_col_delta_premio', 'classif_col_delta_corte',
       'classif_col_pts_jg', 'classif_col_pts_cl', 'classif_col_pts_g4',
     ]
-    const [scorerRes, scorerSetting, settingsRes, premioSpotsRes, colSettingsRes, sobeDesceRow] = await Promise.all([
+    const [scorerRes, scorerSetting, settingsRes, premioSpotsRes, colSettingsRes, sobeDesceRow, dailyRunRow] = await Promise.all([
       admin.from('top_scorer_mapping').select('raw_name, standardized_name, is_eliminated'),
       admin.from('tournament_settings').select('value').eq('key', 'official_top_scorer').maybeSingle(),
       admin.from('tournament_settings').select('value').eq('key', 'prize_spots').maybeSingle(),
       admin.from('tournament_settings').select('value').eq('key', 'premio_spots').maybeSingle(),
       admin.from('tournament_settings').select('key, value').in('key', COL_KEYS),
       admin.from('tournament_settings').select('value').eq('key', 'sobe_desce_visible').maybeSingle(),
+      admin.from('tournament_settings').select('value').eq('key', 'daily_points_last_run').maybeSingle(),
     ])
     // padrão: visível (true) se a chave ainda não existir
     sobeDesceVisible = sobeDesceRow?.data?.value !== 'false'
+
+    // ── Auto-recalc de pontos diários ────────────────────────────────────────
+    const nowBR = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
+    const lastRunDate = dailyRunRow?.data?.value ?? null
+    if (lastRunDate !== nowBR) {
+      const yday = new Date(); yday.setDate(yday.getDate() - 1)
+      const yesterdayBR = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(yday)
+      try {
+        await recalculateDailyPoints({ upToDate: yesterdayBR })
+        await admin.from('tournament_settings').upsert(
+          { key: 'daily_points_last_run', value: nowBR },
+          { onConflict: 'key' },
+        )
+      } catch { /* tabela ainda não criada — ignora */ }
+    }
+
+    // Última data com dados históricos (para limite do Sobe e Desce)
+    try {
+      const lastDataRow = await admin
+        .from('participant_points_by_day')
+        .select('event_date')
+        .order('event_date', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      lastDataDate = lastDataRow?.data?.event_date ?? null
+    } catch { /* tabela ainda não criada */ }
     if (scorerRes.data) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const row of scorerRes.data as any[]) {
@@ -400,6 +429,7 @@ export default async function ClassificacaoMBPage() {
         currentPhaseStartDate={currentPhaseStartDate}
         sobeDesceVisible={sobeDesceVisible}
         isAdmin={isAdmin}
+        lastDataDate={lastDataDate}
       />
     </>
   )

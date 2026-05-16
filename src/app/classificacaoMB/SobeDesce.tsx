@@ -88,18 +88,21 @@ interface UseSobeDesceOptions {
   currentPhaseStartDate: string | null
   /** Array estável (memoizado no componente pai) */
   rankedRows: ReadonlyArray<{ id: string; pts: number; rank: number }>
+  /** Última data com dados em participant_points_by_day (limite para o seletor) */
+  lastDataDate: string | null
 }
 
 export function useSobeDesce({
   lastResultDate,
   currentPhaseStartDate,
   rankedRows,
+  lastDataDate,
 }: UseSobeDesceOptions): UseSobeDesceReturn {
   const router = useRouter()
 
   const [mode,        setMode]        = useState<SobeDesceMode>('hidden')
-  const [customFrom,  setCustomFrom]  = useState(() => subtractDays(todayBR(), 7))
-  const [customTo,    setCustomTo]    = useState(() => todayBR())
+  const [customFrom,  setCustomFrom]  = useState(() => subtractDays(lastDataDate ?? todayBR(), 7))
+  const [customTo,    setCustomTo]    = useState(() => lastDataDate ?? subtractDays(todayBR(), 1))
   const [snapshots,   setSnapshots]   = useState<SnapshotEntry[] | null>(null)
   const [snapshotsTo, setSnapshotsTo] = useState<SnapshotEntry[] | null>(null)
   const [loading,     setLoading]     = useState(false)
@@ -258,6 +261,7 @@ interface SobeDesceSelectorProps {
   hasData:               boolean
   lastResultDate:        string | null
   currentPhaseStartDate: string | null
+  lastDataDate:          string | null
 }
 
 export function SobeDesceSelector({
@@ -265,7 +269,7 @@ export function SobeDesceSelector({
   customFrom, setCustomFrom,
   customTo, setCustomTo,
   loading, refDateLabel, refToDateLabel, hasData,
-  lastResultDate, currentPhaseStartDate,
+  lastResultDate, currentPhaseStartDate, lastDataDate,
 }: SobeDesceSelectorProps) {
   const options: { value: SobeDesceMode; label: string; title: string; disabled?: boolean }[] = [
     {
@@ -332,6 +336,11 @@ export function SobeDesceSelector({
             {dateRangeLabel}
           </span>
         )}
+        {lastDataDate && (
+          <span className="ml-auto text-[9px] text-gray-300" title="Última data com dados históricos disponíveis">
+            dados até {formatDateBR(lastDataDate)}
+          </span>
+        )}
         {mode === 'current_round' && (
           <span className="ml-1 flex items-center gap-1 text-[10px] font-semibold text-verde-600">
             <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-verde-500" />
@@ -356,7 +365,7 @@ export function SobeDesceSelector({
             type="date"
             value={customTo}
             min={customFrom}
-            max={todayBR()}
+            max={lastDataDate ?? todayBR()}
             onChange={e => setCustomTo(e.target.value)}
             className="rounded-lg border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-verde-400"
           />

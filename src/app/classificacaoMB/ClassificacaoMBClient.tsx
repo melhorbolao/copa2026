@@ -52,6 +52,8 @@ interface Props {
   /** Controle admin: se false, usuários comuns não veem o Sobe e Desce */
   sobeDesceVisible: boolean
   isAdmin: boolean
+  /** Última data com dados em participant_points_by_day — limita seletor de período */
+  lastDataDate: string | null
 }
 
 type RankedRow = ParticipantRow & { rank: number; diffLider: number; diffPremio: number | null; diffCorte: number | null }
@@ -318,7 +320,7 @@ export function ClassificacaoMBClient({
   scorerMapping, teamAbbrs, prizeSpots, premioSpots,
   activeParticipantId, colVisibility, renderedAt, matchesRegistered, groupsDefined,
   lastResultDate, currentPhaseStartDate,
-  sobeDesceVisible, isAdmin,
+  sobeDesceVisible, isAdmin, lastDataDate,
 }: Props) {
   const elTeams = useMemo(() => new Set(eliminatedTeams), [eliminatedTeams])
   const elStd   = useMemo(() => new Set(eliminatedStdScorers), [eliminatedStdScorers])
@@ -380,7 +382,7 @@ export function ClassificacaoMBClient({
     customTo: sdCustomTo, setCustomTo: setSdCustomTo,
     deltaMap, loading: sdLoading,
     highlights, refDateLabel, refToDateLabel, hasData: sdHasData,
-  } = useSobeDesce({ lastResultDate, currentPhaseStartDate, rankedRows: rankedRowsForSD })
+  } = useSobeDesce({ lastResultDate, currentPhaseStartDate, rankedRows: rankedRowsForSD, lastDataDate })
   // Usuários comuns só veem se o admin habilitou; admins sempre veem
   const sdAllowed = sobeDesceVisible || isAdmin
   const sdActive = sdAllowed && sdMode !== 'hidden'
@@ -423,6 +425,7 @@ export function ClassificacaoMBClient({
           hasData={sdHasData}
           lastResultDate={lastResultDate}
           currentPhaseStartDate={currentPhaseStartDate}
+          lastDataDate={lastDataDate}
         />
       )}
 
