@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { updateClassifColVisibility } from './actions'
+import { updateClassifColVisibility, updateSobeDesceVisible } from './actions'
 
 interface ColDef {
   key: string
@@ -10,12 +10,29 @@ interface ColDef {
   enabled: boolean
 }
 
-export function ClassificacaoAdminClient({ cols }: { cols: ColDef[] }) {
+export function ClassificacaoAdminClient({ cols, sobeDesceVisible }: { cols: ColDef[]; sobeDesceVisible: boolean }) {
   const [state, setState] = useState<Record<string, boolean>>(
     Object.fromEntries(cols.map(c => [c.key, c.enabled]))
   )
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [, startTransition] = useTransition()
+
+  // ── Toggle Sobe e Desce ──────────────────────────────────────────────────
+  const [sdVisible, setSdVisible]   = useState(sobeDesceVisible)
+  const [sdError,   setSdError]     = useState('')
+  const [sdPending, setSdPending]   = useState(false)
+
+  const toggleSobeDesce = () => {
+    const next = !sdVisible
+    setSdVisible(next)
+    setSdError('')
+    setSdPending(true)
+    startTransition(async () => {
+      const res = await updateSobeDesceVisible(next)
+      setSdPending(false)
+      if (res.error) { setSdVisible(!next); setSdError(res.error) }
+    })
+  }
 
   // ── Captura de Snapshot ──────────────────────────────────────────────────
   const [snapshotStatus, setSnapshotStatus]   = useState<string | null>(null)
@@ -58,6 +75,35 @@ export function ClassificacaoAdminClient({ cols }: { cols: ColDef[] }) {
 
   return (
     <div className="space-y-6">
+      {/* ── Visibilidade Sobe e Desce ────────────────────────────────────────── */}
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="flex items-center justify-between px-5 py-4">
+          <div>
+            <p className="text-sm font-semibold text-gray-800">📈 Exibir Sobe e Desce</p>
+            <p className="mt-0.5 text-xs text-gray-400">
+              Quando desativado, usuários não-admin não veem as opções de Sobe e Desce na Classificação MB.
+              Admins continuam tendo acesso mesmo quando desativado.
+            </p>
+            {sdError && <p className="mt-1 text-xs text-red-500">{sdError}</p>}
+          </div>
+          <button
+            onClick={toggleSobeDesce}
+            disabled={sdPending}
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-50 ${
+              sdVisible ? 'bg-verde-600' : 'bg-gray-200'
+            }`}
+            role="switch"
+            aria-checked={sdVisible}
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                sdVisible ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+      </div>
+
       {/* ── Painel Sobe e Desce ─────────────────────────────────────────────── */}
       <div className="overflow-hidden rounded-xl border border-blue-200 bg-blue-50 shadow-sm">
         <div className="border-b border-blue-200 bg-blue-100 px-5 py-3">

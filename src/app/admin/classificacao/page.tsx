@@ -15,10 +15,12 @@ const COL_DEFS = [
 export default async function ClassificacaoAdminPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAuthAdminClient() as any
+
+  const allKeys = [...COL_DEFS.map(c => c.key), 'sobe_desce_visible']
   const { data: settings } = await admin
     .from('tournament_settings')
     .select('key, value')
-    .in('key', COL_DEFS.map(c => c.key))
+    .in('key', allKeys)
 
   const settingsMap: Record<string, string> = Object.fromEntries(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -30,13 +32,16 @@ export default async function ClassificacaoAdminPage() {
     enabled: c.key in settingsMap ? settingsMap[c.key] === 'true' : c.enabled,
   }))
 
+  // padrão: visível (true) se a chave ainda não foi gravada
+  const sobeDesceVisible = settingsMap['sobe_desce_visible'] !== 'false'
+
   return (
     <>
       <h2 className="mb-2 text-lg font-bold text-gray-900">Colunas — Classificação MB</h2>
       <p className="mb-6 text-sm text-gray-500">
         Ative ou desative colunas da tabela de classificação para todos os usuários.
       </p>
-      <ClassificacaoAdminClient cols={cols} />
+      <ClassificacaoAdminClient cols={cols} sobeDesceVisible={sobeDesceVisible} />
     </>
   )
 }

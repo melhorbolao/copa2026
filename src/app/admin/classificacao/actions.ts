@@ -30,3 +30,22 @@ export async function updateClassifColVisibility(
     return { error: err instanceof Error ? err.message : 'Erro inesperado' }
   }
 }
+
+export async function updateSobeDesceVisible(
+  visible: boolean,
+): Promise<{ error?: string }> {
+  try {
+    await requireAdmin()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAuthAdminClient() as any
+    const { error } = await admin
+      .from('tournament_settings')
+      .upsert({ key: 'sobe_desce_visible', value: visible ? 'true' : 'false' }, { onConflict: 'key' })
+    if (error) return { error: error.message }
+    revalidatePath('/classificacaoMB')
+    revalidatePath('/admin/classificacao')
+    return {}
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Erro inesperado' }
+  }
+}
