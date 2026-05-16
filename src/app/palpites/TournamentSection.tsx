@@ -9,6 +9,18 @@ interface Team { team: string; flag: string }
 interface TBet { champion: string; runner_up: string; semi1: string; semi2: string; top_scorer: string; points?: number | null }
 
 const EMPTY: TBet = { champion: '', runner_up: '', semi1: '', semi2: '', top_scorer: '' }
+const STORAGE_KEY = 'bolao_tbet'
+
+function readStorage(): TBet | null {
+  try {
+    if (typeof window === 'undefined') return null
+    const raw = sessionStorage.getItem(STORAGE_KEY)
+    return raw ? JSON.parse(raw) as TBet : null
+  } catch { return null }
+}
+function writeStorage(f: TBet) {
+  try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(f)) } catch {}
+}
 
 interface Props {
   allTeams: Team[]
@@ -27,38 +39,75 @@ function ScoreBadge({ pts, compact = false }: { pts: number | null | undefined; 
 
 export function TournamentSection({ allTeams, deadline, existingBet, scorerMapping, liveScore, liveBreakdown }: Props) {
   const [pending, startTransition] = useTransition()
-  const [form, setForm] = useState<TBet>(() => existingBet
-    ? {
+
+  const [form, setForm] = useState<TBet>(() => {
+    // Prefer server data if any G4/artilheiro field has been saved
+    const hasServer = existingBet && (
+      existingBet.champion || existingBet.runner_up ||
+      existingBet.semi1    || existingBet.semi2 || existingBet.top_scorer
+    )
+    if (hasServer) return {
+      champion:   existingBet!.champion   ?? '',
+      runner_up:  existingBet!.runner_up  ?? '',
+      semi1:      existingBet!.semi1      ?? '',
+      semi2:      existingBet!.semi2      ?? '',
+      top_scorer: existingBet!.top_scorer ?? '',
+    }
+    // No server data — restore from sessionStorage (survived tab switch)
+    return readStorage() ?? EMPTY
+  })
+
+  const [error, setError]     = useState('')
+  const [isDirty, setIsDirty] = useState(false)
+  const [savedOk, setSavedOk] = useState(false)
+
+  const timerRef      = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const hasPendingRef = useRef(false)
+  const latestFormRef = useRef<TBet>(form)
+
+  const deadlinePassed = isDeadlinePassed(deadline)
+
+  // Keep latestFormRef in sync so the unmount cleanup uses the latest value
+  useEffect(() => { latestFormRef.current = form }, [form])
+
+  // When server data arrives (e.g. revalidation), sync form and storage
+  useEffect(() => {
+    if (existingBet) {
+      const f = {
         champion:   existingBet.champion   ?? '',
         runner_up:  existingBet.runner_up  ?? '',
         semi1:      existingBet.semi1      ?? '',
         semi2:      existingBet.semi2      ?? '',
         top_scorer: existingBet.top_scorer ?? '',
       }
-    : EMPTY
-  )
-  const [error, setError] = useState('')
-  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-
-  const deadlinePassed = isDeadlinePassed(deadline)
-
-  useEffect(() => {
-    if (existingBet) setForm({
-      champion:   existingBet.champion   ?? '',
-      runner_up:  existingBet.runner_up  ?? '',
-      semi1:      existingBet.semi1      ?? '',
-      semi2:      existingBet.semi2      ?? '',
-      top_scorer: existingBet.top_scorer ?? '',
-    })
+      setForm(f)
+      writeStorage(f)
+    }
   }, [existingBet])
+
+  // Flush any pending save when the component unmounts (tab switch, navigation)
+  useEffect(() => {
+    return () => {
+      if (hasPendingRef.current) {
+        clearTimeout(timerRef.current)
+        void saveTournamentBet(latestFormRef.current)
+      }
+    }
+  }, [])
 
   const triggerSave = (updated: TBet, delay = 0) => {
     clearTimeout(timerRef.current)
     setError('')
+    setIsDirty(true)
+    setSavedOk(false)
+    hasPendingRef.current = true
+    writeStorage(updated)           // Persist immediately — survives unmount
     timerRef.current = setTimeout(() => {
+      hasPendingRef.current = false
       startTransition(async () => {
         const r = await saveTournamentBet(updated)
-        if (r.error) setError(r.error)
+        if (r.error) { setError(r.error); setIsDirty(true) }
+        else { setIsDirty(false); setSavedOk(true) }
       })
     }, delay)
   }
@@ -75,7 +124,17 @@ export function TournamentSection({ allTeams, deadline, existingBet, scorerMappi
     triggerSave(updated, 800)
   }
 
-  const teams = allTeams.filter(t => t.team !== 'TBD')
+  const handleManualSave = () => {
+    clearTimeout(timerRef.current)
+    hasPendingRef.current = false
+    startTransition(async () => {
+      const r = await saveTournamentBet(form)
+      if (r.error) { setError(r.error); setIsDirty(true) }
+      else { setIsDirty(false); setSavedOk(true) }
+    })
+  }
+
+  const teams    = allTeams.filter(t => t.team !== 'TBD')
   const selected = [form.champion, form.runner_up, form.semi1, form.semi2]
 
   // Detecta campos G4 com valores duplicados
@@ -148,16 +207,15 @@ export function TournamentSection({ allTeams, deadline, existingBet, scorerMappi
       <div className="flex items-center justify-between bg-gray-900 px-4 py-2.5">
         <div className="flex items-center gap-3">
           <span className="text-sm font-black uppercase tracking-widest text-white">🏆 Bônus G4 e Artilheiro</span>
-          {pending
-            ? <span className="text-xs text-gray-400 animate-pulse">Salvando…</span>
-            : (() => {
-              const pts = existingBet?.points ?? liveScore ?? null
-              if (pts === null) return null
-              return pts > 0
-                ? <span className="text-xs font-bold text-verde-400">+{pts} pts</span>
-                : <span className="text-xs text-gray-500">0 pts</span>
-            })()
-          }
+          {pending && <span className="text-xs text-amber-300 animate-pulse">Salvando…</span>}
+          {!pending && savedOk && <span className="text-xs text-verde-400">Salvo ✓</span>}
+          {!pending && !savedOk && (() => {
+            const pts = existingBet?.points ?? liveScore ?? null
+            if (pts === null) return null
+            return pts > 0
+              ? <span className="text-xs font-bold text-verde-400">+{pts} pts</span>
+              : <span className="text-xs text-gray-500">0 pts</span>
+          })()}
         </div>
         <span className="text-xs text-gray-400">
           prazo: {formatBrasilia(deadline, "dd/MM HH:mm")}
@@ -207,12 +265,33 @@ export function TournamentSection({ allTeams, deadline, existingBet, scorerMappi
           </div>
         </div>
 
-        {conflictFields.size > 0 && (
-          <p className="mt-2 text-xs text-red-500 font-medium">
-            ⚠️ Times repetidos no G4: corrija os campos marcados acima.
-          </p>
-        )}
-        {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
+        <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
+          <div className="space-y-1">
+            {conflictFields.size > 0 && (
+              <p className="text-xs text-red-500 font-medium">
+                ⚠️ Times repetidos no G4: corrija os campos marcados acima.
+              </p>
+            )}
+            {error && <p className="text-xs text-red-500">{error}</p>}
+          </div>
+
+          <div className="flex items-center gap-2">
+            {pending && (
+              <span className="text-xs text-amber-600 animate-pulse">Salvando…</span>
+            )}
+            {!pending && savedOk && (
+              <span className="text-xs font-medium text-verde-600">Salvo ✓</span>
+            )}
+            {!pending && isDirty && conflictFields.size === 0 && (
+              <button
+                onClick={handleManualSave}
+                className="rounded-lg bg-verde-600 px-4 py-1.5 text-xs font-semibold text-white shadow hover:bg-verde-700 active:scale-95 transition-all"
+              >
+                Salvar G4 e Artilheiro
+              </button>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )
