@@ -106,13 +106,21 @@ function AlertCard({
             <p className="mt-1 text-[11px] text-green-700 font-medium">✓ Template personalizado salvo</p>
           )}
         </div>
-        <button
-          onClick={() => setOpen(true)}
-          className="shrink-0 rounded-lg px-4 py-1.5 text-sm font-semibold text-white transition"
-          style={{ backgroundColor: '#002776' }}
-        >
-          Enviar
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            onClick={() => setOpen(true)}
+            className="rounded-lg px-3 py-1.5 text-sm font-semibold border border-gray-300 text-gray-600 hover:bg-gray-50 transition"
+          >
+            Editar
+          </button>
+          <button
+            onClick={() => setOpen(true)}
+            className="rounded-lg px-4 py-1.5 text-sm font-semibold text-white transition"
+            style={{ backgroundColor: '#002776' }}
+          >
+            Enviar
+          </button>
+        </div>
       </div>
     )
   }
