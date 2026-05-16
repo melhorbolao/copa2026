@@ -34,6 +34,7 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
   const [first,  setFirst]  = useState(existingBet?.first_place  ?? '')
   const [second, setSecond] = useState(existingBet?.second_place ?? '')
   const [error,  setError]  = useState('')
+  const [hasSaved, setHasSaved] = useState(!!existingBet)
   const [manualOrder, setManualOrder] = useState<string[] | null>(null)
 
   const { thirdSelections, setGroupBetSelection } = useThirdPlace()
@@ -55,7 +56,11 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
 
   // Sincroniza estado local com existingBet vindo do servidor (ex: revalidação)
   useEffect(() => {
-    if (existingBet) { setFirst(existingBet.first_place); setSecond(existingBet.second_place) }
+    if (existingBet) {
+      setFirst(existingBet.first_place)
+      setSecond(existingBet.second_place)
+      setHasSaved(true)
+    }
   }, [existingBet?.first_place, existingBet?.second_place])
 
   // Na montagem: se não há palpite salvo no servidor, tenta restaurar o
@@ -99,6 +104,7 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
     startTransition(async () => {
       try {
         await saveGroupBet(groupName, f, s)
+        setHasSaved(true)
         localStorage.removeItem(draftKey)          // rascunho cumprido
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Erro')
@@ -283,13 +289,25 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
                 )}
               </div>
 
-              {/* Status / pontos */}
+              {/* Status / pontos / botão salvar */}
               <div className="shrink-0 text-right">
                 {pending
                   ? <span className="text-xs text-gray-400">…</span>
                   : existingBet?.points != null
                     ? <GroupPointsBadge points={existingBet.points} />
-                    : null
+                    : !hasSaved && first && second && first !== second
+                      ? (
+                        <button
+                          type="button"
+                          onClick={() => doSave(first, second)}
+                          className="rounded bg-verde-600 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-verde-700"
+                        >
+                          Salvar
+                        </button>
+                      )
+                      : hasSaved
+                        ? <span className="text-xs text-verde-500">✓</span>
+                        : null
                 }
               </div>
             </div>
