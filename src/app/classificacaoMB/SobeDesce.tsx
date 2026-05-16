@@ -379,11 +379,11 @@ export function SobeDesceSelector({
         </div>
       )}
 
-      {/* Aviso: sem snapshot */}
+      {/* Aviso: sem dados históricos */}
       {!loading && mode !== 'hidden' && refDateLabel && !hasData && (
         <p className="border-t border-amber-100 bg-amber-50 px-3 py-2 text-[10px] font-medium text-amber-700">
-          ⚠️ Sem snapshot disponível para o período selecionado.
-          Use o botão <strong>&quot;Capturar Snapshot Diário&quot;</strong> no painel Admin → Classificação para iniciar o histórico.
+          ⚠️ Sem dados disponíveis para o período selecionado.
+          Use o botão <strong>&quot;Recalcular Pontos Diários&quot;</strong> no painel Admin → Classificação para popular o histórico.
         </p>
       )}
     </div>

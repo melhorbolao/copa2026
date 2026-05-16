@@ -34,28 +34,22 @@ export function ClassificacaoAdminClient({ cols, sobeDesceVisible }: { cols: Col
     })
   }
 
-  // ── Captura de Snapshot ──────────────────────────────────────────────────
-  const [snapshotStatus, setSnapshotStatus]   = useState<string | null>(null)
-  const [snapshotLoading, setSnapshotLoading] = useState(false)
-  const [snapshotDate, setSnapshotDate]       = useState('')   // vazio = hoje (BR)
+  // ── Recalcular Pontos Diários ────────────────────────────────────────────
+  const [dailyStatus, setDailyStatus]   = useState<string | null>(null)
+  const [dailyLoading, setDailyLoading] = useState(false)
 
-  const captureSnapshot = async () => {
-    setSnapshotLoading(true)
-    setSnapshotStatus(null)
+  const recalcDailyPoints = async () => {
+    setDailyLoading(true)
+    setDailyStatus(null)
     try {
-      const body = snapshotDate ? JSON.stringify({ date: snapshotDate }) : '{}'
-      const res  = await fetch('/api/admin/snapshots/capture', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body,
-      })
+      const res  = await fetch('/api/scoring/recalculate-daily', { method: 'POST' })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Erro desconhecido')
-      setSnapshotStatus(`✅ Snapshot capturado: ${json.captured} participantes para ${json.date}`)
+      setDailyStatus(`✅ ${json.count} registros calculados — histórico atualizado`)
     } catch (err) {
-      setSnapshotStatus(`❌ ${err instanceof Error ? err.message : String(err)}`)
+      setDailyStatus(`❌ ${err instanceof Error ? err.message : String(err)}`)
     } finally {
-      setSnapshotLoading(false)
+      setDailyLoading(false)
     }
   }
 
@@ -107,35 +101,24 @@ export function ClassificacaoAdminClient({ cols, sobeDesceVisible }: { cols: Col
       {/* ── Painel Sobe e Desce ─────────────────────────────────────────────── */}
       <div className="overflow-hidden rounded-xl border border-blue-200 bg-blue-50 shadow-sm">
         <div className="border-b border-blue-200 bg-blue-100 px-5 py-3">
-          <p className="text-sm font-bold text-blue-900">📈 Sobe e Desce — Snapshots Diários</p>
+          <p className="text-sm font-bold text-blue-900">📈 Sobe e Desce — Histórico de Pontos</p>
           <p className="mt-0.5 text-xs text-blue-700">
-            Capture o ranking atual para habilitar comparações históricas na Classificação.
-            Execute uma vez por dia (idealmente após registrar os resultados de jogos).
+            Recalcula o histórico diário de pontos de cada participante a partir dos resultados atuais.
+            Execute após registrar ou corrigir resultados de jogos.
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-3 px-5 py-4">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">
-              Data do snapshot (vazio = hoje, horário de Brasília)
-            </label>
-            <input
-              type="date"
-              value={snapshotDate}
-              onChange={e => setSnapshotDate(e.target.value)}
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-            />
-          </div>
           <button
-            onClick={captureSnapshot}
-            disabled={snapshotLoading}
+            onClick={recalcDailyPoints}
+            disabled={dailyLoading}
             className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-bold text-white transition hover:bg-blue-700 disabled:opacity-50"
           >
-            {snapshotLoading ? 'Capturando...' : '📸 Capturar Snapshot Diário'}
+            {dailyLoading ? 'Calculando...' : '🔄 Recalcular Pontos Diários'}
           </button>
         </div>
-        {snapshotStatus && (
+        {dailyStatus && (
           <p className="border-t border-blue-200 px-5 py-2.5 text-xs font-medium text-blue-900">
-            {snapshotStatus}
+            {dailyStatus}
           </p>
         )}
       </div>

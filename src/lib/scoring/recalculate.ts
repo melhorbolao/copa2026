@@ -2,6 +2,7 @@
 // All functions use the service-role admin client and are server-only.
 
 import { createAuthAdminClient } from '@/lib/supabase/server'
+import { recalculateDailyPoints } from './daily-points'
 import { calcGroupStandings, rankThirds } from '@/lib/bracket/engine'
 import type { MatchSlim, BetSlim } from '@/lib/bracket/engine'
 import {
@@ -410,4 +411,7 @@ export async function recalculateAll(): Promise<void> {
 
   // 5. Refresh participant totals once for all affected participants
   await refreshParticipantTotals([...allIds])
+
+  // 6. Rebuild event-driven daily points history
+  await recalculateDailyPoints()
 }

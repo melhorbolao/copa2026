@@ -1,6 +1,5 @@
 // GET /api/rankings/snapshots?date=YYYY-MM-DD
-// Retorna o snapshot mais recente (≤ date) de cada participante.
-// Autenticação: usuário logado.
+// Agrega participant_points_by_day até a data solicitada e retorna com rank.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
@@ -19,31 +18,59 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'date param required (YYYY-MM-DD)' }, { status: 400 })
   }
 
-  // Tenta usar a função SQL DISTINCT ON para eficiência
-  const { data, error } = await supabase
-    .rpc('get_rankings_at_date', { p_date: date })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from('participant_points_by_day')
+    .select('participant_id, pts_matches, pts_groups, pts_thirds, pts_tournament')
+    .lte('event_date', date)
 
-  if (!error) {
-    return NextResponse.json(data ?? [])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if ((error as any)?.message) return NextResponse.json({ error: (error as any).message }, { status: 500 })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = (data ?? []) as any[]
+  if (rows.length === 0) return NextResponse.json([])
+
+  // Aggregate by participant
+  const totals = new Map<string, {
+    pts_matches: number; pts_groups: number; pts_thirds: number; pts_tournament: number; pts_total: number
+  }>()
+
+  for (const row of rows) {
+    let t = totals.get(row.participant_id)
+    if (!t) {
+      t = { pts_matches: 0, pts_groups: 0, pts_thirds: 0, pts_tournament: 0, pts_total: 0 }
+      totals.set(row.participant_id, t)
+    }
+    const m  = row.pts_matches    ?? 0
+    const g  = row.pts_groups     ?? 0
+    const th = row.pts_thirds     ?? 0
+    const to = row.pts_tournament ?? 0
+    t.pts_matches    += m
+    t.pts_groups     += g
+    t.pts_thirds     += th
+    t.pts_tournament += to
+    t.pts_total      += m + g + th + to
   }
 
-  // Fallback: query simples + deduplicação em JS
-  // (funciona antes de rodar a migration)
-  const { data: rows, error: e2 } = await supabase
-    .from('daily_rankings_snapshot')
-    .select(
-      'participant_id, rank, pts_total, pts_matches, pts_groups, pts_thirds, pts_tournament, snapshot_date'
-    )
-    .lte('snapshot_date', date)
-    .order('snapshot_date', { ascending: false })
-    .limit(5000)
+  // Sort desc and assign dense rank (ties share the same rank)
+  const sorted = [...totals.entries()].sort(([, a], [, b]) => b.pts_total - a.pts_total)
 
-  if (e2) return NextResponse.json({ error: e2.message }, { status: 500 })
-
-  // Manter apenas o snapshot mais recente por participante
-  const latest: Record<string, (typeof rows)[0]> = {}
-  for (const row of rows ?? []) {
-    if (!latest[row.participant_id]) latest[row.participant_id] = row
+  const result = []
+  let rank = 1
+  for (let i = 0; i < sorted.length; i++) {
+    if (i > 0 && sorted[i][1].pts_total < sorted[i - 1][1].pts_total) rank = i + 1
+    const [pid, t] = sorted[i]
+    result.push({
+      participant_id: pid,
+      rank,
+      pts_total:      t.pts_total,
+      pts_matches:    t.pts_matches,
+      pts_groups:     t.pts_groups,
+      pts_thirds:     t.pts_thirds,
+      pts_tournament: t.pts_tournament,
+      snapshot_date:  date,
+    })
   }
-  return NextResponse.json(Object.values(latest))
+
+  return NextResponse.json(result)
 }
