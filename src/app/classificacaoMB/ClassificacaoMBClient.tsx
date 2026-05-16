@@ -215,8 +215,8 @@ function CompactRanking({
 
       {/* Header */}
       <div className="border-b border-gray-100 px-4 py-2.5">
-        <p className="text-sm font-black text-gray-800">Classificação Melhor Bolão</p>
-        <p className="text-[10px] text-gray-400 mt-0.5">
+        <p className="text-base font-black text-gray-800">Classificação Melhor Bolão</p>
+        <p className="text-xs text-gray-400 mt-0.5">
           {dateStr}
           {matchesRegistered > 0 && (
             <> · {matchesRegistered} jogos registrados e {groupsDefined}/12 grupos definidos</>
@@ -288,23 +288,23 @@ function CompactRanking({
       {/* Legenda */}
       <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-gray-100 bg-gray-50 px-4 py-2">
         {legendItems.map(({ zone: z, label }) => (
-          <span key={z} className="flex items-center gap-1 text-[9px] text-gray-500">
-            <span className={`inline-block h-2 w-2 rounded-sm ${ZONE_DOT[z]}`} />
+          <span key={z} className="flex items-center gap-1 text-[11px] text-gray-500">
+            <span className={`inline-block h-2.5 w-2.5 rounded-sm ${ZONE_DOT[z]}`} />
             {label}
           </span>
         ))}
         {sdActive && (
           <>
-            <span className="flex items-center gap-1 text-[9px] text-gray-500">
+            <span className="flex items-center gap-1 text-[11px] text-gray-500">
               <span className="inline-block h-3 w-0.5 rounded-sm bg-verde-500" />🚀 Maior subida
             </span>
-            <span className="flex items-center gap-1 text-[9px] text-gray-500">
+            <span className="flex items-center gap-1 text-[11px] text-gray-500">
               <span className="inline-block h-3 w-0.5 rounded-sm bg-red-500" />📉 Maior queda
             </span>
-            <span className="flex items-center gap-1 text-[9px] text-gray-500">
+            <span className="flex items-center gap-1 text-[11px] text-gray-500">
               <span className="inline-block h-3 w-0.5 rounded-sm bg-amber-400" />🔥 Maior pontuação
             </span>
-            <span className="flex items-center gap-1 text-[9px] text-gray-500">
+            <span className="flex items-center gap-1 text-[11px] text-gray-500">
               <span className="inline-block h-3 w-0.5 rounded-sm bg-slate-300" />🥶 Menor pontuação
             </span>
           </>
