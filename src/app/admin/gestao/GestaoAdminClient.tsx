@@ -24,6 +24,7 @@ export function GestaoAdminClient({ productionMode: initProdMode, releasedRounds
   const [roundPending, startRoundTransition]  = useTransition()
   const [fillPending, startFillTransition]    = useTransition()
   const [sdPending, startSdTransition]        = useTransition()
+  const [auditing, setAuditing]               = useState(false)
 
   // ── Clear bets ────────────────────────────────────────────────
   const [confirmBets, setConfirmBets]   = useState(false)
@@ -122,6 +123,20 @@ export function GestaoAdminClient({ productionMode: initProdMode, releasedRounds
       Object.assign(document.createElement('a'), { href: url, download: name }).click()
       URL.revokeObjectURL(url)
     } catch (e) { alert('Erro ao exportar: ' + (e instanceof Error ? e.message : 'desconhecido')) }
+  }
+
+  const handleAuditExport = async () => {
+    setAuditing(true)
+    try {
+      const res = await fetch('/api/admin/auditoria/export')
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? `HTTP ${res.status}`)
+      const blob = await res.blob()
+      const url  = URL.createObjectURL(blob)
+      const name = res.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1] ?? 'auditoria.xlsx'
+      Object.assign(document.createElement('a'), { href: url, download: name }).click()
+      URL.revokeObjectURL(url)
+    } catch (e) { alert('Erro ao exportar auditoria: ' + (e instanceof Error ? e.message : 'desconhecido')) }
+    finally { setAuditing(false) }
   }
 
   const resetImport = () => {
@@ -313,6 +328,31 @@ export function GestaoAdminClient({ productionMode: initProdMode, releasedRounds
           className="inline-flex items-center gap-1.5 rounded border border-verde-300 bg-verde-50 px-3 py-1.5 text-xs font-semibold text-verde-700 hover:bg-verde-100 transition"
         >
           Exportar Excel
+        </button>
+      </section>
+
+      <hr className="border-gray-100" />
+
+      {/* ── AUDIT EXPORT ── */}
+      <section>
+        <h3 className="text-sm font-semibold text-gray-900 mb-1">Relatório de Auditoria de Palpites</h3>
+        <p className="mb-3 text-xs text-gray-500">
+          Gera uma planilha detalhada com o status de preenchimento de cada participante por prazo:
+          status na rodada atual (Eliminado / Não iniciado / Em andamento / Completo),
+          data da última alteração e data de conclusão de cada bloco de palpites.
+        </p>
+        <p className="mb-3 text-xs text-amber-600">
+          Para registrar datas de conclusão com precisão, execute o script{' '}
+          <code className="rounded bg-amber-50 px-1 font-mono">supabase/add_prediction_logs.sql</code>{' '}
+          no Supabase antes de usar este relatório.
+          Sem o script, timestamps de bônus podem aparecer em branco.
+        </p>
+        <button
+          onClick={handleAuditExport}
+          disabled={auditing}
+          className="inline-flex items-center gap-1.5 rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-60 transition"
+        >
+          {auditing ? 'Gerando relatório…' : 'Exportar Relatório de Auditoria (Excel)'}
         </button>
       </section>
 

@@ -41,7 +41,8 @@ export async function deleteBet(matchId: string) {
   await assertStageOpen(supabase, matchId, participantId)
 
   // Caminho rápido: 1 roundtrip via RPC (deadline-check + delete)
-  const rpc = await supabase.rpc('delete_bet', { p_participant_id: participantId, p_match_id: matchId })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rpc = await (supabase as any).rpc('delete_bet', { p_participant_id: participantId, p_match_id: matchId })
   if (rpc.error && !isMissingRpc(rpc.error)) {
     throw new Error(rpc.error.message)
   }
@@ -64,7 +65,8 @@ export async function saveBet(matchId: string, scoreHome: number, scoreAway: num
   await assertStageOpen(supabase, matchId, participantId)
 
   // Caminho rápido: 1 roundtrip via RPC
-  const rpc = await supabase.rpc('save_bet', {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rpc = await (supabase as any).rpc('save_bet', {
     p_participant_id: participantId, p_match_id: matchId,
     p_score_home: scoreHome, p_score_away: scoreAway,
   })
@@ -119,7 +121,7 @@ export async function saveBetsBatch(
   )
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rpc = await supabase.rpc('save_bets_batch', { p_participant_id: participantId, p_bets: payload as any })
+  const rpc = await (supabase as any).rpc('save_bets_batch', { p_participant_id: participantId, p_bets: payload as any })
   if (rpc.error) {
     if (isMissingRpc(rpc.error)) {
       // Fallback: dispara saves individuais (caminho lento até a migration rodar)
@@ -186,7 +188,8 @@ export async function saveGroupBet(groupName: string, firstPlace: string, second
   const { supabase, participantId } = await resolveParticipant()
 
   // Caminho rápido: 1 roundtrip via RPC
-  const rpc = await supabase.rpc('save_group_bet', {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rpc = await (supabase as any).rpc('save_group_bet', {
     p_participant_id: participantId, p_group_name: groupName,
     p_first_place: firstPlace, p_second_place: secondPlace,
   })
@@ -251,7 +254,8 @@ export async function saveThirdPlaceBet(groupName: string, team: string) {
   const { supabase, participantId } = await resolveParticipant()
 
   // Caminho rápido: 1 roundtrip via RPC
-  const rpc = await supabase.rpc('save_third_place_bet', {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rpc = await (supabase as any).rpc('save_third_place_bet', {
     p_participant_id: participantId, p_group_name: groupName, p_team: team,
   })
   if (rpc.error && !isMissingRpc(rpc.error)) {
@@ -278,7 +282,8 @@ export async function deleteThirdPlaceBet(groupName: string) {
   const { supabase, participantId } = await resolveParticipant()
 
   // Caminho rápido: 1 roundtrip via RPC
-  const rpc = await supabase.rpc('delete_third_place_bet', {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rpc = await (supabase as any).rpc('delete_third_place_bet', {
     p_participant_id: participantId, p_group_name: groupName,
   })
   if (rpc.error && !isMissingRpc(rpc.error)) {
