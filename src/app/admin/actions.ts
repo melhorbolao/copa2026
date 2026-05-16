@@ -386,6 +386,79 @@ export async function sendReminderEmails(
   return { sent }
 }
 
+// ── Alertas manuais de palpites (com Excel anexado) ──────────
+export async function sendBonusAlert(
+  type: 'all' | 'incomplete' | 'receipt',
+  subject: string,
+  body: string,
+): Promise<{ sent: number }> {
+  await requireAdmin()
+  const supabase = await createAdminClient()
+
+  const { data: users } = await supabase
+    .from('users')
+    .select('id, name, email')
+    .eq('status', 'aprovado')
+
+  if (!users?.length) return { sent: 0 }
+
+  const userIds = users.map(u => u.id)
+  const { data: userParticipants } = await supabase
+    .from('user_participants')
+    .select('user_id, participant_id')
+    .in('user_id', userIds)
+
+  const userToParticipants = new Map<string, string[]>()
+  for (const row of userParticipants ?? []) {
+    if (!userToParticipants.has(row.user_id)) userToParticipants.set(row.user_id, [])
+    userToParticipants.get(row.user_id)!.push(row.participant_id)
+  }
+
+  let targets = users
+
+  if (type === 'incomplete') {
+    const allParticipantIds = [...new Set((userParticipants ?? []).map(r => r.participant_id))]
+    const { data: completeBets } = await supabase
+      .from('tournament_bets')
+      .select('participant_id')
+      .in('participant_id', allParticipantIds)
+      .not('champion', 'is', null)
+
+    const completeIds = new Set((completeBets ?? []).map(b => b.participant_id))
+    targets = users.filter(u => {
+      const pids = userToParticipants.get(u.id) ?? []
+      return pids.length === 0 || pids.some(pid => !completeIds.has(pid))
+    })
+  }
+
+  let sent = 0
+  for (const u of targets) {
+    try {
+      const participantIds = userToParticipants.get(u.id) ?? []
+      const attachments: Array<{ filename: string; content: Buffer; contentType: string }> = []
+
+      for (const pid of participantIds) {
+        try {
+          const { buffer, fileName } = await buildPalpitesBuffer(supabase, pid)
+          attachments.push({
+            filename: fileName,
+            content: buffer,
+            contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          })
+        } catch { /* ignora falha individual */ }
+      }
+
+      await sendReminderEmail({
+        name: u.name, email: u.email, subject, body,
+        attachments: attachments.length > 0 ? attachments : undefined,
+      })
+      sent++
+    } catch { /* continua mesmo se um falhar */ }
+  }
+
+  return { sent }
+}
+
 function buildStageFilter(stage: string): { phases: string[]; match?: Record<string, unknown> } {
   switch (stage) {
     case 'r1':    return { phases: ['group'], match: { round: 1 } }
