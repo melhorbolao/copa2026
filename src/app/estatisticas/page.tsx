@@ -20,7 +20,7 @@ export default async function EstatisticasPage() {
 
   const admin = createAuthAdminClient() as any
 
-  const [participantsRes, matchesRes, teamsRes, rulesRes, groupBetsRes, thirdBetsRes, tournamentBetsRes, scorerMappingRes] = await Promise.all([
+  const [participantsRes, matchesRes, teamsRes, rulesRes, groupBetsRes, thirdBetsRes, tournamentBetsRes] = await Promise.all([
     supabase.from('participants').select('id, apelido').order('apelido', { ascending: true }),
     supabase.from('matches').select('team_home, team_away, flag_home, flag_away'),
     admin.from('teams').select('name, abbr_br, group_name'),
@@ -28,7 +28,6 @@ export default async function EstatisticasPage() {
     admin.from('group_bets').select('participant_id, group_name, first_place, second_place'),
     admin.from('third_place_bets').select('participant_id, group_name, team'),
     admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer'),
-    admin.from('top_scorer_mapping').select('raw_name, standardized_name'),
   ])
 
   const rules: Record<string, number> = Object.fromEntries(
@@ -51,11 +50,19 @@ export default async function EstatisticasPage() {
       flag:  (teamFlags[t.name] ?? '') as string,
     }))
 
-  const scorerMapping: Record<string, string> = Object.fromEntries(
-    ((scorerMappingRes.data ?? []) as any[])
-      .filter((r: any) => r.raw_name && r.standardized_name)
-      .map((r: any) => [r.raw_name as string, r.standardized_name as string])
-  )
+  let scorerMapping: Record<string, string> = {}
+  try {
+    const { data: mappingRows, error: mappingErr } = await admin.from('top_scorer_mapping').select('raw_name, standardized_name')
+    if (mappingErr) console.error('[estatisticas] top_scorer_mapping error:', mappingErr.message)
+    for (const r of (mappingRows ?? []) as any[]) {
+      if (r.raw_name && r.standardized_name) {
+        scorerMapping[r.raw_name]        = r.standardized_name
+        scorerMapping[r.raw_name.trim()] = r.standardized_name
+      }
+    }
+  } catch (e) {
+    console.error('[estatisticas] top_scorer_mapping fetch failed:', e)
+  }
 
   return (
     <>

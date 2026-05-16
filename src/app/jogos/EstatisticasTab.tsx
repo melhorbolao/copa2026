@@ -69,9 +69,9 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
   const artilharia = useMemo(() => {
     const m = new Map<string, number>()
     for (const b of tournamentBets) {
-      const raw = b.top_scorer?.trim()
-      if (!raw) continue
-      const std = scorerMapping[raw] ?? raw
+      const raw = b.top_scorer
+      if (!raw?.trim()) continue
+      const std = scorerMapping[raw] ?? scorerMapping[raw.trim()] ?? raw.trim()
       m.set(std, (m.get(std) ?? 0) + 1)
     }
     return [...m.entries()]
