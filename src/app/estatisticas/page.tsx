@@ -22,7 +22,7 @@ export default async function EstatisticasPage() {
 
   const [participantsRes, matchesRes, teamsRes, rulesRes, groupBetsRes, thirdBetsRes, tournamentBetsRes] = await Promise.all([
     supabase.from('participants').select('id, apelido').order('apelido', { ascending: true }),
-    supabase.from('matches').select('team_home, team_away, flag_home, flag_away'),
+    supabase.from('matches').select('team_home, team_away, flag_home, flag_away, phase, round, betting_deadline'),
     admin.from('teams').select('name, abbr_br, group_name'),
     supabase.from('scoring_rules').select('key, points'),
     admin.from('group_bets').select('participant_id, group_name, first_place, second_place'),
@@ -35,8 +35,34 @@ export default async function EstatisticasPage() {
   )
   const zebraThreshold = rules['percentual_zebra'] ?? 15
 
+  const allMatches = (matchesRes.data ?? []) as any[]
+
+  // Bloqueia estatísticas enquanto o prazo de palpites estiver aberto
+  const bonusDeadlineStr = allMatches.find((m: any) => m.phase === 'group' && m.round === 1)?.betting_deadline ?? null
+  const now = new Date()
+  if (!bonusDeadlineStr || new Date(bonusDeadlineStr) > now) {
+    const deadlineLabel = bonusDeadlineStr
+      ? new Date(bonusDeadlineStr).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+      : 'data indefinida'
+    return (
+      <>
+        <Navbar />
+        <div className="min-h-screen bg-gray-50 pb-16 pt-16 sm:pt-6 flex items-center justify-center">
+          <div className="max-w-sm mx-auto px-4 text-center">
+            <p className="text-4xl mb-4">🔒</p>
+            <h1 className="text-lg font-bold text-gray-800 mb-2">Estatísticas indisponíveis</h1>
+            <p className="text-sm text-gray-500">
+              As estatísticas ficam visíveis somente após o encerramento do prazo de palpites.
+            </p>
+            <p className="mt-3 text-xs text-gray-400">Prazo: {deadlineLabel}</p>
+          </div>
+        </div>
+      </>
+    )
+  }
+
   const teamFlags: Record<string, string> = {}
-  for (const m of (matchesRes.data ?? []) as any[]) {
+  for (const m of allMatches) {
     if (m.team_home && m.flag_home) teamFlags[m.team_home] = m.flag_home
     if (m.team_away && m.flag_away) teamFlags[m.team_away] = m.flag_away
   }
