@@ -17,9 +17,10 @@ interface Props {
   thirdBets:       ThirdBt[]
   tournamentBets:  TBet[]
   zebraThreshold:  number
+  scorerMapping:   Record<string, string>
 }
 
-export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tournamentBets, zebraThreshold }: Props) {
+export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tournamentBets, zebraThreshold, scorerMapping }: Props) {
   const groups = useMemo(
     () => [...new Set(teams.map(t => t.group))].filter(Boolean).sort(),
     [teams],
@@ -68,13 +69,15 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
   const artilharia = useMemo(() => {
     const m = new Map<string, number>()
     for (const b of tournamentBets) {
-      const k = b.top_scorer?.trim()
-      if (k) m.set(k, (m.get(k) ?? 0) + 1)
+      const raw = b.top_scorer?.trim()
+      if (!raw) continue
+      const std = scorerMapping[raw] ?? raw
+      m.set(std, (m.get(std) ?? 0) + 1)
     }
     return [...m.entries()]
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'pt-BR'))
       .map(([name, count]) => ({ name, count }))
-  }, [tournamentBets])
+  }, [tournamentBets, scorerMapping])
 
   // Returns td className and inner element for a numeric cell
   function C(v: number, z = false, dim = false) {
