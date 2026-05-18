@@ -16,10 +16,10 @@ const ALERTS: Array<{
     type: 'alert_all',
     label: 'Aviso do prazo a todos',
     description: 'Envia a todos os participantes (completos e incompletos) com Excel de palpites em anexo. Recomendado ~24h antes do prazo.',
-    defaultSubject: '⏰ Prazo se encerrando — envie seus palpites até 08/06',
+    defaultSubject: '⏰ Prazo se encerrando — envie seus palpites até 10/06',
     defaultBody: `Olá, {nome}!
 
-O prazo para envio dos palpites da Copa do Mundo 2026 se encerra em 08/06/2026 às 23h59 (horário de Brasília).
+O prazo para envio dos palpites da Copa do Mundo 2026 se encerra em 10/06/2026 às 23h59 (horário de Brasília).
 
 Se ainda não preencheu tudo — grupos, fase final e artilheiro —, é hora de correr! Depois do prazo, os palpites ficam bloqueados para alteração.
 
@@ -31,10 +31,10 @@ Boa sorte! 🏆`,
     type: 'alert_incomplete',
     label: 'Aviso de palpites incompletos',
     description: 'Envia somente aos participantes sem campeão preenchido, com Excel em anexo. Recomendado ~24h antes do prazo.',
-    defaultSubject: '⚠️ Seus palpites estão incompletos — prazo em 08/06',
+    defaultSubject: '⚠️ Seus palpites estão incompletos — prazo em 10/06',
     defaultBody: `Olá, {nome}!
 
-Notamos que seus palpites ainda estão incompletos. O prazo encerra em 08/06/2026 às 23h59 (horário de Brasília) — depois disso não será possível alterar nada.
+Notamos que seus palpites ainda estão incompletos. O prazo encerra em 10/06/2026 às 23h59 (horário de Brasília) — depois disso não será possível alterar nada.
 
 Pode ser que falte preencher: classificação dos grupos, chaveamento da fase final ou artilheiro. Tudo isso conta ponto!
 

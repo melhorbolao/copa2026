@@ -115,7 +115,7 @@ export async function notifyUserApproved({ name, email }: { name: string; email:
       <div style="background:#f0fdf4;border-left:4px solid #009c3b;padding:12px 16px;border-radius:4px;margin-bottom:20px">
         <p style="margin:0 0 4px;font-size:13px;color:#166534;font-weight:700">⚠️ Atenção ao prazo</p>
         <p style="margin:0;font-size:13px;color:#166534">
-          Rodada 1: <strong>08/06 às 23h59</strong> (horário de Brasília)
+          Rodada 1: <strong>10/06 às 23h59</strong> (horário de Brasília)
         </p>
       </div>
       <a href="${BASE_URL}${path}"
