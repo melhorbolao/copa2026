@@ -22,6 +22,12 @@ export async function createParticipant(data: {
   const apelidoTrimmed = data.apelido.trim()
   if (!apelidoTrimmed) return { error: 'Nome no Bolão é obrigatório.' }
 
+  // Verifica que o usuário tem whatsapp e padrinho preenchidos
+  const { data: userRecord } = await supabase
+    .from('users').select('whatsapp, padrinho').eq('id', data.userId).single()
+  if (!userRecord?.whatsapp) return { error: 'O usuário não tem WhatsApp cadastrado.' }
+  if (!userRecord?.padrinho) return { error: 'O usuário não tem padrinho cadastrado.' }
+
   // Verifica unicidade do apelido
   const { data: existing } = await supabase
     .from('participants').select('id').eq('apelido', apelidoTrimmed).maybeSingle()
@@ -100,7 +106,8 @@ export async function updateParticipantBio(participantId: string, bio: string): 
 export async function toggleParticipantPaid(participantId: string, current: boolean): Promise<void> {
   await requireAdmin()
   const supabase = createAuthAdminClient()
-  await supabase.from('participants').update({ paid: !current }).eq('id', participantId)
+  const { error } = await supabase.from('participants').update({ paid: !current }).eq('id', participantId)
+  if (error) throw new Error(error.message)
   revalidatePath('/admin/participantes')
 }
 
@@ -139,4 +146,20 @@ export async function unlinkUserFromParticipant(participantId: string, userId: s
 
   revalidatePath('/admin/participantes')
   return {}
+}
+
+export async function getPagantesNote(): Promise<string> {
+  await requireAdmin()
+  const supabase = createAuthAdminClient()
+  const { data } = await supabase
+    .from('admin_settings').select('value').eq('key', 'pagantes_note').maybeSingle()
+  return data?.value ?? ''
+}
+
+export async function setPagantesNote(text: string): Promise<void> {
+  await requireAdmin()
+  const supabase = createAuthAdminClient()
+  await supabase
+    .from('admin_settings')
+    .upsert({ key: 'pagantes_note', value: text, updated_at: new Date().toISOString() })
 }
