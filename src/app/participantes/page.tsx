@@ -235,6 +235,16 @@ export default async function ControlePage({
     v === 100 ? 'text-verde-600 font-bold' :
     v > 0     ? 'text-amber-600' : 'text-red-400'
 
+  // Contadores para linha de resumo (sempre sobre todos os participantes)
+  const totalCount = allSorted.length
+  const paidCount  = allSorted.filter(p => p.paid).length
+  const fullPctCount: Record<StageKey, number> = { r1:0, r2:0, r3:0, r32:0, r16:0, qf:0, sf:0, final:0 }
+  for (const p of allSorted) {
+    for (const k of STAGE_KEYS) {
+      if (calcPct(p.id, k) === 100) fullPctCount[k]++
+    }
+  }
+
   return (
     <>
       <Navbar />
@@ -284,6 +294,34 @@ export default async function ControlePage({
                 ))}
               </tr>
             </thead>
+            {/* Linha de totais */}
+            <tbody>
+              <tr className="border-b-2 border-gray-200 bg-gray-50/80 text-xs font-semibold text-gray-600">
+                <td className="px-3 py-2" />
+                <td className="px-3 py-2 whitespace-nowrap text-gray-700">
+                  {totalCount} inscritos
+                </td>
+                <td className="px-3 py-2 text-center">
+                  <span className="text-verde-700">{paidCount} pagos</span>
+                  {paidCount < totalCount && (
+                    <span className="ml-1 text-red-400">/ {totalCount - paidCount} pend.</span>
+                  )}
+                </td>
+                <td className="px-2 py-2" />
+                {STAGE_KEYS.map(k => (
+                  <td key={k} className="px-2 py-2 text-center">
+                    {stageTotals[k] > 0 ? (
+                      <span className={fullPctCount[k] === totalCount ? 'text-verde-600' : 'text-gray-500'}>
+                        {fullPctCount[k]}
+                      </span>
+                    ) : (
+                      <span className="text-gray-300">—</span>
+                    )}
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+
             <tbody>
               {sorted.map((p, i) => {
                 const eliminated = eliminatedSet.has(p.id)
