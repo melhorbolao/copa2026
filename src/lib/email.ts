@@ -129,6 +129,32 @@ export async function notifyUserApproved({ name, email }: { name: string; email:
   })
 }
 
+// ── 2b. Lembrete para completar perfil (usuários que abandonaram o cadastro) ──
+export async function notifyProfileReminder({ name, email }: { name: string; email: string }) {
+  await resend.emails.send({
+    from: `Melhor Bolão <${FROM}>`,
+    to:   email,
+    subject: '⚽ Complete seu cadastro — Melhor Bolão Copa 2026',
+    html: htmlWrapper(`
+      <h2 style="margin:0 0 8px;color:#111827;font-size:20px">Olá, ${name}! 👋</h2>
+      <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.6">
+        Você iniciou seu cadastro no <strong>Melhor Bolão Copa do Mundo 2026</strong>
+        mas ainda falta preencher <strong>WhatsApp</strong> e <strong>padrinho no bolão</strong>.
+      </p>
+      <p style="margin:0 0 20px;color:#374151;font-size:15px;line-height:1.6">
+        Leva menos de um minuto — acesse o link e conclua agora:
+      </p>
+      <a href="${BASE_URL}/completar-perfil"
+         style="display:inline-block;background:#009c3b;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px">
+        Completar meu cadastro →
+      </a>
+      <p style="margin:20px 0 0;font-size:12px;color:#9ca3af">
+        Dúvidas? Fale com o admin pelo WhatsApp ou responda este e-mail.
+      </p>
+    `),
+  })
+}
+
 // ── 3. E-mail em massa (com anexo opcional) ───────────────────
 export async function sendReminderEmail({
   name,

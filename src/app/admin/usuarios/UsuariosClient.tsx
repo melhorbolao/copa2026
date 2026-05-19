@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { UserRow } from './UserRow'
 
-type StatusFilter = 'all' | 'aprovado' | 'aprovacao_pendente' | 'email_pendente'
+type StatusFilter = 'all' | 'aprovado' | 'aprovacao_pendente' | 'email_pendente' | 'incompleto'
 type SortField    = 'num' | 'name'
 type SortDir      = 'asc' | 'desc'
 
@@ -17,6 +17,7 @@ const STATUS_OPTIONS: { value: StatusFilter; label: string; active: string; inac
   { value: 'aprovado',          label: '🟢 Aprovado',         active: 'bg-verde-600 text-white',       inactive: 'bg-verde-50 text-verde-700 border border-verde-200 hover:bg-verde-100' },
   { value: 'aprovacao_pendente',label: '🟠 Aguard. aprovação',active: 'bg-orange-600 text-white',      inactive: 'bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100' },
   { value: 'email_pendente',    label: '🟡 E-mail pendente',  active: 'bg-yellow-500 text-white',      inactive: 'bg-yellow-50 text-yellow-700 border border-yellow-200 hover:bg-yellow-100' },
+  { value: 'incompleto',        label: '🔴 Perfil incompleto',active: 'bg-red-600 text-white',         inactive: 'bg-red-50 text-red-700 border border-red-200 hover:bg-red-100' },
 ]
 
 export function UsuariosClient({ users }: Props) {
@@ -33,17 +34,22 @@ export function UsuariosClient({ users }: Props) {
     return sorted.map((u, i) => ({ ...u, num: i + 1 }))
   }, [users])
 
+  const isIncomplete = (u: User) => !u.is_manual && (!u.whatsapp || !u.padrinho)
+
   const counts = useMemo(() => ({
     all:               usersWithNum.length,
     aprovado:          usersWithNum.filter(u => u.status === 'aprovado').length,
     aprovacao_pendente:usersWithNum.filter(u => u.status === 'aprovacao_pendente').length,
     email_pendente:    usersWithNum.filter(u => u.status === 'email_pendente').length,
+    incompleto:        usersWithNum.filter(isIncomplete).length,
   }), [usersWithNum])
 
   const filtered = useMemo(() => {
     let result = usersWithNum
 
-    if (statusFilter !== 'all')
+    if (statusFilter === 'incompleto')
+      result = result.filter(isIncomplete)
+    else if (statusFilter !== 'all')
       result = result.filter(u => u.status === statusFilter)
 
     if (search.trim()) {

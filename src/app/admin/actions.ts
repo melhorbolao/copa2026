@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient, createAdminClient, createAuthAdminClient } from '@/lib/supabase/server'
-import { notifyUserApproved, notifyUserRegistered, sendReminderEmail } from '@/lib/email'
+import { notifyUserApproved, notifyUserRegistered, notifyProfileReminder, sendReminderEmail } from '@/lib/email'
 import { buildPalpitesBuffer } from '@/app/api/palpites/_workbook'
 import { buildTabelaMBBuffer } from '@/app/api/admin/dados/export/_builder'
 import { getVisibilitySettings } from '@/lib/production-mode'
@@ -159,6 +159,14 @@ export async function updateApelido(userId: string, apelido: string) {
   await requireAdmin()
   const supabase = await createAdminClient()
   await supabase.from('users').update({ apelido: apelido || null }).eq('id', userId)
+  revalidatePath('/admin/usuarios')
+}
+
+// ── Atualização de WhatsApp ───────────────────────────────────
+export async function updateWhatsapp(userId: string, whatsapp: string) {
+  await requireAdmin()
+  const supabase = await createAdminClient()
+  await supabase.from('users').update({ whatsapp: whatsapp.trim() || null }).eq('id', userId)
   revalidatePath('/admin/usuarios')
 }
 
@@ -518,6 +526,16 @@ export async function updateUserEmail(userId: string, newEmail: string) {
 
   await admin.from('users').update({ email }).eq('id', userId)
   revalidatePath('/admin/usuarios')
+}
+
+// ── Lembrete para completar perfil ───────────────────────────
+export async function sendProfileReminder(userId: string): Promise<void> {
+  await requireAdmin()
+  const admin = createAuthAdminClient()
+  const { data: u } = await admin.from('users').select('name, email, whatsapp, padrinho').eq('id', userId).single()
+  if (!u) throw new Error('Usuário não encontrado')
+  if (u.whatsapp && u.padrinho) throw new Error('Perfil já está completo.')
+  await notifyProfileReminder({ name: u.name, email: u.email })
 }
 
 // ── Reenviar e-mail de ativação ───────────────────────────────

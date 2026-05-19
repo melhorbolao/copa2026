@@ -12,17 +12,19 @@ export default async function AdminUsuariosPage() {
     `)
     .order('created_at', { ascending: false })
 
-  const total     = users?.length ?? 0
-  const aprovados = users?.filter(u => u.status === 'aprovado').length ?? 0
-  const pendentes = users?.filter(u => u.status === 'aprovacao_pendente').length ?? 0
+  const total       = users?.length ?? 0
+  const aprovados   = users?.filter(u => u.status === 'aprovado').length ?? 0
+  const pendentes   = users?.filter(u => u.status === 'aprovacao_pendente').length ?? 0
+  const incompletos = users?.filter(u => !u.is_manual && (!u.whatsapp || !u.padrinho)).length ?? 0
 
   return (
     <div>
       {/* Resumo */}
-      <div className="mb-6 grid grid-cols-3 gap-3">
-        <StatCard label="Cadastrados"       value={total}     color="gray"   />
-        <StatCard label="Aprovados"         value={aprovados} color="verde"  />
-        <StatCard label="Aguard. aprovação" value={pendentes} color="orange" />
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatCard label="Cadastrados"        value={total}       color="gray"   />
+        <StatCard label="Aprovados"          value={aprovados}   color="verde"  />
+        <StatCard label="Aguard. aprovação"  value={pendentes}   color="orange" />
+        <StatCard label="Perfil incompleto"  value={incompletos} color="red"    />
       </div>
 
       <UsuariosClient users={users ?? []} />
@@ -36,6 +38,7 @@ function StatCard({ label, value, color }: { label: string; value: number; color
     verde:   'bg-verde-50  border-verde-200  text-verde-700',
     orange:  'bg-orange-50 border-orange-200 text-orange-700',
     amarelo: 'bg-yellow-50 border-yellow-200 text-yellow-700',
+    red:     'bg-red-50    border-red-200    text-red-700',
   }
   return (
     <div className={`rounded-xl border p-4 text-center ${styles[color] ?? styles.gray}`}>

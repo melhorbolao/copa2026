@@ -3,7 +3,7 @@
 import { useTransition, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
-import { toggleApproved, deleteUser, updateObservacao, updateApelido, updatePadrinho, toggleAdmin, updateUserEmail, resendActivationEmail, activateUser } from '../actions'
+import { toggleApproved, deleteUser, updateObservacao, updateApelido, updatePadrinho, updateWhatsapp, toggleAdmin, updateUserEmail, resendActivationEmail, activateUser, sendProfileReminder } from '../actions'
 import { formatBrasilia } from '@/utils/date'
 
 type Status = 'email_pendente' | 'aprovacao_pendente' | 'aprovado'
@@ -38,31 +38,37 @@ interface UserRowProps {
 export function UserRow({ user, index }: UserRowProps) {
   const router = useRouter()
 
-  const [pendingApproved, startApproved] = useTransition()
-  const [pendingDelete,   startDelete]   = useTransition()
-  const [pendingObs,      startObs]      = useTransition()
-  const [pendingApelido,  startApelido]  = useTransition()
-  const [pendingPadrinho, startPadrinho] = useTransition()
-  const [pendingAdmin,    startAdmin]    = useTransition()
-  const [pendingEmail,    startEmail]    = useTransition()
-  const [pendingResend,   startResend]   = useTransition()
-  const [pendingActivate, startActivate] = useTransition()
+  const [pendingApproved,  startApproved]  = useTransition()
+  const [pendingDelete,    startDelete]    = useTransition()
+  const [pendingObs,       startObs]       = useTransition()
+  const [pendingApelido,   startApelido]   = useTransition()
+  const [pendingPadrinho,  startPadrinho]  = useTransition()
+  const [pendingWhatsapp,  startWhatsapp]  = useTransition()
+  const [pendingAdmin,     startAdmin]     = useTransition()
+  const [pendingEmail,     startEmail]     = useTransition()
+  const [pendingResend,    startResend]    = useTransition()
+  const [pendingActivate,  startActivate]  = useTransition()
+  const [pendingReminder,  startReminder]  = useTransition()
 
-  const [confirming,     setConfirming]     = useState(false)
-  const [editingObs,     setEditingObs]     = useState(false)
-  const [editingApelido, setEditingApelido] = useState(false)
-  const [editingEmail,   setEditingEmail]   = useState(false)
+  const [confirming,      setConfirming]      = useState(false)
+  const [editingObs,      setEditingObs]      = useState(false)
+  const [editingApelido,  setEditingApelido]  = useState(false)
+  const [editingEmail,    setEditingEmail]    = useState(false)
+  const [editingWhatsapp, setEditingWhatsapp] = useState(false)
 
-  const obsRef     = useRef<HTMLInputElement>(null)
-  const apelidoRef = useRef<HTMLInputElement>(null)
-  const emailRef   = useRef<HTMLInputElement>(null)
+  const obsRef      = useRef<HTMLInputElement>(null)
+  const apelidoRef  = useRef<HTMLInputElement>(null)
+  const emailRef    = useRef<HTMLInputElement>(null)
+  const whatsappRef = useRef<HTMLInputElement>(null)
 
-  const obsLatest     = useRef(user.observacao ?? '')
-  const apelidoLatest = useRef(user.apelido ?? '')
-  const emailLatest   = useRef(user.email)
+  const obsLatest      = useRef(user.observacao ?? '')
+  const apelidoLatest  = useRef(user.apelido ?? '')
+  const emailLatest    = useRef(user.email)
+  const whatsappLatest = useRef(user.whatsapp ?? '')
 
   const [padrinhoValue, setPadrinhoValue] = useState(user.padrinho ?? '')
-  const canApprove = !!padrinhoValue
+  const canApprove     = !!padrinhoValue
+  const profileComplete = user.is_manual || (!!user.whatsapp && !!user.padrinho)
 
   const handleObsSave = () => {
     setEditingObs(false)
@@ -107,6 +113,17 @@ export function UserRow({ user, index }: UserRowProps) {
     })
   }
 
+  const handleWhatsappSave = () => {
+    setEditingWhatsapp(false)
+    const val = whatsappLatest.current.trim()
+    if (val === (user.whatsapp ?? '')) return
+    startWhatsapp(() => {
+      void updateWhatsapp(user.id, val)
+        .then(() => router.refresh())
+        .catch(() => toast.error('Erro ao salvar WhatsApp'))
+    })
+  }
+
   const handleResendActivation = () => {
     startResend(() => {
       void resendActivationEmail(user.id)
@@ -147,6 +164,14 @@ export function UserRow({ user, index }: UserRowProps) {
     })
   }
 
+  const handleReminder = () => {
+    startReminder(() => {
+      void sendProfileReminder(user.id)
+        .then(() => toast.success('Lembrete enviado'))
+        .catch((e: unknown) => toast.error(e instanceof Error ? e.message : 'Erro ao enviar lembrete'))
+    })
+  }
+
   const isMaster = user.email === 'gmousinho@gmail.com'
 
   return (
@@ -160,6 +185,7 @@ export function UserRow({ user, index }: UserRowProps) {
             {user.name}
             {user.is_manual && <span className="ml-1.5 rounded bg-gray-200 px-1 py-0.5 text-xs text-gray-500">manual</span>}
             {user.is_admin  && <span className="ml-1.5 rounded bg-purple-100 px-1 py-0.5 text-xs text-purple-600">admin</span>}
+            {!profileComplete && <span className="ml-1.5 rounded bg-red-100 px-1 py-0.5 text-xs text-red-600 font-semibold">perfil incompleto</span>}
           </p>
         </div>
       </td>
@@ -238,6 +264,16 @@ export function UserRow({ user, index }: UserRowProps) {
                 </button>
               </>
             )}
+            {user.status === 'aprovacao_pendente' && !profileComplete && (
+              <button
+                onClick={handleReminder}
+                disabled={pendingReminder}
+                title="Enviar e-mail lembrando o usuário de completar o cadastro"
+                className="rounded-full px-2.5 py-1 text-xs font-semibold bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50 transition whitespace-nowrap"
+              >
+                {pendingReminder ? '…' : '✉ Lembrar'}
+              </button>
+            )}
             {user.status === 'aprovacao_pendente' && (
               <span title={!canApprove ? 'Selecione o padrinho primeiro' : undefined}>
                 <button
@@ -287,17 +323,43 @@ export function UserRow({ user, index }: UserRowProps) {
         )}
       </td>
 
-      {/* WhatsApp */}
-      <td className="px-3 py-2.5 text-xs text-gray-600 whitespace-nowrap">
-        {user.whatsapp ? (
-          <a
-            href={whatsappLink(user.whatsapp)}
-            target="_blank" rel="noopener noreferrer"
-            className="text-[#25D366] hover:underline"
+      {/* WhatsApp — editável inline */}
+      <td className="px-3 py-2.5 min-w-[130px]">
+        {editingWhatsapp ? (
+          <input
+            ref={whatsappRef}
+            type="tel"
+            defaultValue={user.whatsapp ?? ''}
+            onChange={e => { whatsappLatest.current = e.target.value }}
+            onBlur={handleWhatsappSave}
+            onKeyDown={e => {
+              if (e.key === 'Enter') whatsappRef.current?.blur()
+              if (e.key === 'Escape') { whatsappLatest.current = user.whatsapp ?? ''; setEditingWhatsapp(false) }
+            }}
+            autoFocus
+            placeholder="(11) 99999-9999"
+            className="w-full rounded border border-verde-300 px-1.5 py-1 text-xs focus:outline-none"
+          />
+        ) : (
+          <button
+            onClick={() => { whatsappLatest.current = user.whatsapp ?? ''; setEditingWhatsapp(true) }}
+            title="Clique para editar WhatsApp"
+            className={`w-full text-left text-xs rounded px-1.5 py-1 hover:bg-gray-100 transition ${pendingWhatsapp ? 'opacity-50' : ''}`}
           >
-            {user.whatsapp}
-          </a>
-        ) : <span className="text-gray-300">—</span>}
+            {user.whatsapp ? (
+              <a
+                href={whatsappLink(user.whatsapp)}
+                onClick={e => e.stopPropagation()}
+                target="_blank" rel="noopener noreferrer"
+                className="text-[#25D366] hover:underline"
+              >
+                {user.whatsapp}
+              </a>
+            ) : (
+              <span className="text-gray-300 italic">adicionar…</span>
+            )}
+          </button>
+        )}
       </td>
 
       {/* Participantes vinculados */}
