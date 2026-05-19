@@ -20,9 +20,11 @@ interface Props {
 export function ParticipantsClient({ participants, users, pagantesNote }: Props) {
   const [filter, setFilter] = useState<Filter>('all')
 
-  const total    = participants.length
-  const pagos    = participants.filter(p => p.paid).length
-  const pendentes = total - pagos
+  const total           = participants.length
+  const pagos           = participants.filter(p => p.paid).length
+  const pendentes       = total - pagos
+  const pagantesExtras  = pagantesNote ? pagantesNote.split('\n').filter(l => l.trim()).length : 0
+  const totalArrecadado = (pagos + pagantesExtras) * 250
 
   const visible = filter === 'paid'    ? participants.filter(p => p.paid)
                 : filter === 'pending' ? participants.filter(p => !p.paid)
@@ -31,10 +33,19 @@ export function ParticipantsClient({ participants, users, pagantesNote }: Props)
   return (
     <div>
       {/* Cards-filtro */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <FilterCard label="Participantes" value={total}    color="gray"   active={filter === 'all'}     onClick={() => setFilter(filter === 'all'     ? 'all' : 'all')}     onToggle={() => setFilter('all')}     />
-        <FilterCard label="Pagos"         value={pagos}    color="verde"  active={filter === 'paid'}    onToggle={() => setFilter(filter === 'paid'    ? 'all' : 'paid')}    />
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <FilterCard label="Participantes" value={total}     color="gray"   active={filter === 'all'}     onToggle={() => setFilter('all')}                                      />
+        <FilterCard label="Pagos"         value={pagos}     color="verde"  active={filter === 'paid'}    onToggle={() => setFilter(filter === 'paid'    ? 'all' : 'paid')}    />
         <FilterCard label="Pendentes"     value={pendentes} color="orange" active={filter === 'pending'} onToggle={() => setFilter(filter === 'pending' ? 'all' : 'pending')} />
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center">
+          <p className="text-3xl font-black text-emerald-700">
+            {totalArrecadado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 })}
+          </p>
+          <p className="mt-0.5 text-xs font-medium text-emerald-700">Arrecadado</p>
+          <p className="mt-1 text-[10px] text-emerald-500">
+            {pagos} pagos + {pagantesExtras} sem cadastro
+          </p>
+        </div>
       </div>
 
       <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
