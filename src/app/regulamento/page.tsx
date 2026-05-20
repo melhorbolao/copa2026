@@ -195,8 +195,8 @@ export default async function RegulamentoPage() {
     <>
       <Navbar />
       <div className="mx-auto max-w-3xl px-4 py-8">
-        <h1 className="text-3xl font-black text-white mb-1">Regulamento</h1>
-        <p className="text-sm text-white/60 mb-8">Melhor Bolão · Copa do Mundo 2026</p>
+        <h1 className="text-3xl font-black text-gray-900 mb-1">Regulamento</h1>
+        <p className="text-sm text-gray-500 mb-8">Melhor Bolão · Copa do Mundo 2026</p>
         <RegulamentoContent content={REGULAMENTO} />
       </div>
     </>

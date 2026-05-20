@@ -32,8 +32,8 @@ export default async function PontuacaoPage() {
       <div className="mx-auto max-w-2xl px-4 py-8">
         <div className="mb-8 flex items-end justify-between">
           <div>
-            <h1 className="text-3xl font-black text-white mb-1">Pontuação</h1>
-            <p className="text-sm text-white/60">Tabela de referência · Melhor Bolão · Copa do Mundo 2026</p>
+            <h1 className="text-3xl font-black text-gray-900 mb-1">Pontuação</h1>
+            <p className="text-sm text-gray-500">Tabela de referência · Melhor Bolão · Copa do Mundo 2026</p>
           </div>
           {/* Badge renderizado dentro de ScoringTable (client) para respeitar viewMode */}
         </div>

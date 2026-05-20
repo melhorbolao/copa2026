@@ -20,7 +20,7 @@ export function AdminTabs() {
   const pathname = usePathname()
 
   return (
-    <div className="mb-6 border-b border-ouro/30">
+    <div className="mb-6 border-b border-gray-200">
       <div className="flex flex-wrap gap-1">
         {tabs.map((tab) => {
           const active = pathname.startsWith(tab.href)
@@ -30,8 +30,8 @@ export function AdminTabs() {
               href={tab.href}
               className={`-mb-px whitespace-nowrap border-b-2 px-4 py-2 text-sm font-medium transition ${
                 active
-                  ? 'border-ouro text-ouro'
-                  : 'border-transparent text-white/60 hover:text-white hover:border-white/30'
+                  ? 'border-verde-600 text-verde-700'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
               {tab.label}

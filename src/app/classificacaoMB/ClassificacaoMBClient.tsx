@@ -518,7 +518,7 @@ export function ClassificacaoMBClient({
                 const z        = zoneOf(row)
                 const boundary = tiedAtBoundary && row.pts === cutPts
 
-                const rowBg   = z === 'last' ? ZONE_ROW.last : (isActive ? 'bg-azul-navy/10' : ZONE_ROW[z])
+                const rowBg   = z === 'last' ? ZONE_ROW.last : (isActive ? 'bg-verde-50' : ZONE_ROW[z])
                 const fontCls = z === 'last' ? 'font-bold' : (isActive ? 'font-semibold' : '')
 
                 return (

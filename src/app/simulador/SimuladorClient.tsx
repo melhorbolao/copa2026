@@ -442,7 +442,7 @@ export function SimuladorClient({
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-base font-bold text-gray-800">Meu Simulador MB</h1>
+          <h1 className="text-base font-bold text-gray-800">Meu Simulador</h1>
           <p className="text-[11px] text-gray-400 mt-0.5">
             Projete cenários e veja o impacto no ranking. Os palpites reais não são alterados.
           </p>

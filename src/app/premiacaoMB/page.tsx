@@ -48,8 +48,8 @@ export default async function PremiacaoMBPage() {
     <>
       <Navbar />
       <div className="mx-auto max-w-lg px-4 py-8">
-        <h1 className="text-2xl font-black text-white mb-1">Premiação MB</h1>
-        <p className="text-sm text-white/60 mb-6">Melhor Bolão · Copa do Mundo 2026</p>
+        <h1 className="text-2xl font-black text-gray-900 mb-1">Premiação</h1>
+        <p className="text-sm text-gray-500 mb-6">Melhor Bolão · Copa do Mundo 2026</p>
 
         {/* Resumo da arrecadação */}
         <div className="mb-5 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">

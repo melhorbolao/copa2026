@@ -53,7 +53,7 @@ export function DuelCard({ nameA, nameB, totalA, totalB, breakdown, projection, 
           {/* Header */}
           <div style={{ background: 'linear-gradient(135deg, #004d1a 0%, #006622 100%)', padding: '16px 20px 12px' }}>
             <div style={{ color: '#fbbf24', fontSize: 11, fontWeight: 800, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 4 }}>
-              ⚔️ Duelo MB · Copa 2026
+              ⚔️ Duelo · Copa 2026
             </div>
             <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10 }}>melhorbolao.com.br</div>
           </div>

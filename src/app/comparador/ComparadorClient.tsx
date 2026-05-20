@@ -105,7 +105,7 @@ export function ComparadorClient(props: Props) {
 
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-black text-gray-900">⚔️ Comparador MB</h1>
+        <h1 className="text-2xl font-black text-gray-900">⚔️ Comparador</h1>
         <p className="text-sm text-gray-500 mt-1">Análise profunda de duelo entre dois participantes</p>
       </div>
 

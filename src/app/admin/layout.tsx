@@ -29,7 +29,7 @@ export default async function AdminLayout({
       <div className="mx-auto max-w-6xl px-4 py-6">
         {/* Cabeçalho */}
         <div className="mb-6">
-          <h1 className="text-2xl font-black text-white">Painel Administrativo</h1>
+          <h1 className="text-2xl font-black text-gray-900">Painel Administrativo</h1>
         </div>
 
         {/* Tabs de navegação */}

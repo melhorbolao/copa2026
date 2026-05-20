@@ -37,7 +37,7 @@ export default async function ClassificacaoAdminPage() {
 
   return (
     <>
-      <h2 className="mb-2 text-lg font-bold text-gray-900">Colunas — Classificação MB</h2>
+      <h2 className="mb-2 text-lg font-bold text-gray-900">Colunas — Classificação</h2>
       <p className="mb-6 text-sm text-gray-500">
         Ative ou desative colunas da tabela de classificação para todos os usuários.
       </p>

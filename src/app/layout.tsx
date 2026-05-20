@@ -38,7 +38,7 @@ export default function RootLayout({
         {/* Sprite de bandeiras pré-carregado: 1 request cacheado para todas as 48 bandeiras */}
         <link rel="preload" as="image" href="/flags-sprite.png" type="image/png" />
       </head>
-      <body className="min-h-screen bg-azul-navy font-sans">
+      <body className="min-h-screen bg-gray-50 font-sans">
         <AdminViewProvider>
           <Sidebar />
           <div className="sm:pl-56">
