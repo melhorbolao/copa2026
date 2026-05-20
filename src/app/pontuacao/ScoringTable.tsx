@@ -139,8 +139,8 @@ export function ScoringTable({ rules, isAdmin }: Props) {
         const sectionRules = keys.map(k => ruleMap[k]).filter(Boolean)
 
         return (
-          <section key={section.key} className="overflow-hidden rounded-2xl border border-gray-200 shadow-sm">
-            <div className="flex items-center gap-2 px-4 py-3" style={{ backgroundColor: '#002776' }}>
+          <section key={section.key} className="overflow-hidden rounded-2xl border border-ouro/30 shadow-sm">
+            <div className="flex items-center gap-2 px-4 py-3 bg-azul-dark">
               <span>{section.icon}</span>
               <h2 className="text-sm font-black uppercase tracking-widest text-white">
                 {section.title}
@@ -154,10 +154,10 @@ export function ScoringTable({ rules, isAdmin }: Props) {
                   return (
                     <tr
                       key={rule.key}
-                      className={`border-t border-gray-100 ${
+                      className={`border-t border-azul-dark/20 ${
                         isZebra ? 'bg-amber-50'
                         : isMult ? 'bg-verde-50/50'
-                        : i % 2 === 0 ? 'bg-white' : 'bg-gray-50/40'
+                        : i % 2 === 0 ? 'bg-azul-navy/5' : 'bg-white'
                       }`}
                     >
                       <td className="px-4 py-2.5 text-sm text-gray-700">

@@ -26,16 +26,12 @@ export default async function LoginPage({
         {/* Card de login */}
         <div className="rounded-2xl bg-white p-6 shadow-xl">
           {/* Cabeçalho do card */}
-          <div className="mb-6 flex items-center gap-3 rounded-xl bg-verde-600 px-4 py-3">
+          <div className="mb-6 flex items-center justify-center rounded-xl bg-azul-dark px-4 py-3">
             <img
-              src="/logo.png"
+              src="/logo_azul_amarelo_ret.png"
               alt="Melhor Bolão"
-              className="h-12 w-auto flex-shrink-0"
-              style={{ mixBlendMode: 'screen' }}
+              className="h-12 w-auto"
             />
-            <span className="text-xs font-medium text-white/80 leading-snug">
-              Copa do Mundo<br />EUA · Canadá · México<br />2026
-            </span>
           </div>
           {error && (
             <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
@@ -47,13 +43,13 @@ export default async function LoginPage({
           <LoginForm />
         </div>
 
-        <p className="mt-6 text-center text-xs text-white" style={{ opacity: 0.55 }}>
+        <p className="mt-6 text-center text-xs text-white/85">
           Após o cadastro, aguarde aprovação do administrador para acessar os palpites.
         </p>
-        <p className="mt-3 text-center text-xs" style={{ opacity: 0.4 }}>
-          <a href="/privacidade" className="text-white underline hover:opacity-80">Política de Privacidade</a>
+        <p className="mt-3 text-center text-xs text-white/60">
+          <a href="/privacidade" className="text-white/60 underline hover:text-white">Política de Privacidade</a>
           {' · '}
-          <a href="/termos" className="text-white underline hover:opacity-80">Termos de Uso</a>
+          <a href="/termos" className="text-white/60 underline hover:text-white">Termos de Uso</a>
         </p>
       </div>
     </main>

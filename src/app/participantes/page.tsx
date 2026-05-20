@@ -258,7 +258,7 @@ export default async function ControlePage({
 
     <div className="mx-auto max-w-5xl px-4 py-8">
       <div className="mb-4 flex items-start justify-between gap-4 flex-wrap">
-        <h1 className="text-2xl font-black text-gray-900">Participantes</h1>
+        <h1 className="text-2xl font-black text-white">Participantes</h1>
         {nextDeadline && (
           <Countdown deadline={nextDeadline.iso} label={nextDeadline.label} />
         )}

@@ -1,0 +1,63 @@
+ESPECIFICAÇÃO DE NOVA IDENTIDADE VISUAL: MELHOR BOLÃO 2026 - AZUL OCENO & AMARELO OURO
+
+Abaixo está a especificação completa para a refatoração visual do sistema Melhor Bolão, preservando a estética profissional e organizada de tabelas densas, mas adotando o novo esquema de cores Azul Navy Profundo e Amarelo Dourado Ouro, baseado na logo fornecida.
+
+1.  PALETA DE CORES GLOBAL (THEMING)
+Abandone o Cyan Clássico e adote o contraste vibrante entre o Azul profundo e o Amarelo dourado. A estética de tabelas limpas e organizadas deve ser mantida, mas as cores principais mudam.
+
+| Elemento UI | Cor Antiga (Cyan/Branco) | NOVA COR (Azul/Amarelo) | Referência no Logo |
+| :--- | :--- | :--- | :--- |
+| Fundo da Página (Body BG) | `#F0FDF4` (Verde sutil) | `#001F5B` (Azul Navy Profundo) | Base do card "Azul Oceano" |
+| Cards e Tabela (Fundo Principal)| `White` / `#FFFFFF` | `#001F5B` (Azul Navy Profundo) | Uniformidade visual |
+| Bordas e Divisores | `#E5E7EB` (Cinza claro) | `#FFD700` (Amarelo Dourado Ouro) | A moldura do logo |
+| Texto Principal | `#1F2937` (Cinza escuro) | `White` (`#FFFFFF`) | Para leitura no fundo azul |
+| Texto Destaque (PTS) | `#111827` (Preto) | `#FFD700` (Amarelo Dourado Ouro) | Para vibrar com os pontos |
+| Acentos e Elementos 'Live' | `#00F2FF` (Ciano Neon) | `#00F2FF` (Ciano Neon) | MANTIDO para alto contraste live |
+
+2.  ESPECIFICAÇÃO DA LOGO E POSICIONAMENTO
+A logo `logo_azul_amarelo.png` é a nova âncora da marca e deve ter posicionamento de destaque.
+
+Onde Colocar a Logo (Orientação):
+Substitua qualquer título de texto ("MDB", "MENU", "Melhor Bolão") no topo do Sidebar (Menu Vertical) pela logo.
+
+Instrução Técnica (Claude/Lovable):
+- Remova o componente de título/texto no topo do Sidebar (Menu Vertical).
+- Adicione o componente <Image /> carregando 'logo_azul_amarelo.png'.
+- Redimensione a imagem para ocupar 80% da largura do Sidebar, centralizada horizontalmente.
+- Garanta que a logo tenha um link (href) para a rota '/' (Home/Classificação).
+- Mantenha o espaçamento interno (padding) adequado entre a logo e o primeiro item do menu.
+
+3.  REFATORAÇÃO DO MENU VERTICAL (SIDEBAR)
+O menu vertical é o elemento de maior impacto visual após a logo. Ele deve adotar o contraste total da nova paleta.
+
+| Sub-elemento | Cor Antiga (Branco/Cinza) | NOVA COR (Azul/Amarelo) |
+| :--- | :--- | :--- |
+| Fundo do Menu (Sólido) | `#FFFFFF` (Branco) | `#001133` (Azul Navy Profundo - ligeiramente mais escuro que o BG) |
+| Texto do Item de Menu | `#4B5563` (Cinza) | `#FFD700` (Amarelo Dourado Ouro) |
+| Ícone do Menu | `#6B7280` (Cinza) | `#FFD700` (Amarelo Dourado Ouro) |
+| Item Ativo (Fundo) | `#F3F4F6` (Cinza claro)| `#002D80` (Azul Médio - para destacar) |
+| Item Ativo (Texto/Ícone) | `#111827` (Preto) | `White` (`#FFFFFF`) |
+
+4.  ESTÉTICA DE TABELAS E CARDS (DICAS TÉCNICAS E DE UX)
+A densidade de dados deve ser preservada, mas com contraste profissional.
+
+A) Destaque dos Pontos (A Medalha de Ouro)
+Destaque a pontuação principal (coluna "PTS") com a cor `#FFD700` (Amarelo Ouro) para dar uma sensação de conquista a cada ponto somado.
+
+B) Zebra Stripes Profissionais
+Mantenha as linhas com fundo alternado (zebra stripes) nas tabelas, mas use tons próximos do Azul Navy.
+- Linha 1 (Par): Fundo `#001F5B`.
+- Linha 2 (Ímpar): Fundo `#002D80` (Azul Médio).
+- Efeito Hoover (Passar o mouse): Deve usar `#FFD700` (Amarelo) com opacidade 10% para destacar a linha sem apagar o texto.
+
+5.  IMPLEMENTAÇÃO RESPONSIVA (MOBILE)
+No celular, o Sidebar (Menu Vertical) é recolhido e um cabeçalho fixo no topo (TopBar) aparece.
+
+Instrução de TopBar Mobile:
+- No componente de TopBar Mobile, centralize a logo `logo_azul_amarelo.png`.
+- O TopBar deve adotar o fundo `#001133` (Azul Profundo).
+- O ícone do menu 'hambúrguer' (para abrir o Sidebar) deve ser `#FFD700` (Amarelo Ouro).
+
+Esta mudança cria uma identidade nacional e profissional, assemelhando o bolão a um aplicativo de estatísticas de ponta (como SofaScore), com contraste alto e legibilidade garantida em fundo escuro.
+
+Fim da Especificação Técnico-Visual.

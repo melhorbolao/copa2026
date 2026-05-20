@@ -34,7 +34,7 @@ export function ParticipantSelector({ participants }: { participants: Participan
       title="Trocar participante ativo"
     >
       {participants.map(p => (
-        <option key={p.id} value={p.id} className="bg-verde-800 text-white">
+        <option key={p.id} value={p.id} className="bg-azul-dark text-white">
           {p.apelido}
         </option>
       ))}

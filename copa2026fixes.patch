@@ -1,0 +1,564 @@
+From ac7a3aec2bf3a842596fd1ad9a68122e96b47359 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 15 May 2026 13:43:54 +0000
+Subject: [PATCH 1/3] fix(classificacao): corrige layout da tabela compacta e
+ adiciona toggle admin para Sobe e Desce
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Adiciona classe `grid` ao colsGrid para ativar display:grid — sem ela
+  os spans ficavam inline e os pontos apareciam colados nos nomes
+- Nova setting `sobe_desce_visible` em tournament_settings: quando false,
+  usuários comuns não veem o painel de Sobe e Desce; admin sempre vê
+- Toggle na aba Gestão do painel admin para ligar/desligar a feature
+---
+ src/app/admin/gestao/GestaoAdminClient.tsx    | 41 ++++++++++++++++-
+ src/app/admin/gestao/actions.ts               | 12 +++++
+ src/app/admin/gestao/page.tsx                 |  6 ++-
+ .../classificacaoMB/ClassificacaoMBClient.tsx | 44 +++++++++++--------
+ src/app/classificacaoMB/page.tsx              |  8 +++-
+ 5 files changed, 89 insertions(+), 22 deletions(-)
+
+diff --git a/src/app/admin/gestao/GestaoAdminClient.tsx b/src/app/admin/gestao/GestaoAdminClient.tsx
+index 0a9268f..f55a5dd 100644
+--- a/src/app/admin/gestao/GestaoAdminClient.tsx
++++ b/src/app/admin/gestao/GestaoAdminClient.tsx
+@@ -1,7 +1,7 @@
+ 'use client'
+ 
+ import { useState, useRef, useTransition } from 'react'
+-import { setProductionMode, setRoundReleased, setRoundAvailable, clearAllBets, clearAllResults } from './actions'
++import { setProductionMode, setRoundReleased, setRoundAvailable, clearAllBets, clearAllResults, setSobeDesceVisible } from './actions'
+ import type { RoundInfo } from '@/lib/production-mode'
+ 
+ interface Props {
+@@ -9,18 +9,21 @@ interface Props {
+   releasedRounds: string[]
+   fillableRoundKeys: string[]
+   availableRounds: RoundInfo[]
++  sobeDesceVisible: boolean
+ }
+ 
+ type Msg = { type: 'ok' | 'error'; text: string }
+ type ConflictState = { conflicts: string[]; file: File }
+ 
+-export function GestaoAdminClient({ productionMode: initProdMode, releasedRounds: initReleased, fillableRoundKeys, availableRounds }: Props) {
++export function GestaoAdminClient({ productionMode: initProdMode, releasedRounds: initReleased, fillableRoundKeys, availableRounds, sobeDesceVisible: initSobeDesce }: Props) {
+   const [productionMode, setMode]       = useState(initProdMode)
+   const [releasedRounds, setReleased]   = useState<Set<string>>(new Set(initReleased))
+   const [fillableRounds, setFillable]   = useState<Set<string>>(new Set(fillableRoundKeys))
++  const [sobeDesce, setSobeDesce]             = useState(initSobeDesce)
+   const [modePending, startModeTransition]    = useTransition()
+   const [roundPending, startRoundTransition]  = useTransition()
+   const [fillPending, startFillTransition]    = useTransition()
++  const [sdPending, startSdTransition]        = useTransition()
+ 
+   // ── Clear bets ────────────────────────────────────────────────
+   const [confirmBets, setConfirmBets]   = useState(false)
+@@ -49,6 +52,14 @@ export function GestaoAdminClient({ productionMode: initProdMode, releasedRounds
+     })
+   }
+ 
++  const handleToggleSobeDesce = () => {
++    const next = !sobeDesce
++    startSdTransition(async () => {
++      setSobeDesce(next)
++      await setSobeDesceVisible(next)
++    })
++  }
++
+   // ── Round release toggle ──────────────────────────────────────
+ 
+   const handleToggleRound = (roundKey: string, currentlyReleased: boolean) => {
+@@ -188,6 +199,32 @@ export function GestaoAdminClient({ productionMode: initProdMode, releasedRounds
+         </div>
+       </div>
+ 
++      {/* ── SOBE E DESCE VISIBILITY ── */}
++      <section>
++        <h3 className="text-sm font-semibold text-gray-900 mb-1">Sobe e Desce na Classificação</h3>
++        <p className="mb-3 text-xs text-gray-500">
++          Controla se os usuários comuns veem o painel de Sobe e Desce (evolução de posição/pontos no período).
++          O admin sempre visualiza, independente desta configuração.
++        </p>
++        <div className="flex items-center gap-3">
++          <button
++            onClick={handleToggleSobeDesce}
++            disabled={sdPending}
++            title={sobeDesce ? 'Clique para ocultar dos usuários' : 'Clique para exibir aos usuários'}
++            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:cursor-not-allowed ${
++              sobeDesce ? 'bg-verde-600' : 'bg-gray-200'
++            }`}
++          >
++            <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ${sobeDesce ? 'translate-x-4' : 'translate-x-0'}`} />
++          </button>
++          <span className={`text-xs font-medium ${sobeDesce ? 'text-verde-700' : 'text-gray-500'}`}>
++            {sobeDesce ? 'Visível para todos' : 'Oculto para usuários (só admin vê)'}
++          </span>
++        </div>
++      </section>
++
++      <hr className="border-gray-100" />
++
+       {/* ── ROUND RELEASE ── */}
+       <section>
+         <h3 className="text-sm font-semibold text-gray-900 mb-1">Controle de Liberação por Rodada</h3>
+diff --git a/src/app/admin/gestao/actions.ts b/src/app/admin/gestao/actions.ts
+index 15bb51c..be997ca 100644
+--- a/src/app/admin/gestao/actions.ts
++++ b/src/app/admin/gestao/actions.ts
+@@ -14,6 +14,18 @@ async function requireAdmin() {
+ 
+ // ── Modo Produção ─────────────────────────────────────────────
+ 
++export async function setSobeDesceVisible(visible: boolean): Promise<void> {
++  await requireAdmin()
++  // eslint-disable-next-line @typescript-eslint/no-explicit-any
++  const admin = createAuthAdminClient() as any
++  await admin
++    .from('tournament_settings')
++    .upsert({ key: 'sobe_desce_visible', value: String(visible) }, { onConflict: 'key' })
++
++  revalidatePath('/classificacaoMB')
++  revalidatePath('/admin/gestao')
++}
++
+ export async function setProductionMode(enabled: boolean): Promise<void> {
+   await requireAdmin()
+   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+diff --git a/src/app/admin/gestao/page.tsx b/src/app/admin/gestao/page.tsx
+index 3e731a0..020076a 100644
+--- a/src/app/admin/gestao/page.tsx
++++ b/src/app/admin/gestao/page.tsx
+@@ -7,11 +7,14 @@ export default async function GestaoAdminPage() {
+   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   const admin = createAuthAdminClient() as any
+ 
+-  const [{ productionMode, releasedRounds }, phaseSettings, { data: matchesRaw }] = await Promise.all([
++  const [{ productionMode, releasedRounds }, phaseSettings, { data: matchesRaw }, sobeDesceRow] = await Promise.all([
+     getVisibilitySettings(),
+     getPhaseSettings(),
+     admin.from('matches').select('phase, round, betting_deadline').order('match_datetime', { ascending: true }),
++    admin.from('tournament_settings').select('value').eq('key', 'sobe_desce_visible').maybeSingle(),
+   ])
++  // padrão: visível (true) se a chave ainda não existir
++  const sobeDesceVisible = sobeDesceRow?.data?.value !== 'false'
+ 
+   const availableRounds = buildAvailableRounds(matchesRaw ?? [])
+ 
+@@ -35,6 +38,7 @@ export default async function GestaoAdminPage() {
+         releasedRounds={[...releasedRounds]}
+         fillableRoundKeys={fillableRoundKeys}
+         availableRounds={availableRounds}
++        sobeDesceVisible={sobeDesceVisible}
+       />
+     </>
+   )
+diff --git a/src/app/classificacaoMB/ClassificacaoMBClient.tsx b/src/app/classificacaoMB/ClassificacaoMBClient.tsx
+index f21d22a..e3d3699 100644
+--- a/src/app/classificacaoMB/ClassificacaoMBClient.tsx
++++ b/src/app/classificacaoMB/ClassificacaoMBClient.tsx
+@@ -49,6 +49,9 @@ interface Props {
+   lastResultDate: string | null
+   /** ISO date (YYYY-MM-DD) do primeiro jogo da fase atual */
+   currentPhaseStartDate: string | null
++  /** Controle admin: se false, usuários comuns não veem o Sobe e Desce */
++  sobeDesceVisible: boolean
++  isAdmin: boolean
+ }
+ 
+ type RankedRow = ParticipantRow & { rank: number; diffLider: number; diffPremio: number | null; diffCorte: number | null }
+@@ -187,8 +190,8 @@ function CompactRanking({
+   }
+ 
+   const colsGrid  = sdActive
+-    ? 'grid-cols-[1.4rem_1.6rem_1fr_2.2rem_2.5rem]'
+-    : 'grid-cols-[1.5rem_1fr_2rem]'
++    ? 'grid grid-cols-[1.4rem_1.6rem_1fr_2.2rem_2.5rem]'
++    : 'grid grid-cols-[1.5rem_1fr_2rem]'
+   const minW = sdActive ? 600 : 480
+ 
+   const blockSize = Math.ceil(n / 4)
+@@ -315,6 +318,7 @@ export function ClassificacaoMBClient({
+   scorerMapping, teamAbbrs, prizeSpots, premioSpots,
+   activeParticipantId, colVisibility, renderedAt, matchesRegistered, groupsDefined,
+   lastResultDate, currentPhaseStartDate,
++  sobeDesceVisible, isAdmin,
+ }: Props) {
+   const elTeams = useMemo(() => new Set(eliminatedTeams), [eliminatedTeams])
+   const elStd   = useMemo(() => new Set(eliminatedStdScorers), [eliminatedStdScorers])
+@@ -377,7 +381,9 @@ export function ClassificacaoMBClient({
+     deltaMap, loading: sdLoading,
+     highlights, refDateLabel, refToDateLabel, hasData: sdHasData,
+   } = useSobeDesce({ lastResultDate, currentPhaseStartDate, rankedRows: rankedRowsForSD })
+-  const sdActive = sdMode !== 'hidden'
++  // Usuários comuns só veem se o admin habilitou; admins sempre veem
++  const sdAllowed = sobeDesceVisible || isAdmin
++  const sdActive = sdAllowed && sdMode !== 'hidden'
+ 
+   function zoneOf(r: RankedRow): Zone {
+     if (isUniqueLast && r.rank === lastRank)       return 'last'
+@@ -402,21 +408,23 @@ export function ClassificacaoMBClient({
+   return (
+     <div className="mx-auto max-w-full px-2 py-4 pb-32 sm:px-4 sm:py-6">
+ 
+-      {/* Sobe e Desce — seletor de modo */}
+-      <SobeDesceSelector
+-        mode={sdMode}
+-        setMode={setSdMode}
+-        customFrom={sdCustomFrom}
+-        setCustomFrom={setSdCustomFrom}
+-        customTo={sdCustomTo}
+-        setCustomTo={setSdCustomTo}
+-        loading={sdLoading}
+-        refDateLabel={refDateLabel}
+-        refToDateLabel={refToDateLabel}
+-        hasData={sdHasData}
+-        lastResultDate={lastResultDate}
+-        currentPhaseStartDate={currentPhaseStartDate}
+-      />
++      {/* Sobe e Desce — seletor de modo (oculto para usuários quando admin desabilitou) */}
++      {sdAllowed && (
++        <SobeDesceSelector
++          mode={sdMode}
++          setMode={setSdMode}
++          customFrom={sdCustomFrom}
++          setCustomFrom={setSdCustomFrom}
++          customTo={sdCustomTo}
++          setCustomTo={setSdCustomTo}
++          loading={sdLoading}
++          refDateLabel={refDateLabel}
++          refToDateLabel={refToDateLabel}
++          hasData={sdHasData}
++          lastResultDate={lastResultDate}
++          currentPhaseStartDate={currentPhaseStartDate}
++        />
++      )}
+ 
+       {/* Classificação Melhor Bolão — tabela compacta com Sobe e Desce */}
+       <CompactRanking
+diff --git a/src/app/classificacaoMB/page.tsx b/src/app/classificacaoMB/page.tsx
+index 6a7abb7..78c128b 100644
+--- a/src/app/classificacaoMB/page.tsx
++++ b/src/app/classificacaoMB/page.tsx
+@@ -69,6 +69,7 @@ export default async function ClassificacaoMBPage() {
+   let officialScorers: string[] = []
+   let prizeSpots = 8
+   let premioSpots = 10
++  let sobeDesceVisible = true
+   const colVisibility: Record<string, boolean> = {
+     premio:       false,
+     last_match:   true,
+@@ -98,13 +99,16 @@ export default async function ClassificacaoMBPage() {
+       'classif_col_delta_premio', 'classif_col_delta_corte',
+       'classif_col_pts_jg', 'classif_col_pts_cl', 'classif_col_pts_g4',
+     ]
+-    const [scorerRes, scorerSetting, settingsRes, premioSpotsRes, colSettingsRes] = await Promise.all([
++    const [scorerRes, scorerSetting, settingsRes, premioSpotsRes, colSettingsRes, sobeDesceRow] = await Promise.all([
+       admin.from('top_scorer_mapping').select('raw_name, standardized_name, is_eliminated'),
+       admin.from('tournament_settings').select('value').eq('key', 'official_top_scorer').maybeSingle(),
+       admin.from('tournament_settings').select('value').eq('key', 'prize_spots').maybeSingle(),
+       admin.from('tournament_settings').select('value').eq('key', 'premio_spots').maybeSingle(),
+       admin.from('tournament_settings').select('key, value').in('key', COL_KEYS),
++      admin.from('tournament_settings').select('value').eq('key', 'sobe_desce_visible').maybeSingle(),
+     ])
++    // padrão: visível (true) se a chave ainda não existir
++    sobeDesceVisible = sobeDesceRow?.data?.value !== 'false'
+     if (scorerRes.data) {
+       // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       for (const row of scorerRes.data as any[]) {
+@@ -394,6 +398,8 @@ export default async function ClassificacaoMBPage() {
+         groupsDefined={groupsDefined}
+         lastResultDate={lastResultDate}
+         currentPhaseStartDate={currentPhaseStartDate}
++        sobeDesceVisible={sobeDesceVisible}
++        isAdmin={isAdmin}
+       />
+     </>
+   )
+-- 
+2.43.0
+
+
+From 4503af567b3f19aeb74c2efedbb30946e63529c8 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 15 May 2026 16:50:52 +0000
+Subject: [PATCH 2/3] =?UTF-8?q?fix(admin):=20remove=20scrollbar=20do=20men?=
+ =?UTF-8?q?u=20de=20tabs=20=E2=80=94=20flex-wrap=20em=20vez=20de=20overflo?=
+ =?UTF-8?q?w-x-auto?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ src/app/admin/AdminTabs.tsx | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/app/admin/AdminTabs.tsx b/src/app/admin/AdminTabs.tsx
+index 3db0808..9d90071 100644
+--- a/src/app/admin/AdminTabs.tsx
++++ b/src/app/admin/AdminTabs.tsx
+@@ -20,8 +20,8 @@ export function AdminTabs() {
+   const pathname = usePathname()
+ 
+   return (
+-    <div className="mb-6 overflow-x-auto border-b border-gray-200">
+-      <div className="flex min-w-max gap-1">
++    <div className="mb-6 border-b border-gray-200">
++      <div className="flex flex-wrap gap-1">
+         {tabs.map((tab) => {
+           const active = pathname.startsWith(tab.href)
+           return (
+-- 
+2.43.0
+
+
+From 535655fe82cc92a3b8310ad8f7ce213f828e8776 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 15 May 2026 17:31:09 +0000
+Subject: [PATCH 3/3] =?UTF-8?q?fix:=20corrige=20op=C3=A7=C3=B5es=20de=203?=
+ =?UTF-8?q?=C2=BA=20lugar=20ap=C3=B3s=20mudan=C3=A7a=20manual=20do=202?=
+ =?UTF-8?q?=C2=BA=20colocado?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Quando o usuário preenchia via auto-fill e depois alterava manualmente
+o 2º colocado, a seção de terceiros mostrava opções erradas (ou
+ocultava times que deveriam estar disponíveis) porque groupBets era
+uma prop estática do servidor, nunca atualizada sem router.refresh().
+
+Fix: estende ThirdPlaceContext com groupBetSelections (estado vivo
+do 1º e 2º por grupo). GroupBetRow notifica o contexto sempre que
+altera 1º/2º lugar. ThirdPlaceSection usa esse estado vivo em
+availableTeams() em vez da prop do servidor. Também limpa
+automaticamente a seleção de 3º se aquele time passa a ser 1º ou 2º.
+---
+ src/app/palpites/GroupBetRow.tsx       | 18 +++++++----
+ src/app/palpites/PalpitesContent.tsx   |  7 ++++-
+ src/app/palpites/ThirdPlaceContext.tsx | 41 +++++++++++++++++++++-----
+ src/app/palpites/ThirdPlaceSection.tsx | 36 ++++++++++++++++++----
+ 4 files changed, 82 insertions(+), 20 deletions(-)
+
+diff --git a/src/app/palpites/GroupBetRow.tsx b/src/app/palpites/GroupBetRow.tsx
+index 23329f8..fa44bcb 100644
+--- a/src/app/palpites/GroupBetRow.tsx
++++ b/src/app/palpites/GroupBetRow.tsx
+@@ -36,7 +36,7 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
+   const [error,  setError]  = useState('')
+   const [manualOrder, setManualOrder] = useState<string[] | null>(null)
+ 
+-  const { thirdSelections } = useThirdPlace()
++  const { thirdSelections, setGroupBetSelection } = useThirdPlace()
+   const thirdTeam = thirdSelections[groupName] ?? ''
+ 
+   const deadlinePassed = isDeadlinePassed(deadline)
+@@ -109,8 +109,15 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
+   const doClear = (clearFirst: boolean) => {
+     setError('')
+     const otherValue = clearFirst ? second : first
+-    if (clearFirst) { setFirst('');  saveDraft('', second) }
+-    else            { setSecond(''); saveDraft(first, '') }
++    if (clearFirst) {
++      setFirst('')
++      setGroupBetSelection(groupName, '', second)
++      saveDraft('', second)
++    } else {
++      setSecond('')
++      setGroupBetSelection(groupName, first, '')
++      saveDraft(first, '')
++    }
+     startTransition(async () => {
+       const r = await deleteGroupBet(groupName, clearFirst ? 'first' : 'second', otherValue)
+       if (r.error) setError(r.error)
+@@ -118,22 +125,21 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
+   }
+ 
+   const handleFirst = (val: string) => {
+-    // Se o usuário escolher o time que já está em 2º, faz o swap automaticamente
+-    // (isso é impedido pelo disabled da <option> sem este tratamento especial)
+     const newFirst  = val
+     const newSecond = val === second ? first : second   // troca se conflito
+     setFirst(newFirst)
+     setSecond(newSecond)
++    setGroupBetSelection(groupName, newFirst, newSecond)
+     saveDraft(newFirst, newSecond)
+     if (newFirst && newSecond && newFirst !== newSecond) doSave(newFirst, newSecond)
+   }
+ 
+   const handleSecond = (val: string) => {
+-    // Se o usuário escolher o time que já está em 1º, faz o swap automaticamente
+     const newSecond = val
+     const newFirst  = val === first ? second : first    // troca se conflito
+     setFirst(newFirst)
+     setSecond(newSecond)
++    setGroupBetSelection(groupName, newFirst, newSecond)
+     saveDraft(newFirst, newSecond)
+     if (newFirst && newSecond && newFirst !== newSecond) doSave(newFirst, newSecond)
+   }
+diff --git a/src/app/palpites/PalpitesContent.tsx b/src/app/palpites/PalpitesContent.tsx
+index 23ccb17..f5dec20 100644
+--- a/src/app/palpites/PalpitesContent.tsx
++++ b/src/app/palpites/PalpitesContent.tsx
+@@ -383,7 +383,12 @@ function PalpitesTabPane({
+           {isGroupEtapa && <GroupFilter />}
+         </div>
+ 
+-        <ThirdPlaceProvider initial={Object.fromEntries(thirdBets.map(b => [b.group_name, b.team]))}>
++        <ThirdPlaceProvider
++          initial={Object.fromEntries(thirdBets.map(b => [b.group_name, b.team]))}
++          initialGroupBets={Object.fromEntries(
++            Object.entries(groupBetMap).map(([g, v]) => [g, { first: v.first_place, second: v.second_place }])
++          )}
++        >
+           {totalMatches === 0 ? (
+             <div className="rounded-2xl border border-dashed border-gray-300 bg-white py-20 text-center">
+               <p className="text-4xl mb-3">⚽</p>
+diff --git a/src/app/palpites/ThirdPlaceContext.tsx b/src/app/palpites/ThirdPlaceContext.tsx
+index a7f8b68..b2bdf48 100644
+--- a/src/app/palpites/ThirdPlaceContext.tsx
++++ b/src/app/palpites/ThirdPlaceContext.tsx
+@@ -1,20 +1,19 @@
+ 'use client'
+ 
+-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
++import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+ 
+ // group_name → team escolhido como 3º
+ type ThirdSelections = Record<string, string>
++// group_name → { first, second } apostados (estado vivo do GroupBetRow)
++type GroupBetSelections = Record<string, { first: string; second: string }>
+ 
+ const Ctx = createContext<{
+   thirdSelections: ThirdSelections
+   setThirdSelections: (s: ThirdSelections) => void
+-}>({ thirdSelections: {}, setThirdSelections: () => {} })
++  groupBetSelections: GroupBetSelections
++  setGroupBetSelection: (group: string, first: string, second: string) => void
++}>({ thirdSelections: {}, setThirdSelections: () => {}, groupBetSelections: {}, setGroupBetSelection: () => {} })
+ 
+-/**
+- * Hash determinístico (e barato) das seleções iniciais — usado como dep do
+- * useEffect para sincronizar quando o servidor revalida. Mais leve do que
+- * `JSON.stringify` em cada render do pai.
+- */
+ function hashSelections(s: ThirdSelections): string {
+   const keys = Object.keys(s).sort()
+   let out = ''
+@@ -22,25 +21,51 @@ function hashSelections(s: ThirdSelections): string {
+   return out
+ }
+ 
++function hashGroupBets(s: GroupBetSelections): string {
++  const keys = Object.keys(s).sort()
++  let out = ''
++  for (const k of keys) out += k + '=' + s[k].first + '/' + s[k].second + ';'
++  return out
++}
++
+ export function ThirdPlaceProvider({
+   children,
+   initial,
++  initialGroupBets = {},
+ }: {
+   children: React.ReactNode
+   initial: ThirdSelections
++  initialGroupBets?: GroupBetSelections
+ }) {
+   const [thirdSelections, setThirdSelections] = useState<ThirdSelections>(initial)
++  const [groupBetSelections, setGroupBetSelections] = useState<GroupBetSelections>(initialGroupBets)
++
+   const initialHash = useMemo(() => hashSelections(initial), [initial])
+   const lastHash = useRef(initialHash)
+ 
++  // Sincroniza quando o servidor revalida (ex: auto-preenchimento)
+   useEffect(() => {
+     if (initialHash === lastHash.current) return
+     lastHash.current = initialHash
+     setThirdSelections(initial)
+   }, [initialHash, initial])
+ 
++  const groupHash = useMemo(() => hashGroupBets(initialGroupBets), [initialGroupBets])
++  const lastGroupHash = useRef(groupHash)
++
++  // Sincroniza groupBetSelections quando o servidor revalida
++  useEffect(() => {
++    if (groupHash === lastGroupHash.current) return
++    lastGroupHash.current = groupHash
++    setGroupBetSelections(initialGroupBets)
++  }, [groupHash, initialGroupBets])
++
++  const setGroupBetSelection = useCallback((group: string, first: string, second: string) => {
++    setGroupBetSelections(prev => ({ ...prev, [group]: { first, second } }))
++  }, [])
++
+   return (
+-    <Ctx.Provider value={{ thirdSelections, setThirdSelections }}>
++    <Ctx.Provider value={{ thirdSelections, setThirdSelections, groupBetSelections, setGroupBetSelection }}>
+       {children}
+     </Ctx.Provider>
+   )
+diff --git a/src/app/palpites/ThirdPlaceSection.tsx b/src/app/palpites/ThirdPlaceSection.tsx
+index 6049c49..409158e 100644
+--- a/src/app/palpites/ThirdPlaceSection.tsx
++++ b/src/app/palpites/ThirdPlaceSection.tsx
+@@ -40,7 +40,7 @@ export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBet
+     () => Object.fromEntries((existingBets ?? []).map(b => [b.group_name, b.team]))
+   )
+ 
+-  const { setThirdSelections } = useThirdPlace()
++  const { setThirdSelections, groupBetSelections } = useThirdPlace()
+ 
+   // Hash leve da prop de servidor — substitui JSON.stringify em cada render
+   const existingHash = useMemo(() => {
+@@ -60,16 +60,42 @@ export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBet
+     setThirdSelections(selections)
+   }, [selections, setThirdSelections])
+ 
++  // Ref para ler selections sem re-derivar no effect abaixo
++  const selectionsRef = useRef(selections)
++  selectionsRef.current = selections
++
++  // Limpa a seleção de 3º se aquele time passou a ser 1º ou 2º do grupo
++  // (ocorre quando o usuário muda a aposta de grupo manualmente após o auto-fill)
++  useEffect(() => {
++    const toRemove = Object.keys(selectionsRef.current).filter(g => {
++      const live = groupBetSelections[g]
++      if (!live) return false
++      const sel = selectionsRef.current[g]
++      return sel && (sel === live.first || sel === live.second)
++    })
++    if (toRemove.length === 0) return
++    setSelections(prev => {
++      const next = { ...prev }
++      for (const g of toRemove) delete next[g]
++      return next
++    })
++  }, [groupBetSelections])
++
+   const deadlinePassed  = isDeadlinePassed(deadline)
+   const selectedGroups  = Object.keys(selections)
+   const selectedCount   = selectedGroups.length
+ 
+-  // Times disponíveis para 3º lugar: exclui 1º e 2º apostados
++  // Times disponíveis para 3º lugar: exclui 1º e 2º apostados.
++  // Usa o estado vivo do contexto (atualizado pelo GroupBetRow) em vez da prop
++  // estática do servidor, para refletir mudanças manuais sem precisar de refresh.
+   const availableTeams = (g: string): Team[] => {
+     const all = groupTeams[g]?.teams ?? []
+-    const bet = groupBets?.[g]
+-    if (!bet) return all
+-    return all.filter(t => t.team !== bet.first_place && t.team !== bet.second_place)
++    const live   = groupBetSelections[g]
++    const server = groupBets?.[g]
++    const firstTeam  = live?.first  ?? server?.first_place
++    const secondTeam = live?.second ?? server?.second_place
++    if (!firstTeam && !secondTeam) return all
++    return all.filter(t => t.team !== firstTeam && t.team !== secondTeam)
+   }
+ 
+   const toggleGroup = (g: string) => {
+-- 
+2.43.0
+
