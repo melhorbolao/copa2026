@@ -445,6 +445,63 @@ export type Database = {
         }
         Relationships: []
       }
+      top_scorers: {
+        Row: {
+          id: string
+          player_name: string
+          team: string
+          goals_count: number
+          updated_at: string
+          updated_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          player_name: string
+          team?: string
+          goals_count?: number
+          updated_at?: string
+          updated_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          player_name?: string
+          team?: string
+          goals_count?: number
+          updated_at?: string
+          updated_by?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      participant_scores: {
+        Row: {
+          participant_id: string
+          pts_matches: number
+          pts_groups: number
+          pts_thirds: number
+          pts_tournament: number
+          pts_total: number
+        }
+        Insert: {
+          participant_id: string
+          pts_matches?: number
+          pts_groups?: number
+          pts_thirds?: number
+          pts_tournament?: number
+          pts_total?: number
+        }
+        Update: {
+          participant_id?: string
+          pts_matches?: number
+          pts_groups?: number
+          pts_thirds?: number
+          pts_tournament?: number
+          pts_total?: number
+        }
+        Relationships: []
+      }
       teams: {
         Row: {
           name: string
@@ -502,3 +559,5 @@ export type AdminAlertRow    = Tables<'admin_alerts'>
 export type ParticipantRow   = Tables<'participants'>
 export type TeamRow          = Tables<'teams'>
 export type UserParticipantRow = Tables<'user_participants'>
+export type TopScorerRow     = Tables<'top_scorers'>
+export type ParticipantScoreRow = Tables<'participant_scores'>
