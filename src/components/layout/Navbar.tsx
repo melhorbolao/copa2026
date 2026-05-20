@@ -26,31 +26,32 @@ export async function Navbar() {
   }
 
   return (
-    <header className="sticky top-0 z-50 border-b border-white/10 bg-verde-600 shadow-sm sm:hidden">
+    <header className="sticky top-0 z-50 border-b border-ouro/20 bg-azul-dark shadow-sm sm:hidden">
       <AlertBannerWrapper />
-      <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
-        {/* Logo */}
-        <div className="flex items-center gap-3">
+      <nav className="relative mx-auto flex h-14 max-w-6xl items-center px-4">
+        {/* Logo — centralizada absolutamente */}
+        <div className="absolute left-1/2 -translate-x-1/2">
           <Link href="/">
             <img
-              src="/logo.png"
+              src="/logo_azul_amarelo_ret.png"
               alt="Melhor Bolão"
-              className="h-10 w-auto"
-              style={{ mixBlendMode: 'screen' }}
+              className="h-9 w-auto"
             />
           </Link>
         </div>
 
-        {/* Nav Links — client component com toggle de visão */}
-        {user && (
-          <NavbarLinks
-            isAdmin={profile?.is_admin ?? false}
-            visibility={visibility}
-          />
-        )}
+        {/* Esquerda: hambúrguer */}
+        <div className="flex flex-1 items-center">
+          {user && (
+            <NavbarLinks
+              isAdmin={profile?.is_admin ?? false}
+              visibility={visibility}
+            />
+          )}
+        </div>
 
-        {/* Seletor de participante + Logout / Login */}
-        <div className="flex items-center gap-2">
+        {/* Direita: seletor + logout/login */}
+        <div className="flex flex-1 items-center justify-end gap-2">
           {participants.length > 1 && (
             <ParticipantSelector participants={participants} />
           )}
@@ -58,7 +59,7 @@ export async function Navbar() {
             <form action="/auth/signout" method="post">
               <button
                 type="submit"
-                className="rounded-lg border border-white/30 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/10"
+                className="rounded-lg border border-ouro/40 px-3 py-1.5 text-xs font-medium text-ouro transition hover:bg-azul-mid"
               >
                 Sair
               </button>
@@ -66,7 +67,7 @@ export async function Navbar() {
           ) : (
             <Link
               href="/login"
-              className="rounded-lg bg-amarelo-400 px-3 py-1.5 text-xs font-bold text-verde-900 transition hover:bg-amarelo-300"
+              className="rounded-lg bg-ouro px-3 py-1.5 text-xs font-bold text-azul-dark transition hover:bg-ouro/80"
             >
               Entrar
             </Link>

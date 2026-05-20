@@ -36,7 +36,11 @@ const config: Config = {
         },
         azul: {
           escuro: '#002776', // azul bandeira BR
+          navy:   '#001F5B', // azul navy profundo (fundo principal)
+          mid:    '#002D80', // azul médio (item ativo, zebra ímpar)
+          dark:   '#001133', // azul sidebar/navbar
         },
+        ouro: '#FFD700',     // amarelo dourado ouro
       },
       fontFamily: {
         sans: ['var(--font-sans)', 'system-ui', 'sans-serif'],

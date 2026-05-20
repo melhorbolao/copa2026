@@ -35,10 +35,10 @@ export function SidebarLinks({ isAdmin, visibility }: Props) {
             href={l.href}
             className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
               active
-                ? 'bg-white/20 text-white'
+                ? 'bg-azul-mid text-white'
                 : (l as { highlight?: boolean }).highlight
-                  ? 'font-bold text-amarelo-300 hover:bg-white/10'
-                  : 'text-white/80 hover:bg-white/10 hover:text-white'
+                  ? 'font-bold text-ouro hover:bg-azul-mid'
+                  : 'text-ouro hover:bg-azul-mid hover:text-white'
             }`}
           >
             {l.label}

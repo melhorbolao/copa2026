@@ -28,28 +28,16 @@ export async function Sidebar() {
   }
 
   return (
-    <aside className="fixed left-0 top-0 hidden h-screen w-56 flex-col bg-verde-600 sm:flex">
+    <aside className="fixed left-0 top-0 hidden h-screen w-56 flex-col bg-azul-dark sm:flex">
       {/* Logo */}
-      <div className="flex items-center gap-2 border-b border-white/10 px-4 py-4">
-        <Link href="/">
+      <div className="border-b border-white/10 px-4 py-5">
+        <Link href="/" className="block">
           <img
-            src="/logo.png"
+            src="/logo_azul_amarelo_ret.png"
             alt="Melhor Bolão"
-            className="h-10 w-auto shrink-0"
-            style={{ mixBlendMode: 'screen' }}
+            className="mx-auto block h-auto w-4/5"
           />
         </Link>
-        <div className="min-w-0">
-          <p className="text-[10px] font-semibold leading-tight text-white/70">
-            Copa do Mundo
-          </p>
-          <p className="text-[10px] leading-tight text-white/50">
-            EUA · Canadá · México
-          </p>
-          <p className="text-[10px] font-black leading-tight text-amarelo-300">
-            2026
-          </p>
-        </div>
       </div>
 
       {/* Links de navegação */}
@@ -61,7 +49,7 @@ export async function Sidebar() {
       </nav>
 
       {/* Rodapé: seletor + sair */}
-      <div className="border-t border-white/10 px-3 py-3">
+      <div className="border-t border-ouro/20 px-3 py-3">
         {participants.length > 1 && (
           <div className="mb-2">
             <ParticipantSelector participants={participants} />

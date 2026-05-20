@@ -11,8 +11,8 @@ export function AdminModeToggle() {
       title={viewMode === 'admin' ? 'Alternar para visão de usuário' : 'Alternar para modo admin'}
       className={`mb-2 flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
         viewMode === 'admin'
-          ? 'text-amarelo-200 hover:bg-white/10'
-          : 'text-white/50 hover:bg-white/10 hover:text-white/80'
+          ? 'text-ouro hover:bg-azul-mid'
+          : 'text-ouro/50 hover:bg-azul-mid hover:text-ouro/80'
       }`}
     >
       {viewMode === 'admin' ? <ShieldIcon /> : <UserIcon />}

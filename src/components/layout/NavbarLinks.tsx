@@ -58,7 +58,7 @@ export function NavbarLinks({ isAdmin, visibility }: Props) {
         <button
           onClick={() => setOpen(v => !v)}
           aria-label="Abrir menu"
-          className="flex h-9 w-9 items-center justify-center rounded-md text-white hover:bg-white/10"
+          className="flex h-9 w-9 items-center justify-center rounded-md text-ouro hover:bg-azul-mid"
         >
           {open ? <XIcon /> : <MenuIcon />}
         </button>
@@ -71,14 +71,14 @@ export function NavbarLinks({ isAdmin, visibility }: Props) {
               onClick={() => setOpen(false)}
             />
             {/* Dropdown */}
-            <div className="fixed right-4 top-14 z-50 w-52 overflow-hidden rounded-xl border border-white/10 bg-verde-800 shadow-xl">
+            <div className="fixed right-4 top-14 z-50 w-52 overflow-hidden rounded-xl border border-ouro/20 bg-azul-dark shadow-xl">
               {links.map(l => (
                 <Link
                   key={l.href}
                   href={l.href}
                   onClick={() => setOpen(false)}
-                  className={`block px-4 py-3 text-sm font-medium transition hover:bg-white/10 ${
-                    (l as { highlight?: boolean }).highlight ? 'font-bold text-amarelo-300' : 'text-white/90'
+                  className={`block px-4 py-3 text-sm font-medium transition hover:bg-azul-mid ${
+                    (l as { highlight?: boolean }).highlight ? 'font-bold text-ouro' : 'text-ouro/90'
                   }`}
                 >
                   {l.label}
@@ -88,7 +88,7 @@ export function NavbarLinks({ isAdmin, visibility }: Props) {
               {isAdmin && (
                 <button
                   onClick={() => { toggle(); setOpen(false) }}
-                  className="flex w-full items-center gap-2 border-t border-white/10 px-4 py-3 text-sm font-medium text-white/60 transition hover:bg-white/10"
+                  className="flex w-full items-center gap-2 border-t border-ouro/20 px-4 py-3 text-sm font-medium text-ouro/60 transition hover:bg-azul-mid hover:text-ouro"
                 >
                   {viewMode === 'admin' ? <UserIcon /> : <ShieldIcon />}
                   {viewMode === 'admin' ? 'Visão de usuário' : 'Modo admin'}
