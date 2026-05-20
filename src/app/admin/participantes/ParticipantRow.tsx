@@ -62,18 +62,24 @@ export function ParticipantRow({ participant, index, allUsers }: ParticipantRowP
   const availableUsers = allUsers.filter(u => !linkedUserIds.has(u.id))
 
   const handleTogglePaid = () => {
-    startPaid(() => {
-      void toggleParticipantPaid(participant.id, participant.paid)
-        .then(() => router.refresh())
-        .catch(() => toast.error('Erro ao alterar pagamento'))
+    startPaid(async () => {
+      try {
+        await toggleParticipantPaid(participant.id, participant.paid)
+        router.refresh()
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Erro ao alterar pagamento')
+      }
     })
   }
 
   const handleDelete = () => {
-    startDelete(() => {
-      void deleteParticipant(participant.id)
-        .then(() => router.refresh())
-        .catch((e: unknown) => toast.error(e instanceof Error ? e.message : 'Erro ao excluir'))
+    startDelete(async () => {
+      try {
+        await deleteParticipant(participant.id)
+        router.refresh()
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Erro ao excluir')
+      }
     })
   }
 
@@ -81,10 +87,13 @@ export function ParticipantRow({ participant, index, allUsers }: ParticipantRowP
     setEditingApelido(false)
     const val = apelidoLatest.current.trim()
     if (!val || val === participant.apelido) return
-    startApelido(() => {
-      void updateParticipantApelido(participant.id, val)
-        .then(() => router.refresh())
-        .catch((e: unknown) => toast.error(e instanceof Error ? e.message : 'Erro ao salvar nome'))
+    startApelido(async () => {
+      try {
+        await updateParticipantApelido(participant.id, val)
+        router.refresh()
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Erro ao salvar nome')
+      }
     })
   }
 
@@ -92,42 +101,39 @@ export function ParticipantRow({ participant, index, allUsers }: ParticipantRowP
     setEditingBio(false)
     const val = bioLatest.current
     if (val === (participant.bio ?? '')) return
-    startBio(() => {
-      void updateParticipantBio(participant.id, val)
-        .then(() => router.refresh())
-        .catch(() => toast.error('Erro ao salvar bio'))
+    startBio(async () => {
+      try {
+        await updateParticipantBio(participant.id, val)
+        router.refresh()
+      } catch {
+        toast.error('Erro ao salvar bio')
+      }
     })
   }
 
   const handleSetPrimary = (userId: string) => {
-    startPrimary(() => {
-      void setPrimaryUser(participant.id, userId)
-        .then(res => {
-          if (res.error) toast.error(res.error)
-          else router.refresh()
-        })
+    startPrimary(async () => {
+      const res = await setPrimaryUser(participant.id, userId)
+      if (res.error) toast.error(res.error)
+      else router.refresh()
     })
   }
 
   const handleLinkUser = (userId: string) => {
     if (!userId) return
     setAddingUser(false)
-    startLink(() => {
-      void linkUserToParticipant(participant.id, userId)
-        .then(res => {
-          if (res.error) toast.error(res.error)
-          else router.refresh()
-        })
+    startLink(async () => {
+      const res = await linkUserToParticipant(participant.id, userId)
+      if (res.error) toast.error(res.error)
+      else router.refresh()
     })
   }
 
   const handleUnlinkUser = (userId: string) => {
-    startLink(() => {
-      void unlinkUserFromParticipant(participant.id, userId)
-        .then(res => {
-          if (res.error) toast.error(res.error)
-          else router.refresh()
-        })
+    startLink(async () => {
+      const res = await unlinkUserFromParticipant(participant.id, userId)
+      if (res.error) toast.error(res.error)
+      else router.refresh()
     })
   }
 

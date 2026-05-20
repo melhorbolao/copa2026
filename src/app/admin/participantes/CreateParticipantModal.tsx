@@ -4,7 +4,7 @@ import { useState, useTransition, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createParticipant } from './actions'
 
-interface User { id: string; name: string; apelido: string | null }
+interface User { id: string; name: string; apelido: string | null; whatsapp: string | null; padrinho: string | null }
 
 const inputCls = 'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-verde-400 focus:outline-none'
 
@@ -44,6 +44,8 @@ export function CreateParticipantModal({ users }: { users: User[] }) {
     setError('')
     if (!userId)         { setError('Selecione um usuário.'); return }
     if (!apelido.trim()) { setError('Nome no Bolão é obrigatório.'); return }
+    if (!selectedUser?.whatsapp) { setError('O usuário selecionado não tem WhatsApp cadastrado. Preencha antes de criar o participante.'); return }
+    if (!selectedUser?.padrinho) { setError('O usuário selecionado não tem padrinho cadastrado. Preencha antes de criar o participante.'); return }
 
     start(async () => {
       const result = await createParticipant({ userId, apelido, bio })
@@ -55,7 +57,6 @@ export function CreateParticipantModal({ users }: { users: User[] }) {
   }
 
   const selectedUser = users.find(u => u.id === userId)
-
 
   return (
     <>
@@ -136,6 +137,12 @@ export function CreateParticipantModal({ users }: { users: User[] }) {
                   className={`${inputCls} resize-none`}
                 />
               </div>
+
+              {selectedUser && (!selectedUser.whatsapp || !selectedUser.padrinho) && (
+                <p className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
+                  ⚠ Este usuário não tem {[!selectedUser.whatsapp && 'WhatsApp', !selectedUser.padrinho && 'padrinho'].filter(Boolean).join(' nem ')} cadastrado. Preencha na aba Usuários antes de criar o participante.
+                </p>
+              )}
 
               <p className="text-xs text-gray-400">
                 O participante será vinculado ao usuário selecionado. Se ele já tiver um participante primário, este será um participante adicional.

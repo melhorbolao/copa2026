@@ -9,6 +9,8 @@ import {
 } from './engine'
 import { MatchMatrix } from './MatchMatrix'
 import { ProjectionSection } from './ProjectionSection'
+import { DiaDiaSection } from './DiaDiaSection'
+import type { Snapshot } from './DiaDiaSection'
 
 const DuelCard = dynamic(() => import('./DuelCard').then(m => ({ default: m.DuelCard })), { ssr: false })
 
@@ -31,6 +33,7 @@ interface Props {
   rulesMap: Record<string, number>
   zebraThreshold: number
   currentParticipantId: string
+  snapshots: Snapshot[]
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -39,12 +42,12 @@ export function ComparadorClient(props: Props) {
   const {
     participants, matches,
     betsByParticipant, groupBetsByParticipant, thirdBetsByParticipant, tBetByParticipant,
-    scoresByParticipant, colPopMap, rulesMap, zebraThreshold, currentParticipantId,
+    scoresByParticipant, colPopMap, rulesMap, zebraThreshold, currentParticipantId, snapshots,
   } = props
 
   const [pidA, setPidA] = useState(currentParticipantId)
   const [pidB, setPidB] = useState('')
-  const [activeTab, setActiveTab] = useState<'analise' | 'projecao' | 'matrix'>('analise')
+  const [activeTab, setActiveTab] = useState<'analise' | 'projecao' | 'matrix' | 'diaadia'>('analise')
   const [showCard, setShowCard] = useState(false)
 
   // ── Computed data ──────────────────────────────────────────────────────────
@@ -238,6 +241,7 @@ export function ComparadorClient(props: Props) {
               { key: 'analise',  label: '📊 Análise'   },
               { key: 'projecao', label: '🔮 Projeção'  },
               { key: 'matrix',   label: '📋 Matriz'    },
+              { key: 'diaadia',  label: '📅 Dia a dia' },
             ] as const).map(t => (
               <button
                 key={t.key}
@@ -296,6 +300,17 @@ export function ComparadorClient(props: Props) {
           {/* ── Matriz tab ───────────────────────────────────────────────────── */}
           {activeTab === 'matrix' && (
             <MatchMatrix rows={duelRows} nameA={nameA} nameB={nameB} />
+          )}
+
+          {/* ── Dia a dia tab ──────────────────────────────────────────────────── */}
+          {activeTab === 'diaadia' && (
+            <DiaDiaSection
+              pidA={pidA}
+              pidB={pidB}
+              nameA={nameA}
+              nameB={nameB}
+              snapshots={snapshots}
+            />
           )}
 
           {/* ── Share card button ─────────────────────────────────────────────── */}

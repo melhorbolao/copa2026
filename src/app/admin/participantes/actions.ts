@@ -148,6 +148,126 @@ export async function unlinkUserFromParticipant(participantId: string, userId: s
   return {}
 }
 
+export async function getParticipantesSummaryText(): Promise<string> {
+  await requireAdmin()
+  const supabase = createAuthAdminClient()
+  const now = new Date().toISOString()
+
+  const [
+    { data: participants },
+    { data: noteRow },
+    { data: users },
+    { data: allMatches },
+  ] = await Promise.all([
+    supabase.from('participants').select('id, paid'),
+    supabase.from('admin_settings').select('value').eq('key', 'pagantes_note').maybeSingle(),
+    supabase.from('users').select('status').in('status', ['aprovado', 'aprovacao_pendente']),
+    supabase.from('matches').select('id, phase, round, betting_deadline').order('betting_deadline', { ascending: true }),
+  ])
+
+  const totalParticipants = participants?.length ?? 0
+  const paidParticipants  = (participants ?? []).filter(p => p.paid).length
+  const pagantesExtras    = noteRow?.value
+    ? noteRow.value.split('\n').filter((l: string) => l.trim()).length
+    : 0
+  const usersApproved = (users ?? []).filter(u => u.status === 'aprovado').length
+  const usersPending  = (users ?? []).filter(u => u.status === 'aprovacao_pendente').length
+
+  const nextMatch = (allMatches ?? []).find(m => m.betting_deadline > now)
+
+  let nextStageName: string | null = null
+  let nextStageFullCount = 0
+
+  if (nextMatch) {
+    const nextPhase = nextMatch.phase as string
+    const nextRound = nextMatch.round as number | null
+
+    const sameStage = (allMatches ?? []).filter(m => {
+      if (nextPhase === 'group') return m.phase === 'group' && m.round === nextRound
+      if (nextPhase === 'third_place' || nextPhase === 'final') return m.phase === 'third_place' || m.phase === 'final'
+      return m.phase === nextPhase
+    })
+    const stageMatchIds = sameStage.map(m => m.id)
+
+    const STAGE_NAME_MAP: Record<string, string> = {
+      round_of_32: '16avos', round_of_16: 'Oitavas', quarterfinal: 'Quartas',
+      semifinal: 'Semifinais', third_place: 'Final', final: 'Final',
+    }
+    nextStageName = nextPhase === 'group'
+      ? `Rodada ${nextRound}`
+      : (STAGE_NAME_MAP[nextPhase] ?? nextPhase)
+
+    const { data: bets } = await supabase
+      .from('bets').select('participant_id').in('match_id', stageMatchIds)
+
+    const betCount = new Map<string, number>()
+    for (const b of (bets ?? [])) betCount.set(b.participant_id, (betCount.get(b.participant_id) ?? 0) + 1)
+
+    let stageTotal = stageMatchIds.length
+    const extraData: { trnBets?: unknown[]; grpBets?: unknown[]; thrdBets?: unknown[] } = {}
+
+    if (nextPhase === 'group' && nextRound === 1) {
+      stageTotal += 5 + 12 + 8 // torneio + grupos + terceiros
+      const pids = (participants ?? []).map(p => p.id)
+      const [{ data: trnBets }, { data: grpBets }, { data: thrdBets }] = await Promise.all([
+        supabase.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer').in('participant_id', pids),
+        supabase.from('group_bets').select('participant_id').in('participant_id', pids),
+        supabase.from('third_place_bets').select('participant_id').in('participant_id', pids),
+      ])
+      extraData.trnBets  = trnBets  ?? []
+      extraData.grpBets  = grpBets  ?? []
+      extraData.thrdBets = thrdBets ?? []
+    }
+
+    for (const p of (participants ?? [])) {
+      let count = betCount.get(p.id) ?? 0
+      if (nextPhase === 'group' && nextRound === 1) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const trn = (extraData.trnBets as any[]).find((t: any) => t.participant_id === p.id)
+        count += trn ? [trn.champion, trn.runner_up, trn.semi1, trn.semi2, trn.top_scorer].filter(Boolean).length : 0
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        count += Math.min((extraData.grpBets as any[]).filter((g: any) => g.participant_id === p.id).length, 12)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        count += Math.min((extraData.thrdBets as any[]).filter((t: any) => t.participant_id === p.id).length, 8)
+      }
+      if (count >= stageTotal) nextStageFullCount++
+    }
+  }
+
+  const numWord = (n: number, feminine = false): string => {
+    const masc = ['zero','um','dois','três','quatro','cinco','seis','sete','oito','nove']
+    const fem  = ['zero','uma','duas','três','quatro','cinco','seis','sete','oito','nove']
+    if (n < 10) return feminine ? fem[n] : masc[n]
+    return String(n)
+  }
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
+  const parts: string[] = []
+
+  parts.push(
+    `${totalParticipants} participante${totalParticipants !== 1 ? 's' : ''} cadastrado${totalParticipants !== 1 ? 's' : ''} no sistema, dos quais ${paidParticipants} já ${paidParticipants !== 1 ? 'pagaram' : 'pagou'}.`
+  )
+
+  if (pagantesExtras === 1) {
+    parts.push('Um outro pagou e ainda não se cadastrou.')
+  } else if (pagantesExtras > 1) {
+    parts.push(`${cap(numWord(pagantesExtras))} outros pagaram e ainda não se cadastraram.`)
+  }
+
+  if (nextStageName && totalParticipants > 0) {
+    parts.push(
+      `Dos ${totalParticipants} cadastrados, ${nextStageFullCount} já ${nextStageFullCount !== 1 ? 'estão' : 'está'} com 100% dos palpites de ${nextStageName} preenchidos.`
+    )
+  }
+
+  const pendPart = usersPending === 0
+    ? 'nenhum pendente de aprovação'
+    : `${usersPending} pendente${usersPending !== 1 ? 's' : ''} de aprovação`
+  parts.push(`Temos ${usersApproved} usuário${usersApproved !== 1 ? 's' : ''} criado${usersApproved !== 1 ? 's' : ''} e aprovado${usersApproved !== 1 ? 's' : ''}, ${pendPart}.`)
+
+  return parts.join(' ')
+}
+
 export async function getPagantesNote(): Promise<string> {
   await requireAdmin()
   const supabase = createAuthAdminClient()

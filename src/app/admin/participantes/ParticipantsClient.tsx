@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import { ParticipantRow } from './ParticipantRow'
 import { CreateParticipantModal } from './CreateParticipantModal'
 import { PagantesNote } from './PagantesNote'
+import { getParticipantesSummaryText } from './actions'
 
 type Filter = 'all' | 'paid' | 'pending'
 
@@ -19,6 +20,17 @@ interface Props {
 
 export function ParticipantsClient({ participants, users, pagantesNote }: Props) {
   const [filter, setFilter] = useState<Filter>('all')
+  const [copied, setCopied] = useState(false)
+  const [isPending, startTransition] = useTransition()
+
+  const handleCopyResumo = () => {
+    startTransition(async () => {
+      const text = await getParticipantesSummaryText()
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    })
+  }
 
   const total           = participants.length
   const pagos           = participants.filter(p => p.paid).length
@@ -56,6 +68,13 @@ export function ParticipantsClient({ participants, users, pagantesNote }: Props)
           }
         </p>
         <div className="flex items-center gap-4">
+          <button
+            onClick={handleCopyResumo}
+            disabled={isPending}
+            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 shadow-sm transition hover:bg-gray-50 disabled:opacity-50"
+          >
+            {isPending ? 'Gerando…' : copied ? '✓ Copiado!' : 'Copiar resumo'}
+          </button>
           <PagantesNote initialText={pagantesNote} />
           <CreateParticipantModal users={users} />
         </div>

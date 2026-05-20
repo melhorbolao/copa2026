@@ -6,6 +6,7 @@ import { getActiveParticipantId } from '@/lib/participant'
 import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { ComparadorClient } from './ComparadorClient'
+import type { Snapshot } from './DiaDiaSection'
 import { getMatchResult, detectMatchZebra } from '@/lib/scoring/engine'
 import { getVisibilitySettings, isBonusVisible, filterBetsByDeadline } from '@/lib/production-mode'
 import type { MatchInfo, FlatBet, ColPop } from './engine'
@@ -50,6 +51,7 @@ export default async function ComparadorPage() {
     scoresRes,
     rulesRes,
     visibilitySettings,
+    snapshotsRes,
   ] = await Promise.all([
     admin.from('participants').select('id, apelido').order('apelido'),
     supabase.from('matches')
@@ -63,6 +65,9 @@ export default async function ComparadorPage() {
       .select('participant_id, pts_matches, pts_groups, pts_thirds, pts_tournament, pts_total'),
     supabase.from('scoring_rules').select('key, points'),
     getVisibilitySettings(),
+    admin.from('daily_rankings_snapshot')
+      .select('snapshot_date, participant_id, pts_total')
+      .order('snapshot_date', { ascending: true }),
   ])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -81,6 +86,7 @@ export default async function ComparadorPage() {
   const scores: any[]     = scoresRes.data ?? []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rulesRaw: any[]   = rulesRes.data ?? []
+  const snapshots: Snapshot[] = (snapshotsRes.data ?? []) as Snapshot[]
 
   // ── Build scoring rules map ───────────────────────────────────────────────
   const rulesMap: Record<string, number> = {}
@@ -216,6 +222,7 @@ export default async function ComparadorPage() {
         rulesMap={rulesMap}
         zebraThreshold={zebraThreshold}
         currentParticipantId={participantId}
+        snapshots={snapshots}
       />
     </>
   )
