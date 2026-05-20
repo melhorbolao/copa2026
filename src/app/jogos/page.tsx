@@ -7,7 +7,7 @@ import { getActiveParticipantId } from '@/lib/participant'
 import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { JogosDashboard } from './JogosDashboard'
-import { getVisibilitySettings, filterBetsByDeadline } from '@/lib/production-mode'
+import { getVisibilitySettings, filterBetsByDeadline, getServerNow } from '@/lib/production-mode'
 
 export const metadata = {}
 
@@ -58,11 +58,12 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
   const deadlineByMatch: Record<string, string> = Object.fromEntries(
     allMatches.map((m: any) => [m.id, m.betting_deadline])
   )
+  const serverNow = await getServerNow()
   const safeBets = filterBetsByDeadline(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (betsRes.data ?? []) as any[],
     deadlineByMatch,
-    new Date(),
+    serverNow,
     isTestModeAdmin,
     activeParticipantId,
   )

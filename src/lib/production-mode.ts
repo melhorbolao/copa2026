@@ -3,6 +3,19 @@
 
 import { createAuthAdminClient } from '@/lib/supabase/server'
 
+// Retorna o timestamp atual do PostgreSQL para validação de prazos.
+// Usar o relógio do banco (não new Date()) garante consistência com as
+// políticas RLS e impede que usuários manipulem o relógio do próprio OS.
+export async function getServerNow(): Promise<Date> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAuthAdminClient() as any
+    const { data, error } = await admin.rpc('get_server_now')
+    if (!error && data) return new Date(data as string)
+  } catch { /* fallback gracioso se a função ainda não existir no banco */ }
+  return new Date()
+}
+
 export type RoundKey = string
 
 const PHASE_ORDER: Record<string, number> = {

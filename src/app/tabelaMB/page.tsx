@@ -6,7 +6,7 @@ import { getActiveParticipantId } from '@/lib/participant'
 import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { TabelaMBClient } from './TabelaMBClient'
-import { getVisibilitySettings, isMatchBetsVisible, isBonusVisible } from '@/lib/production-mode'
+import { getVisibilitySettings, isMatchBetsVisible, isBonusVisible, getServerNow } from '@/lib/production-mode'
 import type { MatchFull, Participant, BetRaw, GroupBetRaw, ThirdBetRaw, TournamentBetRaw } from './TabelaMBClient'
 
 export const metadata = {}
@@ -26,7 +26,10 @@ export default async function ClassificacaoPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAuthAdminClient() as any
 
-  const visibilitySettings = await getVisibilitySettings()
+  const [visibilitySettings, serverNow] = await Promise.all([
+    getVisibilitySettings(),
+    getServerNow(),
+  ])
 
   const [matchesRes, participantsRes, betsRes, rulesRes, groupBetsRes, thirdBetsRes, totalsRes, tournamentBetsRes] = await Promise.all([
     supabase.from('matches')
@@ -44,11 +47,19 @@ export default async function ClassificacaoPage() {
   ])
 
   // ── Production mode filtering (server-side, before data reaches the client) ──
-  const now = new Date()
+  // Usa o timestamp do banco (serverNow) para garantir consistência com RLS e
+  // impedir que manipulação do relógio do cliente burle a blindagem.
+  const now = serverNow
   const allMatches = (matchesRes.data ?? []) as MatchFull[]
 
   const bonusDeadlineStr = allMatches.find(m => m.phase === 'group' && m.round === 1)?.betting_deadline ?? null
   const bonusViz = isBonusVisible(bonusDeadlineStr, now, visibilitySettings, isAdmin)
+
+  // Partidas cujo prazo ainda está aberto → outras apostas mostram 🔒 na UI
+  const deadlineLockedIds = allMatches
+    .filter(m => new Date(m.betting_deadline) > now)
+    .map(m => m.id)
+  const bonusIsLocked = bonusDeadlineStr ? new Date(bonusDeadlineStr) > now : false
 
   const visibleMatchIds = new Set<string>(
     allMatches
@@ -117,6 +128,8 @@ export default async function ClassificacaoPage() {
         teamAbbrs={teamAbbrs}
         officialTopScorers={officialTopScorers}
         scorerMapping={scorerMapping}
+        lockedMatchIds={deadlineLockedIds}
+        bonusIsLocked={bonusIsLocked}
       />
     </>
   )

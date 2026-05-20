@@ -86,6 +86,10 @@ interface Props {
   officialTopScorers: string[]
   scorerMapping: Record<string, string>
   productionMode?: boolean
+  /** IDs de partidas cujo prazo de aposta ainda não passou (computados via serverNow no SSR) */
+  lockedMatchIds?: string[]
+  /** Verdadeiro quando o prazo do bônus (R1) ainda não passou */
+  bonusIsLocked?: boolean
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -449,6 +453,7 @@ export function TabelaMBClient({
   initialMatches, participants, initialBets, initialGroupBets, initialThirdBets,
   initialTournamentBets, participantTotals, rules, isAdmin, activeParticipantId,
   teamAbbrs, officialTopScorers, scorerMapping, productionMode = false,
+  lockedMatchIds, bonusIsLocked = false,
 }: Props) {
   const [matches, setMatches] = useState<MatchFull[]>(initialMatches)
   const [betMap,  setBetMap]  = useState<BetMap>(() => buildBetMap(initialBets))
@@ -464,6 +469,9 @@ export function TabelaMBClient({
   const [scorerError,  setScorerError]  = useState('')
 
   const containerRef = useRef<HTMLDivElement>(null)
+
+  // Conjunto de match IDs com prazo aberto — palpites alheios mostram 🔒
+  const lockedSet = useMemo(() => new Set(lockedMatchIds ?? []), [lockedMatchIds])
 
   // Group / third bet maps (static — refreshed on page load)
   const groupBetMap = useMemo(() => {
@@ -1271,7 +1279,10 @@ export function TabelaMBClient({
                                 </span>
                               )}
                             </div>
-                          ) : <span className="text-gray-200">—</span>}
+                          ) : bonusIsLocked && p.id !== activeParticipantId
+                            ? <span className="text-gray-300 text-[10px]" title="Prazo em aberto">🔒</span>
+                            : <span className="text-gray-200">—</span>
+                          }
                         </td>
                       )
                     })}
@@ -1358,7 +1369,10 @@ export function TabelaMBClient({
                                 </span>
                               )}
                             </div>
-                          ) : <span className="text-gray-200">—</span>}
+                          ) : bonusIsLocked && p.id !== activeParticipantId
+                            ? <span className="text-gray-300 text-[10px]" title="Prazo em aberto">🔒</span>
+                            : <span className="text-gray-200">—</span>
+                          }
                         </td>
                       )
                     })}
@@ -1654,7 +1668,10 @@ export function TabelaMBClient({
                               </span>
                             )}
                           </div>
-                        ) : <span className="text-gray-200">—</span>}
+                        ) : lockedSet.has(match.id) && p.id !== activeParticipantId
+                          ? <span className="text-gray-300 text-[10px]" title="Prazo em aberto">🔒</span>
+                          : <span className="text-gray-200">—</span>
+                        }
                       </td>
                     )
                   })}

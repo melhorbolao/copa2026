@@ -119,6 +119,7 @@ export async function buildPalpitesBuffer(
   supabase: AnySupabase,
   participantId: string,
   opts?: { blank?: boolean },
+  serverNow?: Date,
 ): Promise<{ buffer: Buffer; displayName: string; fileName: string }> {
   const [{ data: matches }, { data: profile }] = await Promise.all([
     supabase.from('matches')
@@ -140,7 +141,9 @@ export async function buildPalpitesBuffer(
   const betMap      = new Map((bets      ?? []).map((b: any) => [b.match_id,   b]))
   const groupBetMap = new Map((groupBets ?? []).map((b: any) => [b.group_name, b]))
   const thirdBetMap = new Map((thirdBets ?? []).map((b: any) => [b.group_name, b]))
-  const now         = new Date()
+  // Usa timestamp do servidor (passado pelo caller) para validação de prazo;
+  // fallback para new Date() se não fornecido (ex: testes).
+  const now         = serverNow ?? new Date()
   const apelido     = (profile as any)?.apelido || 'participante'
   const displayName = apelido
   const fileName    = makeFileName(apelido)

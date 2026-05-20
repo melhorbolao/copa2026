@@ -8,7 +8,7 @@ import { Navbar } from '@/components/layout/Navbar'
 import { ComparadorClient } from './ComparadorClient'
 import type { Snapshot } from './DiaDiaSection'
 import { getMatchResult, detectMatchZebra } from '@/lib/scoring/engine'
-import { getVisibilitySettings, isBonusVisible, filterBetsByDeadline } from '@/lib/production-mode'
+import { getVisibilitySettings, isBonusVisible, filterBetsByDeadline, getServerNow } from '@/lib/production-mode'
 import type { MatchInfo, FlatBet, ColPop } from './engine'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -96,7 +96,8 @@ export default async function ComparadorPage() {
 
   // ── Visibilidade em Modo Produção ─────────────────────────────────────────
   const isTestModeAdmin = isAdmin && !visibilitySettings.productionMode
-  const now = new Date()
+  const serverNow = await getServerNow()
+  const now = serverNow
   const bonusDeadline = rawMatches.find((m: any) => m.phase === 'group' && m.round === 1)?.betting_deadline ?? null
   const bonusVis = isBonusVisible(bonusDeadline, now, visibilitySettings, isAdmin)
   const deadlineByMatch: Record<string, string> = {}

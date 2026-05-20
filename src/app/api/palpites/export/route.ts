@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getActiveParticipantId } from '@/lib/participant'
 import { buildPalpitesBuffer } from '../_workbook'
+import { getServerNow } from '@/lib/production-mode'
 
 export async function GET() {
   try {
@@ -9,8 +10,11 @@ export async function GET() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return new NextResponse('Não autorizado', { status: 401 })
 
-    const participantId = await getActiveParticipantId(supabase, user.id)
-    const { buffer, fileName } = await buildPalpitesBuffer(supabase, participantId)
+    const [participantId, serverNow] = await Promise.all([
+      getActiveParticipantId(supabase, user.id),
+      getServerNow(),
+    ])
+    const { buffer, fileName } = await buildPalpitesBuffer(supabase, participantId, undefined, serverNow)
 
     return new NextResponse(buffer as unknown as BodyInit, {
       headers: {

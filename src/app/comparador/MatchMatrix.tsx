@@ -43,7 +43,8 @@ export function MatchMatrix({ rows, nameA, nameB }: Props) {
   const [showKnockout, setShowKnockout] = useState(true)
 
   const filtered = useMemo(() => {
-    let r = rows.filter(row => row.status !== 'hidden')
+    // Linhas com status 'hidden' (prazo aberto) são exibidas com 🔒 em vez de omitidas
+    let r = rows
     if (!showGroup)   r = r.filter(row => row.match.phase !== 'group')
     if (!showKnockout) r = r.filter(row => row.match.phase === 'group')
     switch (filter) {
@@ -163,11 +164,13 @@ export function MatchMatrix({ rows, nameA, nameB }: Props) {
 
                   {/* Bet A */}
                   <td className="px-2 py-1.5 text-center">
-                    {isHidden ? '—' : betA
+                    {betA
                       ? <span className={`font-mono ${row.colA === row.realCol && played ? 'text-verde-600 font-bold' : 'text-gray-600'}`}>
                           {betA.scoreHome}–{betA.scoreAway}
                         </span>
-                      : <span className="text-gray-300">—</span>
+                      : isHidden
+                        ? <span className="text-gray-300 text-[11px]" title="Prazo em aberto">🔒</span>
+                        : <span className="text-gray-300">—</span>
                     }
                   </td>
 
@@ -183,11 +186,13 @@ export function MatchMatrix({ rows, nameA, nameB }: Props) {
 
                   {/* Bet B */}
                   <td className="px-2 py-1.5 text-center">
-                    {isHidden ? '—' : betB
+                    {betB
                       ? <span className={`font-mono ${row.colB === row.realCol && played ? 'text-verde-600 font-bold' : 'text-gray-600'}`}>
                           {betB.scoreHome}–{betB.scoreAway}
                         </span>
-                      : <span className="text-gray-300">—</span>
+                      : isHidden
+                        ? <span className="text-gray-300 text-[11px]" title="Prazo em aberto">🔒</span>
+                        : <span className="text-gray-300">—</span>
                     }
                   </td>
 

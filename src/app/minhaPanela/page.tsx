@@ -6,6 +6,7 @@ import { getActiveParticipantId } from '@/lib/participant'
 import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { PanelaClient } from './PanelaClient'
+import { getServerNow } from '@/lib/production-mode'
 
 export default async function MinhaPanelaPage() {
   const supabase = await createClient()
@@ -22,7 +23,7 @@ export default async function MinhaPanelaPage() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAuthAdminClient() as any
-  const now = new Date()
+  const now = await getServerNow()
 
   const [
     allParticipantsRes,
