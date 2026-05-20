@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useMemo } from 'react'
 import { ParticipantRow } from './ParticipantRow'
 import { CreateParticipantModal } from './CreateParticipantModal'
 import { PagantesNote } from './PagantesNote'
@@ -19,9 +19,11 @@ interface Props {
 }
 
 export function ParticipantsClient({ participants, users, pagantesNote }: Props) {
-  const [filter, setFilter] = useState<Filter>('all')
-  const [copied, setCopied] = useState(false)
-  const [isPending, startTransition] = useTransition()
+  const [filter, setFilter]               = useState<Filter>('all')
+  const [searchText, setSearchText]       = useState('')
+  const [selectedPadrinho, setSelectedPadrinho] = useState<string>('all')
+  const [copied, setCopied]               = useState(false)
+  const [isPending, startTransition]      = useTransition()
 
   const handleCopyResumo = () => {
     startTransition(async () => {
@@ -32,20 +34,47 @@ export function ParticipantsClient({ participants, users, pagantesNote }: Props)
     })
   }
 
+  // Mapa user_id → padrinho para filtro eficiente
+  const userPadrinhoMap = useMemo(() => {
+    const map = new Map<string, string | null>()
+    for (const u of users) map.set(u.id, u.padrinho)
+    return map
+  }, [users])
+
+  // Lista única de padrinhos existentes
+  const padrinhos = useMemo(() => {
+    const set = new Set<string>()
+    for (const u of users) { if (u.padrinho) set.add(u.padrinho) }
+    return [...set].sort()
+  }, [users])
+
   const total           = participants.length
   const pagos           = participants.filter(p => p.paid).length
   const pendentes       = total - pagos
   const pagantesExtras  = pagantesNote ? pagantesNote.split('\n').filter(l => l.trim()).length : 0
   const totalArrecadado = (pagos + pagantesExtras) * 250
 
-  const visible = filter === 'paid'    ? participants.filter(p => p.paid)
-                : filter === 'pending' ? participants.filter(p => !p.paid)
-                : participants
+  const visible = participants
+    .filter(p => filter === 'paid' ? p.paid : filter === 'pending' ? !p.paid : true)
+    .filter(p => {
+      if (!searchText.trim()) return true
+      const q = searchText.toLowerCase()
+      if (p.apelido.toLowerCase().includes(q)) return true
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return p.user_participants.some((up: any) => up.users?.name?.toLowerCase().includes(q))
+    })
+    .filter(p => {
+      if (selectedPadrinho === 'all') return true
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return p.user_participants.some((up: any) => userPadrinhoMap.get(up.user_id) === selectedPadrinho)
+    })
+
+  const hasActiveFilters = filter !== 'all' || searchText.trim() !== '' || selectedPadrinho !== 'all'
 
   return (
     <div>
       {/* Cards-filtro */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <FilterCard label="Participantes" value={total}     color="gray"   active={filter === 'all'}     onToggle={() => setFilter('all')}                                      />
         <FilterCard label="Pagos"         value={pagos}     color="verde"  active={filter === 'paid'}    onToggle={() => setFilter(filter === 'paid'    ? 'all' : 'paid')}    />
         <FilterCard label="Pendentes"     value={pendentes} color="orange" active={filter === 'pending'} onToggle={() => setFilter(filter === 'pending' ? 'all' : 'pending')} />
@@ -60,11 +89,58 @@ export function ParticipantsClient({ participants, users, pagantesNote }: Props)
         </div>
       </div>
 
+      {/* Filtros de texto e padrinho */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[180px]">
+          <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input
+            type="text"
+            placeholder="Pesquisar por nome do participante ou usuário…"
+            value={searchText}
+            onChange={e => setSearchText(e.target.value)}
+            className="w-full rounded-lg border border-gray-200 bg-white py-1.5 pl-8 pr-3 text-sm text-gray-700 placeholder-gray-400 shadow-sm focus:border-blue-300 focus:outline-none focus:ring-1 focus:ring-blue-200"
+          />
+          {searchText && (
+            <button
+              onClick={() => setSearchText('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500 transition"
+              aria-label="Limpar pesquisa"
+            >
+              ×
+            </button>
+          )}
+        </div>
+
+        {padrinhos.length > 0 && (
+          <select
+            value={selectedPadrinho}
+            onChange={e => setSelectedPadrinho(e.target.value)}
+            className="rounded-lg border border-gray-200 bg-white py-1.5 px-3 text-sm text-gray-700 shadow-sm focus:border-blue-300 focus:outline-none focus:ring-1 focus:ring-blue-200"
+          >
+            <option value="all">Todos os padrinhos</option>
+            {padrinhos.map(p => (
+              <option key={p} value={p}>{p}</option>
+            ))}
+          </select>
+        )}
+
+        {hasActiveFilters && (
+          <button
+            onClick={() => { setFilter('all'); setSearchText(''); setSelectedPadrinho('all') }}
+            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-500 shadow-sm hover:bg-gray-50 transition"
+          >
+            Limpar filtros
+          </button>
+        )}
+      </div>
+
       <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
         <p className="text-sm text-gray-500">
-          {filter === 'all'
+          {!hasActiveFilters
             ? <>Gerencie os participantes do bolão · ★ = usuário primário</>
-            : <><span className="font-semibold">{visible.length}</span> de {total} participante{total !== 1 ? 's' : ''} · clique no card para remover filtro</>
+            : <><span className="font-semibold">{visible.length}</span> de {total} participante{total !== 1 ? 's' : ''} · filtro ativo</>
           }
         </p>
         <div className="flex items-center gap-4">
