@@ -133,7 +133,8 @@ async function PalpitesData({ participantId }: { participantId: string }) {
   }))
 
   const slimBetMap = new Map<string, BetSlim>(
-    (bets ?? []).map(b => [b.match_id, { match_id: b.match_id, score_home: b.score_home ?? 0, score_away: b.score_away ?? 0 }])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (bets ?? []).map((b: any) => [b.match_id, { match_id: b.match_id, score_home: b.score_home ?? 0, score_away: b.score_away ?? 0 }])
   )
   const calculatedStandings = calcGroupStandings(slimGroupMatches, slimBetMap)
 
@@ -215,10 +216,12 @@ async function PalpitesData({ participantId }: { participantId: string }) {
     )
 
   const betMap: Record<string, { score_home: number; score_away: number; points: number | null }> =
-    Object.fromEntries((bets ?? []).map(b => [b.match_id, { score_home: b.score_home ?? 0, score_away: b.score_away ?? 0, points: b.points }]))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    Object.fromEntries((bets ?? []).map((b: any) => [b.match_id, { score_home: b.score_home ?? 0, score_away: b.score_away ?? 0, points: b.points }]))
 
   const groupBetMap: Record<string, { first_place: string; second_place: string; points: number | null }> =
-    Object.fromEntries((groupBets ?? []).map(b => [b.group_name, { first_place: b.first_place, second_place: b.second_place, points: b.points }]))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    Object.fromEntries((groupBets ?? []).map((b: any) => [b.group_name, { first_place: b.first_place, second_place: b.second_place, points: b.points }]))
 
   // ── Live G4 + artilheiro score ───────────────────────────────────
   const resolveKnockoutTeam = (m: { id: string; team_home: string; team_away: string }, side: 'home' | 'away'): string => {
@@ -272,29 +275,34 @@ async function PalpitesData({ participantId }: { participantId: string }) {
   // ── Filter-independent stats ─────────────────────────────────────
   const totalMatches   = matches?.length ?? 0
   const totalBets      = bets?.length ?? 0
-  const totalGroupBets = (groupBets ?? []).filter(b => b.first_place && b.second_place).length
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const totalGroupBets = (groupBets ?? []).filter((b: any) => b.first_place && b.second_place).length
   const thirdCount     = thirdBets.filter(b => b.team?.trim().length > 0).length
   const bonusCount     = tBet
     ? [tBet.champion, tBet.runner_up, tBet.semi1, tBet.semi2, tBet.top_scorer].filter(v => v && String(v).length > 0).length
     : 0
 
   const groupMatchSet  = new Set(groupMatches.map(m => m.id))
-  const groupBetCount  = (bets ?? []).filter(b =>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const groupBetCount  = (bets ?? []).filter((b: any) =>
     groupMatchSet.has(b.match_id) && b.score_home !== null && b.score_away !== null
   ).length
   const allGroupsFilled = groupMatches.length > 0 && groupBetCount >= groupMatches.length
-  const alreadyFilled   = (groupBets ?? []).filter(b => b.first_place && b.second_place).length > 0
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const alreadyFilled   = (groupBets ?? []).filter((b: any) => b.first_place && b.second_place).length > 0
     || thirdBets.length > 0
 
   // ── Dados para a aba "Minha Tabela" ──────────────────────────────
   const groupBetsOverride: Record<string, { first_place: string; second_place: string }> =
-    Object.fromEntries((groupBets ?? []).map(gb => [gb.group_name, { first_place: gb.first_place, second_place: gb.second_place }]))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    Object.fromEntries((groupBets ?? []).map((gb: any) => [gb.group_name, { first_place: gb.first_place, second_place: gb.second_place }]))
   const thirdBetsOverride: Record<string, { team: string }> =
     Object.fromEntries(thirdBets.map(tb => [tb.group_name, { team: tb.team }]))
   const g4Deadline = groupMatches.map(m => m.betting_deadline).sort()[0] ?? ''
   const hasTournamentBet = !!(tBet?.champion)
   const groupAllBetsFilled: Record<string, boolean> = {}
-  const groupBetSet = new Set((bets ?? []).map(b => b.match_id))
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const groupBetSet = new Set((bets ?? []).map((b: any) => b.match_id))
   for (const m of groupMatches) {
     if (!m.group_name) continue
     if (!(m.group_name in groupAllBetsFilled)) groupAllBetsFilled[m.group_name] = true

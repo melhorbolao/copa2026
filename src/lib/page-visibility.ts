@@ -21,6 +21,7 @@ const DEFAULT_PAGES: PageVisibilityRow[] = [
   { id: '__default_jogos',        page_name: 'jogos',        label: 'Jogos',            show_for_admin: true, show_for_users: true,  sort_order: 0  },
   { id: '__default_estatisticas', page_name: 'estatisticas', label: 'Estatísticas MB',  show_for_admin: true, show_for_users: true,  sort_order: 60 },
   { id: '__default_artilharia',   page_name: 'artilharia',   label: 'Artilharia',       show_for_admin: true, show_for_users: true,  sort_order: 62 },
+  { id: '__default_zebras',       page_name: 'zebras',       label: 'Zebras',           show_for_admin: true, show_for_users: true,  sort_order: 63 },
   { id: '__default_simulador',    page_name: 'simulador',    label: 'Simulador MB',     show_for_admin: true, show_for_users: true,  sort_order: 65 },
   { id: '__default_comparador',   page_name: 'comparador',   label: 'Comparador MB',    show_for_admin: true, show_for_users: false, sort_order: 70 },
   { id: '__default_premiacaoMB',  page_name: 'premiacaoMB',  label: 'Premiação MB',      show_for_admin: true, show_for_users: true,  sort_order: 75 },
