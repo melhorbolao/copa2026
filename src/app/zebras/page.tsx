@@ -8,7 +8,7 @@ import { Navbar } from '@/components/layout/Navbar'
 import { ZebrasClient } from './ZebrasClient'
 import { detectMatchZebra, getMatchResult, scoreMatchBet } from '@/lib/scoring/engine'
 import type { RuleMap } from '@/lib/scoring/engine'
-import type { ZebraMatch, ZebraRankingEntry, ZebraScorer } from './types'
+import type { ZebraMatch, ZebraRankingEntry, ZebraScorer, PotentialUpset } from './types'
 
 const ZEBRA_THRESHOLD = 15
 
@@ -162,6 +162,80 @@ export default async function ZebrasPage() {
     }))
     .sort((a, b) => b.pts - a.pts || b.cravadas - a.cravadas || b.colunas - a.colunas)
 
+  // ── Radar: jogos futuros com possíveis zebras ────────────────────────────
+  const { data: futureMatchesRaw } = await admin
+    .from('matches')
+    .select('id, team_home, team_away, flag_home, flag_away, match_datetime, betting_deadline, phase, group_name, round, city')
+    .gt('betting_deadline', now)
+    .neq('team_home', 'TBD')
+    .neq('team_away', 'TBD')
+    .order('betting_deadline', { ascending: true })
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const futureIds = (futureMatchesRaw ?? []).map((m: any) => m.id)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let futureBetsRaw: any[] = []
+  if (futureIds.length > 0) {
+    // Admin bypassa RLS — obtém TODAS as apostas (necessário para percentuais reais)
+    const { data } = await admin
+      .from('bets')
+      .select('match_id, score_home, score_away')
+      .in('match_id', futureIds)
+    futureBetsRaw = data ?? []
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const futureBetsByMatch = new Map<string, any[]>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const bet of futureBetsRaw as any[]) {
+    const list = futureBetsByMatch.get(bet.match_id) ?? []
+    list.push(bet)
+    futureBetsByMatch.set(bet.match_id, list)
+  }
+
+  const potentialUpsets: PotentialUpset[] = []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const match of (futureMatchesRaw ?? []) as any[]) {
+    const matchBets = futureBetsByMatch.get(match.id) ?? []
+    if (matchBets.length === 0) continue
+
+    const total = matchBets.length
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const homeCount = matchBets.filter((b: any) => (b.score_home ?? 0) > (b.score_away ?? 0)).length
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const awayCount = matchBets.filter((b: any) => (b.score_away ?? 0) > (b.score_home ?? 0)).length
+    const drawCount = total - homeCount - awayCount
+
+    const homePct = Math.round((homeCount / total) * 100)
+    const drawPct = Math.round((drawCount / total) * 100)
+    const awayPct = Math.round((awayCount / total) * 100)
+
+    const zebraColumns: ('H' | 'D' | 'A')[] = []
+    if (homePct <= ZEBRA_THRESHOLD) zebraColumns.push('H')
+    if (drawPct <= ZEBRA_THRESHOLD) zebraColumns.push('D')
+    if (awayPct <= ZEBRA_THRESHOLD) zebraColumns.push('A')
+
+    if (zebraColumns.length === 0) continue
+
+    potentialUpsets.push({
+      id: match.id,
+      teamHome: match.team_home,
+      teamAway: match.team_away,
+      flagHome: match.flag_home ?? '',
+      flagAway: match.flag_away ?? '',
+      matchDatetime: match.match_datetime,
+      bettingDeadline: match.betting_deadline,
+      phase: match.phase,
+      groupName: match.group_name ?? null,
+      round: match.round ?? null,
+      city: match.city ?? null,
+      homePct,
+      drawPct,
+      awayPct,
+      zebraColumns,
+    })
+  }
+
   return (
     <>
       <Navbar />
@@ -169,6 +243,7 @@ export default async function ZebrasPage() {
         zebraMatches={zebraMatches}
         ranking={ranking}
         threshold={ZEBRA_THRESHOLD}
+        potentialUpsets={potentialUpsets}
       />
     </>
   )

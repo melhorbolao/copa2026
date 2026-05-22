@@ -32,3 +32,21 @@ export interface ZebraRankingEntry {
   colunas: number
   pts: number
 }
+
+export interface PotentialUpset {
+  id: string
+  teamHome: string
+  teamAway: string
+  flagHome: string
+  flagAway: string
+  matchDatetime: string
+  bettingDeadline: string
+  phase: string
+  groupName: string | null
+  round: number | null
+  city: string | null
+  homePct: number
+  drawPct: number
+  awayPct: number
+  zebraColumns: ('H' | 'D' | 'A')[]
+}

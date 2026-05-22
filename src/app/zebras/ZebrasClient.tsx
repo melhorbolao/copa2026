@@ -5,14 +5,16 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { Flag } from '@/components/ui/Flag'
-import type { ZebraMatch, ZebraRankingEntry, ZebraScorer } from './types'
+import type { ZebraMatch, ZebraRankingEntry, ZebraScorer, PotentialUpset } from './types'
 
 type SortKey = 'pts' | 'cravadas' | 'colunas'
+type Tab = 'mitos' | 'almanaque' | 'radar'
 
 interface Props {
   zebraMatches: ZebraMatch[]
   ranking: ZebraRankingEntry[]
   threshold: number
+  potentialUpsets: PotentialUpset[]
 }
 
 // ── Utilitários ──────────────────────────────────────────────────────────────
@@ -40,13 +42,45 @@ function formatDate(iso: string): string {
   })
 }
 
-// ── Sub-componentes ──────────────────────────────────────────────────────────
+function formatMatchDatetime(iso: string): string {
+  return new Date(iso).toLocaleString('pt-BR', {
+    weekday: 'short', day: '2-digit', month: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+    timeZone: 'America/Sao_Paulo',
+  })
+}
+
+function timeToDeadline(deadline: string): string {
+  const diff = new Date(deadline).getTime() - Date.now()
+  if (diff <= 0) return 'Prazo encerrado'
+  const mins = Math.floor(diff / 60000)
+  if (mins < 60) return `${mins}min restantes`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h restantes`
+  const days = Math.floor(hours / 24)
+  return `${days} dia${days !== 1 ? 's' : ''} restante${days !== 1 ? 's' : ''}`
+}
+
+function phaseLabel(phase: string, round: number | null, groupName: string | null): string {
+  if (phase === 'group') return `Grupo ${groupName ?? ''} · Rodada ${round ?? ''}`
+  const map: Record<string, string> = {
+    round_of_32: '16 avos de final',
+    round_of_16: 'Oitavas de final',
+    quarterfinal: 'Quartas de final',
+    semifinal: 'Semifinal',
+    third_place: '3º lugar',
+    final: 'Final',
+  }
+  return map[phase] ?? phase
+}
+
+// ── Sub-componentes base ──────────────────────────────────────────────────────
 
 function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       onClick={onClick}
-      className={`px-4 py-3 text-sm font-semibold transition border-b-2 ${
+      className={`px-4 py-3 text-sm font-semibold transition border-b-2 whitespace-nowrap ${
         active
           ? 'border-ouro text-ouro'
           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -152,21 +186,15 @@ function MitosTab({
   )
 }
 
-// ── Distribuição de apostas ──────────────────────────────────────────────────
+// ── Distribuição: Almanaque ───────────────────────────────────────────────────
 
-function DistributionBar({
-  match,
-}: {
-  match: ZebraMatch
-}) {
+function DistributionBar({ match }: { match: ZebraMatch }) {
   const { teamHome, teamAway, totalBets, homeCount, drawCount, awayCount, actualResult } = match
-
   const cols = [
     { key: 'H' as const, label: teamHome,  flagCode: match.flagHome, count: homeCount },
     { key: 'D' as const, label: 'Empate',  flagCode: '',              count: drawCount },
     { key: 'A' as const, label: teamAway,  flagCode: match.flagAway, count: awayCount },
   ]
-
   return (
     <div className="flex gap-1 text-xs">
       {cols.map(col => {
@@ -176,9 +204,7 @@ function DistributionBar({
           <div
             key={col.key}
             className={`flex flex-1 flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 ${
-              isWinner
-                ? 'border border-ouro/60 bg-amber-50 font-semibold'
-                : 'bg-gray-100'
+              isWinner ? 'border border-ouro/60 bg-amber-50 font-semibold' : 'bg-gray-100'
             }`}
           >
             <div className="flex items-center gap-1">
@@ -186,14 +212,10 @@ function DistributionBar({
               <span className={`max-w-[72px] truncate text-center text-[10px] ${isWinner ? 'text-gray-800' : 'text-gray-500'}`}>
                 {col.label}
               </span>
-              {isWinner && (
-                <Image src="/zebra.png" alt="Zebra" width={14} height={14} className="shrink-0" />
-              )}
+              {isWinner && <Image src="/zebra.png" alt="Zebra" width={14} height={14} className="shrink-0" />}
             </div>
-            <span className={`text-sm font-bold ${isWinner ? 'text-ouro' : 'text-gray-400'}`}>
-              {p}%
-            </span>
-            <span className="text-[9px] text-gray-400">{col.count} aposda{col.count !== 1 ? 's' : ''}</span>
+            <span className={`text-sm font-bold ${isWinner ? 'text-ouro' : 'text-gray-400'}`}>{p}%</span>
+            <span className="text-[9px] text-gray-400">{col.count} apostas</span>
           </div>
         )
       })}
@@ -201,14 +223,10 @@ function DistributionBar({
   )
 }
 
-// ── Card de cada zebra ───────────────────────────────────────────────────────
-
 function ScorerBadge({ scorer }: { scorer: ZebraScorer }) {
   return (
     <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-      scorer.isExact
-        ? 'bg-ouro/15 text-yellow-800'
-        : 'bg-gray-100 text-gray-700'
+      scorer.isExact ? 'bg-ouro/15 text-yellow-800' : 'bg-gray-100 text-gray-700'
     }`}>
       <span>{scorer.apelido}</span>
       {scorer.position !== null && <span className="text-gray-400">({scorer.position}º)</span>}
@@ -224,10 +242,8 @@ function ZebraMatchCard({ match }: { match: ZebraMatch }) {
     match.actualResult === 'H' ? `${match.teamHome} venceu` :
     match.actualResult === 'A' ? `${match.teamAway} venceu` :
     'Empate'
-
   return (
     <div className="overflow-hidden rounded-xl border border-ouro/20 bg-white shadow-sm">
-      {/* Cabeçalho do card */}
       <div className="flex items-center justify-between gap-3 border-b border-ouro/15 bg-azul-dark/5 px-4 py-3">
         <div className="flex items-center gap-2 text-sm font-bold text-gray-800">
           <Flag code={match.flagHome} size="xs" />
@@ -243,9 +259,7 @@ function ZebraMatchCard({ match }: { match: ZebraMatch }) {
           <span className="text-[10px] font-semibold text-gray-400">{formatDate(match.matchDatetime)}</span>
         </div>
       </div>
-
-      <div className="px-4 py-3 space-y-3">
-        {/* Resultado + distribuição */}
+      <div className="space-y-3 px-4 py-3">
         <div className="space-y-1.5">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
             {resultLabel} · apenas {pct(
@@ -257,8 +271,6 @@ function ZebraMatchCard({ match }: { match: ZebraMatch }) {
           </p>
           <DistributionBar match={match} />
         </div>
-
-        {/* Acordeão: Quem Mitou */}
         {match.scorers.length > 0 ? (
           <details className="group">
             <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800">
@@ -266,9 +278,7 @@ function ZebraMatchCard({ match }: { match: ZebraMatch }) {
               <span>Quem Mitou ({match.scorers.length} participante{match.scorers.length !== 1 ? 's' : ''})</span>
             </summary>
             <div className="mt-2 flex flex-wrap gap-1">
-              {match.scorers.map(s => (
-                <ScorerBadge key={s.participantId} scorer={s} />
-              ))}
+              {match.scorers.map(s => <ScorerBadge key={s.participantId} scorer={s} />)}
             </div>
           </details>
         ) : (
@@ -278,8 +288,6 @@ function ZebraMatchCard({ match }: { match: ZebraMatch }) {
     </div>
   )
 }
-
-// ── Aba 2: Almanaque das Zebras ──────────────────────────────────────────────
 
 function AlmanaqueTab({ zebraMatches }: { zebraMatches: ZebraMatch[] }) {
   if (zebraMatches.length === 0) {
@@ -291,25 +299,160 @@ function AlmanaqueTab({ zebraMatches }: { zebraMatches: ZebraMatch[] }) {
       </div>
     )
   }
-
   return (
     <div className="space-y-4">
-      {zebraMatches.map(match => (
-        <ZebraMatchCard key={match.id} match={match} />
-      ))}
+      {zebraMatches.map(match => <ZebraMatchCard key={match.id} match={match} />)}
+    </div>
+  )
+}
+
+// ── Aba 3: Possíveis Zebras (Radar) ──────────────────────────────────────────
+
+function UpsetDistBar({ upset }: { upset: PotentialUpset }) {
+  const cols = [
+    { key: 'H' as const, label: upset.teamHome, flag: upset.flagHome, p: upset.homePct },
+    { key: 'D' as const, label: 'Empate',        flag: '',              p: upset.drawPct },
+    { key: 'A' as const, label: upset.teamAway,  flag: upset.flagAway,  p: upset.awayPct },
+  ]
+  return (
+    <div className="space-y-1.5">
+      {/* Colunas de percentual */}
+      <div className="flex gap-1">
+        {cols.map(col => {
+          const isZebra = upset.zebraColumns.includes(col.key)
+          return (
+            <div
+              key={col.key}
+              className={`flex flex-1 flex-col items-center gap-0.5 rounded-lg px-1.5 py-1.5 ${
+                isZebra
+                  ? 'border border-ouro/60 bg-amber-50'
+                  : 'bg-gray-100'
+              }`}
+            >
+              <div className="flex items-center gap-1">
+                {col.flag && <Flag code={col.flag} size="xs" />}
+                <span className={`max-w-[60px] truncate text-[10px] ${isZebra ? 'font-semibold text-gray-800' : 'text-gray-500'}`}>
+                  {col.label}
+                </span>
+                {isZebra && (
+                  <Image src="/zebra.png" alt="alerta zebra" width={12} height={12} className="shrink-0 animate-pulse" />
+                )}
+              </div>
+              <span className={`text-sm font-bold ${isZebra ? 'text-ouro' : 'text-gray-400'}`}>
+                {col.p}%
+              </span>
+            </div>
+          )
+        })}
+      </div>
+      {/* Barra horizontal empilhada */}
+      <div className="flex h-2 overflow-hidden rounded-full bg-gray-200">
+        {cols.map((col, i) => (
+          <div
+            key={col.key}
+            style={{ width: `${col.p}%` }}
+            className={`transition-all duration-700 ${
+              upset.zebraColumns.includes(col.key)
+                ? 'bg-ouro'
+                : i === 0 ? 'bg-blue-700' : i === 1 ? 'bg-gray-500' : 'bg-blue-400'
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function PotentialUpsetCard({ upset }: { upset: PotentialUpset }) {
+  const deadline = timeToDeadline(upset.bettingDeadline)
+  const deadlineUrgent = new Date(upset.bettingDeadline).getTime() - Date.now() < 3 * 60 * 60 * 1000
+
+  const zebraLabel = upset.zebraColumns.map(col =>
+    col === 'H' ? upset.teamHome :
+    col === 'A' ? upset.teamAway :
+    'Empate'
+  ).join(' e ')
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-ouro/25 bg-white shadow-sm">
+      {/* Cabeçalho: metadados */}
+      <div className="flex items-center justify-between gap-2 border-b border-gray-100 bg-azul-dark/5 px-3 py-2">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+            {phaseLabel(upset.phase, upset.round, upset.groupName)}
+            {upset.city ? ` · ${upset.city}` : ''}
+          </p>
+          <p className="text-[10px] text-gray-400">{formatMatchDatetime(upset.matchDatetime)}</p>
+        </div>
+        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+          deadlineUrgent ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-500'
+        }`}>
+          {deadline}
+        </span>
+      </div>
+
+      <div className="space-y-2.5 px-3 py-2.5">
+        {/* Confronto */}
+        <div className="flex items-center justify-center gap-2 text-sm font-bold text-gray-800">
+          <Flag code={upset.flagHome} size="xs" />
+          <span>{upset.teamHome}</span>
+          <span className="text-gray-300">×</span>
+          <span>{upset.teamAway}</span>
+          <Flag code={upset.flagAway} size="xs" />
+        </div>
+
+        {/* Distribuição */}
+        <UpsetDistBar upset={upset} />
+
+        {/* Label de alerta */}
+        <p className="text-[10px] text-gray-400">
+          <span className="font-semibold text-amber-600">Potencial zebra:</span>{' '}
+          apenas {upset.zebraColumns.map(c =>
+            `${c === 'H' ? upset.homePct : c === 'A' ? upset.awayPct : upset.drawPct}% apostaram em ${c === 'H' ? upset.teamHome : c === 'A' ? upset.teamAway : 'Empate'}`
+          ).join(' · ')}
+          {' '}até agora
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function PotentialUpsetsTab({ upsets }: { upsets: PotentialUpset[] }) {
+  if (upsets.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-16 text-center text-gray-400">
+        <Image src="/zebra.png" alt="" width={48} height={48} className="opacity-30" />
+        <p className="text-sm">Nenhum radar ativo no momento.</p>
+        <p className="text-xs">
+          Quando participantes preencherem palpites e algum resultado estiver com menos de 15% das apostas,
+          ele aparecerá aqui.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-gray-400">
+        Jogos com prazo em aberto onde alguma coluna acumulou ≤ 15% das apostas. Dados anônimos e agregados — sem nomes.
+        Atualiza a cada 60 segundos.
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {upsets.map(u => <PotentialUpsetCard key={u.id} upset={u} />)}
+      </div>
     </div>
   )
 }
 
 // ── Componente principal ─────────────────────────────────────────────────────
 
-export function ZebrasClient({ zebraMatches, ranking, threshold }: Props) {
-  const [tab, setTab] = useState<'mitos' | 'almanaque'>('mitos')
+export function ZebrasClient({ zebraMatches, ranking, threshold, potentialUpsets }: Props) {
+  const [tab, setTab] = useState<Tab>('mitos')
   const [sortKey, setSortKey] = useState<SortKey>('pts')
   const [sortAsc, setSortAsc] = useState(false)
   const router = useRouter()
 
-  // Sincronização em tempo real: atualiza quando scores ou apostas mudam
+  // Realtime: atualiza Almanaque e Mitos quando scores/apostas passadas mudam
   useEffect(() => {
     const supabase = createClient()
     const channel = supabase
@@ -323,6 +466,13 @@ export function ZebrasClient({ zebraMatches, ranking, threshold }: Props) {
       .subscribe()
     return () => { void supabase.removeChannel(channel) }
   }, [router])
+
+  // Radar: refresh periódico de 60s quando a aba está ativa
+  useEffect(() => {
+    if (tab !== 'radar') return
+    const id = setInterval(() => router.refresh(), 60_000)
+    return () => clearInterval(id)
+  }, [tab, router])
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortAsc(v => !v)
@@ -355,12 +505,20 @@ export function ZebrasClient({ zebraMatches, ranking, threshold }: Props) {
 
       {/* Abas */}
       <div className="border-b border-gray-200 bg-white shadow-sm">
-        <div className="mx-auto flex max-w-4xl px-4">
+        <div className="mx-auto flex max-w-4xl overflow-x-auto px-4">
           <TabButton active={tab === 'mitos'} onClick={() => setTab('mitos')}>
             🏆 Mitos das Zebras
           </TabButton>
           <TabButton active={tab === 'almanaque'} onClick={() => setTab('almanaque')}>
             📖 Almanaque
+          </TabButton>
+          <TabButton active={tab === 'radar'} onClick={() => setTab('radar')}>
+            📡 Possíveis Zebras
+            {potentialUpsets.length > 0 && (
+              <span className="ml-1.5 rounded-full bg-ouro/20 px-1.5 py-0.5 text-[10px] font-bold text-ouro">
+                {potentialUpsets.length}
+              </span>
+            )}
           </TabButton>
         </div>
       </div>
@@ -368,15 +526,13 @@ export function ZebrasClient({ zebraMatches, ranking, threshold }: Props) {
       {/* Conteúdo */}
       <div className="mx-auto max-w-4xl px-4 pt-6">
         {tab === 'mitos' && (
-          <MitosTab
-            ranking={sortedRanking}
-            sortKey={sortKey}
-            sortAsc={sortAsc}
-            onSort={handleSort}
-          />
+          <MitosTab ranking={sortedRanking} sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} />
         )}
         {tab === 'almanaque' && (
           <AlmanaqueTab zebraMatches={zebraMatches} />
+        )}
+        {tab === 'radar' && (
+          <PotentialUpsetsTab upsets={potentialUpsets} />
         )}
       </div>
     </main>
