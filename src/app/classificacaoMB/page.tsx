@@ -71,6 +71,7 @@ export default async function ClassificacaoMBPage() {
   let prizeSpots = 8
   let premioSpots = 10
   let sobeDesceVisible = true
+  let artillaryPointsActive = false
   let lastDataDate: string | null = null
   const colVisibility: Record<string, boolean> = {
     premio:       false,
@@ -101,7 +102,7 @@ export default async function ClassificacaoMBPage() {
       'classif_col_delta_premio', 'classif_col_delta_corte',
       'classif_col_pts_jg', 'classif_col_pts_cl', 'classif_col_pts_g4',
     ]
-    const [scorerRes, scorerSetting, settingsRes, premioSpotsRes, colSettingsRes, sobeDesceRow, dailyRunRow] = await Promise.all([
+    const [scorerRes, scorerSetting, settingsRes, premioSpotsRes, colSettingsRes, sobeDesceRow, dailyRunRow, artillaryRow] = await Promise.all([
       admin.from('top_scorer_mapping').select('raw_name, standardized_name, is_eliminated'),
       admin.from('tournament_settings').select('value').eq('key', 'official_top_scorer').maybeSingle(),
       admin.from('tournament_settings').select('value').eq('key', 'prize_spots').maybeSingle(),
@@ -109,9 +110,11 @@ export default async function ClassificacaoMBPage() {
       admin.from('tournament_settings').select('key, value').in('key', COL_KEYS),
       admin.from('tournament_settings').select('value').eq('key', 'sobe_desce_visible').maybeSingle(),
       admin.from('tournament_settings').select('value').eq('key', 'daily_points_last_run').maybeSingle(),
+      admin.from('tournament_settings').select('value').eq('key', 'artillary_points_active').maybeSingle(),
     ])
     // padrão: visível (true) se a chave ainda não existir
     sobeDesceVisible = sobeDesceRow?.data?.value !== 'false'
+    artillaryPointsActive = artillaryRow?.data?.value === 'true'
 
     // ── Auto-recalc de pontos diários ────────────────────────────────────────
     const nowBR = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
@@ -149,6 +152,26 @@ export default async function ClassificacaoMBPage() {
     if (scorerSetting.data?.value) {
       try { officialScorers = JSON.parse(scorerSetting.data.value) }
       catch { officialScorers = [scorerSetting.data.value] }
+    }
+    // Quando o flag está ativo, deriva artilheiros do banco (todos empatados no topo).
+    // Isso garante que empates são detectados e todos que apostaram em qualquer
+    // co-artilheiro recebem os pontos.
+    if (artillaryPointsActive) {
+      try {
+        const { data: topScorersData } = await admin
+          .from('top_scorers')
+          .select('player_name, goals_count')
+          .order('goals_count', { ascending: false })
+        if (topScorersData && topScorersData.length > 0) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const maxGoals = (topScorersData[0] as any).goals_count as number
+          if (maxGoals > 0) {
+            officialScorers = (topScorersData as { player_name: string; goals_count: number }[])
+              .filter(s => s.goals_count === maxGoals)
+              .map(s => s.player_name)
+          }
+        }
+      } catch { /* tabela ainda não populada */ }
     }
     if (settingsRes.data?.value) {
       const n = parseInt(settingsRes.data.value, 10)
@@ -233,7 +256,7 @@ export default async function ClassificacaoMBPage() {
         runner_up:  tb.runner_up  ?? '',
         semi1:      tb.semi1      ?? '',
         semi2:      tb.semi2      ?? '',
-        top_scorer: tb.top_scorer ?? '',
+        top_scorer: artillaryPointsActive ? (tb.top_scorer ?? '') : '',
       },
       tournamentResults,
       rules,

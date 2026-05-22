@@ -1,6 +1,8 @@
 'use client'
 
-import { memo, useMemo } from 'react'
+import { memo, useMemo, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import {
   useSobeDesce,
   SobeDesceSelector,
@@ -322,8 +324,25 @@ export function ClassificacaoMBClient({
   lastResultDate, currentPhaseStartDate,
   sobeDesceVisible, isAdmin, lastDataDate,
 }: Props) {
+  const router = useRouter()
   const elTeams = useMemo(() => new Set(eliminatedTeams), [eliminatedTeams])
   const elStd   = useMemo(() => new Set(eliminatedStdScorers), [eliminatedStdScorers])
+
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel('artillary-ranking-refresh')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'tournament_settings' },
+        (payload) => {
+          const row = payload.new as { key: string; value: string }
+          if (row.key === 'artillary_points_active') router.refresh()
+        },
+      )
+      .subscribe()
+    return () => { void supabase.removeChannel(channel) }
+  }, [router])
 
   const showPremio      = colVisibility['premio']       ?? false
   const showLastMatch   = colVisibility['last_match']   ?? true

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useTransition, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { updateGoalsCount, insertTopScorer } from './actions'
+import { updateGoalsCount, insertTopScorer, setArtillaryPointsActive, deleteTopScorer } from './actions'
 
 export interface Bettor {
   apelido: string
@@ -21,6 +21,9 @@ interface Props {
   initialScorers: TopScorerItem[]
   showBettors: boolean
   showPositions: boolean
+  isAdmin: boolean
+  artillaryPointsActive: boolean
+  artilheiroPoints: number
 }
 
 function PlayerAvatar({ name }: { name: string }) {
@@ -95,9 +98,11 @@ function GoalsControl({
 function BettorList({
   bettors,
   showPositions,
+  ptsBadge,
 }: {
   bettors: Bettor[]
   showPositions: boolean
+  ptsBadge: number | null
 }) {
   if (bettors.length === 0) return null
   return (
@@ -111,6 +116,11 @@ function BettorList({
           {showPositions && b.position !== null && (
             <span className="text-gray-400">({b.position}º)</span>
           )}
+          {ptsBadge !== null && (
+            <span className="rounded bg-green-500 px-1 py-0.5 text-[10px] font-bold leading-none text-white">
+              +{ptsBadge} PTS
+            </span>
+          )}
         </span>
       ))}
     </div>
@@ -122,16 +132,34 @@ function ScorerCard({
   rank,
   showBettors,
   showPositions,
+  isAdmin,
+  artillaryPointsActive,
+  artilheiroPoints,
   onUpdate,
+  onDelete,
 }: {
   scorer: TopScorerItem
   rank: number
   showBettors: boolean
   showPositions: boolean
+  isAdmin: boolean
+  artillaryPointsActive: boolean
+  artilheiroPoints: number
   onUpdate: (id: string, newCount: number) => void
+  onDelete: (id: string) => void
 }) {
   const [expanded, setExpanded] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, startDeleteTransition] = useTransition()
   const hasBettors = showBettors && scorer.bettors.length > 0
+  const ptsBadge = artillaryPointsActive ? artilheiroPoints : null
+
+  const handleDelete = () => {
+    startDeleteTransition(async () => {
+      const r = await deleteTopScorer(scorer.id)
+      if (!r.error) onDelete(scorer.id)
+    })
+  }
 
   const rankColors = [
     'text-yellow-500',
@@ -165,7 +193,7 @@ function ScorerCard({
             <>
               {/* Desktop: always visible */}
               <div className="mt-2 hidden sm:block">
-                <BettorList bettors={scorer.bettors} showPositions={showPositions} />
+                <BettorList bettors={scorer.bettors} showPositions={showPositions} ptsBadge={ptsBadge} />
               </div>
 
               {/* Mobile: accordion */}
@@ -181,7 +209,7 @@ function ScorerCard({
                 </button>
                 {expanded && (
                   <div className="mt-2">
-                    <BettorList bettors={scorer.bettors} showPositions={showPositions} />
+                    <BettorList bettors={scorer.bettors} showPositions={showPositions} ptsBadge={ptsBadge} />
                   </div>
                 )}
               </div>
@@ -193,9 +221,37 @@ function ScorerCard({
           )}
         </div>
 
-        {/* Goals control */}
-        <div className="shrink-0">
+        {/* Goals control + delete */}
+        <div className="flex shrink-0 flex-col items-end gap-2">
           <GoalsControl id={scorer.id} count={scorer.goals_count} onUpdate={onUpdate} />
+          {isAdmin && !confirmDelete && (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="text-[10px] font-medium text-gray-300 transition hover:text-red-400"
+              title="Excluir artilheiro"
+            >
+              excluir
+            </button>
+          )}
+          {isAdmin && confirmDelete && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-gray-500">Excluir?</span>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="rounded bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold text-white transition hover:bg-red-600 disabled:opacity-50"
+              >
+                {deleting ? '…' : 'Sim'}
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                disabled={deleting}
+                className="rounded border border-gray-200 px-1.5 py-0.5 text-[10px] text-gray-500 transition hover:bg-gray-50"
+              >
+                Não
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -210,7 +266,6 @@ function AddScorerForm({
   onCancel: () => void
 }) {
   const [playerName, setPlayerName] = useState('')
-  const [team, setTeam] = useState('')
   const [goals, setGoals] = useState(0)
   const [error, setError] = useState('')
   const [, startTransition] = useTransition()
@@ -222,12 +277,12 @@ function AddScorerForm({
     if (!playerName.trim()) { setError('Nome do jogador é obrigatório'); return }
     setError('')
     startTransition(async () => {
-      const r = await insertTopScorer(playerName, team, goals)
+      const r = await insertTopScorer(playerName, '', goals)
       if (r.error) { setError(r.error); return }
       onAdd({
         id: r.id!,
         player_name: playerName.trim(),
-        team: team.trim(),
+        team: '',
         goals_count: goals,
         bettors: [],
       })
@@ -246,17 +301,6 @@ function AddScorerForm({
             value={playerName}
             onChange={e => setPlayerName(e.target.value)}
             placeholder="Ex: Kylian Mbappé"
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-azul-mid focus:outline-none"
-            onKeyDown={e => e.key === 'Enter' && submit()}
-          />
-        </div>
-        <div className="sm:w-36">
-          <label className="mb-1 block text-xs font-medium text-gray-500">Seleção</label>
-          <input
-            type="text"
-            value={team}
-            onChange={e => setTeam(e.target.value)}
-            placeholder="Ex: França"
             className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-azul-mid focus:outline-none"
             onKeyDown={e => e.key === 'Enter' && submit()}
           />
@@ -291,9 +335,28 @@ function AddScorerForm({
   )
 }
 
-export function ArtilhariaClient({ initialScorers, showBettors, showPositions }: Props) {
+export function ArtilhariaClient({
+  initialScorers, showBettors, showPositions,
+  isAdmin, artillaryPointsActive: initActive, artilheiroPoints,
+}: Props) {
   const [scorers, setScorers] = useState<TopScorerItem[]>(initialScorers)
   const [showAddForm, setShowAddForm] = useState(false)
+  const [artillaryActive, setArtillaryActive] = useState(initActive)
+  const [togglePending, startToggleTransition] = useTransition()
+  const [toggleError, setToggleError] = useState('')
+
+  const handleToggleArtillary = () => {
+    const next = !artillaryActive
+    setToggleError('')
+    startToggleTransition(async () => {
+      setArtillaryActive(next)
+      const r = await setArtillaryPointsActive(next)
+      if (r.error) {
+        setToggleError(r.error)
+        setArtillaryActive(!next)
+      }
+    })
+  }
 
   const updateScorer = (id: string, newCount: number) => {
     setScorers(prev =>
@@ -307,6 +370,10 @@ export function ArtilhariaClient({ initialScorers, showBettors, showPositions }:
       [...prev, s].sort((a, b) => b.goals_count - a.goals_count || a.player_name.localeCompare(b.player_name, 'pt-BR'))
     )
     setShowAddForm(false)
+  }
+
+  const removeScorer = (id: string) => {
+    setScorers(prev => prev.filter(s => s.id !== id))
   }
 
   // Supabase Realtime — sincroniza gols entre todos os usuários conectados
@@ -361,6 +428,45 @@ export function ArtilhariaClient({ initialScorers, showBettors, showPositions }:
         )}
       </div>
 
+      {/* Controle de pontos de artilharia */}
+      <div className="mb-5 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-gray-800">Contar pontos de artilharia no ranking geral?</p>
+            {isAdmin ? (
+              <p className="mt-0.5 text-xs text-gray-500">
+                {artillaryActive
+                  ? 'Ativado — pontos de artilheiro estão sendo somados no ranking.'
+                  : 'Desativado — pontos de artilheiro não entram no total do ranking.'}
+              </p>
+            ) : (
+              <p className="mt-0.5 text-xs text-gray-500">Configurado pelo administrador do bolão.</p>
+            )}
+            {toggleError && <p className="mt-1 text-xs text-red-500">{toggleError}</p>}
+          </div>
+          {isAdmin ? (
+            <button
+              onClick={handleToggleArtillary}
+              disabled={togglePending}
+              title={artillaryActive ? 'Clique para desativar' : 'Clique para ativar'}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:cursor-not-allowed ${
+                artillaryActive ? 'bg-verde-600' : 'bg-gray-300'
+              }`}
+            >
+              <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${artillaryActive ? 'translate-x-5' : 'translate-x-0'}`} />
+            </button>
+          ) : (
+            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+              artillaryActive
+                ? 'bg-green-100 text-green-800'
+                : 'bg-amber-100 text-amber-800'
+            }`}>
+              {artillaryActive ? 'Pontos Computados' : 'Aguardando Validação'}
+            </span>
+          )}
+        </div>
+      </div>
+
       {/* Formulário de inserção */}
       {showAddForm && (
         <div className="mb-4">
@@ -389,7 +495,11 @@ export function ArtilhariaClient({ initialScorers, showBettors, showPositions }:
               rank={i + 1}
               showBettors={showBettors}
               showPositions={showPositions}
+              isAdmin={isAdmin}
+              artillaryPointsActive={artillaryActive}
+              artilheiroPoints={artilheiroPoints}
               onUpdate={updateScorer}
+              onDelete={removeScorer}
             />
           ))}
         </div>

@@ -38,6 +38,7 @@ export default async function ArtilhariaPage() {
     { data: tSettings },
     { data: existingScorers },
     { data: firstMatch },
+    { data: artilhRule },
   ] = await Promise.all([
     getServerNow(),
     getVisibilitySettings(),
@@ -45,10 +46,11 @@ export default async function ArtilhariaPage() {
     admin.from('top_scorer_mapping').select('raw_name, standardized_name'),
     admin.from('participants').select('id, apelido'),
     admin.from('participant_scores').select('participant_id, pts_total'),
-    admin.from('tournament_settings').select('key, value').in('key', ['tournament_started']),
+    admin.from('tournament_settings').select('key, value').in('key', ['tournament_started', 'artillary_points_active']),
     admin.from('top_scorers').select('id, player_name, team, goals_count'),
     admin.from('matches').select('betting_deadline')
       .order('betting_deadline', { ascending: true }).limit(1),
+    supabase.from('scoring_rules').select('points').eq('key', 'artilheiro').maybeSingle(),
   ])
 
   // ── Visibilidade (anti-spoiler) ───────────────────────────────────────────
@@ -59,6 +61,8 @@ export default async function ArtilhariaPage() {
     ((tSettings ?? []) as { key: string; value: string }[]).map(r => [r.key, r.value])
   )
   const showPositions = tSettingsMap['tournament_started'] === 'true' && showBettors
+  const artillaryPointsActive = tSettingsMap['artillary_points_active'] === 'true'
+  const artilheiroPoints = (artilhRule as { points: number } | null)?.points ?? 18
 
   // ── Normalização de nomes via mapeamento ──────────────────────────────────
   const nameMap = Object.fromEntries(
@@ -81,6 +85,7 @@ export default async function ArtilhariaPage() {
   )
   const toSeed = predictedNamesRaw.filter(n => !existingNamesSet.has(n.toLowerCase()))
   if (toSeed.length > 0) {
+    // Ignora erros: o índice único no banco rejeita corridas concorrentes silenciosamente.
     await admin.from('top_scorers').insert(
       toSeed.map((name: string) => ({
         player_name: name,
@@ -88,7 +93,7 @@ export default async function ArtilhariaPage() {
         goals_count: 0,
         updated_by: user.id,
       }))
-    )
+    ).then(() => null, () => null)
   }
 
   // ── Recarrega lista final após seeding ────────────────────────────────────
@@ -145,6 +150,9 @@ export default async function ArtilhariaPage() {
           initialScorers={scorersWithBettors}
           showBettors={showBettors}
           showPositions={showPositions}
+          isAdmin={isAdmin}
+          artillaryPointsActive={artillaryPointsActive}
+          artilheiroPoints={artilheiroPoints}
         />
       </div>
     </>

@@ -1,6 +1,7 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { revalidatePath } from 'next/cache'
+import { createClient, createAuthAdminClient } from '@/lib/supabase/server'
 
 async function getAuthUser() {
   const supabase = await createClient()
@@ -27,6 +28,49 @@ export async function updateGoalsCount(
       })
       .eq('id', id)
 
+    if (error) return { error: error.message }
+    return {}
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Erro inesperado' }
+  }
+}
+
+export async function setArtillaryPointsActive(
+  active: boolean,
+): Promise<{ error?: string }> {
+  try {
+    const user = await getAuthUser()
+    if (!user) return { error: 'Não autenticado' }
+
+    const supabase = await createClient()
+    const { data: profile } = await supabase
+      .from('users').select('is_admin').eq('id', user.id).single()
+    if (!profile?.is_admin) return { error: 'Acesso negado' }
+
+    const admin = createAuthAdminClient()
+    const { error } = await admin
+      .from('tournament_settings')
+      .upsert({ key: 'artillary_points_active', value: active ? 'true' : 'false' }, { onConflict: 'key' })
+
+    if (error) return { error: error.message }
+    revalidatePath('/classificacaoMB')
+    return {}
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Erro inesperado' }
+  }
+}
+
+export async function deleteTopScorer(id: string): Promise<{ error?: string }> {
+  try {
+    const user = await getAuthUser()
+    if (!user) return { error: 'Não autenticado' }
+
+    const supabase = await createClient()
+    const { data: profile } = await supabase
+      .from('users').select('is_admin').eq('id', user.id).single()
+    if (!profile?.is_admin) return { error: 'Acesso negado' }
+
+    const { error } = await supabase.from('top_scorers').delete().eq('id', id)
     if (error) return { error: error.message }
     return {}
   } catch (err) {

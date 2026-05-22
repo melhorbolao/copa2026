@@ -1,63 +1,25 @@
-ESPECIFICAÇÃO DE NOVA IDENTIDADE VISUAL: MELHOR BOLÃO 2026 - AZUL OCENO & AMARELO OURO
+ESPECIFICAÇÃO TÉCNICA: INTEGRAÇÃO DA ARTILHARIA COM A PONTUAÇÃO DO BOLÃO
 
-Abaixo está a especificação completa para a refatoração visual do sistema Melhor Bolão, preservando a estética profissional e organizada de tabelas densas, mas adotando o novo esquema de cores Azul Navy Profundo e Amarelo Dourado Ouro, baseado na logo fornecida.
+Objetivo: Centralizar o controle de ativação dos pontos de artilharia na página "Artilharia" e refletir essa pontuação dinamicamente na Classificação Geral e no Simulador.
 
-1.  PALETA DE CORES GLOBAL (THEMING)
-Abandone o Cyan Clássico e adote o contraste vibrante entre o Azul profundo e o Amarelo dourado. A estética de tabelas limpas e organizadas deve ser mantida, mas as cores principais mudam.
+1. CONTROLE DE STATUS GLOBAL (ATIVAÇÃO DE PONTOS):
+- Na página "Artilharia", inclua um componente de controle (Toggle ou Select) com o título: "Contar pontos de artilharia no ranking geral?".
+- Restrição de Acesso: Este controle deve estar visível e editável APENAS para administradores. Usuários comuns visualizam apenas uma badge indicativa (ex: "Status: Pontos Computados" ou "Status: Aguardando Validação").
+- Valor Inicial/Padrão: 'Não' (False).
+- Persistência: Salve este estado em um campo 'artillary_points_active' (boolean) na tabela global de configurações ('system_settings') do Supabase.
 
-| Elemento UI | Cor Antiga (Cyan/Branco) | NOVA COR (Azul/Amarelo) | Referência no Logo |
-| :--- | :--- | :--- | :--- |
-| Fundo da Página (Body BG) | `#F0FDF4` (Verde sutil) | `#001F5B` (Azul Navy Profundo) | Base do card "Azul Oceano" |
-| Cards e Tabela (Fundo Principal)| `White` / `#FFFFFF` | `#001F5B` (Azul Navy Profundo) | Uniformidade visual |
-| Bordas e Divisores | `#E5E7EB` (Cinza claro) | `#FFD700` (Amarelo Dourado Ouro) | A moldura do logo |
-| Texto Principal | `#1F2937` (Cinza escuro) | `White` (`#FFFFFF`) | Para leitura no fundo azul |
-| Texto Destaque (PTS) | `#111827` (Preto) | `#FFD700` (Amarelo Dourado Ouro) | Para vibrar com os pontos |
-| Acentos e Elementos 'Live' | `#00F2FF` (Ciano Neon) | `#00F2FF` (Ciano Neon) | MANTIDO para alto contraste live |
+2. REGRAS DE CÁLCULO E IMPACTO NO RANKING GERAL:
+- Condicional de Pontuação: A lógica/função de cálculo da Classificação Geral deve verificar o status de 'artillary_points_active'.
+  * Se estiver 'Não' (False): Os pontos obtidos com os palpites de artilheiro de cada participante são desconsiderados no somatório total da Classificação Geral (PTS).
+  * Se estiver 'Sim' (True): O sistema deve processar os acertos de artilharia, somar os respectivos pontos regulamentares ao total de cada participante e atualizar o ranking e a ordenação live instantaneamente.
 
-2.  ESPECIFICAÇÃO DA LOGO E POSICIONAMENTO
-A logo `logo_azul_amarelo.png` é a nova âncora da marca e deve ter posicionamento de destaque.
+3. REFATORAÇÃO E LIMPEZA DE ESCOPO (PAINEL DE ADMIN):
+- Remoção de Redundância: Retire da página de Admin do Bolão (antiga "Dados", agora "Gestão") qualquer campo, input ou tabela que servia para incluir ou atualizar manualmente os gols dos artilheiros. Esta ação agora é feita única e exclusivamente pelos botões (+ / -) e pelo botão de inserção contidos na página "Artilharia".
 
-Onde Colocar a Logo (Orientação):
-Substitua qualquer título de texto ("MDB", "MENU", "Melhor Bolão") no topo do Sidebar (Menu Vertical) pela logo.
+4. COMPORTAMENTO NO "MEU SIMULADOR MB":
+- Isolamento do Simulador: Mantenha intacta a funcionalidade de simulação de artilharia na página "Meu Simulador MB". 
+- Regra do Simulador: No ambiente do simulador, o usuário logado DEVE continuar com a liberdade de inserir gols hipotéticos para os artilheiros e ver o impacto projetado na tabela simulada dele, INDEPENDENTEMENTE de o Admin ter ativado ou não os pontos oficiais no ranking geral.
 
-Instrução Técnica (Claude/Lovable):
-- Remova o componente de título/texto no topo do Sidebar (Menu Vertical).
-- Adicione o componente <Image /> carregando 'logo_azul_amarelo.png'.
-- Redimensione a imagem para ocupar 80% da largura do Sidebar, centralizada horizontalmente.
-- Garanta que a logo tenha um link (href) para a rota '/' (Home/Classificação).
-- Mantenha o espaçamento interno (padding) adequado entre a logo e o primeiro item do menu.
-
-3.  REFATORAÇÃO DO MENU VERTICAL (SIDEBAR)
-O menu vertical é o elemento de maior impacto visual após a logo. Ele deve adotar o contraste total da nova paleta.
-
-| Sub-elemento | Cor Antiga (Branco/Cinza) | NOVA COR (Azul/Amarelo) |
-| :--- | :--- | :--- |
-| Fundo do Menu (Sólido) | `#FFFFFF` (Branco) | `#001133` (Azul Navy Profundo - ligeiramente mais escuro que o BG) |
-| Texto do Item de Menu | `#4B5563` (Cinza) | `#FFD700` (Amarelo Dourado Ouro) |
-| Ícone do Menu | `#6B7280` (Cinza) | `#FFD700` (Amarelo Dourado Ouro) |
-| Item Ativo (Fundo) | `#F3F4F6` (Cinza claro)| `#002D80` (Azul Médio - para destacar) |
-| Item Ativo (Texto/Ícone) | `#111827` (Preto) | `White` (`#FFFFFF`) |
-
-4.  ESTÉTICA DE TABELAS E CARDS (DICAS TÉCNICAS E DE UX)
-A densidade de dados deve ser preservada, mas com contraste profissional.
-
-A) Destaque dos Pontos (A Medalha de Ouro)
-Destaque a pontuação principal (coluna "PTS") com a cor `#FFD700` (Amarelo Ouro) para dar uma sensação de conquista a cada ponto somado.
-
-B) Zebra Stripes Profissionais
-Mantenha as linhas com fundo alternado (zebra stripes) nas tabelas, mas use tons próximos do Azul Navy.
-- Linha 1 (Par): Fundo `#001F5B`.
-- Linha 2 (Ímpar): Fundo `#002D80` (Azul Médio).
-- Efeito Hoover (Passar o mouse): Deve usar `#FFD700` (Amarelo) com opacidade 10% para destacar a linha sem apagar o texto.
-
-5.  IMPLEMENTAÇÃO RESPONSIVA (MOBILE)
-No celular, o Sidebar (Menu Vertical) é recolhido e um cabeçalho fixo no topo (TopBar) aparece.
-
-Instrução de TopBar Mobile:
-- No componente de TopBar Mobile, centralize a logo `logo_azul_amarelo.png`.
-- O TopBar deve adotar o fundo `#001133` (Azul Profundo).
-- O ícone do menu 'hambúrguer' (para abrir o Sidebar) deve ser `#FFD700` (Amarelo Ouro).
-
-Esta mudança cria uma identidade nacional e profissional, assemelhando o bolão a um aplicativo de estatísticas de ponta (como SofaScore), com contraste alto e legibilidade garantida em fundo escuro.
-
-Fim da Especificação Técnico-Visual.
+5. DIRETRIZES TÉCNICAS E REATIVIDADE:
+- Trigger/RPC de Recálculo: Ao alterar o switch de ativação para 'Sim', dispare um recálculo global das pontuações ou limpe o cache de dados do ranking (SWR / React Query) para que a interface de classificação geral de todos os usuários reflita a nova realidade imediatamente via Supabase Realtime.
+- Visualização de Impacto: Na listagem de apoiadores de cada card de artilheiro ("Quem Apostou"), se os pontos estiverem ativados, adicione um destaque visual sutil ao lado do nome do participante (ex: uma badge verde escrito "+X PTS") confirmando que aquela aposta já está somando no perfil dele.
