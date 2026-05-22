@@ -342,11 +342,7 @@ export function ZebrasClient({ zebraMatches, ranking, threshold }: Props) {
     <main className="min-h-screen bg-gray-50 pb-12">
       {/* Cabeçalho */}
       <div className="bg-azul-dark py-5 text-center shadow">
-        <div className="flex items-center justify-center gap-2">
-          <Image src="/zebra.png" alt="" width={28} height={28} className="shrink-0" />
-          <h1 className="text-xl font-black tracking-tight text-ouro sm:text-2xl">Zebras</h1>
-          <Image src="/zebra.png" alt="" width={28} height={28} className="shrink-0 scale-x-[-1]" />
-        </div>
+        <h1 className="text-xl font-black tracking-tight text-ouro sm:text-2xl">Zebras</h1>
         <p className="mt-1 text-xs text-white/60 sm:text-sm">
           O raio-x dos palpites improváveis · resultados apostados por ≤ {threshold}%
         </p>

@@ -10,7 +10,7 @@ import { detectMatchZebra, getMatchResult, scoreMatchBet } from '@/lib/scoring/e
 import type { RuleMap } from '@/lib/scoring/engine'
 import type { ZebraMatch, ZebraRankingEntry, ZebraScorer } from './types'
 
-const ZEBRA_THRESHOLD = 20
+const ZEBRA_THRESHOLD = 15
 
 export default async function ZebrasPage() {
   const supabase = await createClient()
