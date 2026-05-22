@@ -89,13 +89,13 @@ async function PalpitesData({ participantId }: { participantId: string }) {
     supabase.from('matches')
       .select('id, match_number, phase, group_name, round, team_home, team_away, flag_home, flag_away, match_datetime, city, betting_deadline, score_home, score_away, is_brazil, penalty_winner')
       .order('match_datetime', { ascending: true }),
-    supabase.from('bets')
+    admin.from('bets')
       .select('match_id, score_home, score_away, points')
       .eq('participant_id', participantId),
-    supabase.from('group_bets')
+    admin.from('group_bets')
       .select('group_name, first_place, second_place, points')
       .eq('participant_id', participantId),
-    supabase.from('tournament_bets')
+    admin.from('tournament_bets')
       .select('champion, runner_up, semi1, semi2, top_scorer, points')
       .eq('participant_id', participantId)
       .maybeSingle(),

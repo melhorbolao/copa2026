@@ -80,7 +80,9 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
           try {
             await saveGroupBet(groupName, f, s)
             localStorage.removeItem(draftKey)
-          } catch { /* ignora — tentará novamente na próxima montagem */ }
+          } catch (err) {
+            setError(err instanceof Error ? err.message : 'Erro ao salvar palpite. Tente novamente.')
+          }
         })
       }
     } catch { /* ignore */ }
