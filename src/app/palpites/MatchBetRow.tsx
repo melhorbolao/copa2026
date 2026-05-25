@@ -36,18 +36,19 @@ function MatchBetRowImpl({ match, bet, slotLabelHome, slotLabelAway }: Props) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const homeRef = useRef(home)
   const awayRef = useRef(away)
+  // Rastreia o último valor confirmado pelo servidor para detectar edições locais pendentes
+  const confirmedRef = useRef({ h: bet?.score_home?.toString() ?? '', a: bet?.score_away?.toString() ?? '' })
 
   useEffect(() => {
-    if (bet) {
-      const h = bet.score_home.toString()
-      const a = bet.score_away.toString()
-      setHome(h); setAway(a)
-      homeRef.current = h; awayRef.current = a
-    } else {
-      // Palpite removido — limpa os campos
-      setHome(''); setAway('')
-      homeRef.current = ''; awayRef.current = ''
+    const serverH = bet?.score_home?.toString() ?? ''
+    const serverA = bet?.score_away?.toString() ?? ''
+    // Só sobrescreve estado local se o usuário não fez mudanças não confirmadas.
+    // Se local bate com o último confirmado, não há edições pendentes → aceita server.
+    if (homeRef.current === confirmedRef.current.h && awayRef.current === confirmedRef.current.a) {
+      setHome(serverH); setAway(serverA)
+      homeRef.current = serverH; awayRef.current = serverA
     }
+    confirmedRef.current = { h: serverH, a: serverA }
   }, [bet?.score_home, bet?.score_away])
 
   const deadlinePassed = isDeadlinePassed(match.betting_deadline)
