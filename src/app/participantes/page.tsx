@@ -151,6 +151,28 @@ export default async function ControlePage({
     counts.r1 += Math.min(thirdBetCount.get(pid) ?? 0, 8)
   }
 
+  // DEBUG TEMPORÁRIO — remover após diagnóstico
+  {
+    const bruno = (participants ?? []).find(p => p.apelido.toLowerCase().includes('bruno'))
+    if (bruno) {
+      const pid = bruno.id
+      const betsForBruno = (allBets ?? []).filter((b: Bet) => b.participant_id === pid)
+      const betsInMatchStage = betsForBruno.filter((b: Bet) => matchStage.has(b.match_id))
+      const uniqueBetPids = new Set((allBets ?? []).map((b: Bet) => b.participant_id))
+      console.log('[DEBUG participantes] Bruno pid:', pid)
+      console.log('[DEBUG participantes] allBets total rows:', (allBets ?? []).length)
+      console.log('[DEBUG participantes] unique participant_ids in allBets:', uniqueBetPids.size)
+      console.log('[DEBUG participantes] bets com pid=Bruno:', betsForBruno.length)
+      console.log('[DEBUG participantes] bets mapeados p/ etapa:', betsInMatchStage.length)
+      console.log('[DEBUG participantes] betCount[Bruno].r1:', betCount.get(pid)?.r1)
+      console.log('[DEBUG participantes] stageTotals.r1:', stageTotals.r1)
+      console.log('[DEBUG participantes] matchStage size:', matchStage.size)
+      console.log('[DEBUG participantes] trnBetCount[Bruno]:', trnBetCount.get(pid))
+      console.log('[DEBUG participantes] groupBetCount[Bruno]:', groupBetCount.get(pid))
+      console.log('[DEBUG participantes] thirdBetCount[Bruno]:', thirdBetCount.get(pid))
+    }
+  }
+
   const calcPct = (participantId: string, k: StageKey) => {
     const total = stageTotals[k]
     if (!total) return -1
