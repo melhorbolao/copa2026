@@ -61,10 +61,10 @@ export default async function ControlePage({
       .select('id, apelido, paid')
       .order('apelido', { ascending: true }),
     supabase.from('matches').select('id, phase, round, betting_deadline'),
-    admin.from('bets').select('participant_id, match_id, updated_at'),
-    admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer'),
-    admin.from('group_bets').select('participant_id, group_name'),
-    admin.from('third_place_bets').select('participant_id, group_name'),
+    admin.from('bets').select('participant_id, match_id, updated_at').limit(100000),
+    admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer').limit(10000),
+    admin.from('group_bets').select('participant_id, group_name').limit(10000),
+    admin.from('third_place_bets').select('participant_id, group_name').limit(10000),
     getPhaseSettings(),
     getQualifiedSets(),
   ])
