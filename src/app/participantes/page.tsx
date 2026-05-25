@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAuthAdminClient } from '@/lib/supabase/server'
 import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { formatBrasilia } from '@/utils/date'
@@ -45,6 +45,8 @@ export default async function ControlePage({
   }
   await requirePageAccess('participantes', isAdmin)
 
+  const admin = createAuthAdminClient()
+
   const [
     { data: participants },
     { data: matches },
@@ -59,10 +61,10 @@ export default async function ControlePage({
       .select('id, apelido, paid')
       .order('apelido', { ascending: true }),
     supabase.from('matches').select('id, phase, round, betting_deadline'),
-    supabase.from('bets').select('participant_id, match_id, updated_at'),
-    supabase.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer'),
-    supabase.from('group_bets').select('participant_id, group_name'),
-    supabase.from('third_place_bets').select('participant_id, group_name'),
+    admin.from('bets').select('participant_id, match_id, updated_at'),
+    admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer'),
+    admin.from('group_bets').select('participant_id, group_name'),
+    admin.from('third_place_bets').select('participant_id, group_name'),
     getPhaseSettings(),
     getQualifiedSets(),
   ])
