@@ -47,10 +47,30 @@ export default async function ControlePage({
 
   const admin = createAuthAdminClient()
 
+  // Pagina a tabela bets para contornar o max-rows=1000 do PostgREST:
+  // .limit(N) no cliente é ignorado quando o servidor tem max-rows configurado.
+  async function fetchAllBets(): Promise<Bet[]> {
+    const PAGE = 1000
+    const rows: Bet[] = []
+    let from = 0
+    for (;;) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (admin as any)
+        .from('bets')
+        .select('participant_id, match_id, updated_at')
+        .range(from, from + PAGE - 1)
+      if (error || !data || data.length === 0) break
+      rows.push(...data)
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+    return rows
+  }
+
   const [
     { data: participants },
     { data: matches },
-    { data: allBets },
+    allBets,
     { data: trnBets },
     { data: groupBets },
     { data: thirdBets },
@@ -61,7 +81,7 @@ export default async function ControlePage({
       .select('id, apelido, paid')
       .order('apelido', { ascending: true }),
     supabase.from('matches').select('id, phase, round, betting_deadline'),
-    admin.from('bets').select('participant_id, match_id, updated_at').limit(100000),
+    fetchAllBets(),
     admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer').limit(10000),
     admin.from('group_bets').select('participant_id, group_name').limit(10000),
     admin.from('third_place_bets').select('participant_id, group_name').limit(10000),
@@ -128,7 +148,7 @@ export default async function ControlePage({
   const betCount   = new Map<string, Record<StageKey, number>>()
   const lastSavedMap = new Map<string, Record<StageKey, string>>()
 
-  for (const b of (allBets ?? []) as Bet[]) {
+  for (const b of allBets as Bet[]) {
     const k = matchStage.get(b.match_id)
     if (!k) continue
 
@@ -151,27 +171,6 @@ export default async function ControlePage({
     counts.r1 += Math.min(thirdBetCount.get(pid) ?? 0, 8)
   }
 
-  // DEBUG TEMPORÁRIO — remover após diagnóstico
-  {
-    const bruno = (participants ?? []).find(p => p.apelido.toLowerCase().includes('bruno'))
-    if (bruno) {
-      const pid = bruno.id
-      const betsForBruno = (allBets ?? []).filter((b: Bet) => b.participant_id === pid)
-      const betsInMatchStage = betsForBruno.filter((b: Bet) => matchStage.has(b.match_id))
-      const uniqueBetPids = new Set((allBets ?? []).map((b: Bet) => b.participant_id))
-      console.log('[DEBUG participantes] Bruno pid:', pid)
-      console.log('[DEBUG participantes] allBets total rows:', (allBets ?? []).length)
-      console.log('[DEBUG participantes] unique participant_ids in allBets:', uniqueBetPids.size)
-      console.log('[DEBUG participantes] bets com pid=Bruno:', betsForBruno.length)
-      console.log('[DEBUG participantes] bets mapeados p/ etapa:', betsInMatchStage.length)
-      console.log('[DEBUG participantes] betCount[Bruno].r1:', betCount.get(pid)?.r1)
-      console.log('[DEBUG participantes] stageTotals.r1:', stageTotals.r1)
-      console.log('[DEBUG participantes] matchStage size:', matchStage.size)
-      console.log('[DEBUG participantes] trnBetCount[Bruno]:', trnBetCount.get(pid))
-      console.log('[DEBUG participantes] groupBetCount[Bruno]:', groupBetCount.get(pid))
-      console.log('[DEBUG participantes] thirdBetCount[Bruno]:', thirdBetCount.get(pid))
-    }
-  }
 
   const calcPct = (participantId: string, k: StageKey) => {
     const total = stageTotals[k]
