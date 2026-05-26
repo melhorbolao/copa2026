@@ -168,8 +168,8 @@ const PHASE_ORDER = ['group', 'round_of_32', 'round_of_16', 'quarterfinal', 'sem
 const G4_ROWS: { key: keyof NonNullable<AIPalpites['tournament_bet']>; label: string }[] = [
   { key: 'champion',   label: 'Campeão' },
   { key: 'runner_up',  label: 'Vice-Campeão' },
-  { key: 'semi1',      label: 'Semifinalista 1' },
-  { key: 'semi2',      label: 'Semifinalista 2' },
+  { key: 'semi1',      label: '3º Lugar' },
+  { key: 'semi2',      label: '4º Lugar' },
   { key: 'top_scorer', label: 'Artilheiro' },
 ]
 
