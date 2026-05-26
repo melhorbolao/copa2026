@@ -6,6 +6,7 @@ import { Navbar } from '@/components/layout/Navbar'
 import { createClient, createAuthAdminClient } from '@/lib/supabase/server'
 import { requirePageAccess } from '@/lib/page-visibility'
 import { getActiveParticipantId } from '@/lib/participant'
+import { ImportButton } from './ImportButton'
 import {
   scoreMatchBet, scoreGroupBet, scoreTournamentBet,
   detectMatchZebra, detectGroupZebra, getMatchResult,
@@ -325,11 +326,14 @@ export default async function IaNoMbPage() {
       <main className="min-h-screen bg-azul-navy px-4 py-6 sm:px-8">
 
         {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-white">🤖 IA no MB</h1>
-          <p className="mt-1 text-sm text-white/60">
-            Benchmarking de modelos de IA — não são participantes oficiais
-          </p>
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-white">🤖 IA no MB</h1>
+            <p className="mt-1 text-sm text-white/60">
+              Benchmarking de modelos de IA — não são participantes oficiais
+            </p>
+          </div>
+          {isAdmin && <ImportButton />}
         </div>
 
         {aiModels.length === 0 ? (
