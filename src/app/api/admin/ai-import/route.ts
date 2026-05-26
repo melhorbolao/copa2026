@@ -4,9 +4,12 @@
 //   Formato A — Claude.xlsx, grok.xlsx  : aba "Palpites", 3 linhas de header, col7/col8 = gols
 //   Formato A* — chatgpt.xlsx           : igual ao A mas workbook.xml usa namespace x: e IDs GUID
 //   Formato B — gemini.xlsx             : aba diferente, id-N nos jogos 25+, bonus:* para G4, col9 para terceiros
+//                                         Não tem grp_bet:X — 1º/2º são derivados via calcGroupStandings
 
 import { NextResponse } from 'next/server'
 import { createClient, createAuthAdminClient } from '@/lib/supabase/server'
+import { calcGroupStandings } from '@/lib/bracket/engine'
+import type { MatchSlim, BetSlim } from '@/lib/bracket/engine'
 import ExcelJS from 'exceljs'
 import fs from 'fs'
 import path from 'path'
@@ -250,11 +253,21 @@ export async function POST() {
 
   const admin = createAuthAdminClient()
 
-  // Mapeia número do jogo → UUID (necessário para ids do tipo "id-N" do gemini)
-  const { data: matchesData } = await supabase.from('matches').select('id, match_number')
+  // Busca dados completos dos jogos: UUID por número (gemini usa id-N) + detalhes para derivar grp_bet
+  const { data: matchesData } = await supabase
+    .from('matches')
+    .select('id, match_number, phase, group_name, team_home, team_away')
   const matchNumToId = new Map<number, string>(
     (matchesData ?? []).map(m => [m.match_number as number, m.id as string]),
   )
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const groupMatchesSlim: MatchSlim[] = (matchesData ?? [])
+    .filter((m: any) => m.phase === 'group')
+    .map((m: any) => ({
+      id: m.id, group_name: m.group_name, phase: m.phase,
+      team_home: m.team_home, team_away: m.team_away,
+      flag_home: '', flag_away: '',
+    }))
 
   const results = []
 
@@ -268,6 +281,23 @@ export async function POST() {
 
     try {
       const palpites = await parseExcelFile(filePath, matchNumToId)
+
+      // Gemini não tem grp_bet:X — deriva 1º/2º de cada grupo simulando os placares apostados
+      if (Object.keys(palpites.group_bets).length === 0 && groupMatchesSlim.length > 0) {
+        const betMap = new Map<string, BetSlim>()
+        for (const [matchId, bet] of Object.entries(palpites.matches)) {
+          betMap.set(matchId, { match_id: matchId, score_home: bet.score_home, score_away: bet.score_away })
+        }
+        const standings = calcGroupStandings(groupMatchesSlim, betMap)
+        for (const standing of standings) {
+          if (standing.teams.length >= 2) {
+            palpites.group_bets[standing.group] = {
+              first_place:  standing.teams[0].team,
+              second_place: standing.teams[1].team,
+            }
+          }
+        }
+      }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (admin as any).from('ai_models_performance').upsert({

@@ -391,7 +391,7 @@ export default async function IaNoMbPage() {
                       Total analisado: <span className="font-bold text-white">{divergeTotal} jogos</span>
                     </span>
                     <span className="text-sm text-verde-600">
-                      ✓ Concordaram: <span className="font-bold">{divergeAgree} ({agreePct}%)</span>
+                      ✓ Concordaram no desfecho: <span className="font-bold">{divergeAgree} ({agreePct}%)</span>
                     </span>
                     <span className="text-sm text-amarelo-400">
                       ✗ Divergiram: <span className="font-bold">{divergeDisagree} ({disagreePct}%)</span>
@@ -401,7 +401,7 @@ export default async function IaNoMbPage() {
                     <div className="h-full rounded-full bg-verde-600 transition-all" style={{ width: `${agreePct}%` }} />
                   </div>
                   <p className="mt-3 text-xs text-white/40">
-                    Quando todas as IAs concordam, vale mais a pena prestar atenção — mas não é garantia.
+                    Compara apenas quem vence ou se há empate — não o placar exato. Quando todas as IAs concordam, preste mais atenção.
                   </p>
                 </div>
               </section>
