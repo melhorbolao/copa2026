@@ -72,7 +72,7 @@ async function loadWorkbook(filePath: string): Promise<ExcelJS.Workbook> {
       let relsXml  = (await relsEntry.async('string')).replace(/^﻿/, '')
       const guidMap = new Map<string, string>()
       let counter   = 1
-      relsXml = relsXml.replace(/Id="([^"]+)"/g, (_, id) => {
+      relsXml = relsXml.replace(/Id="([^"]+)"/g, (_: string, id: string) => {
         if (!guidMap.has(id)) guidMap.set(id, `rId${counter++}`)
         return `Id="${guidMap.get(id)!}"`
       })
