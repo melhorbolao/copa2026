@@ -71,6 +71,7 @@ function calcAiScore(
   realTournamentBets: RealTournamentBet[],
   rules: RuleMap,
   knockoutMatches: Match[],
+  scorerMapping: Record<string, string>,
 ): {
   total: number; matchPts: number; groupPts: number; thirdPts: number; tournamentPts: number
   perMatch: Record<string, MatchResult>
@@ -149,7 +150,7 @@ function calcAiScore(
     if (results.champion) {
       const isZebraChampion = realTournamentBets.length > 0 &&
         (realTournamentBets.filter(b => b.champion === results.champion).length / realTournamentBets.length) * 100 <= threshold
-      tournamentPts = scoreTournamentBet(model.palpites.tournament_bet, results, rules, isZebraChampion, {})
+      tournamentPts = scoreTournamentBet(model.palpites.tournament_bet, results, rules, isZebraChampion, scorerMapping)
     }
   }
 
@@ -195,6 +196,7 @@ export default async function IaNoMbPage() {
     scoresRes,
     groupBetsRes,
     trnBetsRes,
+    scorerMappingRes,
     allRealBets,
     myBetsRes,
     myGroupBetsRes,
@@ -208,6 +210,7 @@ export default async function IaNoMbPage() {
     admin.from('participant_scores').select('pts_total').limit(10000),
     admin.from('group_bets').select('group_name, first_place').limit(10000),
     admin.from('tournament_bets').select('champion').limit(10000),
+    admin.from('top_scorer_mapping').select('raw_name, standardized_name'),
     fetchAllRealBets(admin),
     participantId
       ? supabase.from('bets').select('match_id, score_home, score_away').eq('participant_id', participantId).limit(1000)
@@ -237,6 +240,11 @@ export default async function IaNoMbPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const realTournamentBets: RealTournamentBet[] = (trnBetsRes.data ?? []) as any[]
 
+  const scorerMapping: Record<string, string> = {}
+  for (const row of (scorerMappingRes.data ?? []) as { raw_name: string; standardized_name: string | null }[]) {
+    if (row.standardized_name) scorerMapping[row.raw_name] = row.standardized_name
+  }
+
   const myBets: MyBet[]        = (myBetsRes.data ?? []) as MyBet[]
   const myGroupBets: MyGroupBet[] = (myGroupBetsRes.data ?? []) as MyGroupBet[]
   const myThirdBets: MyThirdBet[] = (myThirdBetsRes.data ?? []) as MyThirdBet[]
@@ -260,7 +268,7 @@ export default async function IaNoMbPage() {
   type AiScored = AiModel & { score: ReturnType<typeof calcAiScore> }
   const aiScored: AiScored[] = aiModels.map(model => ({
     ...model,
-    score: calcAiScore(model, matches, realBetsByMatch, realGroupBets, realTournamentBets, rules, knockoutMatches),
+    score: calcAiScore(model, matches, realBetsByMatch, realGroupBets, realTournamentBets, rules, knockoutMatches, scorerMapping),
   }))
 
   const aiRanked = [...aiScored].sort((a, b) => b.score.total - a.score.total)
