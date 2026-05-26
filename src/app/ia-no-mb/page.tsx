@@ -276,7 +276,7 @@ export default async function IaNoMbPage() {
   return (
     <>
       <Navbar />
-      <main className="min-h-screen bg-azul-navy px-4 py-6 sm:ml-56 sm:px-8">
+      <main className="min-h-screen bg-azul-navy px-4 py-6 sm:px-8">
         {/* Header */}
         <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
