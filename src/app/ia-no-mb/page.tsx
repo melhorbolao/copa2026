@@ -333,7 +333,7 @@ export default async function IaNoMbPage() {
               Benchmarking de modelos de IA — não são participantes oficiais
             </p>
           </div>
-          {isAdmin && <ImportButton />}
+          {false && isAdmin && <ImportButton />}
         </div>
 
         {aiModels.length === 0 ? (
