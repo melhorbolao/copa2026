@@ -26,6 +26,7 @@ const DEFAULT_PAGES: PageVisibilityRow[] = [
   { id: '__default_comparador',   page_name: 'comparador',   label: 'Comparador MB',    show_for_admin: true, show_for_users: false, sort_order: 70 },
   { id: '__default_premiacaoMB',  page_name: 'premiacaoMB',  label: 'Premiação MB',      show_for_admin: true, show_for_users: true,  sort_order: 75 },
   { id: '__default_minhaPanela',  page_name: 'minhaPanela',  label: 'Minha Panela',      show_for_admin: true, show_for_users: true,  sort_order: 72 },
+  { id: '__default_iaMb',        page_name: 'ia-no-mb',    label: 'IA no MB',          show_for_admin: true, show_for_users: true,  sort_order: 78 },
 ]
 
 // Memoized per request — deduplicates calls from Sidebar, Navbar, and page components

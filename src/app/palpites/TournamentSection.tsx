@@ -112,6 +112,16 @@ export function TournamentSection({ allTeams, deadline, existingBet, scorerMappi
     }, delay)
   }
 
+  // Resgate de mount: se o sessionStorage tem dados que o servidor não salvou
+  // (ex.: save falhou numa sessão anterior), reenvia automaticamente.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!existingBet) {
+      const hasData = form.champion || form.runner_up || form.semi1 || form.semi2 || form.top_scorer
+      if (hasData) triggerSave(form)
+    }
+  }, []) // só na montagem
+
   const handleSelect = (field: keyof TBet, value: string) => {
     const updated = { ...form, [field]: value }
     setForm(updated)

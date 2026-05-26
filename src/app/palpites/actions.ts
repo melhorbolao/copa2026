@@ -193,14 +193,11 @@ export async function saveGroupBet(groupName: string, firstPlace: string, second
     p_participant_id: participantId, p_group_name: groupName,
     p_first_place: firstPlace, p_second_place: secondPlace,
   })
-  if (rpc.error && !isMissingRpc(rpc.error)) {
-    throw new Error(rpc.error.message)
-  }
 
   const admin = createAuthAdminClient()
 
   if (rpc.error) {
-    // Fallback (migration ainda não rodou)
+    // Fallback: RPC ausente ou com erro — usa admin diretamente
     const { error } = await admin.from('group_bets').upsert(
       { participant_id: participantId, group_name: groupName, first_place: firstPlace, second_place: secondPlace },
       { onConflict: 'participant_id,group_name' },
@@ -258,9 +255,6 @@ export async function saveThirdPlaceBet(groupName: string, team: string) {
   const rpc = await (supabase as any).rpc('save_third_place_bet', {
     p_participant_id: participantId, p_group_name: groupName, p_team: team,
   })
-  if (rpc.error && !isMissingRpc(rpc.error)) {
-    throw new Error(rpc.error.message)
-  }
   if (!rpc.error) return
 
   // Fallback (migration ainda não rodou)
@@ -286,9 +280,6 @@ export async function deleteThirdPlaceBet(groupName: string) {
   const rpc = await (supabase as any).rpc('delete_third_place_bet', {
     p_participant_id: participantId, p_group_name: groupName,
   })
-  if (rpc.error && !isMissingRpc(rpc.error)) {
-    throw new Error(rpc.error.message)
-  }
   if (!rpc.error) return
 
   // Fallback
