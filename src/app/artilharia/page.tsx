@@ -47,7 +47,7 @@ export default async function ArtilhariaPage() {
     admin.from('participants').select('id, apelido'),
     admin.from('participant_scores').select('participant_id, pts_total'),
     admin.from('tournament_settings').select('key, value').in('key', ['tournament_started', 'artillary_points_active']),
-    admin.from('top_scorers').select('id, player_name, team, goals_count'),
+    admin.from('top_scorers').select('id, player_name, team, goals_count, photo_url'),
     admin.from('matches').select('betting_deadline')
       .order('betting_deadline', { ascending: true }).limit(1),
     supabase.from('scoring_rules').select('points').eq('key', 'artilheiro').maybeSingle(),
@@ -65,10 +65,8 @@ export default async function ArtilhariaPage() {
   const artilheiroPoints = (artilhRule as { points: number } | null)?.points ?? 18
 
   // ── Normalização de nomes via mapeamento ──────────────────────────────────
-  const nameMap = Object.fromEntries(
-    ((mapping ?? []) as { raw_name: string; standardized_name: string }[])
-      .map(m => [m.raw_name, m.standardized_name ?? m.raw_name])
-  )
+  const mappingRows = (mapping ?? []) as { raw_name: string; standardized_name: string }[]
+  const nameMap = Object.fromEntries(mappingRows.map(m => [m.raw_name, m.standardized_name ?? m.raw_name]))
   const normalize = (name: string) => nameMap[name] ?? name
 
   // ── Auto-seeding: insere jogadores apostados que ainda não estão na tabela ─
@@ -99,7 +97,7 @@ export default async function ArtilhariaPage() {
   // ── Recarrega lista final após seeding ────────────────────────────────────
   const { data: allScorers } = await admin
     .from('top_scorers')
-    .select('id, player_name, team, goals_count')
+    .select('id, player_name, team, goals_count, photo_url')
     .order('goals_count', { ascending: false })
     .order('player_name', { ascending: true })
 
@@ -131,16 +129,35 @@ export default async function ArtilhariaPage() {
     }
   }
 
-  // ── Monta lista final com apostadores ────────────────────────────────────
-  const scorersWithBettors: TopScorerItem[] = (
-    (allScorers ?? []) as { id: string; player_name: string; team: string; goals_count: number }[]
-  ).map(s => ({
-    id: s.id,
-    player_name: s.player_name,
-    team: s.team,
-    goals_count: s.goals_count,
-    bettors: scorerBettors[s.player_name] ?? [],
-  }))
+  // ── Monta lista final com apostadores (mescla duplicatas pelo nome normalizado) ──
+  const mergedMap = new Map<string, TopScorerItem>()
+  for (const s of (allScorers ?? []) as { id: string; player_name: string; team: string; goals_count: number; photo_url?: string }[]) {
+    const displayName = normalize(s.player_name)
+    const existing = mergedMap.get(displayName)
+    if (!existing) {
+      mergedMap.set(displayName, {
+        id: s.id,
+        player_name: displayName,
+        team: s.team || '',
+        goals_count: s.goals_count,
+        photo_url: s.photo_url ?? undefined,
+        bettors: scorerBettors[displayName] ?? [],
+      })
+    } else {
+      // Mantém o maior goals_count; prioriza a entrada que tem foto
+      const useThis = s.goals_count > existing.goals_count || (!existing.photo_url && s.photo_url)
+      if (useThis) {
+        mergedMap.set(displayName, {
+          ...existing,
+          team: s.team || existing.team || '',
+          goals_count: Math.max(existing.goals_count, s.goals_count),
+          photo_url: s.photo_url ?? existing.photo_url ?? undefined,
+        })
+      }
+    }
+  }
+  const scorersWithBettors: TopScorerItem[] = [...mergedMap.values()]
+    .sort((a, b) => b.goals_count - a.goals_count || a.player_name.localeCompare(b.player_name, 'pt-BR'))
 
   return (
     <>

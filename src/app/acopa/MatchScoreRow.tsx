@@ -1,6 +1,7 @@
 'use client'
 
-import { useTransition, useState, useEffect, useRef, memo } from 'react'
+import { useState, useEffect, useRef, memo } from 'react'
+import { useProgressTransition } from '@/hooks/useProgressTransition'
 import { saveOfficialScore, savePenaltyWinner } from './actions'
 import { Flag } from '@/components/ui/Flag'
 import { formatBrasilia } from '@/utils/date'
@@ -45,7 +46,7 @@ export const MatchScoreRow = memo(function MatchScoreRow({ match, canEdit, teamO
   const flagHome = teamOverride?.flag_home ?? match.flag_home
   const teamAway = teamOverride?.team_away ?? match.team_away
   const flagAway = teamOverride?.flag_away ?? match.flag_away
-  const [pending, startTransition]  = useTransition()
+  const [pending, startTransition]  = useProgressTransition()
   const [home, setHome]             = useState(match.score_home?.toString() ?? '')
   const [away, setAway]             = useState(match.score_away?.toString() ?? '')
   const [error, setError]           = useState('')

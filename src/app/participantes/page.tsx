@@ -45,32 +45,13 @@ export default async function ControlePage({
   }
   await requirePageAccess('participantes', isAdmin)
 
-  const admin = createAuthAdminClient()
-
-  // Pagina a tabela bets para contornar o max-rows=1000 do PostgREST:
-  // .limit(N) no cliente é ignorado quando o servidor tem max-rows configurado.
-  async function fetchAllBets(): Promise<Bet[]> {
-    const PAGE = 1000
-    const rows: Bet[] = []
-    let from = 0
-    for (;;) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (admin as any)
-        .from('bets')
-        .select('participant_id, match_id, updated_at')
-        .range(from, from + PAGE - 1)
-      if (error || !data || data.length === 0) break
-      rows.push(...data)
-      if (data.length < PAGE) break
-      from += PAGE
-    }
-    return rows
-  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAuthAdminClient() as any
 
   const [
     { data: participants },
     { data: matches },
-    allBets,
+    { data: allBets },
     { data: trnBets },
     { data: groupBets },
     { data: thirdBets },
@@ -81,7 +62,10 @@ export default async function ControlePage({
       .select('id, apelido, paid')
       .order('apelido', { ascending: true }),
     supabase.from('matches').select('id, phase, round, betting_deadline'),
-    fetchAllBets(),
+    // service_role bypassa RLS; .limit(10000) supera o cap de 1000 do PostgREST
+    admin.from('bets')
+      .select('participant_id, match_id, updated_at')
+      .limit(10000),
     admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer').limit(10000),
     admin.from('group_bets').select('participant_id, group_name').limit(10000),
     admin.from('third_place_bets').select('participant_id, group_name').limit(10000),
@@ -128,10 +112,18 @@ export default async function ControlePage({
   stageTotals['r1'] += R1_BONUS
 
   // Pré-processa bônus por participante para R1
-  const trnBetCount = new Map<string, number>()
+  const trnBetCount   = new Map<string, number>()
+  const trnBetMissing = new Map<string, string[]>()
   for (const t of (trnBets ?? [])) {
     const filled = [t.champion, t.runner_up, t.semi1, t.semi2, t.top_scorer].filter(Boolean).length
     trnBetCount.set(t.participant_id, filled)
+    const missing: string[] = []
+    if (!t.champion)   missing.push('campeão')
+    if (!t.runner_up)  missing.push('vice')
+    if (!t.semi1)      missing.push('terceiro')
+    if (!t.semi2)      missing.push('quarto')
+    if (!t.top_scorer) missing.push('artilheiro')
+    trnBetMissing.set(t.participant_id, missing)
   }
 
   const groupBetCount = new Map<string, number>()
@@ -148,7 +140,7 @@ export default async function ControlePage({
   const betCount   = new Map<string, Record<StageKey, number>>()
   const lastSavedMap = new Map<string, Record<StageKey, string>>()
 
-  for (const b of allBets as Bet[]) {
+  for (const b of (allBets ?? []) as Bet[]) {
     const k = matchStage.get(b.match_id)
     if (!k) continue
 
@@ -176,6 +168,38 @@ export default async function ControlePage({
     const total = stageTotals[k]
     if (!total) return -1
     return Math.round((betCount.get(participantId)?.[k] ?? 0) / total * 100)
+  }
+
+  const PT_CARD = ['', 'um', 'dois', 'três', 'quatro', 'cinco', 'seis', 'sete', 'oito']
+  const ptJoin = (parts: string[]) =>
+    parts.length <= 1 ? (parts[0] ?? '') :
+    parts.slice(0, -1).join(', ') + ' e ' + parts[parts.length - 1]
+
+  const getMissingTooltip = (pid: string, k: StageKey): string | null => {
+    const filled = betCount.get(pid)?.[k] ?? 0
+    const total  = stageTotals[k]
+    if (total === 0 || filled === 0 || filled >= total) return null
+    const parts: string[] = []
+    if (k === 'r1') {
+      const trnFilled   = trnBetCount.get(pid) ?? 0
+      const grpFilled   = Math.min(groupBetCount.get(pid) ?? 0, 12)
+      const thirdFilled = Math.min(thirdBetCount.get(pid) ?? 0, 8)
+      const matchFilled = Math.max(0, filled - trnFilled - grpFilled - thirdFilled)
+      const missingMatches = (total - R1_BONUS) - matchFilled
+      if (missingMatches > 0)
+        parts.push(`${missingMatches} ${missingMatches === 1 ? 'jogo' : 'jogos'}`)
+      parts.push(...(trnBetMissing.get(pid) ?? ['campeão', 'vice', 'terceiro', 'quarto', 'artilheiro']))
+      const missingGrp = 12 - grpFilled
+      if (missingGrp > 0)
+        parts.push(`${missingGrp} ${missingGrp === 1 ? 'classificado' : 'classificados'}`)
+      const missingThird = 8 - thirdFilled
+      if (missingThird > 0)
+        parts.push(`${PT_CARD[missingThird] ?? missingThird} ${missingThird === 1 ? 'terceiro colocado' : 'terceiros colocados'}`)
+    } else {
+      const missing = total - filled
+      parts.push(`${missing} ${missing === 1 ? 'jogo' : 'jogos'}`)
+    }
+    return parts.length > 0 ? ptJoin(parts) : null
   }
 
   const getLastSaved = (participantId: string, k: StageKey): string | null => {
@@ -411,9 +435,15 @@ export default async function ControlePage({
                       )
                     }
                     const v = status.pct
+                    const missingTip = getMissingTooltip(p.id, k)
                     return (
                       <td key={k} className="px-2 py-2 text-center">
-                        <div className={`text-xs tabular-nums ${pctCls(v)}`}>{pct(v)}</div>
+                        <div
+                          className={`text-xs tabular-nums ${pctCls(v)}${missingTip ? ' cursor-help underline decoration-dotted underline-offset-2' : ''}`}
+                          title={missingTip ?? undefined}
+                        >
+                          {pct(v)}
+                        </div>
                         {ts && <div className="text-[10px] text-gray-300 tabular-nums leading-tight">{ts}</div>}
                       </td>
                     )

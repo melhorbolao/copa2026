@@ -1,6 +1,7 @@
 'use client'
 
-import { useTransition, useState } from 'react'
+import { useState } from 'react'
+import { useProgressTransition } from '@/hooks/useProgressTransition'
 import { saveMatchScore } from '../actions'
 
 interface Props {
@@ -20,7 +21,7 @@ export function MatchScoreForm({
   scoreAway,
   betsCount,
 }: Props) {
-  const [pending, startTransition] = useTransition()
+  const [pending, startTransition] = useProgressTransition()
   const [home, setHome] = useState(scoreHome?.toString() ?? '')
   const [away, setAway] = useState(scoreAway?.toString() ?? '')
   const [error, setError] = useState('')

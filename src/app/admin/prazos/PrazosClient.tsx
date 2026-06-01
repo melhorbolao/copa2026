@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState } from 'react'
+import { useProgressTransition } from '@/hooks/useProgressTransition'
 import { updatePhaseDeadline, updateGroupRoundDeadline, updateMatchDeadline } from '@/app/admin/actions'
 import type { PhaseGroup, MatchDeadlineRow } from './types'
 
@@ -60,7 +61,7 @@ function PhaseCard({ group }: { group: PhaseGroup }) {
   const [bulkValue, setBulkValue] = useState(
     isoToBRT(group.sharedDeadline ?? group.minDeadline)
   )
-  const [bulkPending, startBulk] = useTransition()
+  const [bulkPending, startBulk] = useProgressTransition()
   const [bulkError, setBulkError] = useState('')
   const [bulkSaved, setBulkSaved] = useState(false)
 
@@ -177,7 +178,7 @@ function PhaseCard({ group }: { group: PhaseGroup }) {
 
 function MatchDeadlineRow({ match }: { match: MatchDeadlineRow }) {
   const [value, setValue] = useState(isoToBRT(match.betting_deadline))
-  const [pending, start] = useTransition()
+  const [pending, start] = useProgressTransition()
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
 

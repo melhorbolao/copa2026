@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState } from 'react'
+import { useProgressTransition } from '@/hooks/useProgressTransition'
 import { sendReminderEmails } from '../actions'
 
 const STAGES = [
@@ -40,7 +41,7 @@ export function ReminderSection() {
   const [attachPalpites, setAttachPalpites] = useState(false)
   const [attachTabelaMB, setAttachTabelaMB] = useState(false)
   const [result,         setResult]     = useState<string | null>(null)
-  const [pending,        startTransition] = useTransition()
+  const [pending,        startTransition] = useProgressTransition()
 
   const handleSend = () => {
     setResult(null)

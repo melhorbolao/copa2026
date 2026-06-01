@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useRef, useTransition } from 'react'
+import { useState, useRef } from 'react'
+import { useProgressTransition } from '@/hooks/useProgressTransition'
 import { upsertTopScorerMapping, deleteTopScorerMapping, updateScorerElimination } from './actions'
 
 interface Row {
@@ -28,7 +29,7 @@ export function ArtilheirosClient({ rawNames, initialMappings, initialEliminatio
     }))
   )
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
-  const [, startTransition] = useTransition()
+  const [, startTransition] = useProgressTransition()
 
   const setRow = (rawName: string, patch: Partial<Row>) =>
     setRows(prev => prev.map(r => r.rawName === rawName ? { ...r, ...patch } : r))

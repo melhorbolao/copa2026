@@ -14,6 +14,7 @@ const tabs = [
   { href: '/admin/paginas',        label: 'Páginas'       },
   { href: '/admin/classificacao', label: 'Classificação' },
   { href: '/admin/gestao',        label: 'Gestão'        },
+  { href: '/admin/telemetria',    label: 'Telemetria'    },
 ]
 
 export function AdminTabs() {

@@ -1,6 +1,7 @@
 'use client'
 
-import { useTransition, useState, useRef } from 'react'
+import { useState, useRef } from 'react'
+import { useProgressTransition } from '@/hooks/useProgressTransition'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
 import {
@@ -36,12 +37,12 @@ interface ParticipantRowProps {
 export function ParticipantRow({ participant, index, allUsers }: ParticipantRowProps) {
   const router = useRouter()
 
-  const [pendingPaid,    startPaid]    = useTransition()
-  const [pendingDelete,  startDelete]  = useTransition()
-  const [pendingApelido, startApelido] = useTransition()
-  const [pendingBio,     startBio]     = useTransition()
-  const [pendingLink,    startLink]    = useTransition()
-  const [pendingPrimary, startPrimary] = useTransition()
+  const [pendingPaid,    startPaid]    = useProgressTransition()
+  const [pendingDelete,  startDelete]  = useProgressTransition()
+  const [pendingApelido, startApelido] = useProgressTransition()
+  const [pendingBio,     startBio]     = useProgressTransition()
+  const [pendingLink,    startLink]    = useProgressTransition()
+  const [pendingPrimary, startPrimary] = useProgressTransition()
 
   const [confirming,     setConfirming]     = useState(false)
   const [editingApelido, setEditingApelido] = useState(false)

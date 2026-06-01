@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useTransition, useRef } from 'react'
+import { useState, useRef } from 'react'
+import { useProgressTransition } from '@/hooks/useProgressTransition'
 import { updatePageVisibility, updatePageLabel, updatePageOrders } from './actions'
 import type { PageVisibilityRow } from '@/lib/page-visibility'
 
@@ -11,7 +12,7 @@ interface Props {
 type RowState = Record<string, { show_for_admin: boolean; show_for_users: boolean; label: string }>
 
 export function PageVisibilityClient({ rows }: Props) {
-  const [pending, startTransition] = useTransition()
+  const [pending, startTransition] = useProgressTransition()
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [ordered, setOrdered] = useState<PageVisibilityRow[]>(rows)
   const [state, setState] = useState<RowState>(() =>

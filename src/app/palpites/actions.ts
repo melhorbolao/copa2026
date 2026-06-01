@@ -152,8 +152,15 @@ export async function deleteGroupBet(
   otherValue: string,
 ): Promise<{ error?: string }> {
   try {
-    const { participantId } = await resolveParticipant()
+    const { supabase, participantId } = await resolveParticipant()
     const admin = createAuthAdminClient()
+
+    const { data: dl } = await supabase
+      .from('matches').select('betting_deadline')
+      .eq('phase', 'group').eq('round', 1)
+      .order('betting_deadline', { ascending: true }).limit(1).single()
+    if (dl && new Date() > new Date(dl.betting_deadline))
+      return { error: 'Prazo encerrado.' }
 
     if (!otherValue) {
       // Outro campo também vazio — apaga a linha inteira
@@ -197,7 +204,14 @@ export async function saveGroupBet(groupName: string, firstPlace: string, second
   const admin = createAuthAdminClient()
 
   if (rpc.error) {
-    // Fallback: RPC ausente ou com erro — usa admin diretamente
+    if (!isMissingRpc(rpc.error)) throw new Error(rpc.error.message)
+    // Fallback: RPC ausente — verifica prazo antes de escrever
+    const { data: dl } = await supabase
+      .from('matches').select('betting_deadline')
+      .eq('phase', 'group').eq('round', 1)
+      .order('betting_deadline', { ascending: true }).limit(1).single()
+    if (dl && new Date() > new Date(dl.betting_deadline))
+      throw new Error('Prazo encerrado.')
     const { error } = await admin.from('group_bets').upsert(
       { participant_id: participantId, group_name: groupName, first_place: firstPlace, second_place: secondPlace },
       { onConflict: 'participant_id,group_name' },
@@ -281,8 +295,15 @@ export async function deleteThirdPlaceBet(groupName: string) {
     p_participant_id: participantId, p_group_name: groupName,
   })
   if (!rpc.error) return
+  if (!isMissingRpc(rpc.error)) throw new Error(rpc.error.message)
 
-  // Fallback
+  // Fallback: RPC ausente — verifica prazo antes de deletar
+  const { data: dl } = await supabase
+    .from('matches').select('betting_deadline')
+    .eq('phase', 'group').eq('round', 1)
+    .order('betting_deadline', { ascending: true }).limit(1).single()
+  if (dl && new Date() > new Date(dl.betting_deadline))
+    throw new Error('Prazo encerrado.')
   const admin = createAuthAdminClient()
   const { error } = await admin.from('third_place_bets')
     .delete().eq('participant_id', participantId).eq('group_name', groupName)
@@ -404,7 +425,15 @@ export async function saveTournamentBet(data: {
     if (new Set(filled).size < filled.length)
       return { error: 'Os semifinalistas devem ser diferentes.' }
 
-    const { participantId } = await resolveParticipant()
+    const { supabase, participantId } = await resolveParticipant()
+
+    const { data: dl } = await supabase
+      .from('matches').select('betting_deadline')
+      .eq('phase', 'group').eq('round', 1)
+      .order('betting_deadline', { ascending: true }).limit(1).single()
+    if (dl && new Date() > new Date(dl.betting_deadline))
+      return { error: 'Prazo encerrado.' }
+
     const admin = createAuthAdminClient()
 
     const { error } = await admin.from('tournament_bets').upsert(

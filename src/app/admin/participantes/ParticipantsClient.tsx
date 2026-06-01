@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useTransition, useMemo } from 'react'
+import { useState, useMemo } from 'react'
+import { useProgressTransition } from '@/hooks/useProgressTransition'
 import { ParticipantRow } from './ParticipantRow'
 import { CreateParticipantModal } from './CreateParticipantModal'
 import { PagantesNote } from './PagantesNote'
@@ -23,7 +24,7 @@ export function ParticipantsClient({ participants, users, pagantesNote }: Props)
   const [searchText, setSearchText]       = useState('')
   const [selectedPadrinho, setSelectedPadrinho] = useState<string>('all')
   const [copied, setCopied]               = useState(false)
-  const [isPending, startTransition]      = useTransition()
+  const [isPending, startTransition]      = useProgressTransition()
 
   const handleCopyResumo = () => {
     startTransition(async () => {

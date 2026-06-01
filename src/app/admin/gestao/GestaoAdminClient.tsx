@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useRef, useTransition } from 'react'
+import { useState, useRef } from 'react'
+import { useProgressTransition } from '@/hooks/useProgressTransition'
 import { setProductionMode, setRoundReleased, setRoundAvailable, clearAllBets, clearAllResults, setSobeDesceVisible } from './actions'
 import type { RoundInfo } from '@/lib/production-mode'
 
@@ -20,10 +21,10 @@ export function GestaoAdminClient({ productionMode: initProdMode, releasedRounds
   const [releasedRounds, setReleased]   = useState<Set<string>>(new Set(initReleased))
   const [fillableRounds, setFillable]   = useState<Set<string>>(new Set(fillableRoundKeys))
   const [sobeDesce, setSobeDesce]             = useState(initSobeDesce)
-  const [modePending, startModeTransition]    = useTransition()
-  const [roundPending, startRoundTransition]  = useTransition()
-  const [fillPending, startFillTransition]    = useTransition()
-  const [sdPending, startSdTransition]        = useTransition()
+  const [modePending, startModeTransition]    = useProgressTransition()
+  const [roundPending, startRoundTransition]  = useProgressTransition()
+  const [fillPending, startFillTransition]    = useProgressTransition()
+  const [sdPending, startSdTransition]        = useProgressTransition()
   const [auditing, setAuditing]               = useState(false)
 
   // ── Clear bets ────────────────────────────────────────────────

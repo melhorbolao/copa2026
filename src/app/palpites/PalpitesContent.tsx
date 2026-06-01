@@ -424,7 +424,7 @@ function PalpitesTabPane({
                           key={g}
                           groupName={g}
                           teams={data.teams}
-                          deadline={data.deadline}
+                          deadline={tournamentDeadline}
                           existingBet={groupBetMap[g] ?? null}
                           calculatedTop={calculatedTopPerGroup[g]}
                           userId={participantId}

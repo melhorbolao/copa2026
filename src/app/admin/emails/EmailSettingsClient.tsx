@@ -1,6 +1,6 @@
 'use client'
 
-import { useTransition } from 'react'
+import { useProgressTransition } from '@/hooks/useProgressTransition'
 import { toggleEmailSetting } from '../actions'
 
 interface Setting {
@@ -23,7 +23,7 @@ interface Props {
 }
 
 export function EmailSettingCard({ setting, stats, isCron }: Props) {
-  const [pending, startTransition] = useTransition()
+  const [pending, startTransition] = useProgressTransition()
 
   const toggle = () => {
     startTransition(async () => {

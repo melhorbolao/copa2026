@@ -1,6 +1,7 @@
 'use client'
 
-import { useTransition, useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
+import { useProgressTransition } from '@/hooks/useProgressTransition'
 import { useRouter } from 'next/navigation'
 import { saveTournamentBet } from './actions'
 import { Countdown } from '@/components/ui/Countdown'
@@ -29,7 +30,7 @@ const EMPTY: ExistingBet = { champion: '', runner_up: '', semi1: '', semi2: '', 
 
 export function TournamentBetForm({ allTeams, deadline, existingBet }: Props) {
   const router = useRouter()
-  const [pending, startTransition] = useTransition()
+  const [pending, startTransition] = useProgressTransition()
   const [form, setForm] = useState<ExistingBet>(existingBet ?? EMPTY)
   const [justSaved, setJustSaved] = useState(false)
   const [error, setError] = useState('')

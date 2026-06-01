@@ -1,6 +1,7 @@
 'use client'
 
-import { useTransition, useState, useRef } from 'react'
+import { useState, useRef } from 'react'
+import { useProgressTransition } from '@/hooks/useProgressTransition'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
 import { toggleApproved, deleteUser, updateObservacao, updateApelido, updatePadrinho, updateWhatsapp, toggleAdmin, updateUserEmail, resendActivationEmail, activateUser, sendProfileReminder } from '../actions'
@@ -38,17 +39,17 @@ interface UserRowProps {
 export function UserRow({ user, index }: UserRowProps) {
   const router = useRouter()
 
-  const [pendingApproved,  startApproved]  = useTransition()
-  const [pendingDelete,    startDelete]    = useTransition()
-  const [pendingObs,       startObs]       = useTransition()
-  const [pendingApelido,   startApelido]   = useTransition()
-  const [pendingPadrinho,  startPadrinho]  = useTransition()
-  const [pendingWhatsapp,  startWhatsapp]  = useTransition()
-  const [pendingAdmin,     startAdmin]     = useTransition()
-  const [pendingEmail,     startEmail]     = useTransition()
-  const [pendingResend,    startResend]    = useTransition()
-  const [pendingActivate,  startActivate]  = useTransition()
-  const [pendingReminder,  startReminder]  = useTransition()
+  const [pendingApproved,  startApproved]  = useProgressTransition()
+  const [pendingDelete,    startDelete]    = useProgressTransition()
+  const [pendingObs,       startObs]       = useProgressTransition()
+  const [pendingApelido,   startApelido]   = useProgressTransition()
+  const [pendingPadrinho,  startPadrinho]  = useProgressTransition()
+  const [pendingWhatsapp,  startWhatsapp]  = useProgressTransition()
+  const [pendingAdmin,     startAdmin]     = useProgressTransition()
+  const [pendingEmail,     startEmail]     = useProgressTransition()
+  const [pendingResend,    startResend]    = useProgressTransition()
+  const [pendingActivate,  startActivate]  = useProgressTransition()
+  const [pendingReminder,  startReminder]  = useProgressTransition()
 
   const [confirming,      setConfirming]      = useState(false)
   const [editingObs,      setEditingObs]      = useState(false)
@@ -74,102 +75,102 @@ export function UserRow({ user, index }: UserRowProps) {
     setEditingObs(false)
     const val = obsLatest.current
     if (val === (user.observacao ?? '')) return
-    startObs(() => {
-      void updateObservacao(user.id, val)
+    startObs(() =>
+      updateObservacao(user.id, val)
         .then(() => router.refresh())
         .catch(() => toast.error('Erro ao salvar observação'))
-    })
+    )
   }
 
   const handleApelidoSave = () => {
     setEditingApelido(false)
     const val = apelidoLatest.current
     if (val === (user.apelido ?? '')) return
-    startApelido(() => {
-      void updateApelido(user.id, val)
+    startApelido(() =>
+      updateApelido(user.id, val)
         .then(() => router.refresh())
         .catch(() => toast.error('Erro ao salvar nome no bolão'))
-    })
+    )
   }
 
   const handlePadrinhoChange = (val: string) => {
     setPadrinhoValue(val)
     if (val === (user.padrinho ?? '')) return
-    startPadrinho(() => {
-      void updatePadrinho(user.id, val)
+    startPadrinho(() =>
+      updatePadrinho(user.id, val)
         .then(() => router.refresh())
         .catch(() => toast.error('Erro ao salvar padrinho'))
-    })
+    )
   }
 
   const handleEmailSave = () => {
     setEditingEmail(false)
     const val = emailLatest.current.toLowerCase().trim()
     if (val === user.email || !val) return
-    startEmail(() => {
-      void updateUserEmail(user.id, val)
+    startEmail(() =>
+      updateUserEmail(user.id, val)
         .then(() => router.refresh())
         .catch((e: unknown) => toast.error(e instanceof Error ? e.message : 'Erro ao alterar e-mail'))
-    })
+    )
   }
 
   const handleWhatsappSave = () => {
     setEditingWhatsapp(false)
     const val = whatsappLatest.current.trim()
     if (val === (user.whatsapp ?? '')) return
-    startWhatsapp(() => {
-      void updateWhatsapp(user.id, val)
+    startWhatsapp(() =>
+      updateWhatsapp(user.id, val)
         .then(() => router.refresh())
         .catch(() => toast.error('Erro ao salvar WhatsApp'))
-    })
+    )
   }
 
   const handleResendActivation = () => {
-    startResend(() => {
-      void resendActivationEmail(user.id)
+    startResend(() =>
+      resendActivationEmail(user.id)
         .then(() => toast.success('E-mail de ativação reenviado'))
         .catch((e: unknown) => toast.error(e instanceof Error ? e.message : 'Erro ao reenviar e-mail'))
-    })
+    )
   }
 
   const handleActivateUser = () => {
-    startActivate(() => {
-      void activateUser(user.id)
+    startActivate(() =>
+      activateUser(user.id)
         .then(() => router.refresh())
         .catch((e: unknown) => toast.error(e instanceof Error ? e.message : 'Erro ao ativar usuário'))
-    })
+    )
   }
 
   const handleToggleApproved = () => {
-    startApproved(() => {
-      void toggleApproved(user.id, user.approved)
+    startApproved(() =>
+      toggleApproved(user.id, user.approved)
         .then(() => router.refresh())
         .catch(() => toast.error('Erro ao alterar aprovação'))
-    })
+    )
   }
 
   const handleDelete = () => {
-    startDelete(() => {
-      void deleteUser(user.id)
+    startDelete(() =>
+      deleteUser(user.id)
         .then(() => router.refresh())
         .catch((e: unknown) => toast.error(e instanceof Error ? e.message : 'Erro ao excluir usuário'))
-    })
+    )
   }
 
   const handleToggleAdmin = () => {
-    startAdmin(() => {
-      void toggleAdmin(user.id, user.is_admin)
+    startAdmin(() =>
+      toggleAdmin(user.id, user.is_admin)
         .then(() => router.refresh())
         .catch((e: unknown) => toast.error(e instanceof Error ? e.message : 'Erro ao alterar admin'))
-    })
+    )
   }
 
   const handleReminder = () => {
-    startReminder(() => {
-      void sendProfileReminder(user.id)
+    startReminder(() =>
+      sendProfileReminder(user.id)
         .then(() => toast.success('Lembrete enviado'))
         .catch((e: unknown) => toast.error(e instanceof Error ? e.message : 'Erro ao enviar lembrete'))
-    })
+    )
   }
 
   const isMaster = user.email === 'gmousinho@gmail.com'

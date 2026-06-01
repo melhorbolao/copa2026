@@ -205,7 +205,10 @@ async function PalpitesData({ participantId }: { participantId: string }) {
   }
   allTeams.sort((a, b) => a.team.localeCompare(b.team, 'pt'))
 
-  const tournamentDeadline = groupMatches[0]?.betting_deadline ?? new Date().toISOString()
+  const tournamentDeadline = groupMatches
+    .filter(m => m.round === 1)
+    .map(m => m.betting_deadline as string)
+    .sort()[0] ?? new Date().toISOString()
 
   const calculatedTopPerGroup: Record<string, { first: string; second: string; third: string; tiedTeams: string[] }> =
     Object.fromEntries(

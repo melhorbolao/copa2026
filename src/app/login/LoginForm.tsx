@@ -21,7 +21,6 @@ export function LoginForm() {
   const [phone,    setPhone]    = useState('')
   const [padrinho, setPadrinho] = useState('')
   const [apelido,  setApelido]  = useState('')
-  const [bio,      setBio]      = useState('')
 
   const supabase = createClient()
 
@@ -74,7 +73,6 @@ export function LoginForm() {
       phone:   phone.trim(),
       padrinho,
       apelido: apelido.trim(),
-      bio:     bio.trim(),
     })
 
     if (result.error) {
@@ -205,16 +203,6 @@ export function LoginForm() {
                 onChange={e => setApelido(e.target.value)}
                 placeholder="Como quer ser chamado? (opcional)"
                 className={inputCls} />
-            </Field>
-            <Field label="Apresentação para resenha (opcional)" id="bio">
-              <textarea
-                id="bio"
-                value={bio}
-                onChange={e => setBio(e.target.value)}
-                rows={4}
-                placeholder="Escreva uma breve apresentação sua, opcional, para ser usada nas resenhas do Melhor Bolão. Participa do Melhor Bolão desde quando? Como foi a sua participação nas outras edições? Qual a sua idade? Onde mora? O que faz da vida? Vai pra Copa? Qual o seu time? Alguma outra curiosidade?"
-                className={`${inputCls} resize-none leading-relaxed`}
-              />
             </Field>
           </>
         )}

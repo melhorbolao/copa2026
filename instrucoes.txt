@@ -1,25 +1,26 @@
-ESPECIFICAÇÃO TÉCNICA: INTEGRAÇÃO DA ARTILHARIA COM A PONTUAÇÃO DO BOLÃO
+ALERTA CRÍTICO DE INFRAESTRUTURA: O projeto Supabase emitiu um aviso de "Disk IO Budget Depletion". Precisamos estancar o consumo excessivo de leitura/escrita no banco de dados. 
 
-Objetivo: Centralizar o controle de ativação dos pontos de artilharia na página "Artilharia" e refletir essa pontuação dinamicamente na Classificação Geral e no Simulador.
+Execute um processo de raciocínio analítico detalhado (step-by-step) para identificar e corrigir os gargalos de performance. Não aplique correções impulsivas. Siga este roteiro:
 
-1. CONTROLE DE STATUS GLOBAL (ATIVAÇÃO DE PONTOS):
-- Na página "Artilharia", inclua um componente de controle (Toggle ou Select) com o título: "Contar pontos de artilharia no ranking geral?".
-- Restrição de Acesso: Este controle deve estar visível e editável APENAS para administradores. Usuários comuns visualizam apenas uma badge indicativa (ex: "Status: Pontos Computados" ou "Status: Aguardando Validação").
-- Valor Inicial/Padrão: 'Não' (False).
-- Persistência: Salve este estado em um campo 'artillary_points_active' (boolean) na tabela global de configurações ('system_settings') do Supabase.
+1. AUDITORIA DE ÍNDICES (INDEXES) NO POSTGRESQL:
+- Analise a estrutura das tabelas com maior volume de dados ('predictions', 'daily_rankings_snapshot', 'page_views', 'top_scorers').
+- A falta de índices é a principal causa de Disk IO alto (Full Table Scans). 
+- Elabore queries SQL para criar índices ('CREATE INDEX') em todas as colunas que são frequentemente usadas em cláusulas WHERE, JOIN e ORDER BY (especialmente chaves estrangeiras como 'user_id', 'match_id' e colunas de data como 'created_at').
 
-2. REGRAS DE CÁLCULO E IMPACTO NO RANKING GERAL:
-- Condicional de Pontuação: A lógica/função de cálculo da Classificação Geral deve verificar o status de 'artillary_points_active'.
-  * Se estiver 'Não' (False): Os pontos obtidos com os palpites de artilheiro de cada participante são desconsiderados no somatório total da Classificação Geral (PTS).
-  * Se estiver 'Sim' (True): O sistema deve processar os acertos de artilharia, somar os respectivos pontos regulamentares ao total de cada participante e atualizar o ranking e a ordenação live instantaneamente.
+2. OTIMIZAÇÃO DE LEITURAS (FRONTEND E CACHE):
+- Faça uma varredura nos hooks de busca de dados no Next.js/React. 
+- Verifique se a aplicação está fazendo fetch desnecessário a cada montagem de componente.
+- Certifique-se de que o gerenciador de estado (SWR, React Query ou cache do Next App Router) está configurado com 'staleTime' ou 'dedupingInterval' adequados (ex: segurar os dados da tabela de classificação por pelo menos 30 a 60 segundos).
 
-3. REFATORAÇÃO E LIMPEZA DE ESCOPO (PAINEL DE ADMIN):
-- Remoção de Redundância: Retire da página de Admin do Bolão (antiga "Dados", agora "Gestão") qualquer campo, input ou tabela que servia para incluir ou atualizar manualmente os gols dos artilheiros. Esta ação agora é feita única e exclusivamente pelos botões (+ / -) e pelo botão de inserção contidos na página "Artilharia".
+3. OTIMIZAÇÃO DE AGREGAÇÕES (VIEWS VS CLIENT-SIDE):
+- Verifique a funcionalidade de "Zebras" e o "Comparador MB". O sistema está baixando todos os palpites do banco para calcular os percentuais no Javascript (sobrecarregando a rede e o banco)?
+- Se sim, refatore para usar Views do Supabase (ex: 'vw_predictions_stats') que já entregam os percentuais agregados prontos.
 
-4. COMPORTAMENTO NO "MEU SIMULADOR MB":
-- Isolamento do Simulador: Mantenha intacta a funcionalidade de simulação de artilharia na página "Meu Simulador MB". 
-- Regra do Simulador: No ambiente do simulador, o usuário logado DEVE continuar com a liberdade de inserir gols hipotéticos para os artilheiros e ver o impacto projetado na tabela simulada dele, INDEPENDENTEMENTE de o Admin ter ativado ou não os pontos oficiais no ranking geral.
+4. THROTTLING DE ESCRITAS (TELEMETRIA):
+- Se a tabela 'page_views' foi implementada, verifique se ela está disparando um INSERT a cada milissegundo que o usuário respira no site. Implemente um 'debounce' ou 'throttle' no registro de acessos.
 
-5. DIRETRIZES TÉCNICAS E REATIVIDADE:
-- Trigger/RPC de Recálculo: Ao alterar o switch de ativação para 'Sim', dispare um recálculo global das pontuações ou limpe o cache de dados do ranking (SWR / React Query) para que a interface de classificação geral de todos os usuários reflita a nova realidade imediatamente via Supabase Realtime.
-- Visualização de Impacto: Na listagem de apoiadores de cada card de artilheiro ("Quem Apostou"), se os pontos estiverem ativados, adicione um destaque visual sutil ao lado do nome do participante (ex: uma badge verde escrito "+X PTS") confirmando que aquela aposta já está somando no perfil dele.
+5. VERIFICAÇÃO INDEPENDENTE:
+- Antes de aplicar qualquer código ou executar comandos SQL no Supabase, PARE e me apresente:
+  A) As queries de CREATE INDEX exatas que você planeja rodar.
+  B) Um diagnóstico de qual componente frontend está fazendo mais requisições concorrentes (Problema N+1).
+  C) A justificativa matemática de como essas mudanças reduzirão a carga de I/O.

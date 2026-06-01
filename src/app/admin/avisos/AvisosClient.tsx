@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState } from 'react'
+import { useProgressTransition } from '@/hooks/useProgressTransition'
 import { createAlert, deactivateAlert, deleteAlert } from './actions'
 import type { AdminAlertRow } from '@/types/database'
 
@@ -29,7 +30,7 @@ export function CreateAlertForm() {
   const [startAt, setStartAt]   = useState('')
   const [endAt, setEndAt]       = useState('')
   const [error, setError]       = useState<string | null>(null)
-  const [pending, startTransition] = useTransition()
+  const [pending, startTransition] = useProgressTransition()
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -112,7 +113,7 @@ interface AlertListProps {
 }
 
 export function AlertList({ alerts, title, showActions = true }: AlertListProps) {
-  const [pending, startTransition] = useTransition()
+  const [pending, startTransition] = useProgressTransition()
   const [busyId, setBusyId]        = useState<string | null>(null)
 
   function handleDeactivate(id: string) {

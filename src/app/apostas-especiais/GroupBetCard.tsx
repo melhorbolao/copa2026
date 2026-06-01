@@ -1,6 +1,7 @@
 'use client'
 
-import { useTransition, useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
+import { useProgressTransition } from '@/hooks/useProgressTransition'
 import { useRouter } from 'next/navigation'
 import { saveGroupBet } from './actions'
 import { Countdown } from '@/components/ui/Countdown'
@@ -21,7 +22,7 @@ interface Props {
 
 export function GroupBetCard({ groupName, teams, deadline, existingBet }: Props) {
   const router = useRouter()
-  const [pending, startTransition] = useTransition()
+  const [pending, startTransition] = useProgressTransition()
   const [first,   setFirst]   = useState(existingBet?.first_place  ?? '')
   const [second,  setSecond]  = useState(existingBet?.second_place ?? '')
   const [justSaved, setJustSaved] = useState(false)

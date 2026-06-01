@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState } from 'react'
+import { useProgressTransition } from '@/hooks/useProgressTransition'
 import { sendBonusAlert, saveAlertTemplate } from '../actions'
 
 type AlertType = 'alert_all' | 'alert_incomplete' | 'alert_receipt'
@@ -67,8 +68,8 @@ function AlertCard({
   const [body,    setBody]   = useState(saved.body    ?? defaultBody)
   const [sendMsg,  setSendMsg]  = useState<string | null>(null)
   const [saveMsg,  setSaveMsg]  = useState<string | null>(null)
-  const [sending,  startSend]  = useTransition()
-  const [saving,   startSave]  = useTransition()
+  const [sending,  startSend]  = useProgressTransition()
+  const [saving,   startSave]  = useProgressTransition()
 
   const isDirty = subject !== (saved.subject ?? defaultSubject) || body !== (saved.body ?? defaultBody)
 

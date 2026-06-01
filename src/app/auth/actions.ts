@@ -13,7 +13,6 @@ export async function signUpAndCreateProfile(params: {
   phone: string
   padrinho: string
   apelido: string
-  bio: string
 }): Promise<{ error?: string }> {
   const adminDb   = await createAdminClient()
   const adminAuth = createAuthAdminClient()
@@ -61,7 +60,7 @@ export async function signUpAndCreateProfile(params: {
     paid:      false,
     is_admin:  false,
     is_manual: false,
-    bio:       params.bio.trim() || null,
+    bio:       null,
   })
 
   // Notifica admin e envia confirmação ao usuário
@@ -84,7 +83,6 @@ export async function createPendingUserProfile(
   whatsapp: string,
   padrinho: string,
   apelido = '',
-  bio = '',
 ) {
   const supabase = await createAdminClient()
 
@@ -105,7 +103,7 @@ export async function createPendingUserProfile(
     paid:      false,
     is_admin:  false,
     is_manual: false,
-    bio:       bio.trim() || null,
+    bio:       null,
   })
 }
 
@@ -115,7 +113,6 @@ export async function saveUserProfile(
   whatsapp: string,
   padrinho: string,
   apelido = '',
-  bio = '',
 ) {
   if (!name.trim())     throw new Error('Nome é obrigatório.')
   if (!whatsapp.trim()) throw new Error('WhatsApp é obrigatório.')
@@ -140,7 +137,6 @@ export async function saveUserProfile(
       whatsapp: whatsapp.trim(),
       padrinho: padrinho || null,
       apelido:  apelido.trim() || null,
-      bio:      bio.trim() || null,
     })
     .eq('id', user.id)
 

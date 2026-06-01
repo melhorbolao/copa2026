@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState } from 'react'
+import { useProgressTransition } from '@/hooks/useProgressTransition'
 import { updateClassifColVisibility, updateSobeDesceVisible } from './actions'
 
 interface ColDef {
@@ -15,7 +16,7 @@ export function ClassificacaoAdminClient({ cols, sobeDesceVisible }: { cols: Col
     Object.fromEntries(cols.map(c => [c.key, c.enabled]))
   )
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [, startTransition] = useTransition()
+  const [, startTransition] = useProgressTransition()
 
   // ── Toggle Sobe e Desce ──────────────────────────────────────────────────
   const [sdVisible, setSdVisible]   = useState(sobeDesceVisible)

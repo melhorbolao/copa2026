@@ -11,6 +11,7 @@ interface Props {
   match: {
     id: string
     match_number: number
+    group_name: string | null
     is_brazil: boolean
     team_home: string
     team_away: string
@@ -101,6 +102,9 @@ function MatchBetRowImpl({ match, bet, slotLabelHome, slotLabelAway }: Props) {
       <td className="py-2.5 text-xs text-gray-400 whitespace-nowrap">
         <div className={`flex items-center gap-1 pl-1.5 sm:gap-1.5 sm:pl-3 ${match.is_brazil ? 'border-l-4 border-verde-500' : 'border-l-4 border-transparent'}`}>
           <span className="font-mono">{match.match_number}</span>
+          {match.group_name && (
+            <span className="hidden sm:inline text-sm text-gray-400 font-bold">{match.group_name}</span>
+          )}
           {match.is_brazil && (
             <span
               title="Peso 2 — jogo do Brasil"

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useTransition, useRef } from 'react'
+import { useState, useRef } from 'react'
+import { useProgressTransition } from '@/hooks/useProgressTransition'
 import { useRouter } from 'next/navigation'
 import { createParticipant } from './actions'
 
@@ -11,7 +12,7 @@ const inputCls = 'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm foc
 export function CreateParticipantModal({ users }: { users: User[] }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
-  const [pending, start] = useTransition()
+  const [pending, start] = useProgressTransition()
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
 

@@ -1,8 +1,10 @@
 import type { Metadata, Viewport } from 'next'
 import { Plus_Jakarta_Sans } from 'next/font/google'
 import { Toaster } from 'react-hot-toast'
+import NextTopLoader from 'nextjs-toploader'
 import { AdminViewProvider } from '@/contexts/AdminViewContext'
 import { Sidebar } from '@/components/layout/Sidebar'
+import { PageTracker } from '@/components/analytics/PageTracker'
 import './globals.css'
 
 const font = Plus_Jakarta_Sans({
@@ -39,7 +41,9 @@ export default function RootLayout({
         <link rel="preload" as="image" href="/flags-sprite.png" type="image/png" />
       </head>
       <body className="min-h-screen bg-gray-50 font-sans">
+        <NextTopLoader color="#009c3b" height={3} showSpinner={false} />
         <AdminViewProvider>
+          <PageTracker />
           <Sidebar />
           <div className="sm:pl-56">
             {children}

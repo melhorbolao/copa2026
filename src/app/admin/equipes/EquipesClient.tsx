@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState } from 'react'
+import { useProgressTransition } from '@/hooks/useProgressTransition'
 import { updateTeam, updateTeamElimination } from './actions'
 
 type Team = {
@@ -21,7 +22,7 @@ export function EquipesClient({ teams }: { teams: Team[] }) {
   const [editing, setEditing] = useState<string | null>(null)
   const [draft, setDraft] = useState<EditingRow>({ abbr_br: '', abbr_fifa: '', group_name: '' })
   const [rowError, setRowError] = useState<string | null>(null)
-  const [pending, startTransition] = useTransition()
+  const [pending, startTransition] = useProgressTransition()
   const [teamState, setTeamState] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(teams.map(t => [t.name, t.is_eliminated]))
   )

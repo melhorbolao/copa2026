@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useProgressTransition } from '@/hooks/useProgressTransition'
 import { autoFillGroupBets } from './actions'
 
 interface Props {
@@ -14,7 +15,7 @@ export function AutoFillButton({ enabled, alreadyFilled }: Props) {
   const [showConfirm, setShowConfirm] = useState(false)
   const [fillError, setFillError] = useState('')
   const [tiedGroups, setTiedGroups] = useState<string[]>([])
-  const [pending, startTransition] = useTransition()
+  const [pending, startTransition] = useProgressTransition()
 
   function handleClick() {
     if (alreadyFilled) {

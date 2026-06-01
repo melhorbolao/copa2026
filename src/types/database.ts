@@ -523,6 +523,24 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_settings: {
+        Row: {
+          key: string
+          value: string
+          updated_at: string
+        }
+        Insert: {
+          key: string
+          value: string
+          updated_at?: string
+        }
+        Update: {
+          key?: string
+          value?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -559,5 +577,6 @@ export type AdminAlertRow    = Tables<'admin_alerts'>
 export type ParticipantRow   = Tables<'participants'>
 export type TeamRow          = Tables<'teams'>
 export type UserParticipantRow = Tables<'user_participants'>
-export type TopScorerRow     = Tables<'top_scorers'>
+export type TopScorerRow        = Tables<'top_scorers'>
 export type ParticipantScoreRow = Tables<'participant_scores'>
+export type AdminSettingsRow    = Tables<'admin_settings'>

@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic'
 
+import { unstable_cache } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient, createAuthAdminClient } from '@/lib/supabase/server'
 import { getActiveParticipantId } from '@/lib/participant'
@@ -10,6 +11,45 @@ import type { Snapshot } from './DiaDiaSection'
 import { getMatchResult, detectMatchZebra } from '@/lib/scoring/engine'
 import { getVisibilitySettings, isBonusVisible, filterBetsByDeadline, getServerNow } from '@/lib/production-mode'
 import type { MatchInfo, FlatBet, ColPop } from './engine'
+
+// Dados quasi-estáticos: participantes mudam ao aprovação, matches ao resultado,
+// scoring_rules quase nunca. Cache curto evita re-reads a cada acesso.
+const getCachedParticipants = unstable_cache(
+  async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAuthAdminClient() as any
+    const { data } = await admin.from('participants').select('id, apelido').order('apelido')
+    return (data ?? []) as { id: string; apelido: string }[]
+  },
+  ['comparador:participants'],
+  { revalidate: 300, tags: ['participants'] },
+)
+
+const getCachedMatches = unstable_cache(
+  async () => {
+    // admin client: não depende de cookies, seguro dentro de unstable_cache
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAuthAdminClient() as any
+    const { data } = await admin
+      .from('matches')
+      .select('id, match_number, phase, group_name, round, team_home, team_away, flag_home, flag_away, match_datetime, betting_deadline, score_home, score_away, is_brazil')
+      .order('match_datetime', { ascending: true })
+    return (data ?? []) as object[]
+  },
+  ['comparador:matches'],
+  { revalidate: 60, tags: ['matches'] },
+)
+
+const getCachedScoringRules = unstable_cache(
+  async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAuthAdminClient() as any
+    const { data } = await admin.from('scoring_rules').select('key, points')
+    return (data ?? []) as { key: string; points: number }[]
+  },
+  ['comparador:scoring_rules'],
+  { revalidate: 3600, tags: ['scoring_rules'] },
+)
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -40,30 +80,30 @@ export default async function ComparadorPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAuthAdminClient() as any
 
-  // ── Parallel data load ────────────────────────────────────────────────────
+  // ── Dados estáticos (cacheados) + dinâmicos (ao vivo) em paralelo ────────────
   const [
-    participantsRes,
-    matchesRes,
+    participants,
+    rawMatchesRaw,
+    rulesRaw,
     allBetsRes,
     allGroupBetsRes,
     allThirdBetsRes,
     allTBetsRes,
     scoresRes,
-    rulesRes,
     visibilitySettings,
     snapshotsRes,
   ] = await Promise.all([
-    admin.from('participants').select('id, apelido').order('apelido'),
-    supabase.from('matches')
-      .select('id, match_number, phase, group_name, round, team_home, team_away, flag_home, flag_away, match_datetime, betting_deadline, score_home, score_away, is_brazil')
-      .order('match_datetime', { ascending: true }),
+    // cacheados: participantes (5 min), partidas (1 min), regras (1 h)
+    getCachedParticipants(),
+    getCachedMatches(),
+    getCachedScoringRules(),
+    // ao vivo: apostas mudam a cada salvamento
     admin.from('bets').select('participant_id, match_id, score_home, score_away, points'),
     admin.from('group_bets').select('participant_id, group_name, first_place, second_place, points'),
     admin.from('third_place_bets').select('participant_id, group_name, team'),
     admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer'),
     admin.from('participant_scores')
       .select('participant_id, pts_matches, pts_groups, pts_thirds, pts_tournament, pts_total'),
-    supabase.from('scoring_rules').select('key, points'),
     getVisibilitySettings(),
     admin.from('daily_rankings_snapshot')
       .select('snapshot_date, participant_id, pts_total')
@@ -71,9 +111,7 @@ export default async function ComparadorPage() {
   ])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const participants: { id: string; apelido: string }[] = participantsRes.data ?? []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rawMatches: any[] = matchesRes.data ?? []
+  const rawMatches: any[] = rawMatchesRaw as any[]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const allBets: any[]    = allBetsRes.data ?? []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -84,8 +122,6 @@ export default async function ComparadorPage() {
   const allTBets: any[]   = allTBetsRes.data ?? []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const scores: any[]     = scoresRes.data ?? []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rulesRaw: any[]   = rulesRes.data ?? []
   const snapshots: Snapshot[] = (snapshotsRes.data ?? []) as Snapshot[]
 
   // ── Build scoring rules map ───────────────────────────────────────────────
