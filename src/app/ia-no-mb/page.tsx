@@ -190,6 +190,23 @@ export default async function IaNoMbPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAuthAdminClient() as any
 
+  // PostgREST aplica max-rows=1000 mesmo com service_role.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function fetchAllGroupBets(): Promise<any[]> {
+    const PAGE = 1000
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: any[] = []
+    let from = 0
+    for (;;) {
+      const { data, error } = await admin.from('group_bets').select('group_name, first_place').range(from, from + PAGE - 1)
+      if (error || !data || data.length === 0) break
+      rows.push(...data)
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+    return rows
+  }
+
   const [
     aiRes,
     matchesRes,
@@ -209,7 +226,7 @@ export default async function IaNoMbPage() {
     supabase.from('matches').select('id, match_number, phase, round, group_name, team_home, team_away, match_datetime, score_home, score_away, is_brazil, betting_deadline').order('match_datetime', { ascending: true }),
     supabase.from('scoring_rules').select('key, points'),
     admin.from('participant_scores').select('pts_total').limit(10000),
-    admin.from('group_bets').select('group_name, first_place').limit(10000),
+    fetchAllGroupBets(),
     admin.from('tournament_bets').select('champion').limit(10000),
     admin.from('top_scorer_mapping').select('raw_name, standardized_name'),
     fetchAllRealBets(admin),
@@ -237,7 +254,7 @@ export default async function IaNoMbPage() {
   const rules: RuleMap       = Object.fromEntries((rulesRes.data ?? []).map((r: { key: string; points: number }) => [r.key, r.points]))
   const allParticipantTotals = (scoresRes.data ?? []).map((s: { pts_total: number | null }) => s.pts_total ?? 0)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const realGroupBets: RealGroupBet[]       = (groupBetsRes.data ?? []) as any[]
+  const realGroupBets: RealGroupBet[]       = groupBetsRes as any[]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const realTournamentBets: RealTournamentBet[] = (trnBetsRes.data ?? []) as any[]
 

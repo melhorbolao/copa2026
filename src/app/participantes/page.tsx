@@ -50,17 +50,16 @@ export default async function ControlePage({
 
   // PostgREST aplica max-rows no servidor (padrão 1000) mesmo com service_role.
   // .limit(N) no cliente é ignorado quando max-rows < N. Paginamos manualmente.
-  async function fetchAllBets(): Promise<Bet[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function fetchAll(table: string, select: string): Promise<any[]> {
     const PAGE = 1000
-    const rows: Bet[] = []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: any[] = []
     let from = 0
     for (;;) {
-      const { data, error } = await admin
-        .from('bets')
-        .select('participant_id, match_id, updated_at')
-        .range(from, from + PAGE - 1)
+      const { data, error } = await admin.from(table).select(select).range(from, from + PAGE - 1)
       if (error || !data || data.length === 0) break
-      rows.push(...(data as Bet[]))
+      rows.push(...data)
       if (data.length < PAGE) break
       from += PAGE
     }
@@ -72,8 +71,8 @@ export default async function ControlePage({
     { data: matches },
     allBets,
     { data: trnBets },
-    { data: groupBets },
-    { data: thirdBets },
+    groupBets,
+    thirdBets,
     phaseSettings,
     qualified,
   ] = await Promise.all([
@@ -81,10 +80,10 @@ export default async function ControlePage({
       .select('id, apelido, paid')
       .order('apelido', { ascending: true }),
     supabase.from('matches').select('id, phase, round, betting_deadline'),
-    fetchAllBets(),
+    fetchAll('bets', 'participant_id, match_id, updated_at') as Promise<Bet[]>,
     admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer').limit(10000),
-    admin.from('group_bets').select('participant_id, group_name').limit(10000),
-    admin.from('third_place_bets').select('participant_id, group_name').limit(10000),
+    fetchAll('group_bets', 'participant_id, group_name'),
+    fetchAll('third_place_bets', 'participant_id, group_name'),
     getPhaseSettings(),
     getQualifiedSets(),
   ])
