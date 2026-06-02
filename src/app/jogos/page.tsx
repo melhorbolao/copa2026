@@ -28,6 +28,23 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
   const visibilitySettings = await getVisibilitySettings()
   const isTestModeAdmin = isAdmin && !visibilitySettings.productionMode
 
+  // PostgREST aplica max-rows=1000 mesmo com service_role.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function fetchAllBets(): Promise<any[]> {
+    const PAGE = 1000
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: any[] = []
+    let from = 0
+    for (;;) {
+      const { data, error } = await admin.from('bets').select('participant_id, match_id, score_home, score_away, points').range(from, from + PAGE - 1)
+      if (error || !data || data.length === 0) break
+      rows.push(...data)
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+    return rows
+  }
+
   const [
     matchesRes, participantsRes, betsRes, rulesRes, scoresRes, teamAbbrRes,
     attendanceRes, photosRes, userParticipantsRes,
@@ -36,7 +53,7 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
       .select('id, match_number, phase, round, group_name, team_home, team_away, flag_home, flag_away, match_datetime, city, betting_deadline, score_home, score_away, penalty_winner, is_brazil')
       .order('match_datetime', { ascending: true }),
     supabase.from('participants').select('id, apelido').order('apelido', { ascending: true }),
-    admin.from('bets').select('participant_id, match_id, score_home, score_away, points'),
+    fetchAllBets(),
     supabase.from('scoring_rules').select('key, points'),
     admin.from('participant_scores').select('participant_id, pts_total'),
     admin.from('teams').select('name, abbr_br'),
@@ -61,7 +78,7 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
   const serverNow = await getServerNow()
   const safeBets = filterBetsByDeadline(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (betsRes.data ?? []) as any[],
+    betsRes as any[],
     deadlineByMatch,
     serverNow,
     isTestModeAdmin,

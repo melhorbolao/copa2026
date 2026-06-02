@@ -20,13 +20,30 @@ export default async function EstatisticasPage() {
 
   const admin = createAuthAdminClient() as any
 
+  // PostgREST aplica max-rows=1000 mesmo com service_role.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function fetchAll(table: string, select: string): Promise<any[]> {
+    const PAGE = 1000
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: any[] = []
+    let from = 0
+    for (;;) {
+      const { data, error } = await admin.from(table).select(select).range(from, from + PAGE - 1)
+      if (error || !data || data.length === 0) break
+      rows.push(...data)
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+    return rows
+  }
+
   const [participantsRes, matchesRes, teamsRes, rulesRes, groupBetsRes, thirdBetsRes, tournamentBetsRes] = await Promise.all([
     supabase.from('participants').select('id, apelido').order('apelido', { ascending: true }),
     supabase.from('matches').select('team_home, team_away, flag_home, flag_away, phase, round, betting_deadline'),
     admin.from('teams').select('name, abbr_br, group_name'),
     supabase.from('scoring_rules').select('key, points'),
-    admin.from('group_bets').select('participant_id, group_name, first_place, second_place'),
-    admin.from('third_place_bets').select('participant_id, group_name, team'),
+    fetchAll('group_bets', 'participant_id, group_name, first_place, second_place'),
+    fetchAll('third_place_bets', 'participant_id, group_name, team'),
     admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer'),
   ])
 
@@ -98,8 +115,8 @@ export default async function EstatisticasPage() {
           <EstatisticasTab
             participants={(participantsRes.data ?? []) as any[]}
             teams={teams}
-            groupBets={(groupBetsRes.data ?? []) as any[]}
-            thirdBets={(thirdBetsRes.data ?? []) as any[]}
+            groupBets={groupBetsRes as any[]}
+            thirdBets={thirdBetsRes as any[]}
             tournamentBets={(tournamentBetsRes.data ?? []) as any[]}
             zebraThreshold={zebraThreshold}
             scorerMapping={scorerMapping}

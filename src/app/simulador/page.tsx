@@ -54,6 +54,23 @@ export default async function SimuladorPage() {
   const visibilitySettings = await getVisibilitySettings()
   const isTestModeAdmin = isAdmin && !visibilitySettings.productionMode
 
+  // PostgREST aplica max-rows=1000 mesmo com service_role.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function fetchAll(table: string, select: string): Promise<any[]> {
+    const PAGE = 1000
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: any[] = []
+    let from = 0
+    for (;;) {
+      const { data, error } = await admin.from(table).select(select).range(from, from + PAGE - 1)
+      if (error || !data || data.length === 0) break
+      rows.push(...data)
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+    return rows
+  }
+
   const [
     participantsRes, matchesRes, betsRes, groupBetsRes, tournamentBetsRes,
     thirdScoresRes, thirdBetsRes, rulesRes, teamAbbrRes,
@@ -64,11 +81,11 @@ export default async function SimuladorPage() {
     supabase.from('matches')
       .select('id, match_number, phase, round, group_name, team_home, team_away, flag_home, flag_away, score_home, score_away, penalty_winner, is_brazil, match_datetime, betting_deadline, city')
       .order('match_datetime', { ascending: true }),
-    admin.from('bets').select('participant_id, match_id, score_home, score_away'),
-    admin.from('group_bets').select('participant_id, group_name, first_place, second_place, points'),
+    fetchAll('bets', 'participant_id, match_id, score_home, score_away'),
+    fetchAll('group_bets', 'participant_id, group_name, first_place, second_place, points'),
     admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer'),
     admin.from('participant_scores').select('participant_id, pts_thirds'),
-    admin.from('third_place_bets').select('participant_id, group_name, team'),
+    fetchAll('third_place_bets', 'participant_id, group_name, team'),
     supabase.from('scoring_rules').select('key, points'),
     admin.from('teams').select('name, abbr_br, group_name'),
     admin.from('top_scorer_mapping').select('raw_name, standardized_name'),
@@ -106,16 +123,16 @@ export default async function SimuladorPage() {
     allMatches.map((m: any) => [m.id, m.betting_deadline])
   )
   const allBets = filterBetsByDeadline(
-    (betsRes.data ?? []) as any[],
+    betsRes as any[],
     deadlineByMatch,
     new Date(now),
     isTestModeAdmin,
     activeParticipantId,
   )
-  const allGroupBets  = (groupBetsRes.data       ?? []) as any[]
+  const allGroupBets  = groupBetsRes as any[]
   const allTBets      = (tournamentBetsRes.data   ?? []) as any[]
   const thirdScores   = (thirdScoresRes.data      ?? []) as any[]
-  const allThirdBets  = (thirdBetsRes.data        ?? []) as any[]
+  const allThirdBets  = thirdBetsRes as any[]
 
   // ── Compute PTS Oficial live (mirrors ClassificacaoMB) ─────────────────────
 

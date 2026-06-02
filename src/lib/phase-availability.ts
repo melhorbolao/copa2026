@@ -151,18 +151,35 @@ export async function getQualifiedSets(): Promise<{
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAuthAdminClient() as any
 
+  // PostgREST aplica max-rows=1000 mesmo com service_role.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function fetchAll(table: string, select: string): Promise<any[]> {
+    const PAGE = 1000
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: any[] = []
+    let from = 0
+    for (;;) {
+      const { data, error } = await admin.from(table).select(select).range(from, from + PAGE - 1)
+      if (error || !data || data.length === 0) break
+      rows.push(...data)
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+    return rows
+  }
+
   const [
     { data: participants },
     { data: matches },
-    { data: bets },
-    { data: groupBets },
-    { data: thirdBets },
+    bets,
+    groupBets,
+    thirdBets,
   ] = await Promise.all([
     admin.from('participants').select('id'),
     admin.from('matches').select('id, phase'),
-    admin.from('bets').select('participant_id, match_id, points'),
-    admin.from('group_bets').select('participant_id, points'),
-    admin.from('third_place_bets').select('participant_id, points'),
+    fetchAll('bets', 'participant_id, match_id, points'),
+    fetchAll('group_bets', 'participant_id, points'),
+    fetchAll('third_place_bets', 'participant_id, points'),
   ])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

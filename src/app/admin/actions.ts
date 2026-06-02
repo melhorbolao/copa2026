@@ -303,10 +303,19 @@ export async function sendReminderEmails(
 
     if (matches?.length) {
       const matchIds = new Set(matches.map(m => m.id))
-      const { data: bets } = await supabase
-        .from('bets')
-        .select('participant_id, match_id')
-        .in('participant_id', allParticipantIds)
+      // PostgREST aplica max-rows=1000 mesmo com service_role — pagina manualmente.
+      const bets: { participant_id: string; match_id: string }[] = []
+      {
+        const PAGE = 1000
+        let from = 0
+        for (;;) {
+          const { data, error } = await supabase.from('bets').select('participant_id, match_id').in('participant_id', allParticipantIds).range(from, from + PAGE - 1)
+          if (error || !data || data.length === 0) break
+          bets.push(...data)
+          if (data.length < PAGE) break
+          from += PAGE
+        }
+      }
 
       // Conta bets por usuário (através do participante)
       const betCountByUser = new Map<string, number>()
@@ -329,10 +338,19 @@ export async function sendReminderEmails(
 
     if (cutMatches?.length) {
       const cutMatchIds = new Set(cutMatches.map(m => m.id))
-      const { data: bets } = await supabase
-        .from('bets')
-        .select('participant_id, match_id')
-        .in('participant_id', allParticipantIds)
+      // PostgREST aplica max-rows=1000 mesmo com service_role — pagina manualmente.
+      const bets: { participant_id: string; match_id: string }[] = []
+      {
+        const PAGE = 1000
+        let from = 0
+        for (;;) {
+          const { data, error } = await supabase.from('bets').select('participant_id, match_id').in('participant_id', allParticipantIds).range(from, from + PAGE - 1)
+          if (error || !data || data.length === 0) break
+          bets.push(...data)
+          if (data.length < PAGE) break
+          from += PAGE
+        }
+      }
 
       const usersWithBets = new Set<string>()
       for (const bet of bets ?? []) {

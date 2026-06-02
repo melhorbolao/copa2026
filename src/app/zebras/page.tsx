@@ -176,12 +176,17 @@ export default async function ZebrasPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let futureBetsRaw: any[] = []
   if (futureIds.length > 0) {
-    // Admin bypassa RLS — obtém TODAS as apostas (necessário para percentuais reais)
-    const { data } = await admin
-      .from('bets')
-      .select('match_id, score_home, score_away')
-      .in('match_id', futureIds)
-    futureBetsRaw = data ?? []
+    // Admin bypassa RLS — obtém TODAS as apostas (necessário para percentuais reais).
+    // PostgREST aplica max-rows=1000 mesmo com service_role — pagina manualmente.
+    const PAGE = 1000
+    let from = 0
+    for (;;) {
+      const { data, error } = await admin.from('bets').select('match_id, score_home, score_away').in('match_id', futureIds).range(from, from + PAGE - 1)
+      if (error || !data || data.length === 0) break
+      futureBetsRaw.push(...data)
+      if (data.length < PAGE) break
+      from += PAGE
+    }
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -54,13 +54,30 @@ function fmtDateShort(ts: string | null | undefined): string {
 export async function buildAuditBuffer(): Promise<{ buffer: Buffer; fileName: string }> {
   const admin = createAuthAdminClient() as any
 
+  // PostgREST aplica max-rows=1000 mesmo com service_role.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function fetchAll(table: string, select: string): Promise<any[]> {
+    const PAGE = 1000
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: any[] = []
+    let from = 0
+    for (;;) {
+      const { data, error } = await admin.from(table).select(select).range(from, from + PAGE - 1)
+      if (error || !data || data.length === 0) break
+      rows.push(...data)
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+    return rows
+  }
+
   // Busca todos os dados em paralelo para evitar N+1
   const [
     { data: participantsRaw },
     { data: matchesRaw },
-    { data: betsRaw },
-    { data: groupBetsRaw },
-    { data: thirdBetsRaw },
+    betsRaw,
+    groupBetsRaw,
+    thirdBetsRaw,
     { data: tBetsRaw },
     predLogsResult,
     { data: settingsRaw },
@@ -75,14 +92,11 @@ export async function buildAuditBuffer(): Promise<{ buffer: Buffer; fileName: st
       .select('id, phase, round, group_name, betting_deadline, match_datetime')
       .order('match_datetime', { ascending: true }),
 
-    admin.from('bets')
-      .select('participant_id, match_id, updated_at'),
+    fetchAll('bets', 'participant_id, match_id, updated_at'),
 
-    admin.from('group_bets')
-      .select('participant_id'),
+    fetchAll('group_bets', 'participant_id'),
 
-    admin.from('third_place_bets')
-      .select('participant_id'),
+    fetchAll('third_place_bets', 'participant_id'),
 
     admin.from('tournament_bets')
       .select('participant_id'),

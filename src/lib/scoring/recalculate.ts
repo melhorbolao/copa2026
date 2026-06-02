@@ -316,11 +316,27 @@ export async function refreshParticipantTotals(participantIds: string[]): Promis
   if (!participantIds.length) return
   const admin = createAuthAdminClient()
 
-  const [bRes, gRes, tpRes, tbRes] = await Promise.all([
-    admin.from('bets').select('participant_id, points').in('participant_id', participantIds),
-    admin.from('group_bets').select('participant_id, points').in('participant_id', participantIds),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (admin as any).from('third_place_bets').select('participant_id, points').in('participant_id', participantIds),
+  // PostgREST aplica max-rows=1000 mesmo com service_role.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function fetchFiltered(table: string, select: string): Promise<{ participant_id: string; points: number | null }[]> {
+    const PAGE = 1000
+    const rows: { participant_id: string; points: number | null }[] = []
+    let from = 0
+    for (;;) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (admin as any).from(table).select(select).in('participant_id', participantIds).range(from, from + PAGE - 1)
+      if (error || !data || data.length === 0) break
+      rows.push(...data)
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+    return rows
+  }
+
+  const [bRows, gRows, tpRows, tbRes] = await Promise.all([
+    fetchFiltered('bets', 'participant_id, points'),
+    fetchFiltered('group_bets', 'participant_id, points'),
+    fetchFiltered('third_place_bets', 'participant_id, points'),
     admin.from('tournament_bets').select('participant_id, points').in('participant_id', participantIds),
   ])
 
@@ -329,10 +345,9 @@ export async function refreshParticipantTotals(participantIds: string[]): Promis
 
   const now = new Date().toISOString()
   const scores = participantIds.map(pid => {
-    const ptsMatches    = sumFor(bRes.data as { participant_id: string; points: number | null }[] | null, pid)
-    const ptsGroups     = sumFor(gRes.data as { participant_id: string; points: number | null }[] | null, pid)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const ptsThirds     = sumFor(tpRes.data as any, pid)
+    const ptsMatches    = sumFor(bRows, pid)
+    const ptsGroups     = sumFor(gRows, pid)
+    const ptsThirds     = sumFor(tpRows, pid)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const ptsTournament = ((tbRes.data ?? []) as any[]).find((r: any) => r.participant_id === pid)?.points ?? 0
     const ptsTotal      = ptsMatches + ptsGroups + ptsThirds + ptsTournament

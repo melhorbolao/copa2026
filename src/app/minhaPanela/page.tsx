@@ -97,11 +97,16 @@ export default async function MinhaPanelaPage() {
   const relevantMatchIds = [...recentMatches, ...upcomingMatches].map((m: any) => m.id)
   let betsRaw: { participant_id: string; match_id: string; score_home: number; score_away: number; points: number | null }[] = []
   if (relevantMatchIds.length > 0) {
-    const { data } = await admin
-      .from('bets')
-      .select('participant_id, match_id, score_home, score_away, points')
-      .in('match_id', relevantMatchIds)
-    betsRaw = data ?? []
+    // PostgREST aplica max-rows=1000 mesmo com service_role — pagina manualmente.
+    const PAGE = 1000
+    let from = 0
+    for (;;) {
+      const { data, error } = await admin.from('bets').select('participant_id, match_id, score_home, score_away, points').in('match_id', relevantMatchIds).range(from, from + PAGE - 1)
+      if (error || !data || data.length === 0) break
+      betsRaw.push(...data)
+      if (data.length < PAGE) break
+      from += PAGE
+    }
   }
 
   const betsByParticipant: Record<string, Record<string, { scoreHome: number; scoreAway: number; points: number | null }>> = {}

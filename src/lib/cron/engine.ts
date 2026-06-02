@@ -130,15 +130,26 @@ export async function getParticipants(
   const matchCount = matches?.length ?? 0
   const matchIds   = new Set((matches ?? []).map((m: any) => m.id as string))
 
-  // Busca todos os palpites dessas partidas de uma vez
-  const { data: allBets } = await supabase
-    .from('bets')
-    .select('user_id, match_id')
-    .in('match_id', [...matchIds])
+  // Busca todos os palpites dessas partidas — pagina por causa do max-rows=1000 do PostgREST.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allBets: any[] = []
+  {
+    const PAGE = 1000
+    const ids = [...matchIds]
+    let from = 0
+    for (;;) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any).from('bets').select('user_id, match_id').in('match_id', ids).range(from, from + PAGE - 1)
+      if (error || !data || data.length === 0) break
+      allBets.push(...data)
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+  }
 
   // Agrupa por user_id
   const betsByUser = new Map<string, number>()
-  for (const b of (allBets ?? []) as any[]) {
+  for (const b of allBets as any[]) {
     betsByUser.set(b.user_id, (betsByUser.get(b.user_id) ?? 0) + 1)
   }
 

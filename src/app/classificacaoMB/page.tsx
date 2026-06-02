@@ -46,6 +46,23 @@ export default async function ClassificacaoMBPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAuthAdminClient() as any
 
+  // PostgREST aplica max-rows=1000 mesmo com service_role.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function fetchAll(table: string, select: string): Promise<any[]> {
+    const PAGE = 1000
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: any[] = []
+    let from = 0
+    for (;;) {
+      const { data, error } = await admin.from(table).select(select).range(from, from + PAGE - 1)
+      if (error || !data || data.length === 0) break
+      rows.push(...data)
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+    return rows
+  }
+
   const [visibilitySettings] = await Promise.all([getVisibilitySettings()])
   const isTestModeAdmin = isAdmin && !visibilitySettings.productionMode
 
@@ -55,8 +72,8 @@ export default async function ClassificacaoMBPage() {
     supabase.from('matches')
       .select('id, match_number, match_datetime, betting_deadline, team_home, team_away, score_home, score_away, phase, round, group_name, penalty_winner, is_brazil')
       .order('match_datetime', { ascending: true }),
-    admin.from('bets').select('participant_id, match_id, score_home, score_away, points'),
-    admin.from('group_bets').select('participant_id, points'),
+    fetchAll('bets', 'participant_id, match_id, score_home, score_away, points'),
+    fetchAll('group_bets', 'participant_id, points'),
     admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer'),
     admin.from('participant_scores').select('participant_id, pts_thirds'),
     supabase.from('scoring_rules').select('key, points'),
@@ -199,11 +216,11 @@ export default async function ClassificacaoMBPage() {
     phase: string; round: number | null; group_name: string | null; penalty_winner: string | null
     is_brazil: boolean
   }[]
-  const allBets = (betsRes.data ?? []) as {
+  const allBets = betsRes as {
     participant_id: string; match_id: string
     score_home: number; score_away: number; points: number | null
   }[]
-  const allGroupBets = (groupBetsRes.data ?? []) as { participant_id: string; points: number | null }[]
+  const allGroupBets = groupBetsRes as { participant_id: string; points: number | null }[]
   const allTBets     = (tournamentBetsRes.data ?? []) as {
     participant_id: string; champion: string; runner_up: string
     semi1: string; semi2: string; top_scorer: string
