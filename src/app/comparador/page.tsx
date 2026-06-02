@@ -80,14 +80,31 @@ export default async function ComparadorPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAuthAdminClient() as any
 
+  // PostgREST aplica max-rows=1000 mesmo com service_role.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function fetchAll(table: string, select: string): Promise<any[]> {
+    const PAGE = 1000
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: any[] = []
+    let from = 0
+    for (;;) {
+      const { data, error } = await admin.from(table).select(select).range(from, from + PAGE - 1)
+      if (error || !data || data.length === 0) break
+      rows.push(...data)
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+    return rows
+  }
+
   // ── Dados estáticos (cacheados) + dinâmicos (ao vivo) em paralelo ────────────
   const [
     participants,
     rawMatchesRaw,
     rulesRaw,
-    allBetsRes,
-    allGroupBetsRes,
-    allThirdBetsRes,
+    allBets,
+    allGroupBets,
+    allThirdBets,
     allTBetsRes,
     scoresRes,
     visibilitySettings,
@@ -98,9 +115,9 @@ export default async function ComparadorPage() {
     getCachedMatches(),
     getCachedScoringRules(),
     // ao vivo: apostas mudam a cada salvamento
-    admin.from('bets').select('participant_id, match_id, score_home, score_away, points'),
-    admin.from('group_bets').select('participant_id, group_name, first_place, second_place, points'),
-    admin.from('third_place_bets').select('participant_id, group_name, team'),
+    fetchAll('bets', 'participant_id, match_id, score_home, score_away, points'),
+    fetchAll('group_bets', 'participant_id, group_name, first_place, second_place, points'),
+    fetchAll('third_place_bets', 'participant_id, group_name, team'),
     admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer'),
     admin.from('participant_scores')
       .select('participant_id, pts_matches, pts_groups, pts_thirds, pts_tournament, pts_total'),
@@ -112,12 +129,6 @@ export default async function ComparadorPage() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rawMatches: any[] = rawMatchesRaw as any[]
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const allBets: any[]    = allBetsRes.data ?? []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const allGroupBets: any[] = allGroupBetsRes.data ?? []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const allThirdBets: any[] = allThirdBetsRes.data ?? []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const allTBets: any[]   = allTBetsRes.data ?? []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

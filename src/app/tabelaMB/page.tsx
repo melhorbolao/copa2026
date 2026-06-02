@@ -26,6 +26,23 @@ export default async function ClassificacaoPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAuthAdminClient() as any
 
+  // PostgREST aplica max-rows=1000 mesmo com service_role.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function fetchAll(table: string, select: string): Promise<any[]> {
+    const PAGE = 1000
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: any[] = []
+    let from = 0
+    for (;;) {
+      const { data, error } = await admin.from(table).select(select).range(from, from + PAGE - 1)
+      if (error || !data || data.length === 0) break
+      rows.push(...data)
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+    return rows
+  }
+
   const [visibilitySettings, serverNow] = await Promise.all([
     getVisibilitySettings(),
     getServerNow(),
@@ -38,10 +55,10 @@ export default async function ClassificacaoPage() {
     supabase.from('participants')
       .select('id, apelido')
       .order('apelido', { ascending: true }),
-    admin.from('bets').select('participant_id, match_id, score_home, score_away, points'),
+    fetchAll('bets', 'participant_id, match_id, score_home, score_away, points'),
     supabase.from('scoring_rules').select('key, points'),
-    admin.from('group_bets').select('participant_id, group_name, first_place, second_place, points'),
-    admin.from('third_place_bets').select('participant_id, group_name, team'),
+    fetchAll('group_bets', 'participant_id, group_name, first_place, second_place, points'),
+    fetchAll('third_place_bets', 'participant_id, group_name, team'),
     admin.from('participant_scores').select('participant_id, pts_total'),
     admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer, points'),
   ])
@@ -67,9 +84,9 @@ export default async function ClassificacaoPage() {
       .map(m => m.id),
   )
 
-  const filteredBets     = ((betsRes.data ?? []) as BetRaw[]).filter(b => visibleMatchIds.has(b.match_id))
-  const filteredGroupBets    = bonusViz ? ((groupBetsRes.data    ?? []) as GroupBetRaw[])    : []
-  const filteredThirdBets    = bonusViz ? ((thirdBetsRes.data    ?? []) as ThirdBetRaw[])    : []
+  const filteredBets     = (betsRes as BetRaw[]).filter(b => visibleMatchIds.has(b.match_id))
+  const filteredGroupBets    = bonusViz ? (groupBetsRes    as GroupBetRaw[])    : []
+  const filteredThirdBets    = bonusViz ? (thirdBetsRes    as ThirdBetRaw[])    : []
   const filteredTournamentBets = bonusViz ? ((tournamentBetsRes.data ?? []) as TournamentBetRaw[]) : []
 
   const rulesMap: Record<string, number> = Object.fromEntries(
