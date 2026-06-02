@@ -174,12 +174,10 @@ export async function getParticipantesSummaryText(): Promise<string> {
   const [
     { data: participants },
     { data: noteRow },
-    { data: users },
     { data: allMatches },
   ] = await Promise.all([
     supabase.from('participants').select('id, paid'),
     supabase.from('admin_settings').select('value').eq('key', 'pagantes_note').maybeSingle(),
-    supabase.from('users').select('status').in('status', ['aprovado', 'aprovacao_pendente']),
     supabase.from('matches').select('id, phase, round, betting_deadline').order('betting_deadline', { ascending: true }),
   ])
 
@@ -188,13 +186,13 @@ export async function getParticipantesSummaryText(): Promise<string> {
   const pagantesExtras    = noteRow?.value
     ? noteRow.value.split('\n').filter((l: string) => l.trim()).length
     : 0
-  const usersApproved = (users ?? []).filter((u: { status: string }) => u.status === 'aprovado').length
-  const usersPending  = (users ?? []).filter((u: { status: string }) => u.status === 'aprovacao_pendente').length
 
   const nextMatch = (allMatches ?? []).find((m: { betting_deadline: string }) => m.betting_deadline > now)
 
   let nextStageName: string | null = null
-  let nextStageFullCount = 0
+  let nextStageZeroCount    = 0
+  let nextStagePartialCount = 0
+  let nextStageFullCount    = 0
 
   if (nextMatch) {
     const nextPhase = nextMatch.phase as string
@@ -251,42 +249,28 @@ export async function getParticipantesSummaryText(): Promise<string> {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         count += Math.min((extraData.thrdBets as any[]).filter((t: any) => t.participant_id === p.id).length, 8)
       }
-      if (count >= stageTotal) nextStageFullCount++
+      if (count === 0)          nextStageZeroCount++
+      else if (count >= stageTotal) nextStageFullCount++
+      else                      nextStagePartialCount++
     }
   }
 
-  const numWord = (n: number, feminine = false): string => {
-    const masc = ['zero','um','dois','três','quatro','cinco','seis','sete','oito','nove']
-    const fem  = ['zero','uma','duas','três','quatro','cinco','seis','sete','oito','nove']
-    if (n < 10) return feminine ? fem[n] : masc[n]
-    return String(n)
-  }
-  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+  const lines: string[] = []
 
-  const parts: string[] = []
+  lines.push(`Participantes cadastrados: ${totalParticipants}`)
 
-  parts.push(
-    `${totalParticipants} participante${totalParticipants !== 1 ? 's' : ''} cadastrado${totalParticipants !== 1 ? 's' : ''} no sistema, dos quais ${paidParticipants} já ${paidParticipants !== 1 ? 'pagaram' : 'pagou'}.`
-  )
-
-  if (pagantesExtras === 1) {
-    parts.push('Um outro pagou e ainda não se cadastrou.')
-  } else if (pagantesExtras > 1) {
-    parts.push(`${cap(numWord(pagantesExtras))} outros pagaram e ainda não se cadastraram.`)
+  if (pagantesExtras > 0) {
+    lines.push(`Pagamentos recebidos: ${paidParticipants} de participantes cadastrados + ${pagantesExtras} outros`)
+    lines.push(`Cadastrados (${totalParticipants}) + pagos sem cadastro (${pagantesExtras}) = ${totalParticipants + pagantesExtras}`)
+  } else {
+    lines.push(`Pagamentos recebidos: ${paidParticipants} de participantes cadastrados`)
   }
 
-  if (nextStageName && totalParticipants > 0) {
-    parts.push(
-      `Dos ${totalParticipants} cadastrados, ${nextStageFullCount} já ${nextStageFullCount !== 1 ? 'estão' : 'está'} com 100% dos palpites de ${nextStageName} preenchidos.`
-    )
+  if (nextStageName) {
+    lines.push(`Palpites ${nextStageName}: ${nextStageZeroCount} zerados, ${nextStagePartialCount} iniciados, ${nextStageFullCount} 100% preenchidos`)
   }
 
-  const pendPart = usersPending === 0
-    ? 'nenhum pendente de aprovação'
-    : `${usersPending} pendente${usersPending !== 1 ? 's' : ''} de aprovação`
-  parts.push(`Temos ${usersApproved} usuário${usersApproved !== 1 ? 's' : ''} criado${usersApproved !== 1 ? 's' : ''} e aprovado${usersApproved !== 1 ? 's' : ''}, ${pendPart}.`)
-
-  return parts.join(' ')
+  return lines.join('\n')
 }
 
 export async function getPagantesNote(): Promise<string> {
