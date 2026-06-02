@@ -138,6 +138,10 @@ async function PalpitesData({ participantId }: { participantId: string }) {
   )
   const calculatedStandings = calcGroupStandings(slimGroupMatches, slimBetMap)
 
+  // Guard: só mostra divergência quando TODOS os jogos do grupo têm aposta —
+  // evita alertas espúrios quando o participante preencheu só parte das rodadas.
+  const userCompletion = computeGroupCompletion(slimGroupMatches, slimBetMap)
+
   const officialScoreMap = new Map<string, BetSlim>(
     groupMatches
       .filter(m => m.score_home !== null && m.score_away !== null)
@@ -212,10 +216,12 @@ async function PalpitesData({ participantId }: { participantId: string }) {
 
   const calculatedTopPerGroup: Record<string, { first: string; second: string; third: string; tiedTeams: string[] }> =
     Object.fromEntries(
-      calculatedStandings.map(s => [s.group, {
-        first: s.teams[0]?.team ?? '', second: s.teams[1]?.team ?? '',
-        third: s.teams[2]?.team ?? '', tiedTeams: s.tiedTeams ?? [],
-      }])
+      calculatedStandings
+        .filter(s => userCompletion.completeGroups.has(s.group))
+        .map(s => [s.group, {
+          first: s.teams[0]?.team ?? '', second: s.teams[1]?.team ?? '',
+          third: s.teams[2]?.team ?? '', tiedTeams: s.tiedTeams ?? [],
+        }])
     )
 
   const betMap: Record<string, { score_home: number; score_away: number; points: number | null }> =
@@ -313,11 +319,6 @@ async function PalpitesData({ participantId }: { participantId: string }) {
   }
   const filledBets        = groupBetCount
   const totalGroupMatches = groupMatches.length
-
-  // Mesma guarda do bracket oficial, mas baseada nos PALPITES do usuário:
-  // só preenche slots da Minha Tabela quando os grupos relevantes estão
-  // 100% palpitados — caso contrário cai no fallback alfabético.
-  const userCompletion = computeGroupCompletion(slimGroupMatches, slimBetMap)
 
   // ── Default etapa = rodada ativa (item A) ─────────────────────────
   // O servidor calcula o default para o cliente saber qual etapa exibir
