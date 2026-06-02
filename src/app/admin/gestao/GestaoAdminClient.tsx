@@ -321,8 +321,7 @@ export function GestaoAdminClient({ productionMode: initProdMode, releasedRounds
       <section>
         <h3 className="text-sm font-semibold text-gray-900 mb-1">Exportar todos os palpites</h3>
         <p className="mb-3 text-xs text-gray-500">
-          Baixa uma planilha Excel com os palpites de todos os participantes.
-          {productionMode && ' Em Modo Produção, apenas palpites de rodadas liberadas são incluídos.'}
+          Baixa uma planilha Excel com os palpites de todos os participantes — incluindo rodadas ainda não liberadas ao público.
         </p>
         <button
           onClick={handleExport}

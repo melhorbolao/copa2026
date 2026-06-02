@@ -84,13 +84,16 @@ export async function buildTabelaMBBuffer(
 
   // Compute bonus deadline (round 1 of group phase)
   const bonusDeadlineStr = matches.find(m => m.phase === 'group' && m.round === 1)?.betting_deadline ?? null
-  const bonusViz = isBonusVisible(bonusDeadlineStr, now, settings, forAdmin)
+  // Admin export always includes all bets regardless of production mode or round release status.
+  const bonusViz = forAdmin || isBonusVisible(bonusDeadlineStr, now, settings)
 
-  // Build visible match IDs
+  // Build visible match IDs — admin sees all; others see only released rounds past deadline.
   const visibleMatchIds = new Set<string>(
-    matches
-      .filter(m => isMatchBetsVisible(m.phase, m.round, m.betting_deadline, now, settings))
-      .map(m => m.id as string),
+    forAdmin
+      ? matches.map(m => m.id as string)
+      : matches
+          .filter(m => isMatchBetsVisible(m.phase, m.round, m.betting_deadline, now, settings))
+          .map(m => m.id as string),
   )
 
   // Filter bets
