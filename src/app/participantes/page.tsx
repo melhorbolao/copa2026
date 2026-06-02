@@ -48,10 +48,29 @@ export default async function ControlePage({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAuthAdminClient() as any
 
+  // PostgREST aplica max-rows no servidor (padrão 1000) mesmo com service_role.
+  // .limit(N) no cliente é ignorado quando max-rows < N. Paginamos manualmente.
+  async function fetchAllBets(): Promise<Bet[]> {
+    const PAGE = 1000
+    const rows: Bet[] = []
+    let from = 0
+    for (;;) {
+      const { data, error } = await admin
+        .from('bets')
+        .select('participant_id, match_id, updated_at')
+        .range(from, from + PAGE - 1)
+      if (error || !data || data.length === 0) break
+      rows.push(...(data as Bet[]))
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+    return rows
+  }
+
   const [
     { data: participants },
     { data: matches },
-    { data: allBets },
+    allBets,
     { data: trnBets },
     { data: groupBets },
     { data: thirdBets },
@@ -62,10 +81,7 @@ export default async function ControlePage({
       .select('id, apelido, paid')
       .order('apelido', { ascending: true }),
     supabase.from('matches').select('id, phase, round, betting_deadline'),
-    // service_role bypassa RLS; .limit(10000) supera o cap de 1000 do PostgREST
-    admin.from('bets')
-      .select('participant_id, match_id, updated_at')
-      .limit(10000),
+    fetchAllBets(),
     admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer').limit(10000),
     admin.from('group_bets').select('participant_id, group_name').limit(10000),
     admin.from('third_place_bets').select('participant_id, group_name').limit(10000),

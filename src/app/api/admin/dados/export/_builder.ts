@@ -42,6 +42,7 @@ const COL_PART = 4   // first participant
 
 export async function buildTabelaMBBuffer(
   settings: VisibilitySettings,
+  forAdmin = false,
 ): Promise<{ buffer: Buffer; fileName: string }> {
   const admin = createAuthAdminClient() as any
   const now   = new Date()
@@ -83,7 +84,7 @@ export async function buildTabelaMBBuffer(
 
   // Compute bonus deadline (round 1 of group phase)
   const bonusDeadlineStr = matches.find(m => m.phase === 'group' && m.round === 1)?.betting_deadline ?? null
-  const bonusViz = isBonusVisible(bonusDeadlineStr, now, settings)
+  const bonusViz = isBonusVisible(bonusDeadlineStr, now, settings, forAdmin)
 
   // Build visible match IDs
   const visibleMatchIds = new Set<string>(

@@ -14,7 +14,7 @@ export async function GET() {
 
   try {
     const settings = await getVisibilitySettings()
-    const { buffer, fileName } = await buildTabelaMBBuffer(settings)
+    const { buffer, fileName } = await buildTabelaMBBuffer(settings, true)
 
     return new NextResponse(buffer as unknown as BodyInit, {
       headers: {
