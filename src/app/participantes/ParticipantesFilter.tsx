@@ -35,8 +35,10 @@ export function ParticipantesFilter({ nextStageLabel, hasAnyEliminated }: Props)
     baseOptions.push({ value: '', label: 'Todos' })
   }
   baseOptions.push({ value: 'pendente', label: '✗ Pagamento pendente' })
+  baseOptions.push({ value: 'pago',    label: '✓ Pagamento ok' })
   if (nextStageLabel) {
     baseOptions.push({ value: 'incompleto', label: `< 100% ${nextStageLabel}` })
+    baseOptions.push({ value: 'completo',   label: `100% ${nextStageLabel}` })
   }
 
   return (

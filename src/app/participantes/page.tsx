@@ -5,6 +5,8 @@ import { formatBrasilia } from '@/utils/date'
 import { Countdown } from '@/app/palpites/Countdown'
 import { Suspense } from 'react'
 import { ParticipantesFilter } from './ParticipantesFilter'
+import { ParticipantesTable } from './ParticipantesTable'
+import type { TableRow, StageData } from './ParticipantesTable'
 import {
   getPhaseSettings, getQualifiedSets, canFillStage, isCutFromStage,
   isParticipantEliminated, STAGE_KEYS,
@@ -248,9 +250,6 @@ export default async function ControlePage({
     a.apelido.localeCompare(b.apelido, 'pt-BR', { sensitivity: 'base' })
   )
 
-  // Eliminação: depende dos cortes vigentes. Se nenhum corte foi aplicado
-  // ainda (admin não marcou nenhuma etapa pós-grupos como disponível), ninguém
-  // está eliminado e o filtro "apenas ativos" não é exibido.
   const eliminatedSet = new Set<string>(
     allSorted
       .filter(p => isParticipantEliminated(p.id, phaseSettings, qualified))
@@ -258,225 +257,80 @@ export default async function ControlePage({
   )
   const hasAnyEliminated = eliminatedSet.size > 0
 
-  // Default = "apenas ativos" quando há eliminados; senão, "todos".
-  // O usuário pode alternar via filter='todos' explícito.
-  const isActivesView =
-    filter === 'ativos' ||
-    (filter === '' && hasAnyEliminated) ||
-    (filter === undefined && hasAnyEliminated)
-
-  const sorted = allSorted.filter(p => {
-    if (filter === 'pendente')   return !p.paid
-    if (filter === 'incompleto') return nextStageKey !== null && calcPct(p.id, nextStageKey) < 100
-    if (isActivesView)           return !eliminatedSet.has(p.id)
-    return true
-  })
-
-  // Estado de uma célula (participante, etapa) na tabela:
-  //  - 'unavailable': admin não liberou OU é etapa de grupos sem total — mostra '—'
-  //  - 'cut':         admin liberou, mas participante foi cortado — mostra ✗
-  //  - 'open':        pode preencher — mostra %
+  // Estado de uma célula (participante, etapa) na tabela
   type CellStatus = { kind: 'unavailable' | 'cut' | 'open'; pct: number }
   const cellStatus = (pid: string, k: StageKey): CellStatus => {
     const v = calcPct(pid, k)
-    // Etapas de grupos: a "disponibilidade" é sempre verdadeira do ponto de vista
-    // de regulamento (todos podem palpitar). Mas o admin pode bloquear via flag.
-    // Se não há total de partidas mapeado, exibe '—' como antes.
     if (v === -1) return { kind: 'unavailable', pct: -1 }
     if (!canFillStage(k, pid, phaseSettings, qualified)) {
-      // Distingue "não disponível" de "cortado" pra UI usar ícones diferentes.
       if (isCutFromStage(k, pid, phaseSettings, qualified)) return { kind: 'cut', pct: v }
       return { kind: 'unavailable', pct: v }
     }
     return { kind: 'open', pct: v }
   }
 
-  const pct    = (v: number) => v === -1 ? '—' : `${v}%`
-  const pctCls = (v: number) =>
-    v === -1  ? 'text-gray-300' :
-    v === 100 ? 'text-verde-600 font-bold' :
-    v > 0     ? 'text-amber-600' : 'text-red-400'
+  // Serializa dados de cada participante para o componente cliente
+  const allRows: TableRow[] = allSorted.map(p => ({
+    id:        p.id,
+    apelido:   p.apelido,
+    paid:      p.paid,
+    eliminated: eliminatedSet.has(p.id),
+    g4Errors:  g4ErrorMap.get(p.id) ?? null,
+    stages: STAGE_KEYS.map(k => {
+      const status = cellStatus(p.id, k)
+      return {
+        kind:       status.kind,
+        pct:        status.pct,
+        lastSaved:  getLastSaved(p.id, k),
+        missingTip: getMissingTooltip(p.id, k),
+      } satisfies StageData
+    }),
+  }))
 
-  // Contadores para linha de resumo (sempre sobre todos os participantes)
-  const totalCount = allSorted.length
-  const paidCount  = allSorted.filter(p => p.paid).length
-  const fullPctCount: Record<StageKey, number> = { r1:0, r2:0, r3:0, r32:0, r16:0, qf:0, sf:0, final:0 }
-  for (const p of allSorted) {
-    for (const k of STAGE_KEYS) {
-      if (calcPct(p.id, k) === 100) fullPctCount[k]++
-    }
-  }
+  const stageMeta = STAGE_KEYS.map(k => ({
+    label:    STAGE_LABELS[k],
+    deadline: stageDeadlines[k] ? formatBrasilia(stageDeadlines[k], 'dd/MM HH:mm') : null,
+  }))
+
+  const nextStageIdx = nextStageKey ? STAGE_KEYS.indexOf(nextStageKey) : null
 
   return (
     <>
       <Navbar />
 
-      {/* Banner de alerta global */}
       {hasAnyError && (
         <div className="sticky top-14 z-40 border-b border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700 font-medium">
           ⚠️ Existem erros de lógica nos palpites de alguns participantes. Verifique a lista abaixo.
         </div>
       )}
 
-    <div className="mx-auto max-w-5xl px-4 py-8">
-      <div className="mb-4 flex items-start justify-between gap-4 flex-wrap">
-        <h1 className="text-2xl font-black text-gray-900">Participantes</h1>
-        {nextDeadline && (
-          <Countdown deadline={nextDeadline.iso} label={nextDeadline.label} />
-        )}
-      </div>
-
-      <div className="mb-6">
-        <Suspense fallback={null}>
-          <ParticipantesFilter
-            nextStageLabel={nextStageLabel}
-            hasAnyEliminated={hasAnyEliminated}
-          />
-        </Suspense>
-      </div>
-
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-gray-100 bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">
-              <tr>
-                <th className="px-3 py-3">#</th>
-                <th className="px-3 py-3">Nome</th>
-                <th className="px-3 py-3 text-center">Pagamento</th>
-                <th className="px-2 py-3 text-center w-8" title="Erros de lógica">⚠️</th>
-                {STAGE_KEYS.map(k => (
-                  <th key={k} className="px-2 py-3 text-center">
-                    <div>{STAGE_LABELS[k]}</div>
-                    {stageDeadlines[k] && (
-                      <div className="text-[10px] font-normal normal-case tracking-normal text-gray-400">
-                        {formatBrasilia(stageDeadlines[k], 'dd/MM HH:mm')}
-                      </div>
-                    )}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            {/* Linha de totais */}
-            <tbody>
-              <tr className="border-b-2 border-gray-200 bg-gray-50/80 text-xs font-semibold text-gray-600">
-                <td className="px-3 py-2" />
-                <td className="px-3 py-2 whitespace-nowrap text-gray-700">
-                  {totalCount} inscritos
-                </td>
-                <td className="px-3 py-2 text-center">
-                  <span className="text-verde-700">{paidCount} pagos</span>
-                  {paidCount < totalCount && (
-                    <span className="ml-1 text-red-400">/ {totalCount - paidCount} pend.</span>
-                  )}
-                </td>
-                <td className="px-2 py-2" />
-                {STAGE_KEYS.map(k => (
-                  <td key={k} className="px-2 py-2 text-center">
-                    {stageTotals[k] > 0 ? (
-                      <span className={fullPctCount[k] === totalCount ? 'text-verde-600' : 'text-gray-500'}>
-                        {fullPctCount[k]}
-                      </span>
-                    ) : (
-                      <span className="text-gray-300">—</span>
-                    )}
-                  </td>
-                ))}
-              </tr>
-            </tbody>
-
-            <tbody>
-              {sorted.map((p, i) => {
-                const eliminated = eliminatedSet.has(p.id)
-                return (
-                <tr key={p.id} className={`border-b border-gray-100 last:border-0 hover:bg-gray-50 ${eliminated ? 'bg-gray-50/70' : ''}`}>
-                  <td className="px-3 py-2.5 text-xs text-gray-400">{i + 1}</td>
-                  <td className={`px-3 py-2.5 whitespace-nowrap font-medium ${eliminated ? 'text-gray-400 line-through decoration-gray-300' : 'text-gray-900'}`}>
-                    <span className="inline-flex items-center gap-1.5">
-                      {p.apelido}
-                      {eliminated && (
-                        <span
-                          title="Eliminado: não classificado para a fase atual (regulamento 27–30)"
-                          className="inline-block rounded-full bg-gray-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-gray-600"
-                        >
-                          Cortado
-                        </span>
-                      )}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5 text-center">
-                    {p.paid ? (
-                      <span className="inline-block rounded-full bg-verde-100 px-2.5 py-0.5 text-xs font-semibold text-verde-700">✓ Pago</span>
-                    ) : (
-                      <span className="inline-block rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-600">✗ Pendente</span>
-                    )}
-                  </td>
-                  <td className="px-2 py-2.5 text-center">
-                    {g4ErrorMap.has(p.id) ? (
-                      <span
-                        title={g4ErrorMap.get(p.id)!.join('\n')}
-                        className="cursor-help text-sm text-red-500"
-                      >
-                        ⚠️
-                      </span>
-                    ) : (
-                      <span className="text-xs text-gray-200">✓</span>
-                    )}
-                  </td>
-                  {STAGE_KEYS.map(k => {
-                    const status = cellStatus(p.id, k)
-                    const ts     = getLastSaved(p.id, k)
-                    if (status.kind === 'unavailable') {
-                      return (
-                        <td key={k} className="px-2 py-2 text-center">
-                          <div
-                            className="text-xs tabular-nums text-gray-300"
-                            title="Etapa ainda não disponível para preenchimento"
-                          >
-                            —
-                          </div>
-                        </td>
-                      )
-                    }
-                    if (status.kind === 'cut') {
-                      return (
-                        <td key={k} className="px-2 py-2 text-center">
-                          <div
-                            className="text-xs tabular-nums text-gray-400"
-                            title="Participante cortado nesta fase (regulamento 27–30)"
-                          >
-                            ✗
-                          </div>
-                        </td>
-                      )
-                    }
-                    const v = status.pct
-                    const missingTip = getMissingTooltip(p.id, k)
-                    return (
-                      <td key={k} className="px-2 py-2 text-center">
-                        <div
-                          className={`text-xs tabular-nums ${pctCls(v)}${missingTip ? ' cursor-help underline decoration-dotted underline-offset-2' : ''}`}
-                          title={missingTip ?? undefined}
-                        >
-                          {pct(v)}
-                        </div>
-                        {ts && <div className="text-[10px] text-gray-300 tabular-nums leading-tight">{ts}</div>}
-                      </td>
-                    )
-                  })}
-                </tr>
-                )
-              })}
-            </tbody>
-          </table>
+      <div className="mx-auto max-w-5xl px-4 py-8">
+        <div className="mb-4 flex items-start justify-between gap-4 flex-wrap">
+          <h1 className="text-2xl font-black text-gray-900">Participantes</h1>
+          {nextDeadline && (
+            <Countdown deadline={nextDeadline.iso} label={nextDeadline.label} />
+          )}
         </div>
-      </div>
 
-      <p className="mt-3 text-right text-xs text-gray-400">
-        {sorted.length === allSorted.length
-          ? `${sorted.length} participantes`
-          : `${sorted.length} de ${allSorted.length} participantes`}
-      </p>
-    </div>
+        <div className="mb-4">
+          <Suspense fallback={null}>
+            <ParticipantesFilter
+              nextStageLabel={nextStageLabel}
+              hasAnyEliminated={hasAnyEliminated}
+            />
+          </Suspense>
+        </div>
+
+        <ParticipantesTable
+          rows={allRows}
+          activeFilter={filter}
+          hasAnyEliminated={hasAnyEliminated}
+          nextStageIdx={nextStageIdx}
+          stageMeta={stageMeta}
+          stageTotals={STAGE_KEYS.map(k => stageTotals[k])}
+          hasAnyError={hasAnyError}
+        />
+      </div>
     </>
   )
 }
