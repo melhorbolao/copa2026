@@ -47,10 +47,28 @@ export async function buildTabelaMBBuffer(
   const admin = createAuthAdminClient() as any
   const now   = new Date()
 
+  // PostgREST aplica max-rows no servidor (padrão 1000) mesmo com service_role.
+  async function fetchAllBets() {
+    const PAGE = 1000
+    const rows: any[] = []
+    let from = 0
+    for (;;) {
+      const { data, error } = await admin
+        .from('bets')
+        .select('participant_id, match_id, score_home, score_away')
+        .range(from, from + PAGE - 1)
+      if (error || !data || data.length === 0) break
+      rows.push(...data)
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+    return rows
+  }
+
   const [
     { data: matchesRaw },
     { data: participantsRaw },
-    { data: betsRaw },
+    betsRaw,
     { data: groupBetsRaw },
     { data: thirdBetsRaw },
     { data: tBetsRaw },
@@ -61,8 +79,7 @@ export async function buildTabelaMBBuffer(
     admin.from('participants')
       .select('id, apelido')
       .order('apelido', { ascending: true }),
-    admin.from('bets')
-      .select('participant_id, match_id, score_home, score_away'),
+    fetchAllBets(),
     admin.from('group_bets')
       .select('participant_id, group_name, first_place, second_place'),
     admin.from('third_place_bets')
