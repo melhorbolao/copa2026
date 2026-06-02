@@ -150,8 +150,26 @@ export async function unlinkUserFromParticipant(participantId: string, userId: s
 
 export async function getParticipantesSummaryText(): Promise<string> {
   await requireAdmin()
-  const supabase = createAuthAdminClient()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createAuthAdminClient() as any
   const now = new Date().toISOString()
+
+  // PostgREST limita a 1000 linhas por request mesmo com service_role.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function fetchAllIn(table: string, select: string, col: string, vals: string[]): Promise<any[]> {
+    const PAGE = 1000
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: any[] = []
+    let from = 0
+    for (;;) {
+      const { data, error } = await supabase.from(table).select(select).in(col, vals).range(from, from + PAGE - 1)
+      if (error || !data || data.length === 0) break
+      rows.push(...data)
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+    return rows
+  }
 
   const [
     { data: participants },
@@ -166,14 +184,14 @@ export async function getParticipantesSummaryText(): Promise<string> {
   ])
 
   const totalParticipants = participants?.length ?? 0
-  const paidParticipants  = (participants ?? []).filter(p => p.paid).length
+  const paidParticipants  = (participants ?? []).filter((p: { paid: boolean }) => p.paid).length
   const pagantesExtras    = noteRow?.value
     ? noteRow.value.split('\n').filter((l: string) => l.trim()).length
     : 0
-  const usersApproved = (users ?? []).filter(u => u.status === 'aprovado').length
-  const usersPending  = (users ?? []).filter(u => u.status === 'aprovacao_pendente').length
+  const usersApproved = (users ?? []).filter((u: { status: string }) => u.status === 'aprovado').length
+  const usersPending  = (users ?? []).filter((u: { status: string }) => u.status === 'aprovacao_pendente').length
 
-  const nextMatch = (allMatches ?? []).find(m => m.betting_deadline > now)
+  const nextMatch = (allMatches ?? []).find((m: { betting_deadline: string }) => m.betting_deadline > now)
 
   let nextStageName: string | null = null
   let nextStageFullCount = 0
@@ -182,12 +200,12 @@ export async function getParticipantesSummaryText(): Promise<string> {
     const nextPhase = nextMatch.phase as string
     const nextRound = nextMatch.round as number | null
 
-    const sameStage = (allMatches ?? []).filter(m => {
+    const sameStage = (allMatches ?? []).filter((m: { phase: string; round: number | null }) => {
       if (nextPhase === 'group') return m.phase === 'group' && m.round === nextRound
       if (nextPhase === 'third_place' || nextPhase === 'final') return m.phase === 'third_place' || m.phase === 'final'
       return m.phase === nextPhase
     })
-    const stageMatchIds = sameStage.map(m => m.id)
+    const stageMatchIds = sameStage.map((m: { id: string }) => m.id)
 
     const STAGE_NAME_MAP: Record<string, string> = {
       round_of_32: '16avos', round_of_16: 'Oitavas', quarterfinal: 'Quartas',
@@ -197,26 +215,29 @@ export async function getParticipantesSummaryText(): Promise<string> {
       ? `Rodada ${nextRound}`
       : (STAGE_NAME_MAP[nextPhase] ?? nextPhase)
 
-    const { data: bets } = await supabase
-      .from('bets').select('participant_id').in('match_id', stageMatchIds)
+    // Paginado: N participantes × M partidas pode facilmente exceder 1000 linhas
+    const bets = await fetchAllIn('bets', 'participant_id', 'match_id', stageMatchIds)
 
     const betCount = new Map<string, number>()
-    for (const b of (bets ?? [])) betCount.set(b.participant_id, (betCount.get(b.participant_id) ?? 0) + 1)
+    for (const b of bets) betCount.set(b.participant_id, (betCount.get(b.participant_id) ?? 0) + 1)
 
     let stageTotal = stageMatchIds.length
-    const extraData: { trnBets?: unknown[]; grpBets?: unknown[]; thrdBets?: unknown[] } = {}
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const extraData: { trnBets?: any[]; grpBets?: any[]; thrdBets?: any[] } = {}
 
     if (nextPhase === 'group' && nextRound === 1) {
       stageTotal += 5 + 12 + 8 // torneio + grupos + terceiros
-      const pids = (participants ?? []).map(p => p.id)
-      const [{ data: trnBets }, { data: grpBets }, { data: thrdBets }] = await Promise.all([
+      const pids = (participants ?? []).map((p: { id: string }) => p.id)
+      const [{ data: trnBets }, grpBets, thrdBets] = await Promise.all([
+        // tournament_bets: 1 linha/participante → sem risco de truncamento
         supabase.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer').in('participant_id', pids),
-        supabase.from('group_bets').select('participant_id').in('participant_id', pids),
-        supabase.from('third_place_bets').select('participant_id').in('participant_id', pids),
+        // group_bets e third_place_bets: até 12/8 linhas por participante → paginar
+        fetchAllIn('group_bets', 'participant_id', 'participant_id', pids),
+        fetchAllIn('third_place_bets', 'participant_id', 'participant_id', pids),
       ])
       extraData.trnBets  = trnBets  ?? []
-      extraData.grpBets  = grpBets  ?? []
-      extraData.thrdBets = thrdBets ?? []
+      extraData.grpBets  = grpBets
+      extraData.thrdBets = thrdBets
     }
 
     for (const p of (participants ?? [])) {
