@@ -18,16 +18,27 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'date param required (YYYY-MM-DD)' }, { status: 400 })
   }
 
+  // participant_points_by_day cresce 200 linhas/dia — pagina manualmente (max-rows=1000 do PostgREST).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
-    .from('participant_points_by_day')
-    .select('participant_id, pts_matches, pts_groups, pts_thirds, pts_tournament')
-    .lte('event_date', date)
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if ((error as any)?.message) return NextResponse.json({ error: (error as any).message }, { status: 500 })
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rows = (data ?? []) as any[]
+  const rows: any[] = []
+  {
+    const PAGE = 1000
+    let from = 0
+    for (;;) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any)
+        .from('participant_points_by_day')
+        .select('participant_id, pts_matches, pts_groups, pts_thirds, pts_tournament')
+        .lte('event_date', date)
+        .range(from, from + PAGE - 1)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((error as any)?.message) return NextResponse.json({ error: (error as any).message }, { status: 500 })
+      if (!data || data.length === 0) break
+      rows.push(...data)
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+  }
   if (rows.length === 0) return NextResponse.json([])
 
   // Aggregate by participant

@@ -32,7 +32,7 @@ export default async function ZebrasPage() {
 
   const [
     { data: matchesRaw },
-    { data: betsRaw },
+    betsRaw,
     { data: participants },
     { data: scores },
     { data: rulesRaw },
@@ -45,8 +45,23 @@ export default async function ZebrasPage() {
       .not('score_away', 'is', null)
       .lte('betting_deadline', now)
       .order('match_datetime', { ascending: false }),
-    // vw_public_predictions: só retorna apostas com prazo encerrado (anti-spoiler garantido pela view)
-    admin.from('vw_public_predictions').select('participant_id, match_id, score_home, score_away, points'),
+    // vw_public_predictions: prazo encerrado via view. Pagina — 200 participantes × 111 jogos > 1000.
+    (async () => {
+      const PAGE = 1000
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rows: any[] = []
+      let from = 0
+      for (;;) {
+        const { data, error } = await admin.from('vw_public_predictions')
+          .select('participant_id, match_id, score_home, score_away, points')
+          .range(from, from + PAGE - 1)
+        if (error || !data || data.length === 0) break
+        rows.push(...data)
+        if (data.length < PAGE) break
+        from += PAGE
+      }
+      return rows
+    })(),
     admin.from('participants').select('id, apelido'),
     admin.from('participant_scores').select('participant_id, pts_total'),
     admin.from('scoring_rules').select('key, points'),

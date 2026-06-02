@@ -122,9 +122,24 @@ export default async function ComparadorPage() {
     admin.from('participant_scores')
       .select('participant_id, pts_matches, pts_groups, pts_thirds, pts_tournament, pts_total'),
     getVisibilitySettings(),
-    admin.from('daily_rankings_snapshot')
-      .select('snapshot_date, participant_id, pts_total')
-      .order('snapshot_date', { ascending: true }),
+    // daily_rankings_snapshot: cresce 200 linhas/dia — pagina com .order() preservado
+    (async () => {
+      const PAGE = 1000
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rows: any[] = []
+      let from = 0
+      for (;;) {
+        const { data, error } = await admin.from('daily_rankings_snapshot')
+          .select('snapshot_date, participant_id, pts_total')
+          .order('snapshot_date', { ascending: true })
+          .range(from, from + PAGE - 1)
+        if (error || !data || data.length === 0) break
+        rows.push(...data)
+        if (data.length < PAGE) break
+        from += PAGE
+      }
+      return rows
+    })(),
   ])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -133,7 +148,7 @@ export default async function ComparadorPage() {
   const allTBets: any[]   = allTBetsRes.data ?? []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const scores: any[]     = scoresRes.data ?? []
-  const snapshots: Snapshot[] = (snapshotsRes.data ?? []) as Snapshot[]
+  const snapshots: Snapshot[] = snapshotsRes as Snapshot[]
 
   // ── Build scoring rules map ───────────────────────────────────────────────
   const rulesMap: Record<string, number> = {}

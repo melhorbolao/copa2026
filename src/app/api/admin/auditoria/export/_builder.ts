@@ -101,10 +101,25 @@ export async function buildAuditBuffer(): Promise<{ buffer: Buffer; fileName: st
     admin.from('tournament_bets')
       .select('participant_id'),
 
-    // prediction_logs pode não existir se a migration ainda não foi executada
-    admin.from('prediction_logs')
-      .select('participant_id, deadline_key, last_updated_at, completed_at')
-      .then((r: any) => r, () => ({ data: null, error: 'not_found' })),
+    // prediction_logs pode não existir se a migration ainda não foi executada.
+    // Pagina — cresce com participantes × deadlines. Retorna null se a tabela não existir.
+    (async (): Promise<any[] | null> => {
+      const PAGE = 1000
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rows: any[] = []
+      let from = 0
+      for (;;) {
+        const { data, error } = await admin.from('prediction_logs')
+          .select('participant_id, deadline_key, last_updated_at, completed_at')
+          .range(from, from + PAGE - 1)
+        if (error) return null
+        if (!data || data.length === 0) break
+        rows.push(...data)
+        if (data.length < PAGE) break
+        from += PAGE
+      }
+      return rows
+    })(),
 
     admin.from('tournament_settings')
       .select('key, value')
@@ -121,9 +136,9 @@ export async function buildAuditBuffer(): Promise<{ buffer: Buffer; fileName: st
   const thirdBets    = (thirdBetsRaw ?? []) as any[]
   const tBets        = (tBetsRaw ?? []) as any[]
 
-  const predLogsData  = (predLogsResult as any).data
-  const hasPredLogs   = Array.isArray(predLogsData)
-  const predLogs      = hasPredLogs ? predLogsData as any[] : []
+  const hasPredLogs = predLogsResult !== null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const predLogs    = (predLogsResult ?? []) as any[]
 
   // available_rounds da configuração do admin
   const settingsMap: Record<string, string> = {}
