@@ -166,7 +166,7 @@ export async function buildPalpitesBuffer(
     }
   }
 
-  const sheetPassword = genPassword()
+  const sheetPassword = process.env.EXCEL_SHEET_PASSWORD ?? genPassword()
   const wb = new ExcelJS.Workbook()
   wb.creator = 'Melhor Bolão'
 
