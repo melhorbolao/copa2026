@@ -316,7 +316,7 @@ export function GroupCard({
                 onDragEnd={draggable   ? handleDragEnd : undefined}
                 className={[
                   'border-t border-gray-100 transition',
-                  i % 2 === 0 ? 'bg-white' : 'bg-gray-50/40',
+                  i % 2 === 0 ? 'bg-white' : 'bg-gray-100',
                   dragOver === i ? 'bg-amber-50 ring-1 ring-inset ring-amber-300' : '',
                   draggable     ? 'cursor-grab active:cursor-grabbing select-none' : '',
                 ].join(' ')}
