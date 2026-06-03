@@ -576,7 +576,8 @@ export function ClassificacaoMBClient({
                 } else {
                   rowBg = ZONE_ROW[z]
                 }
-                const fontCls = z === 'last' ? 'font-bold' : (isActive ? 'font-semibold' : '')
+                const highlighted = highlightMode !== 'none'
+                const fontCls = z === 'last' ? 'font-bold' : (isActive && highlighted ? 'font-semibold' : '')
 
                 return (
                   <tr
@@ -601,7 +602,7 @@ export function ClassificacaoMBClient({
                     <td className={`px-1.5 py-1 max-w-[120px] truncate ${z === 'last' ? 'text-white' : 'text-gray-900'}`}>
                       {row.apelido}
                       {z === 'last' && <span className="ml-1 text-[11px]">🔦</span>}
-                      {isActive && <span className={`ml-1 text-[10px] ${z === 'last' ? 'text-white' : 'text-verde-600'}`}>◀</span>}
+                      {isActive && highlighted && <span className={`ml-1 text-[10px] ${z === 'last' ? 'text-white' : 'text-verde-600'}`}>◀</span>}
                     </td>
                     <td className={`px-1.5 py-1 text-right font-mono font-bold tabular-nums ${z === 'last' ? 'text-white' : 'text-gray-900'}`}>
                       {row.pts}
