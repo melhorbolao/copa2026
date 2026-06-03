@@ -138,7 +138,10 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
         topPct   = (topCount / total) * 100
       }
 
-      const draws = bets.filter(b => b.score_home === b.score_away).length
+      const draws    = bets.filter(b => b.score_home === b.score_away).length
+      const avgGoals = total > 0
+        ? bets.reduce((s, b) => s + b.score_home + b.score_away, 0) / total
+        : 0
 
       let zebras = 0
       for (const b of bets) {
@@ -148,7 +151,7 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
         if ((dist[res] / dist.total) * 100 <= zebraThreshold) zebras++
       }
 
-      return { apelido: p.apelido, total, topLabel, topPct, draws, zebras }
+      return { apelido: p.apelido, total, topLabel, topPct, draws, zebras, avgGoals }
     })
   }, [matchBets, participants, zebraThreshold])
 
@@ -347,6 +350,7 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
                   <th className="text-left px-4 py-2">Participante</th>
                   <th className="text-center px-3 py-2">Placar Mais Frequente</th>
                   <th className="text-right px-3 py-2">% do Placar</th>
+                  <th className="text-right px-3 py-2">Média Gols</th>
                   <th className="text-right px-3 py-2">Empates</th>
                   <th className="text-right px-4 py-2">Zebras</th>
                 </tr>
@@ -360,6 +364,9 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
                     </td>
                     <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-gray-700">
                       {s.total === 0 ? <span className="text-gray-300">–</span> : `${s.topPct.toFixed(1)}%`}
+                    </td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-gray-700">
+                      {s.total === 0 ? <span className="text-gray-300">–</span> : s.avgGoals.toFixed(2)}
                     </td>
                     <td className="px-3 py-1.5 text-right tabular-nums text-gray-700">
                       {s.draws === 0 ? <span className="text-gray-300">–</span> : s.draws}
