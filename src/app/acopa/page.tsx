@@ -58,10 +58,7 @@ export default async function ACopaPage() {
           <p className="text-sm text-gray-500">
             Resultados oficiais · Comum a todos os participantes
           </p>
-          <p className="mt-2 text-xs text-gray-500 bg-gray-100 rounded-lg px-3 py-2 border border-gray-200">
-            Qualquer participante pode registrar o placar de um jogo durante as <strong>4 horas</strong> após o início da partida.
-            Fora desse intervalo, apenas administradores podem corrigir.
-          </p>
+
         </div>
 
         <RecalcButton />
