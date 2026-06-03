@@ -241,7 +241,7 @@ export const MatchScoreRow = memo(function MatchScoreRow({ match, canEdit, teamO
         </td>
 
         {/* Data · Cidade */}
-        <td className="hidden px-3 py-2.5 text-xs text-gray-400 sm:table-cell whitespace-nowrap">
+        <td className="px-1.5 py-2.5 text-[10px] text-gray-400 sm:px-3 sm:text-xs whitespace-nowrap">
           <div>{formatBrasilia(match.match_datetime, 'dd/MM HH:mm')}</div>
           <div className="text-gray-300">{match.city}</div>
         </td>
@@ -278,7 +278,7 @@ export const MatchScoreRow = memo(function MatchScoreRow({ match, canEdit, teamO
               )}
             </div>
           </td>
-          <td className="hidden sm:table-cell" />
+          <td />
         </tr>
       )}
     </>
