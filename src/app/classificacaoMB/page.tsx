@@ -46,6 +46,18 @@ export default async function ClassificacaoMBPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAuthAdminClient() as any
 
+  let panelaMemberIds: string[] = []
+  if (activeParticipantId) {
+    try {
+      const { data: panelaData } = await admin
+        .from('user_panela')
+        .select('member_participant_id')
+        .eq('owner_participant_id', activeParticipantId)
+      panelaMemberIds = ((panelaData ?? []) as { member_participant_id: string }[])
+        .map(r => r.member_participant_id)
+    } catch { /* tabela pode não existir */ }
+  }
+
   // PostgREST aplica max-rows=1000 mesmo com service_role.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async function fetchAll(table: string, select: string): Promise<any[]> {
@@ -461,6 +473,7 @@ export default async function ClassificacaoMBPage() {
         prizeSpots={prizeSpots}
         premioSpots={premioSpots}
         activeParticipantId={activeParticipantId ?? ''}
+        panelaMemberIds={panelaMemberIds}
         colVisibility={colVisibility}
         renderedAt={new Date().toISOString()}
         matchesRegistered={matchesRegistered}

@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useMemo, useEffect } from 'react'
+import { memo, useMemo, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -43,6 +43,7 @@ interface Props {
   prizeSpots: number
   premioSpots: number
   activeParticipantId: string
+  panelaMemberIds: string[]
   colVisibility: Record<string, boolean>
   renderedAt: string
   matchesRegistered: number
@@ -316,17 +317,21 @@ function CompactRanking({
   )
 }
 
+type HighlightMode = 'me' | 'panela' | 'none'
+
 export function ClassificacaoMBClient({
   rows, lastMatch, nextMatch,
   eliminatedTeams, eliminatedStdScorers,
   scorerMapping, teamAbbrs, prizeSpots, premioSpots,
-  activeParticipantId, colVisibility, renderedAt, matchesRegistered, groupsDefined,
+  activeParticipantId, panelaMemberIds, colVisibility, renderedAt, matchesRegistered, groupsDefined,
   lastResultDate, currentPhaseStartDate,
   sobeDesceVisible, isAdmin, lastDataDate,
 }: Props) {
   const router = useRouter()
-  const elTeams = useMemo(() => new Set(eliminatedTeams), [eliminatedTeams])
-  const elStd   = useMemo(() => new Set(eliminatedStdScorers), [eliminatedStdScorers])
+  const elTeams    = useMemo(() => new Set(eliminatedTeams),   [eliminatedTeams])
+  const elStd      = useMemo(() => new Set(eliminatedStdScorers), [eliminatedStdScorers])
+  const panelaSet  = useMemo(() => new Set(panelaMemberIds),   [panelaMemberIds])
+  const [highlightMode, setHighlightMode] = useState<HighlightMode>('me')
 
   useEffect(() => {
     const supabase = createClient()
@@ -461,10 +466,31 @@ export function ClassificacaoMBClient({
         sdActive={sdActive}
       />
 
-      <div className="mb-3 flex items-baseline gap-3">
-        <h1 className="text-2xl font-black text-gray-900">Classificação Detalhada</h1>
-        <span className="text-[10px] text-gray-400">{formatRenderedAt(renderedAt)}</span>
-        <span className="text-[10px] text-gray-400">· {matchesRegistered} jogos registrados e {groupsDefined}/12 grupos definidos</span>
+      <div className="mb-3">
+        <div className="flex flex-wrap items-baseline gap-3">
+          <h1 className="text-2xl font-black text-gray-900">Classificação Detalhada</h1>
+          <span className="text-[10px] text-gray-400">{formatRenderedAt(renderedAt)}</span>
+          <span className="text-[10px] text-gray-400">· {matchesRegistered} jogos registrados e {groupsDefined}/12 grupos definidos</span>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {([
+            { value: 'me',     label: 'Destacar meu nome' },
+            { value: 'panela', label: 'Destacar minha panela' },
+            { value: 'none',   label: 'Sem destaques' },
+          ] as { value: HighlightMode; label: string }[]).map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => setHighlightMode(opt.value)}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                highlightMode === opt.value
+                  ? 'border-azul-escuro bg-azul-escuro text-white'
+                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-400'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
@@ -533,11 +559,23 @@ export function ClassificacaoMBClient({
                 </tr>
               )}
               {ranked.map(row => {
-                const isActive = row.id === activeParticipantId
-                const z        = zoneOf(row)
-                const boundary = tiedAtBoundary && row.pts === cutPts
+                const isActive  = row.id === activeParticipantId
+                const isPanela  = panelaSet.has(row.id)
+                const z         = zoneOf(row)
+                const boundary  = tiedAtBoundary && row.pts === cutPts
 
-                const rowBg   = z === 'last' ? ZONE_ROW.last : (isActive ? 'bg-verde-50' : ZONE_ROW[z])
+                let rowBg: string
+                if (z === 'last') {
+                  rowBg = ZONE_ROW.last
+                } else if (highlightMode === 'panela') {
+                  if (isActive)      rowBg = 'bg-verde-100'    // meu nome: verde mais intenso
+                  else if (isPanela) rowBg = 'bg-indigo-50'    // panela: índigo suave
+                  else               rowBg = ZONE_ROW[z]
+                } else if (highlightMode === 'me' && isActive) {
+                  rowBg = 'bg-verde-50'
+                } else {
+                  rowBg = ZONE_ROW[z]
+                }
                 const fontCls = z === 'last' ? 'font-bold' : (isActive ? 'font-semibold' : '')
 
                 return (
