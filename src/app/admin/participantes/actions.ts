@@ -310,7 +310,7 @@ export async function getParticipantesSummaryText(): Promise<string> {
   }
 
   if (round1AvgPct !== null) {
-    lines.push(`% médio de preenchimento (Rodada 1): ${round1AvgPct.toFixed(1)}%`)
+    lines.push(`% médio de preenchimento (Rodada 1): ${round1AvgPct.toFixed(1).replace('.', ',')}%`)
   }
 
   return lines.join('\n')
