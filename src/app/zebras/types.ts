@@ -40,7 +40,6 @@ export interface PotentialUpset {
   flagHome: string
   flagAway: string
   matchDatetime: string
-  bettingDeadline: string
   phase: string
   groupName: string | null
   round: number | null
@@ -49,4 +48,22 @@ export interface PotentialUpset {
   drawPct: number
   awayPct: number
   zebraColumns: ('H' | 'D' | 'A')[]
+}
+
+export interface PotentialGroupZebra {
+  groupName: string
+  teamName: string
+  flagCode: string
+  pct: number
+  count: number
+  total: number
+}
+
+export interface PotentialG4Zebra {
+  slot: 'champion' | 'runner_up' | 'semi'
+  teamName: string
+  flagCode: string
+  pct: number
+  count: number
+  total: number
 }

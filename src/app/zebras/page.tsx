@@ -8,7 +8,7 @@ import { Navbar } from '@/components/layout/Navbar'
 import { ZebrasClient } from './ZebrasClient'
 import { detectMatchZebra, getMatchResult, scoreMatchBet } from '@/lib/scoring/engine'
 import type { RuleMap } from '@/lib/scoring/engine'
-import type { ZebraMatch, ZebraRankingEntry, ZebraScorer, PotentialUpset } from './types'
+import type { ZebraMatch, ZebraRankingEntry, ZebraScorer, PotentialUpset, PotentialGroupZebra, PotentialG4Zebra } from './types'
 
 const ZEBRA_THRESHOLD = 15
 
@@ -81,6 +81,14 @@ export default async function ZebrasPage() {
   )
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const participantMap = new Map<string, string>((participants ?? []).map((p: any) => [p.id, p.apelido]))
+
+  // Mapa nome-do-time → código de bandeira (para cards de grupo e G4)
+  const teamFlags: Record<string, string> = {}
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const m of (matchesRaw ?? []) as any[]) {
+    if (m.team_home && m.flag_home) teamFlags[m.team_home] = m.flag_home
+    if (m.team_away && m.flag_away) teamFlags[m.team_away] = m.flag_away
+  }
 
   // Apenas apostas de partidas com prazo encerrado (filtro duplo de segurança)
   const deadlineMatchIds = new Set((matchesRaw ?? []).map((m: { id: string }) => m.id))
@@ -177,46 +185,56 @@ export default async function ZebrasPage() {
     }))
     .sort((a, b) => b.pts - a.pts || b.cravadas - a.cravadas || b.colunas - a.colunas)
 
-  // ── Radar: jogos futuros com possíveis zebras ────────────────────────────
-  const { data: futureMatchesRaw } = await admin
+  // ── Radar: apostas encerradas para jogos/grupos/G4 ainda não realizados ─────
+  // Conceito: prazo de apostas JÁ ENCERRADO, mas resultado/classificação ainda
+  // não definido. Apostas estão bloqueadas — distribuição final.
+
+  // 1. Jogos com prazo encerrado e sem placar oficial
+  const { data: pendingMatchesRaw } = await admin
     .from('matches')
-    .select('id, team_home, team_away, flag_home, flag_away, match_datetime, betting_deadline, phase, group_name, round, city')
-    .gt('betting_deadline', now)
+    .select('id, team_home, team_away, flag_home, flag_away, match_datetime, phase, group_name, round, city')
+    .lte('betting_deadline', now)
+    .is('score_home', null)
     .neq('team_home', 'TBD')
     .neq('team_away', 'TBD')
-    .order('betting_deadline', { ascending: true })
+    .order('match_datetime', { ascending: true })
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const futureIds = (futureMatchesRaw ?? []).map((m: any) => m.id)
+  // Completa teamFlags com times das partidas ainda não realizadas
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let futureBetsRaw: any[] = []
-  if (futureIds.length > 0) {
-    // Admin bypassa RLS — obtém TODAS as apostas (necessário para percentuais reais).
-    // PostgREST aplica max-rows=1000 mesmo com service_role — pagina manualmente.
+  for (const m of (pendingMatchesRaw ?? []) as any[]) {
+    if (m.team_home && m.flag_home) teamFlags[m.team_home] = m.flag_home
+    if (m.team_away && m.flag_away) teamFlags[m.team_away] = m.flag_away
+  }
+
+  const pendingIds = ((pendingMatchesRaw ?? []) as any[]).map((m: any) => m.id)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let pendingBetsRaw: any[] = []
+  if (pendingIds.length > 0) {
     const PAGE = 1000
     let from = 0
     for (;;) {
-      const { data, error } = await admin.from('bets').select('match_id, score_home, score_away').in('match_id', futureIds).range(from, from + PAGE - 1)
+      const { data, error } = await admin.from('bets').select('match_id, score_home, score_away').in('match_id', pendingIds).range(from, from + PAGE - 1)
       if (error || !data || data.length === 0) break
-      futureBetsRaw.push(...data)
+      pendingBetsRaw.push(...data)
       if (data.length < PAGE) break
       from += PAGE
     }
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const futureBetsByMatch = new Map<string, any[]>()
+  const pendingBetsByMatch = new Map<string, any[]>()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const bet of futureBetsRaw as any[]) {
-    const list = futureBetsByMatch.get(bet.match_id) ?? []
+  for (const bet of pendingBetsRaw as any[]) {
+    const list = pendingBetsByMatch.get(bet.match_id) ?? []
     list.push(bet)
-    futureBetsByMatch.set(bet.match_id, list)
+    pendingBetsByMatch.set(bet.match_id, list)
   }
 
   const potentialUpsets: PotentialUpset[] = []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const match of (futureMatchesRaw ?? []) as any[]) {
-    const matchBets = futureBetsByMatch.get(match.id) ?? []
+  for (const match of (pendingMatchesRaw ?? []) as any[]) {
+    const matchBets = pendingBetsByMatch.get(match.id) ?? []
     if (matchBets.length === 0) continue
 
     const total = matchBets.length
@@ -244,7 +262,6 @@ export default async function ZebrasPage() {
       flagHome: match.flag_home ?? '',
       flagAway: match.flag_away ?? '',
       matchDatetime: match.match_datetime,
-      bettingDeadline: match.betting_deadline,
       phase: match.phase,
       groupName: match.group_name ?? null,
       round: match.round ?? null,
@@ -256,6 +273,89 @@ export default async function ZebrasPage() {
     })
   }
 
+  // 2. Grupos com classificação ainda indefinida (algum jogo do grupo sem placar)
+  const pendingGroupNames = new Set<string>(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((pendingMatchesRaw ?? []) as any[])
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .filter((m: any) => m.phase === 'group' && m.group_name)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((m: any) => m.group_name as string)
+  )
+
+  const potentialGroupZebras: PotentialGroupZebra[] = []
+  if (pendingGroupNames.size > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const allGroupBets: any[] = []
+    {
+      const PAGE = 1000; let from = 0
+      for (;;) {
+        const { data, error } = await admin.from('group_bets').select('group_name, first_place').range(from, from + PAGE - 1)
+        if (error || !data || data.length === 0) break
+        allGroupBets.push(...data)
+        if (data.length < PAGE) break
+        from += PAGE
+      }
+    }
+    for (const groupName of [...pendingGroupNames].sort()) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const groupBets = allGroupBets.filter((b: any) => b.group_name === groupName && b.first_place)
+      const total = groupBets.length
+      if (total === 0) continue
+      const counts = new Map<string, number>()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const b of groupBets) counts.set(b.first_place, (counts.get(b.first_place) ?? 0) + 1)
+      for (const [team, count] of counts) {
+        const pct = Math.round((count / total) * 100)
+        if (pct > ZEBRA_THRESHOLD) continue
+        potentialGroupZebras.push({ groupName, teamName: team, flagCode: teamFlags[team] ?? '', pct, count, total })
+      }
+    }
+    potentialGroupZebras.sort((a, b) => a.pct - b.pct || a.groupName.localeCompare(b.groupName))
+  }
+
+  // 3. G4 da Copa: slots ainda não definidos (prazo de bonus já encerrado)
+  const potentialG4Zebras: PotentialG4Zebra[] = []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const bonusDeadlinePassed = (matchesRaw ?? []).some((m: any) => m.phase === 'group')
+  if (bonusDeadlinePassed) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: tBetsData } = await admin.from('tournament_bets').select('champion, runner_up, semi1, semi2') as any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tBets: any[] = tBetsData ?? []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const completedPhases = new Set((matchesRaw ?? []).map((m: any) => m.phase as string))
+    const hasChampion = completedPhases.has('final')
+    const hasSemis    = completedPhases.has('semifinal')
+
+    const slotDefs: { slot: PotentialG4Zebra['slot']; field: string; decided: boolean }[] = [
+      { slot: 'champion',  field: 'champion',  decided: hasChampion },
+      { slot: 'runner_up', field: 'runner_up', decided: hasChampion },
+      { slot: 'semi',      field: 'semi1',     decided: hasSemis },
+      { slot: 'semi',      field: 'semi2',     decided: hasSemis },
+    ]
+
+    for (const { slot, field, decided } of slotDefs) {
+      if (decided) continue
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const picks = tBets.filter((b: any) => b[field])
+      const total = picks.length
+      if (total === 0) continue
+      const counts = new Map<string, number>()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const b of picks) counts.set(b[field], (counts.get(b[field]) ?? 0) + 1)
+      for (const [team, count] of counts) {
+        const pct = Math.round((count / total) * 100)
+        if (pct > ZEBRA_THRESHOLD) continue
+        // Semi: evita duplicar se o mesmo time aparece em semi1 e semi2
+        const dup = potentialG4Zebras.find(z => z.slot === 'semi' && z.teamName === team)
+        if (dup) { if (pct < dup.pct) { dup.pct = pct; dup.count = count } ; continue }
+        potentialG4Zebras.push({ slot, teamName: team, flagCode: teamFlags[team] ?? '', pct, count, total })
+      }
+    }
+    potentialG4Zebras.sort((a, b) => a.pct - b.pct)
+  }
+
   return (
     <>
       <Navbar />
@@ -264,6 +364,8 @@ export default async function ZebrasPage() {
         ranking={ranking}
         threshold={ZEBRA_THRESHOLD}
         potentialUpsets={potentialUpsets}
+        potentialGroupZebras={potentialGroupZebras}
+        potentialG4Zebras={potentialG4Zebras}
       />
     </>
   )

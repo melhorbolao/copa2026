@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { Flag } from '@/components/ui/Flag'
-import type { ZebraMatch, ZebraRankingEntry, ZebraScorer, PotentialUpset } from './types'
+import type { ZebraMatch, ZebraRankingEntry, ZebraScorer, PotentialUpset, PotentialGroupZebra, PotentialG4Zebra } from './types'
 
 type SortKey = 'pts' | 'cravadas' | 'colunas'
 type Tab = 'mitos' | 'almanaque' | 'radar'
@@ -15,6 +15,8 @@ interface Props {
   ranking: ZebraRankingEntry[]
   threshold: number
   potentialUpsets: PotentialUpset[]
+  potentialGroupZebras: PotentialGroupZebra[]
+  potentialG4Zebras: PotentialG4Zebra[]
 }
 
 // ── Utilitários ──────────────────────────────────────────────────────────────
@@ -50,16 +52,6 @@ function formatMatchDatetime(iso: string): string {
   })
 }
 
-function timeToDeadline(deadline: string): string {
-  const diff = new Date(deadline).getTime() - Date.now()
-  if (diff <= 0) return 'Prazo encerrado'
-  const mins = Math.floor(diff / 60000)
-  if (mins < 60) return `${mins}min restantes`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}h restantes`
-  const days = Math.floor(hours / 24)
-  return `${days} dia${days !== 1 ? 's' : ''} restante${days !== 1 ? 's' : ''}`
-}
 
 function phaseLabel(phase: string, round: number | null, groupName: string | null): string {
   if (phase === 'group') return `Grupo ${groupName ?? ''} · Rodada ${round ?? ''}`
@@ -364,18 +356,8 @@ function UpsetDistBar({ upset }: { upset: PotentialUpset }) {
 }
 
 function PotentialUpsetCard({ upset }: { upset: PotentialUpset }) {
-  const deadline = timeToDeadline(upset.bettingDeadline)
-  const deadlineUrgent = new Date(upset.bettingDeadline).getTime() - Date.now() < 3 * 60 * 60 * 1000
-
-  const zebraLabel = upset.zebraColumns.map(col =>
-    col === 'H' ? upset.teamHome :
-    col === 'A' ? upset.teamAway :
-    'Empate'
-  ).join(' e ')
-
   return (
     <div className="overflow-hidden rounded-xl border border-ouro/25 bg-white shadow-sm">
-      {/* Cabeçalho: metadados */}
       <div className="flex items-center justify-between gap-2 border-b border-gray-100 bg-azul-dark/5 px-3 py-2">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
@@ -384,15 +366,11 @@ function PotentialUpsetCard({ upset }: { upset: PotentialUpset }) {
           </p>
           <p className="text-[10px] text-gray-400">{formatMatchDatetime(upset.matchDatetime)}</p>
         </div>
-        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-          deadlineUrgent ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-500'
-        }`}>
-          {deadline}
+        <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+          🔒 apostas encerradas
         </span>
       </div>
-
       <div className="space-y-2.5 px-3 py-2.5">
-        {/* Confronto */}
         <div className="flex items-center justify-center gap-2 text-sm font-bold text-gray-800">
           <Flag code={upset.flagHome} size="xs" />
           <span>{upset.teamHome}</span>
@@ -400,53 +378,120 @@ function PotentialUpsetCard({ upset }: { upset: PotentialUpset }) {
           <span>{upset.teamAway}</span>
           <Flag code={upset.flagAway} size="xs" />
         </div>
-
-        {/* Distribuição */}
         <UpsetDistBar upset={upset} />
-
-        {/* Label de alerta */}
         <p className="text-[10px] text-gray-400">
           <span className="font-semibold text-amber-600">Potencial zebra:</span>{' '}
-          apenas {upset.zebraColumns.map(c =>
-            `${c === 'H' ? upset.homePct : c === 'A' ? upset.awayPct : upset.drawPct}% apostaram em ${c === 'H' ? upset.teamHome : c === 'A' ? upset.teamAway : 'Empate'}`
+          {upset.zebraColumns.map(c =>
+            `apenas ${c === 'H' ? upset.homePct : c === 'A' ? upset.awayPct : upset.drawPct}% apostaram em ${c === 'H' ? upset.teamHome : c === 'A' ? upset.teamAway : 'Empate'}`
           ).join(' · ')}
-          {' '}até agora
         </p>
       </div>
     </div>
   )
 }
 
-function PotentialUpsetsTab({ upsets }: { upsets: PotentialUpset[] }) {
-  if (upsets.length === 0) {
+const G4_SLOT_LABEL: Record<PotentialG4Zebra['slot'], string> = {
+  champion:  'Campeão',
+  runner_up: 'Vice-campeão',
+  semi:      'Semifinal',
+}
+
+function PotentialG4Card({ z }: { z: PotentialG4Zebra }) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-ouro/25 bg-white px-3 py-2.5 shadow-sm">
+      <Flag code={z.flagCode} size="xs" className="shrink-0" />
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-bold text-gray-800">{z.teamName}</p>
+        <p className="text-[10px] text-gray-400">{G4_SLOT_LABEL[z.slot]}</p>
+      </div>
+      <div className="text-right shrink-0">
+        <p className="text-sm font-black text-ouro">{z.pct}%</p>
+        <p className="text-[10px] text-gray-400">{z.count}/{z.total}</p>
+      </div>
+      <Image src="/zebra.png" alt="" width={16} height={16} className="shrink-0 animate-pulse" />
+    </div>
+  )
+}
+
+function PotentialGroupCard({ z }: { z: PotentialGroupZebra }) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-ouro/25 bg-white px-3 py-2.5 shadow-sm">
+      <Flag code={z.flagCode} size="xs" className="shrink-0" />
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-bold text-gray-800">{z.teamName}</p>
+        <p className="text-[10px] text-gray-400">1º do Grupo {z.groupName}</p>
+      </div>
+      <div className="text-right shrink-0">
+        <p className="text-sm font-black text-ouro">{z.pct}%</p>
+        <p className="text-[10px] text-gray-400">{z.count}/{z.total}</p>
+      </div>
+      <Image src="/zebra.png" alt="" width={16} height={16} className="shrink-0 animate-pulse" />
+    </div>
+  )
+}
+
+function PotentialUpsetsTab({
+  upsets, groupZebras, g4Zebras,
+}: {
+  upsets: PotentialUpset[]
+  groupZebras: PotentialGroupZebra[]
+  g4Zebras: PotentialG4Zebra[]
+}) {
+  const total = upsets.length + groupZebras.length + g4Zebras.length
+
+  if (total === 0) {
     return (
       <div className="flex flex-col items-center gap-3 py-16 text-center text-gray-400">
         <Image src="/zebra.png" alt="" width={48} height={48} className="opacity-30" />
-        <p className="text-sm">Nenhum radar ativo no momento.</p>
+        <p className="text-sm">Nenhuma possível zebra no momento.</p>
         <p className="text-xs">
-          Quando participantes preencherem palpites e algum resultado estiver com menos de 15% das apostas,
-          ele aparecerá aqui.
+          Aparecem aqui apostas (jogos, 1º do grupo ou G4) com prazo encerrado,
+          jogo/resultado ainda não definido, e algum resultado apostado por ≤ 15%.
         </p>
       </div>
     )
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-5">
       <p className="text-xs text-gray-400">
-        Jogos com prazo em aberto onde alguma coluna acumulou ≤ 15% das apostas. Dados anônimos e agregados — sem nomes.
-        Atualiza a cada 60 segundos.
+        Apostas com prazo <strong>já encerrado</strong> e resultado <strong>ainda não definido</strong> onde alguma coluna tem ≤ 15% das apostas.
+        Distribuição final — apostas bloqueadas.
       </p>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {upsets.map(u => <PotentialUpsetCard key={u.id} upset={u} />)}
-      </div>
+
+      {upsets.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-[11px] font-bold uppercase tracking-wide text-gray-500">⚽ Jogos</h3>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {upsets.map(u => <PotentialUpsetCard key={u.id} upset={u} />)}
+          </div>
+        </div>
+      )}
+
+      {groupZebras.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-[11px] font-bold uppercase tracking-wide text-gray-500">🏆 1º do Grupo</h3>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {groupZebras.map(z => <PotentialGroupCard key={`${z.groupName}-${z.teamName}`} z={z} />)}
+          </div>
+        </div>
+      )}
+
+      {g4Zebras.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-[11px] font-bold uppercase tracking-wide text-gray-500">🌟 G4 da Copa</h3>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {g4Zebras.map(z => <PotentialG4Card key={`${z.slot}-${z.teamName}`} z={z} />)}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 // ── Componente principal ─────────────────────────────────────────────────────
 
-export function ZebrasClient({ zebraMatches, ranking, threshold, potentialUpsets }: Props) {
+export function ZebrasClient({ zebraMatches, ranking, threshold, potentialUpsets, potentialGroupZebras, potentialG4Zebras }: Props) {
   const [tab, setTab] = useState<Tab>('mitos')
   const [sortKey, setSortKey] = useState<SortKey>('pts')
   const [sortAsc, setSortAsc] = useState(false)
@@ -467,12 +512,8 @@ export function ZebrasClient({ zebraMatches, ranking, threshold, potentialUpsets
     return () => { void supabase.removeChannel(channel) }
   }, [router])
 
-  // Radar: refresh periódico de 60s quando a aba está ativa
-  useEffect(() => {
-    if (tab !== 'radar') return
-    const id = setInterval(() => router.refresh(), 60_000)
-    return () => clearInterval(id)
-  }, [tab, router])
+  // Radar: refresh quando um jogo ganha placar (e desaparece da lista)
+  // Não precisamos de polling periódico pois apostas já estão bloqueadas
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortAsc(v => !v)
@@ -514,9 +555,9 @@ export function ZebrasClient({ zebraMatches, ranking, threshold, potentialUpsets
           </TabButton>
           <TabButton active={tab === 'radar'} onClick={() => setTab('radar')}>
             📡 Possíveis Zebras
-            {potentialUpsets.length > 0 && (
+            {(potentialUpsets.length + potentialGroupZebras.length + potentialG4Zebras.length) > 0 && (
               <span className="ml-1.5 rounded-full bg-ouro/20 px-1.5 py-0.5 text-[10px] font-bold text-ouro">
-                {potentialUpsets.length}
+                {potentialUpsets.length + potentialGroupZebras.length + potentialG4Zebras.length}
               </span>
             )}
           </TabButton>
@@ -532,7 +573,7 @@ export function ZebrasClient({ zebraMatches, ranking, threshold, potentialUpsets
           <AlmanaqueTab zebraMatches={zebraMatches} />
         )}
         {tab === 'radar' && (
-          <PotentialUpsetsTab upsets={potentialUpsets} />
+          <PotentialUpsetsTab upsets={potentialUpsets} groupZebras={potentialGroupZebras} g4Zebras={potentialG4Zebras} />
         )}
       </div>
     </main>
