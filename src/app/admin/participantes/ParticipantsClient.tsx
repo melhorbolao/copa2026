@@ -7,24 +7,28 @@ import { CreateParticipantModal } from './CreateParticipantModal'
 import { PagantesNote } from './PagantesNote'
 import { getParticipantesSummaryText } from './actions'
 
-type Filter = 'all' | 'paid' | 'pending'
+type PaymentFilter = 'all' | 'paid' | 'pending'
+type FillFilter    = 'all' | 'zerado' | 'parcial' | 'completo'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Participant = any
 type User = { id: string; name: string; apelido: string | null; whatsapp: string | null; padrinho: string | null }
 
 interface Props {
-  participants: Participant[]
-  users: User[]
-  pagantesNote: string
+  participants:    Participant[]
+  users:           User[]
+  pagantesNote:    string
+  betFillByPid:    Record<string, 'zerado' | 'parcial' | 'completo'>
+  currentStageName: string | null
 }
 
-export function ParticipantsClient({ participants, users, pagantesNote }: Props) {
-  const [filter, setFilter]               = useState<Filter>('all')
-  const [searchText, setSearchText]       = useState('')
+export function ParticipantsClient({ participants, users, pagantesNote, betFillByPid, currentStageName }: Props) {
+  const [paymentFilter,    setPaymentFilter]    = useState<PaymentFilter>('all')
+  const [fillFilter,       setFillFilter]       = useState<FillFilter>('all')
+  const [searchText,       setSearchText]       = useState('')
   const [selectedPadrinho, setSelectedPadrinho] = useState<string>('all')
-  const [copied, setCopied]               = useState(false)
-  const [isPending, startTransition]      = useProgressTransition()
+  const [copied,           setCopied]           = useState(false)
+  const [isPending,        startTransition]     = useProgressTransition()
 
   const handleCopyResumo = () => {
     startTransition(async () => {
@@ -67,8 +71,21 @@ export function ParticipantsClient({ participants, users, pagantesNote }: Props)
   const pagantesExtras  = pagantesNote ? pagantesNote.split('\n').filter(l => l.trim()).length : 0
   const totalArrecadado = (pagos + pagantesExtras) * 250
 
+  // Contagens de preenchimento para os chips de filtro
+  const zeradoCount   = currentStageName ? participants.filter(p => betFillByPid[p.id] === 'zerado').length   : 0
+  const parcialCount  = currentStageName ? participants.filter(p => betFillByPid[p.id] === 'parcial').length  : 0
+  const completoCount = currentStageName ? participants.filter(p => betFillByPid[p.id] === 'completo').length : 0
+
   const visible = participants
-    .filter(p => filter === 'paid' ? p.paid : filter === 'pending' ? !p.paid : true)
+    .filter(p => {
+      if (paymentFilter === 'paid')    return p.paid
+      if (paymentFilter === 'pending') return !p.paid
+      return true
+    })
+    .filter(p => {
+      if (fillFilter === 'all') return true
+      return betFillByPid[p.id] === fillFilter
+    })
     .filter(p => {
       if (!searchText.trim()) return true
       const q = searchText.toLowerCase()
@@ -82,15 +99,36 @@ export function ParticipantsClient({ participants, users, pagantesNote }: Props)
       return p.user_participants.some((up: any) => userPadrinhoMap.get(up.user_id) === selectedPadrinho)
     })
 
-  const hasActiveFilters = filter !== 'all' || searchText.trim() !== '' || selectedPadrinho !== 'all'
+  const hasActiveFilters =
+    paymentFilter !== 'all' || fillFilter !== 'all' ||
+    searchText.trim() !== '' || selectedPadrinho !== 'all'
+
+  const clearAll = () => {
+    setPaymentFilter('all')
+    setFillFilter('all')
+    setSearchText('')
+    setSelectedPadrinho('all')
+  }
 
   return (
     <div>
-      {/* Cards-filtro */}
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <FilterCard label="Participantes" value={total}     color="gray"   active={filter === 'all'}     onToggle={() => setFilter('all')}                                      />
-        <FilterCard label="Pagos"         value={pagos}     color="verde"  active={filter === 'paid'}    onToggle={() => setFilter(filter === 'paid'    ? 'all' : 'paid')}    />
-        <FilterCard label="Pendentes"     value={pendentes} color="orange" active={filter === 'pending'} onToggle={() => setFilter(filter === 'pending' ? 'all' : 'pending')} />
+      {/* Cards-filtro de pagamento */}
+      <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <FilterCard
+          label="Participantes" value={total} color="gray"
+          active={paymentFilter === 'all' && fillFilter === 'all'}
+          onToggle={clearAll}
+        />
+        <FilterCard
+          label="Pagos" value={pagos} color="verde"
+          active={paymentFilter === 'paid'}
+          onToggle={() => setPaymentFilter(paymentFilter === 'paid' ? 'all' : 'paid')}
+        />
+        <FilterCard
+          label="Pendentes" value={pendentes} color="orange"
+          active={paymentFilter === 'pending'}
+          onToggle={() => setPaymentFilter(paymentFilter === 'pending' ? 'all' : 'pending')}
+        />
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center">
           <p className="text-3xl font-black text-emerald-700">
             {totalArrecadado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 })}
@@ -101,6 +139,33 @@ export function ParticipantsClient({ participants, users, pagantesNote }: Props)
           </p>
         </div>
       </div>
+
+      {/* Chips de filtro por preenchimento de palpites */}
+      {currentStageName && (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-gray-400">
+            Palpites {currentStageName}:
+          </span>
+          <FillChip
+            label="Zerado" count={zeradoCount}
+            color="red"
+            active={fillFilter === 'zerado'}
+            onToggle={() => setFillFilter(fillFilter === 'zerado' ? 'all' : 'zerado')}
+          />
+          <FillChip
+            label="Parcial" count={parcialCount}
+            color="amber"
+            active={fillFilter === 'parcial'}
+            onToggle={() => setFillFilter(fillFilter === 'parcial' ? 'all' : 'parcial')}
+          />
+          <FillChip
+            label="Completo" count={completoCount}
+            color="green"
+            active={fillFilter === 'completo'}
+            onToggle={() => setFillFilter(fillFilter === 'completo' ? 'all' : 'completo')}
+          />
+        </div>
+      )}
 
       {/* Filtros de texto e padrinho */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -141,7 +206,7 @@ export function ParticipantsClient({ participants, users, pagantesNote }: Props)
 
         {hasActiveFilters && (
           <button
-            onClick={() => { setFilter('all'); setSearchText(''); setSelectedPadrinho('all') }}
+            onClick={clearAll}
             className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-500 shadow-sm hover:bg-gray-50 transition"
           >
             Limpar filtros
@@ -202,13 +267,14 @@ export function ParticipantsClient({ participants, users, pagantesNote }: Props)
   )
 }
 
+// ── FilterCard ────────────────────────────────────────────────────────────────
+
 interface FilterCardProps {
-  label: string
-  value: number
-  color: string
-  active: boolean
+  label:    string
+  value:    number
+  color:    string
+  active:   boolean
   onToggle: () => void
-  onClick?: () => void
 }
 
 function FilterCard({ label, value, color, active, onToggle }: FilterCardProps) {
@@ -239,4 +305,30 @@ function ringColor(color: string) {
   if (color === 'verde')  return 'ring-verde-400'
   if (color === 'orange') return 'ring-orange-400'
   return 'ring-gray-400'
+}
+
+// ── FillChip ──────────────────────────────────────────────────────────────────
+
+interface FillChipProps {
+  label:    string
+  count:    number
+  color:    'red' | 'amber' | 'green'
+  active:   boolean
+  onToggle: () => void
+}
+
+function FillChip({ label, count, color, active, onToggle }: FillChipProps) {
+  const styles: Record<FillChipProps['color'], { on: string; off: string }> = {
+    red:   { on: 'bg-red-600   text-white', off: 'bg-red-50   text-red-600   hover:bg-red-100'   },
+    amber: { on: 'bg-amber-500 text-white', off: 'bg-amber-50 text-amber-600 hover:bg-amber-100' },
+    green: { on: 'bg-green-600 text-white', off: 'bg-green-50 text-green-700 hover:bg-green-100' },
+  }
+  return (
+    <button
+      onClick={onToggle}
+      className={`rounded-full px-3 py-1 text-xs font-semibold transition ${active ? styles[color].on : styles[color].off}`}
+    >
+      {label} · {count}
+    </button>
+  )
 }
