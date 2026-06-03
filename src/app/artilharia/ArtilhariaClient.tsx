@@ -715,11 +715,20 @@ export function ArtilhariaClient({
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {scorers.map((scorer, i) => (
+          {(() => {
+            const ranks: number[] = []
+            for (let i = 0; i < scorers.length; i++) {
+              ranks.push(
+                i > 0 && scorers[i].goals_count === scorers[i - 1].goals_count
+                  ? ranks[i - 1]
+                  : i + 1
+              )
+            }
+            return scorers.map((scorer, i) => (
             <ScorerCard
               key={scorer.id}
               scorer={scorer}
-              rank={i + 1}
+              rank={ranks[i]}
               showBettors={showBettors}
               showPositions={showPositions}
               isAdmin={isAdmin}
@@ -730,7 +739,8 @@ export function ArtilhariaClient({
               onUpdatePhoto={updateScorerPhoto}
               onUpdateTeam={updateScorerTeam}
             />
-          ))}
+          ))
+          })()}
         </div>
       )}
 
