@@ -475,7 +475,7 @@ export function ClassificacaoMBClient({
         <div className="mt-2 flex flex-wrap gap-2">
           {([
             { value: 'me',     label: 'Destacar meu nome' },
-            { value: 'panela', label: 'Destacar minha panela' },
+            ...(panelaMemberIds.length > 0 ? [{ value: 'panela' as HighlightMode, label: 'Destacar minha panela' }] : []),
             { value: 'none',   label: 'Sem destaques' },
           ] as { value: HighlightMode; label: string }[]).map(opt => (
             <button
