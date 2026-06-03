@@ -572,7 +572,7 @@ export function ClassificacaoMBClient({
                   else if (isPanela) rowBg = 'bg-indigo-50'    // panela: índigo suave
                   else               rowBg = ZONE_ROW[z]
                 } else if (highlightMode === 'me' && isActive) {
-                  rowBg = 'bg-verde-50'
+                  rowBg = 'bg-verde-100'
                 } else {
                   rowBg = ZONE_ROW[z]
                 }
