@@ -1153,7 +1153,7 @@ export function TabelaMBClient({
             {vItems.map(vRow => {
               const row = allRows[vRow.index]
               const odd = vRow.index % 2 === 1
-              const bg  = odd ? '#f9fafb' : '#ffffff'
+              const bg  = odd ? '#e5e7eb' : '#ffffff'
 
               // ── Section header ──────────────────────────────────────────────
               if (row.kind === 'section') {
