@@ -150,7 +150,8 @@ async function createParticipantForUser(admin: any, userId: string, apelido: str
 export async function updateObservacao(userId: string, observacao: string) {
   await requireAdmin()
   const supabase = await createAdminClient()
-  await supabase.from('users').update({ observacao: observacao || null }).eq('id', userId)
+  const { error } = await supabase.from('users').update({ observacao: observacao || null }).eq('id', userId)
+  if (error) throw new Error(error.message)
   revalidatePath('/admin/usuarios')
 }
 
@@ -158,7 +159,8 @@ export async function updateObservacao(userId: string, observacao: string) {
 export async function updateApelido(userId: string, apelido: string) {
   await requireAdmin()
   const supabase = await createAdminClient()
-  await supabase.from('users').update({ apelido: apelido || null }).eq('id', userId)
+  const { error } = await supabase.from('users').update({ apelido: apelido || null }).eq('id', userId)
+  if (error) throw new Error(error.message)
   revalidatePath('/admin/usuarios')
 }
 
@@ -166,7 +168,8 @@ export async function updateApelido(userId: string, apelido: string) {
 export async function updateWhatsapp(userId: string, whatsapp: string) {
   await requireAdmin()
   const supabase = await createAdminClient()
-  await supabase.from('users').update({ whatsapp: whatsapp.trim() || null }).eq('id', userId)
+  const { error } = await supabase.from('users').update({ whatsapp: whatsapp.trim() || null }).eq('id', userId)
+  if (error) throw new Error(error.message)
   revalidatePath('/admin/usuarios')
 }
 
@@ -174,7 +177,8 @@ export async function updateWhatsapp(userId: string, whatsapp: string) {
 export async function updatePadrinho(userId: string, padrinho: string) {
   await requireAdmin()
   const supabase = await createAdminClient()
-  await supabase.from('users').update({ padrinho: padrinho || null }).eq('id', userId)
+  const { error } = await supabase.from('users').update({ padrinho: padrinho || null }).eq('id', userId)
+  if (error) throw new Error(error.message)
   revalidatePath('/admin/usuarios')
 }
 
