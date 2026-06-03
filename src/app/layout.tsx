@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast'
 import NextTopLoader from 'nextjs-toploader'
 import { AdminViewProvider } from '@/contexts/AdminViewContext'
 import { Sidebar } from '@/components/layout/Sidebar'
+import { AlertBannerWrapper } from '@/components/AlertBannerWrapper'
 import { PageTracker } from '@/components/analytics/PageTracker'
 import './globals.css'
 
@@ -46,6 +47,9 @@ export default function RootLayout({
           <PageTracker />
           <Sidebar />
           <div className="sm:pl-56">
+            <div className="hidden sm:block sticky top-0 z-40">
+              <AlertBannerWrapper />
+            </div>
             {children}
           </div>
         </AdminViewProvider>

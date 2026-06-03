@@ -444,17 +444,45 @@ export async function sendBonusAlert(
 
   if (type === 'alert_incomplete') {
     const allParticipantIds = [...new Set((userParticipants ?? []).map(r => r.participant_id))]
-    const { data: completeBets } = await supabase
-      .from('tournament_bets')
-      .select('participant_id')
-      .in('participant_id', allParticipantIds)
-      .not('champion', 'is', null)
 
-    const completeIds = new Set((completeBets ?? []).map(b => b.participant_id))
-    targets = users.filter(u => {
-      const pids = userToParticipants.get(u.id) ?? []
-      return pids.length === 0 || pids.some(pid => !completeIds.has(pid))
-    })
+    const { data: upcomingMatches } = await supabase
+      .from('matches')
+      .select('id, phase, round')
+      .gt('betting_deadline', new Date().toISOString())
+      .order('betting_deadline', { ascending: true })
+
+    if (!upcomingMatches?.length) {
+      targets = []
+    } else {
+      const { phase: nextPhase, round: nextRound } = upcomingMatches[0]
+      const roundMatchIds = upcomingMatches
+        .filter(m => m.phase === nextPhase && m.round === nextRound)
+        .map(m => m.id)
+
+      const { data: existingBets } = await supabase
+        .from('bets')
+        .select('participant_id, match_id')
+        .in('participant_id', allParticipantIds)
+        .in('match_id', roundMatchIds)
+
+      const betsByParticipant = new Map<string, Set<string>>()
+      for (const bet of existingBets ?? []) {
+        if (!betsByParticipant.has(bet.participant_id)) betsByParticipant.set(bet.participant_id, new Set())
+        betsByParticipant.get(bet.participant_id)!.add(bet.match_id)
+      }
+
+      const incompleteIds = new Set(
+        allParticipantIds.filter(pid => {
+          const bets = betsByParticipant.get(pid) ?? new Set<string>()
+          return !roundMatchIds.every(mid => bets.has(mid))
+        })
+      )
+
+      targets = users.filter(u => {
+        const pids = userToParticipants.get(u.id) ?? []
+        return pids.length === 0 || pids.some(pid => incompleteIds.has(pid))
+      })
+    }
   }
 
   let sent = 0

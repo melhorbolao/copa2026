@@ -14,7 +14,6 @@ function isAlertActive(alert: AdminAlertRow): boolean {
 
 export function AlertBanner() {
   const [alerts,    setAlerts]    = useState<AdminAlertRow[]>([])
-  const [loggedIn,  setLoggedIn]  = useState(false)
   const [dismissed, setDismissed] = useState<string[]>([])
 
   useEffect(() => {
@@ -33,10 +32,6 @@ export function AlertBanner() {
         )
     }
 
-    supabase.auth.getUser().then(({ data }) => {
-      if (data?.user) setLoggedIn(true)
-    }, () => {})
-
     fetchAlerts()
 
     try {
@@ -54,8 +49,6 @@ export function AlertBanner() {
       }
     }
   }, [])
-
-  if (!loggedIn) return null
 
   const visible = alerts.filter(a => isAlertActive(a) && !dismissed.includes(a.id))
   if (visible.length === 0) return null

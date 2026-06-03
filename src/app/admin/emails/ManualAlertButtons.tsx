@@ -31,7 +31,7 @@ Boa sorte! 🏆`,
   {
     type: 'alert_incomplete',
     label: 'Aviso de palpites incompletos',
-    description: 'Envia somente aos participantes sem campeão preenchido, com Excel em anexo. Recomendado ~24h antes do prazo.',
+    description: 'Envia somente aos participantes sem todos os palpites da próxima rodada preenchidos, com Excel em anexo. Recomendado ~24h antes do prazo.',
     defaultSubject: '⚠️ Seus palpites estão incompletos — prazo em 10/06',
     defaultBody: `Olá, {nome}!
 
