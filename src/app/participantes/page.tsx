@@ -35,9 +35,9 @@ const STAGE_LABELS: Record<StageKey, string> = {
 export default async function ControlePage({
   searchParams,
 }: {
-  searchParams: Promise<{ filter?: string }>
+  searchParams: Promise<{ filter?: string; pagamento?: string; palpite?: string }>
 }) {
-  const { filter = '' } = await searchParams
+  const { filter = '', pagamento = '', palpite = '' } = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   let isAdmin = false
@@ -324,6 +324,8 @@ export default async function ControlePage({
         <ParticipantesTable
           rows={allRows}
           activeFilter={filter}
+          paymentFilter={pagamento}
+          fillFilter={palpite}
           hasAnyEliminated={hasAnyEliminated}
           nextStageIdx={nextStageIdx}
           stageMeta={stageMeta}

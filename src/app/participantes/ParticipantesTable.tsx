@@ -34,7 +34,9 @@ interface StageMeta {
 
 interface Props {
   rows: TableRow[]
-  activeFilter: string
+  activeFilter: string   // view: ativos | todos
+  paymentFilter: string  // pagamento: pago | pendente | ''
+  fillFilter: string     // palpite: completo | incompleto | ''
   hasAnyEliminated: boolean
   nextStageIdx: number | null
   stageMeta: StageMeta[]
@@ -56,7 +58,7 @@ const pctCls = (v: number) =>
   v > 0     ? 'text-amber-600' : 'text-red-400'
 
 export function ParticipantesTable({
-  rows, activeFilter, hasAnyEliminated, nextStageIdx, stageMeta, stageTotals, hasAnyError,
+  rows, activeFilter, paymentFilter, fillFilter, hasAnyEliminated, nextStageIdx, stageMeta, stageTotals, hasAnyError,
 }: Props) {
   const [nameQuery, setNameQuery] = useState('')
   const [sortCol, setSortCol]     = useState<SortCol | null>(null)
@@ -77,18 +79,24 @@ export function ParticipantesTable({
       (activeFilter === '' && hasAnyEliminated)
 
     let result = rows.filter(r => {
-      if (activeFilter === 'pendente')   return !r.paid
-      if (activeFilter === 'pago')       return r.paid
-      if (activeFilter === 'incompleto') {
+      // View: ativos / todos
+      if (isActivesView && r.eliminated) return false
+
+      // Pagamento (combinável)
+      if (paymentFilter === 'pendente' && r.paid)  return false
+      if (paymentFilter === 'pago'    && !r.paid)  return false
+
+      // Preenchimento da rodada (combinável)
+      if (fillFilter === 'incompleto') {
         if (nextStageIdx === null) return true
         const pct = r.stages[nextStageIdx].pct
-        return pct !== -1 && pct < 100
+        if (!(pct !== -1 && pct < 100)) return false
       }
-      if (activeFilter === 'completo') {
+      if (fillFilter === 'completo') {
         if (nextStageIdx === null) return false
-        return r.stages[nextStageIdx].pct === 100
+        if (r.stages[nextStageIdx].pct !== 100) return false
       }
-      if (isActivesView) return !r.eliminated
+
       return true
     })
 
@@ -116,7 +124,7 @@ export function ParticipantesTable({
     }
 
     return result
-  }, [rows, activeFilter, hasAnyEliminated, nextStageIdx, nameQuery, sortCol, sortDir])
+  }, [rows, activeFilter, paymentFilter, fillFilter, hasAnyEliminated, nextStageIdx, nameQuery, sortCol, sortDir])
 
   const displayPaidCount  = display.filter(r => r.paid).length
   const displayFullPct    = stageTotals.map((total, i) =>

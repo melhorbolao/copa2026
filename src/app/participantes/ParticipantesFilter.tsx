@@ -4,61 +4,110 @@ import { useRouter, useSearchParams } from 'next/navigation'
 
 interface Props {
   nextStageLabel: string | null
-  /** True quando pelo menos um participante já foi eliminado por corte. Só
-   *  então os botões "Apenas ativos / Todos" aparecem. */
   hasAnyEliminated: boolean
 }
 
 export function ParticipantesFilter({ nextStageLabel, hasAnyEliminated }: Props) {
   const router      = useRouter()
   const searchParams = useSearchParams()
-  const raw         = searchParams.get('filter') ?? ''
 
-  // Quando há eliminados, sem param na URL significa "apenas ativos" (default
-  // da nova feature). Quando não há, default volta a ser "todos" (sem mudar UX
-  // prévia para torneios pré-mata-mata).
-  const active = raw || (hasAnyEliminated ? 'ativos' : '')
+  const currentFilter   = searchParams.get('filter')    ?? ''
+  const currentPagamento = searchParams.get('pagamento') ?? ''
+  const currentPalpite   = searchParams.get('palpite')   ?? ''
 
-  const set = (v: string) => {
+  // Quando há eliminados, default da view é "ativos"
+  const viewFilter = currentFilter || (hasAnyEliminated ? 'ativos' : '')
+
+  const setParam = (key: string, value: string) => {
     const p = new URLSearchParams(searchParams.toString())
-    if (v) { p.set('filter', v) } else { p.delete('filter') }
+    if (value) p.set(key, value)
+    else       p.delete(key)
     router.push(`?${p.toString()}`)
   }
 
-  const baseOptions: { value: string; label: string }[] = []
-  if (hasAnyEliminated) {
-    baseOptions.push(
-      { value: 'ativos', label: 'Apenas ativos' },
-      { value: 'todos',  label: 'Todos (inclui cortados)' },
-    )
-  } else {
-    baseOptions.push({ value: '', label: 'Todos' })
-  }
-  baseOptions.push({ value: 'pendente', label: '✗ Pagamento pendente' })
-  baseOptions.push({ value: 'pago',    label: '✓ Pagamento ok' })
-  if (nextStageLabel) {
-    baseOptions.push({ value: 'incompleto', label: `< 100% ${nextStageLabel}` })
-    baseOptions.push({ value: 'completo',   label: `100% ${nextStageLabel}` })
+  const toggleParam = (key: string, value: string, current: string) =>
+    setParam(key, current === value ? '' : value)
+
+  const pill = (active: boolean, color: 'blue' | 'red' | 'green' | 'amber') => {
+    const on: Record<string, string> = {
+      blue:  'border-azul-escuro bg-azul-escuro text-white',
+      red:   'border-red-500    bg-red-500    text-white',
+      green: 'border-verde-600  bg-verde-600  text-white',
+      amber: 'border-amber-500  bg-amber-500  text-white',
+    }
+    return `rounded-full border px-3 py-1 text-xs font-semibold transition ${
+      active ? on[color] : 'border-gray-200 bg-white text-gray-600 hover:border-gray-400'
+    }`
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
-      {baseOptions.map(opt => {
-        const isActive = active === opt.value || (opt.value === '' && active === '')
-        return (
+    <div className="flex flex-col gap-2">
+
+      {/* View toggle — só aparece quando há participantes eliminados */}
+      {hasAnyEliminated && (
+        <div className="flex flex-wrap gap-2">
+          {[
+            { value: 'ativos', label: 'Apenas ativos' },
+            { value: 'todos',  label: 'Todos (inclui cortados)' },
+          ].map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => setParam('filter', viewFilter === opt.value ? '' : opt.value)}
+              className={pill(viewFilter === opt.value, 'blue')}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Filtros combináveis: pagamento + preenchimento */}
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          onClick={() => toggleParam('pagamento', 'pendente', currentPagamento)}
+          className={pill(currentPagamento === 'pendente', 'red')}
+        >
+          ✗ Pendente
+        </button>
+        <button
+          onClick={() => toggleParam('pagamento', 'pago', currentPagamento)}
+          className={pill(currentPagamento === 'pago', 'green')}
+        >
+          ✓ Pago
+        </button>
+
+        {nextStageLabel && (
+          <>
+            <span className="text-gray-300 select-none">|</span>
+            <button
+              onClick={() => toggleParam('palpite', 'incompleto', currentPalpite)}
+              className={pill(currentPalpite === 'incompleto', 'amber')}
+            >
+              {'< 100% '}{nextStageLabel}
+            </button>
+            <button
+              onClick={() => toggleParam('palpite', 'completo', currentPalpite)}
+              className={pill(currentPalpite === 'completo', 'green')}
+            >
+              {'100% '}{nextStageLabel}
+            </button>
+          </>
+        )}
+
+        {(currentPagamento || currentPalpite) && (
           <button
-            key={opt.value || 'all'}
-            onClick={() => set(opt.value)}
-            className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-              isActive
-                ? 'border-azul-escuro bg-azul-escuro text-white'
-                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-400'
-            }`}
+            onClick={() => {
+              const p = new URLSearchParams(searchParams.toString())
+              p.delete('pagamento')
+              p.delete('palpite')
+              router.push(`?${p.toString()}`)
+            }}
+            className="text-xs text-gray-400 hover:text-gray-600 transition"
           >
-            {opt.label}
+            limpar
           </button>
-        )
-      })}
+        )}
+      </div>
     </div>
   )
 }
