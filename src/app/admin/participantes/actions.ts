@@ -92,14 +92,16 @@ export async function updateParticipantApelido(participantId: string, apelido: s
     .from('participants').select('id').eq('apelido', trimmed).neq('id', participantId).maybeSingle()
   if (existing) throw new Error(`O nome "${trimmed}" já está em uso.`)
 
-  await supabase.from('participants').update({ apelido: trimmed }).eq('id', participantId)
+  const { error } = await supabase.from('participants').update({ apelido: trimmed }).eq('id', participantId)
+  if (error) throw new Error(`Erro ao salvar nome: ${error.message}`)
   revalidatePath('/admin/participantes')
 }
 
 export async function updateParticipantBio(participantId: string, bio: string): Promise<void> {
   await requireAdmin()
   const supabase = createAuthAdminClient()
-  await supabase.from('participants').update({ bio: bio.trim() || null }).eq('id', participantId)
+  const { error } = await supabase.from('participants').update({ bio: bio.trim() || null }).eq('id', participantId)
+  if (error) throw new Error(`Erro ao salvar bio: ${error.message}`)
   revalidatePath('/admin/participantes')
 }
 
