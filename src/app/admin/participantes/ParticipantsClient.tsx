@@ -29,7 +29,19 @@ export function ParticipantsClient({ participants, users, pagantesNote }: Props)
   const handleCopyResumo = () => {
     startTransition(async () => {
       const text = await getParticipantesSummaryText()
-      await navigator.clipboard.writeText(text)
+      try {
+        await navigator.clipboard.writeText(text)
+      } catch {
+        // Fallback: user activation pode expirar durante a server action
+        const el = document.createElement('textarea')
+        el.value = text
+        el.style.cssText = 'position:fixed;opacity:0;pointer-events:none'
+        document.body.appendChild(el)
+        el.focus()
+        el.select()
+        document.execCommand('copy')
+        document.body.removeChild(el)
+      }
       setCopied(true)
       setTimeout(() => setCopied(false), 2500)
     })
