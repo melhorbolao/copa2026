@@ -294,6 +294,19 @@ export default async function ControlePage({
 
   const nextStageIdx = nextStageKey ? STAGE_KEYS.indexOf(nextStageKey) : null
 
+  // Subtotais de preenchimento para os chips de filtro
+  const fillCounts = nextStageIdx !== null ? (() => {
+    let zerado = 0, parcial = 0, completo = 0
+    for (const r of allRows) {
+      const pct = r.stages[nextStageIdx!].pct
+      if (pct === -1) continue
+      if (pct === 0)        zerado++
+      else if (pct === 100) completo++
+      else                  parcial++
+    }
+    return { zerado, parcial, completo }
+  })() : null
+
   return (
     <>
       <Navbar />
@@ -317,6 +330,7 @@ export default async function ControlePage({
             <ParticipantesFilter
               nextStageLabel={nextStageLabel}
               hasAnyEliminated={hasAnyEliminated}
+              fillCounts={fillCounts}
             />
           </Suspense>
         </div>

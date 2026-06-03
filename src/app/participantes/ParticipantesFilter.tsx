@@ -5,17 +5,17 @@ import { useRouter, useSearchParams } from 'next/navigation'
 interface Props {
   nextStageLabel: string | null
   hasAnyEliminated: boolean
+  fillCounts: { zerado: number; parcial: number; completo: number } | null
 }
 
-export function ParticipantesFilter({ nextStageLabel, hasAnyEliminated }: Props) {
+export function ParticipantesFilter({ nextStageLabel, hasAnyEliminated, fillCounts }: Props) {
   const router      = useRouter()
   const searchParams = useSearchParams()
 
-  const currentFilter   = searchParams.get('filter')    ?? ''
+  const currentFilter    = searchParams.get('filter')    ?? ''
   const currentPagamento = searchParams.get('pagamento') ?? ''
   const currentPalpite   = searchParams.get('palpite')   ?? ''
 
-  // Quando há eliminados, default da view é "ativos"
   const viewFilter = currentFilter || (hasAnyEliminated ? 'ativos' : '')
 
   const setParam = (key: string, value: string) => {
@@ -43,7 +43,7 @@ export function ParticipantesFilter({ nextStageLabel, hasAnyEliminated }: Props)
   return (
     <div className="flex flex-col gap-2">
 
-      {/* View toggle — só aparece quando há participantes eliminados */}
+      {/* View toggle — só quando há eliminados */}
       {hasAnyEliminated && (
         <div className="flex flex-wrap gap-2">
           {[
@@ -76,20 +76,26 @@ export function ParticipantesFilter({ nextStageLabel, hasAnyEliminated }: Props)
           ✓ Pago
         </button>
 
-        {nextStageLabel && (
+        {nextStageLabel && fillCounts && (
           <>
             <span className="text-gray-300 select-none">|</span>
             <button
-              onClick={() => toggleParam('palpite', 'incompleto', currentPalpite)}
-              className={pill(currentPalpite === 'incompleto', 'amber')}
+              onClick={() => toggleParam('palpite', 'zerado', currentPalpite)}
+              className={pill(currentPalpite === 'zerado', 'red')}
             >
-              {'< 100% '}{nextStageLabel}
+              Zerado · {fillCounts.zerado}
+            </button>
+            <button
+              onClick={() => toggleParam('palpite', 'parcial', currentPalpite)}
+              className={pill(currentPalpite === 'parcial', 'amber')}
+            >
+              Parcial · {fillCounts.parcial}
             </button>
             <button
               onClick={() => toggleParam('palpite', 'completo', currentPalpite)}
               className={pill(currentPalpite === 'completo', 'green')}
             >
-              {'100% '}{nextStageLabel}
+              Completo · {fillCounts.completo}
             </button>
           </>
         )}

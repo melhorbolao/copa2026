@@ -87,14 +87,12 @@ export function ParticipantesTable({
       if (paymentFilter === 'pago'    && !r.paid)  return false
 
       // Preenchimento da rodada (combinável)
-      if (fillFilter === 'incompleto') {
-        if (nextStageIdx === null) return true
+      if (fillFilter && nextStageIdx !== null) {
         const pct = r.stages[nextStageIdx].pct
-        if (!(pct !== -1 && pct < 100)) return false
-      }
-      if (fillFilter === 'completo') {
-        if (nextStageIdx === null) return false
-        if (r.stages[nextStageIdx].pct !== 100) return false
+        if (fillFilter === 'zerado')    { if (pct !== 0)                   return false }
+        if (fillFilter === 'parcial')   { if (!(pct > 0 && pct < 100))     return false }
+        if (fillFilter === 'completo')  { if (pct !== 100)                  return false }
+        if (fillFilter === 'incompleto'){ if (!(pct !== -1 && pct < 100))   return false }
       }
 
       return true

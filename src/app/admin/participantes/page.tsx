@@ -57,23 +57,69 @@ export default async function AdminParticipantesPage() {
   // ── Preenchimento de palpites por participante ─────────────────────────────
   const betFillByPid: Record<string, 'zerado' | 'parcial' | 'completo'> = {}
 
-  if (currentStageMatchIds.length > 0) {
-    const { data: betsRaw } = await supabase
-      .from('bets')
-      .select('participant_id')
-      .in('match_id', currentStageMatchIds)
-      .range(0, 4999)
+  if (currentStageMatchIds.length > 0 && nextMatch) {
+    const isR1     = nextMatch.phase === 'group' && nextMatch.round === 1
+    const R1_BONUS = 5 + 12 + 8   // torneio (5) + grupos (12) + terceiros (8)
+    const stageTotal = currentStageMatchIds.length + (isR1 ? R1_BONUS : 0)
+    const PAGE = 1000
 
+    // Match bets — paginado para evitar truncamento
     const betCountByPid = new Map<string, number>()
-    for (const b of (betsRaw ?? [])) {
-      betCountByPid.set(b.participant_id, (betCountByPid.get(b.participant_id) ?? 0) + 1)
+    for (let from = 0;;) {
+      const { data, error } = await supabase
+        .from('bets').select('participant_id')
+        .in('match_id', currentStageMatchIds)
+        .range(from, from + PAGE - 1)
+      if (error || !data || data.length === 0) break
+      for (const b of data) betCountByPid.set(b.participant_id, (betCountByPid.get(b.participant_id) ?? 0) + 1)
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+
+    // Bônus da R1: torneio, grupos, terceiros
+    const trnCountMap   = new Map<string, number>()
+    const grpCountMap   = new Map<string, number>()
+    const thirdCountMap = new Map<string, number>()
+
+    if (isR1) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const pids = participants.map((p: any) => p.id)
+
+      const { data: trnData } = await supabase
+        .from('tournament_bets')
+        .select('participant_id, champion, runner_up, semi1, semi2, top_scorer')
+        .in('participant_id', pids)
+      for (const t of (trnData ?? []))
+        trnCountMap.set(t.participant_id,
+          [t.champion, t.runner_up, t.semi1, t.semi2, t.top_scorer].filter(Boolean).length)
+
+      for (let from = 0;;) {
+        const { data, error } = await supabase
+          .from('group_bets').select('participant_id').in('participant_id', pids).range(from, from + PAGE - 1)
+        if (error || !data || data.length === 0) break
+        for (const g of data) grpCountMap.set(g.participant_id, (grpCountMap.get(g.participant_id) ?? 0) + 1)
+        if (data.length < PAGE) break
+        from += PAGE
+      }
+
+      for (let from = 0;;) {
+        const { data, error } = await supabase
+          .from('third_place_bets').select('participant_id').in('participant_id', pids).range(from, from + PAGE - 1)
+        if (error || !data || data.length === 0) break
+        for (const t of data) thirdCountMap.set(t.participant_id, (thirdCountMap.get(t.participant_id) ?? 0) + 1)
+        if (data.length < PAGE) break
+        from += PAGE
+      }
     }
 
     for (const p of participants) {
-      const count = betCountByPid.get(p.id) ?? 0
-      betFillByPid[p.id] = count === 0
-        ? 'zerado'
-        : count >= currentStageMatchIds.length ? 'completo' : 'parcial'
+      let count = betCountByPid.get(p.id) ?? 0
+      if (isR1) {
+        count += trnCountMap.get(p.id) ?? 0
+        count += Math.min(grpCountMap.get(p.id) ?? 0, 12)
+        count += Math.min(thirdCountMap.get(p.id) ?? 0, 8)
+      }
+      betFillByPid[p.id] = count === 0 ? 'zerado' : count >= stageTotal ? 'completo' : 'parcial'
     }
   }
 
