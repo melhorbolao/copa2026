@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { saveUserProfile } from '@/app/auth/actions'
 
-const PADRINHOS = ['Bruninho','Cadu','Daniel','Guga','Luizinho','Medel','Nando "Sapo"','Teixeira']
+const PADRINHOS = ['Bruninho','Cadu','Daniel','EP971','Guga','Luizinho','Medel','Nando "Sapo"','Teixeira']
 
 const inputCls = 'w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-verde-400 focus:outline-none'
 

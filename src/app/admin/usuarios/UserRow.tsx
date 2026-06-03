@@ -462,7 +462,7 @@ export function UserRow({ user, index }: UserRowProps) {
   )
 }
 
-const PADRINHOS = ['Bruninho','Cadu','Daniel','Guga','Luizinho','Medel','Nando "Sapo"','Teixeira']
+const PADRINHOS = ['Bruninho','Cadu','Daniel','EP971','Guga','Luizinho','Medel','Nando "Sapo"','Teixeira']
 
 function StatusBadge({ status }: { status: Status }) {
   const map: Record<Status, { label: string; cls: string }> = {
