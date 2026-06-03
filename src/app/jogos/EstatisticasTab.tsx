@@ -7,7 +7,7 @@ import type { Participant } from './JogosDashboard'
 type GBet    = { participant_id: string; group_name: string; first_place: string; second_place: string }
 type ThirdBt = { participant_id: string; group_name: string; team: string }
 type TBet    = { participant_id: string; champion: string; runner_up: string; semi1: string; semi2: string; top_scorer: string }
-type MBet    = { score_home: number; score_away: number }
+type MBet    = { participant_id: string; match_id: string; score_home: number; score_away: number }
 
 export interface TeamInfo { name: string; abbr: string; group: string; flag: string }
 
@@ -98,6 +98,59 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'pt-BR'))
       .map(([name, count]) => ({ name, count }))
   }, [tournamentBets, scorerMapping])
+
+  const participantBetStats = useMemo(() => {
+    // Distribuição de resultados por partida (para detectar zebra)
+    const matchDist = new Map<string, { H: number; D: number; A: number; total: number }>()
+    for (const b of matchBets) {
+      const res = b.score_home > b.score_away ? 'H' : b.score_home < b.score_away ? 'A' : 'D'
+      const d   = matchDist.get(b.match_id) ?? { H: 0, D: 0, A: 0, total: 0 }
+      d[res]++; d.total++
+      matchDist.set(b.match_id, d)
+    }
+
+    // Agrupa apostas por participante
+    const betsByPid = new Map<string, MBet[]>()
+    for (const b of matchBets) {
+      const arr = betsByPid.get(b.participant_id) ?? []
+      arr.push(b)
+      betsByPid.set(b.participant_id, arr)
+    }
+
+    return participants.map(p => {
+      const bets  = betsByPid.get(p.id) ?? []
+      const total = bets.length
+
+      let topLabel = '–'
+      let topPct   = 0
+
+      if (total > 0) {
+        const counts = new Map<string, number>()
+        for (const b of bets) {
+          const hi  = Math.max(b.score_home, b.score_away)
+          const lo  = Math.min(b.score_home, b.score_away)
+          const key = `${hi}-${lo}`
+          counts.set(key, (counts.get(key) ?? 0) + 1)
+        }
+        const [topKey, topCount] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]
+        const [hi, lo] = topKey.split('-').map(Number)
+        topLabel = hi === lo ? `${hi} × ${hi}` : `${hi} × ${lo}`
+        topPct   = (topCount / total) * 100
+      }
+
+      const draws = bets.filter(b => b.score_home === b.score_away).length
+
+      let zebras = 0
+      for (const b of bets) {
+        const dist = matchDist.get(b.match_id)
+        if (!dist || dist.total === 0) continue
+        const res = b.score_home > b.score_away ? 'H' : b.score_home < b.score_away ? 'A' : 'D'
+        if ((dist[res] / dist.total) * 100 <= zebraThreshold) zebras++
+      }
+
+      return { apelido: p.apelido, total, topLabel, topPct, draws, zebras }
+    })
+  }, [matchBets, participants, zebraThreshold])
 
   // Returns td className and inner element for a numeric cell
   function C(v: number, z = false, dim = false) {
@@ -275,6 +328,50 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
               </tr>
             </tfoot>
           </table>
+        )}
+      </div>
+
+      {/* ── Placar favorito por participante ────────────────────── */}
+      <div className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
+        <div className="px-4 pt-3 pb-2 border-b border-gray-100">
+          <h2 className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Placar favorito por participante</h2>
+          <p className="mt-0.5 text-[10px] text-gray-400">1×0 e 0×1 contam como o mesmo placar</p>
+        </div>
+        {participantBetStats.length === 0 ? (
+          <p className="px-4 py-6 text-sm text-center text-gray-400">Sem apostas de placar registradas.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs whitespace-nowrap">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-bold text-gray-400 uppercase tracking-wide">
+                  <th className="text-left px-4 py-2">Participante</th>
+                  <th className="text-center px-3 py-2">Placar Mais Frequente</th>
+                  <th className="text-right px-3 py-2">% do Placar</th>
+                  <th className="text-right px-3 py-2">Empates</th>
+                  <th className="text-right px-4 py-2">Zebras</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {participantBetStats.map(s => (
+                  <tr key={s.apelido} className="hover:bg-gray-50/60">
+                    <td className="px-4 py-1.5 font-medium text-gray-800">{s.apelido}</td>
+                    <td className="px-3 py-1.5 text-center font-bold tabular-nums text-gray-800 tracking-wider">
+                      {s.total === 0 ? <span className="text-gray-300">–</span> : s.topLabel}
+                    </td>
+                    <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-gray-700">
+                      {s.total === 0 ? <span className="text-gray-300">–</span> : `${s.topPct.toFixed(1)}%`}
+                    </td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-gray-700">
+                      {s.draws === 0 ? <span className="text-gray-300">–</span> : s.draws}
+                    </td>
+                    <td className="px-4 py-1.5 text-right tabular-nums text-gray-700">
+                      {s.zebras === 0 ? <span className="text-gray-300">–</span> : s.zebras}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 

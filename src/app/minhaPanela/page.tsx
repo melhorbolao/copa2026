@@ -62,10 +62,17 @@ export default async function MinhaPanelaPage() {
   const scoreMap: Record<string, number> = {}
   for (const s of scores) scoreMap[s.participant_id] = s.pts_total ?? 0
 
-  const allRanked = allParticipants
+  const sortedParticipants = allParticipants
     .map(p => ({ id: p.id, apelido: p.apelido, ptsTotal: scoreMap[p.id] ?? 0 }))
     .sort((a, b) => b.ptsTotal - a.ptsTotal)
-    .map((p, i) => ({ ...p, rank: i + 1 }))
+
+  const allRanked: { id: string; apelido: string; ptsTotal: number; rank: number }[] = []
+  for (let i = 0; i < sortedParticipants.length; i++) {
+    const rank = i > 0 && sortedParticipants[i].ptsTotal === sortedParticipants[i - 1].ptsTotal
+      ? allRanked[i - 1].rank
+      : i + 1
+    allRanked.push({ ...sortedParticipants[i], rank })
+  }
 
   // ── Snapshot mais recente por participante ──────────────────────────────────
   const latestDate = snapshotRows.length > 0 ? snapshotRows[0].snapshot_date : null

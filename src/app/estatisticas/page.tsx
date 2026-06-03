@@ -45,7 +45,7 @@ export default async function EstatisticasPage() {
     fetchAll('group_bets', 'participant_id, group_name, first_place, second_place'),
     fetchAll('third_place_bets', 'participant_id, group_name, team'),
     admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer'),
-    fetchAll('bets', 'score_home, score_away'),
+    fetchAll('bets', 'participant_id, match_id, score_home, score_away'),
   ])
 
   const rules: Record<string, number> = Object.fromEntries(

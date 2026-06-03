@@ -255,6 +255,45 @@ export async function getParticipantesSummaryText(): Promise<string> {
     }
   }
 
+  // % médio de preenchimento da Rodada 1 (sempre incluído quando houver dados)
+  let round1AvgPct: number | null = null
+
+  const round1Matches = (allMatches ?? []).filter(
+    (m: { phase: string; round: number | null }) => m.phase === 'group' && m.round === 1
+  )
+
+  if (round1Matches.length > 0 && totalParticipants > 0) {
+    const r1MatchIds  = round1Matches.map((m: { id: string }) => m.id)
+    const r1Total     = round1Matches.length + 5 + 12 + 8 // partidas + torneio + grupos + terceiros
+    const pids        = (participants ?? []).map((p: { id: string }) => p.id)
+
+    const [r1Bets, { data: r1TrnBets }, r1GrpBets, r1ThrdBets] = await Promise.all([
+      fetchAllIn('bets', 'participant_id', 'match_id', r1MatchIds),
+      supabase.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer').in('participant_id', pids),
+      fetchAllIn('group_bets', 'participant_id', 'participant_id', pids),
+      fetchAllIn('third_place_bets', 'participant_id', 'participant_id', pids),
+    ])
+
+    const r1BetCount = new Map<string, number>()
+    for (const b of r1Bets) r1BetCount.set(b.participant_id, (r1BetCount.get(b.participant_id) ?? 0) + 1)
+
+    let totalPct = 0
+    for (const p of (participants ?? [])) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let count = r1BetCount.get(p.id) ?? 0
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const trn = (r1TrnBets ?? []).find((t: any) => t.participant_id === p.id)
+      count += trn ? [trn.champion, trn.runner_up, trn.semi1, trn.semi2, trn.top_scorer].filter(Boolean).length : 0
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      count += Math.min(r1GrpBets.filter((g: any) => g.participant_id === p.id).length, 12)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      count += Math.min(r1ThrdBets.filter((t: any) => t.participant_id === p.id).length, 8)
+      totalPct += Math.min(count / r1Total, 1) * 100
+    }
+
+    round1AvgPct = totalPct / totalParticipants
+  }
+
   const lines: string[] = []
 
   lines.push(`Participantes cadastrados: ${totalParticipants}`)
@@ -268,6 +307,10 @@ export async function getParticipantesSummaryText(): Promise<string> {
 
   if (nextStageName) {
     lines.push(`Palpites ${nextStageName}: ${nextStageZeroCount} zerados, ${nextStagePartialCount} iniciados, ${nextStageFullCount} 100% preenchidos`)
+  }
+
+  if (round1AvgPct !== null) {
+    lines.push(`% médio de preenchimento (Rodada 1): ${round1AvgPct.toFixed(1)}%`)
   }
 
   return lines.join('\n')
