@@ -37,7 +37,7 @@ export default async function EstatisticasPage() {
     return rows
   }
 
-  const [participantsRes, matchesRes, teamsRes, rulesRes, groupBetsRes, thirdBetsRes, tournamentBetsRes] = await Promise.all([
+  const [participantsRes, matchesRes, teamsRes, rulesRes, groupBetsRes, thirdBetsRes, tournamentBetsRes, matchBetsRes] = await Promise.all([
     supabase.from('participants').select('id, apelido').order('apelido', { ascending: true }),
     supabase.from('matches').select('team_home, team_away, flag_home, flag_away, phase, round, betting_deadline'),
     admin.from('teams').select('name, abbr_br, group_name'),
@@ -45,6 +45,7 @@ export default async function EstatisticasPage() {
     fetchAll('group_bets', 'participant_id, group_name, first_place, second_place'),
     fetchAll('third_place_bets', 'participant_id, group_name, team'),
     admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer'),
+    fetchAll('bets', 'score_home, score_away'),
   ])
 
   const rules: Record<string, number> = Object.fromEntries(
@@ -118,6 +119,7 @@ export default async function EstatisticasPage() {
             groupBets={groupBetsRes as any[]}
             thirdBets={thirdBetsRes as any[]}
             tournamentBets={(tournamentBetsRes.data ?? []) as any[]}
+            matchBets={(matchBetsRes as any[]).filter((b: any) => b.score_home !== null && b.score_away !== null)}
             zebraThreshold={zebraThreshold}
             scorerMapping={scorerMapping}
           />

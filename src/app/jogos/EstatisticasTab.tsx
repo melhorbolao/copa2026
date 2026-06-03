@@ -7,6 +7,7 @@ import type { Participant } from './JogosDashboard'
 type GBet    = { participant_id: string; group_name: string; first_place: string; second_place: string }
 type ThirdBt = { participant_id: string; group_name: string; team: string }
 type TBet    = { participant_id: string; champion: string; runner_up: string; semi1: string; semi2: string; top_scorer: string }
+type MBet    = { score_home: number; score_away: number }
 
 export interface TeamInfo { name: string; abbr: string; group: string; flag: string }
 
@@ -16,11 +17,12 @@ interface Props {
   groupBets:       GBet[]
   thirdBets:       ThirdBt[]
   tournamentBets:  TBet[]
+  matchBets:       MBet[]
   zebraThreshold:  number
   scorerMapping:   Record<string, string>
 }
 
-export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tournamentBets, zebraThreshold, scorerMapping }: Props) {
+export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tournamentBets, matchBets, zebraThreshold, scorerMapping }: Props) {
   const groups = useMemo(
     () => [...new Set(teams.map(t => t.group))].filter(Boolean).sort(),
     [teams],
@@ -65,6 +67,24 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
     elim:  a.elim  + t.elim,  champ:  a.champ  + t.champ,  vice:  a.vice  + t.vice,
     third4: a.third4 + t.third4, fourth: a.fourth + t.fourth, nemSemi: a.nemSemi + t.nemSemi,
   }), { first: 0, second: 0, third: 0, elim: 0, champ: 0, vice: 0, third4: 0, fourth: 0, nemSemi: 0 })
+
+  const scoreFrequency = useMemo(() => {
+    const total = matchBets.length
+    if (total === 0) return []
+    const counts = new Map<string, number>()
+    for (const b of matchBets) {
+      const hi = Math.max(b.score_home, b.score_away)
+      const lo = Math.min(b.score_home, b.score_away)
+      const key = `${hi}-${lo}`
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+    return [...counts.entries()]
+      .map(([key, count]) => {
+        const [hi, lo] = key.split('-').map(Number)
+        return { label: hi === lo ? `${hi} × ${hi}` : `${hi} × ${lo}`, count, pct: (count / total) * 100 }
+      })
+      .sort((a, b) => b.count - a.count)
+  }, [matchBets])
 
   const artilharia = useMemo(() => {
     const m = new Map<string, number>()
@@ -182,6 +202,45 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
             </tfoot>
           </table>
         </div>
+      </div>
+
+      {/* ── Placares mais frequentes ────────────────────────────────── */}
+      <div className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
+        <div className="px-4 pt-3 pb-2 border-b border-gray-100">
+          <h2 className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Placares mais frequentes</h2>
+          <p className="mt-0.5 text-[10px] text-gray-400">2×1 e 1×2 contam como o mesmo placar · {matchBets.length.toLocaleString('pt-BR')} apostas no total</p>
+        </div>
+        {scoreFrequency.length === 0 ? (
+          <p className="px-4 py-6 text-sm text-center text-gray-400">Sem apostas de placar registradas.</p>
+        ) : (
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                <th className="text-left px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wide">Placar</th>
+                <th className="text-right px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wide w-16">Apostas</th>
+                <th className="text-right px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wide w-16">%</th>
+                <th className="px-4 py-2 w-32 hidden sm:table-cell" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {scoreFrequency.map(s => (
+                <tr key={s.label} className="hover:bg-gray-50/60">
+                  <td className="px-4 py-1.5 font-bold tabular-nums text-gray-800 tracking-wider">{s.label}</td>
+                  <td className="px-4 py-1.5 text-right tabular-nums text-gray-600">{s.count.toLocaleString('pt-BR')}</td>
+                  <td className="px-4 py-1.5 text-right tabular-nums font-semibold text-gray-700">{s.pct.toFixed(1)}%</td>
+                  <td className="px-4 py-1.5 hidden sm:table-cell">
+                    <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-azul-escuro/60"
+                        style={{ width: `${Math.min(s.pct / scoreFrequency[0].pct * 100, 100)}%` }}
+                      />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {/* ── Artilharia ──────────────────────────────────────────────── */}
