@@ -91,7 +91,12 @@ export function ArtilheirosClient({ rawNames, initialMappings, initialEliminatio
           </tr>
         </thead>
         <tbody>
-          {rows.map(row => (
+          {[...rows].sort((a, b) => {
+            const aEmpty = !a.standardizedName.trim()
+            const bEmpty = !b.standardizedName.trim()
+            if (aEmpty !== bEmpty) return aEmpty ? -1 : 1
+            return a.standardizedName.localeCompare(b.standardizedName, 'pt-BR', { sensitivity: 'base' })
+          }).map(row => (
             <tr key={row.rawName} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50">
               <td className="px-4 py-2.5 font-mono text-sm text-gray-700">{row.rawName}</td>
               <td className="px-4 py-2.5">
@@ -140,6 +145,7 @@ export function ArtilheirosClient({ rawNames, initialMappings, initialEliminatio
             </tr>
           ))}
         </tbody>
+
       </table>
     </div>
   )
