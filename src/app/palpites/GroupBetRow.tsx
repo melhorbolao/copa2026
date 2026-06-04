@@ -63,19 +63,35 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
     }
   }, [existingBet?.first_place, existingBet?.second_place])
 
-  // Na montagem: se não há palpite salvo no servidor, tenta restaurar o
-  // rascunho do localStorage e, se ambos os times estiverem presentes,
-  // dispara o save automaticamente (cobre o caso de navegação antes do save).
+  // Na montagem: tenta restaurar rascunho do localStorage.
+  // Cobre dois casos:
+  //   a) Navegação antes do save — rascunho sem flag saved → auto-save
+  //   b) Troca de aba após save bem-sucedido — rascunho com saved=true →
+  //      restaura valores sem re-salvar (existingBet ainda é null porque a
+  //      prop do servidor não foi atualizada com router.refresh()).
   useEffect(() => {
-    if (existingBet) return            // servidor já tem dados — não precisa do rascunho
     try {
       const raw = localStorage.getItem(draftKey)
       if (!raw) return
-      const { f, s } = JSON.parse(raw) as { f?: string; s?: string }
+      const { f, s, saved } = JSON.parse(raw) as { f?: string; s?: string; saved?: boolean }
+
+      if (existingBet) {
+        // Servidor já tem dados — limpa rascunho correspondente e encerra
+        if (f === existingBet.first_place && s === existingBet.second_place) {
+          localStorage.removeItem(draftKey)
+        }
+        return
+      }
+
+      // Sem dados do servidor — restaura valores do rascunho
       if (f) setFirst(f)
       if (s) setSecond(s)
-      if (f && s && f !== s) {
-        // Ambos os times estavam no rascunho → salva no servidor agora
+
+      if (saved) {
+        // Rascunho marcado como salvo: não re-dispara saveGroupBet
+        setHasSaved(true)
+      } else if (f && s && f !== s) {
+        // Rascunho não salvo: dispara save agora
         startTransition(async () => {
           try {
             await saveGroupBet(groupName, f, s)
@@ -107,7 +123,10 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
       try {
         await saveGroupBet(groupName, f, s)
         setHasSaved(true)
-        localStorage.removeItem(draftKey)          // rascunho cumprido
+        // Mantém o rascunho marcado como salvo — permite restaurar os valores
+        // caso o componente seja desmontado/remontado (troca de aba) antes de
+        // o servidor atualizar existingBet via router.refresh().
+        try { localStorage.setItem(draftKey, JSON.stringify({ f, s, saved: true })) } catch { /* ignore */ }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Erro')
       }
