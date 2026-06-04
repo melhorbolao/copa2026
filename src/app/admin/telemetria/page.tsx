@@ -187,17 +187,25 @@ export default async function TelemetriaAdminPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (r: any) => r.user_id !== masterUserId
     )
-    // Para pageStats filtrados: subtrai as visitas do master usando query indexada
-    // (user_id index → apenas as linhas do master, não um full scan)
-    const masterPageRes = await admin
-      .from('page_views')
-      .select('path, device_type')
-      .eq('user_id', masterUserId)
+    // Para pageStats filtrados: subtrai as visitas do master usando query indexada.
+    // Pagina manualmente para não truncar em 1000 linhas (PostgREST default).
+    const masterPageRows: { path: string; device_type: string }[] = []
+    for (let from = 0;;) {
+      const { data, error } = await admin
+        .from('page_views')
+        .select('path, device_type')
+        .eq('user_id', masterUserId)
+        .range(from, from + 999)
+      if (error || !data || data.length === 0) break
+      masterPageRows.push(...data)
+      if (data.length < 1000) break
+      from += 1000
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const masterPathMap: Record<string, { total: number; mobile: number; desktop: number }> = {}
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    for (const row of (masterPageRes.data ?? []) as any[]) {
+    for (const row of masterPageRows as any[]) {
       if (!masterPathMap[row.path]) masterPathMap[row.path] = { total: 0, mobile: 0, desktop: 0 }
       masterPathMap[row.path].total++
       if (row.device_type === 'mobile') masterPathMap[row.path].mobile++
