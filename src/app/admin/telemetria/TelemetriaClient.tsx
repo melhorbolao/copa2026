@@ -173,18 +173,34 @@ export function TelemetriaClient({
 }: Props) {
   const [excludeAdmin, setExcludeAdmin] = useState(true)
   const [search, setSearch] = useState('')
+  const [sortCol, setSortCol]   = useState<'rank' | 'name' | 'clicks' | 'desktop' | 'favorite' | 'last'>('rank')
+  const [sortDir, setSortDir]   = useState<'asc' | 'desc'>('asc')
 
   const data = excludeAdmin ? filteredStats : fullStats
 
   const { kpis, pageStats, userEngagement, temporalData } = data
 
-  const filteredUsers = search
-    ? userEngagement.filter(
-        u =>
-          u.name.toLowerCase().includes(search.toLowerCase()) ||
-          (u.apelido ?? '').toLowerCase().includes(search.toLowerCase())
-      )
+  const handleSort = (col: typeof sortCol) => {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortCol(col); setSortDir(col === 'rank' || col === 'clicks' ? 'asc' : 'asc') }
+  }
+
+  const sortedUsers = [...(search
+    ? userEngagement.filter(u =>
+        u.name.toLowerCase().includes(search.toLowerCase()) ||
+        (u.apelido ?? '').toLowerCase().includes(search.toLowerCase()))
     : userEngagement
+  )].sort((a, b) => {
+    let cmp = 0
+    if (sortCol === 'rank' || sortCol === 'clicks') cmp = b.totalClicks - a.totalClicks
+    else if (sortCol === 'name')     cmp = (a.apelido ?? a.name).localeCompare(b.apelido ?? b.name, 'pt-BR')
+    else if (sortCol === 'desktop')  cmp = a.desktopPct - b.desktopPct
+    else if (sortCol === 'favorite') cmp = (a.favoritePage).localeCompare(b.favoritePage)
+    else if (sortCol === 'last')     cmp = a.lastAction.localeCompare(b.lastAction)
+    return sortDir === 'asc' ? cmp : -cmp
+  })
+
+  const filteredUsers = sortedUsers
 
   const isEmpty = kpis.totalViews === 0
 
@@ -362,17 +378,33 @@ export function TelemetriaClient({
           <table className="min-w-full text-sm">
             <thead>
               <tr className="border-b border-[#FFD700]/30 bg-[#001F5B] text-left text-xs font-semibold uppercase tracking-wider text-[#FFD700]">
-                <th className="px-3 py-3 text-center">#</th>
-                <th className="px-4 py-3">Participante</th>
-                <th className="px-4 py-3 text-right">Cliques</th>
-                <th className="px-4 py-3">Página Favorita</th>
-                <th className="px-4 py-3">Última Ação</th>
+                {(
+                  [
+                    { col: 'rank',     label: '#',              cls: 'px-3 py-3 text-center w-10' },
+                    { col: 'name',     label: 'Participante',   cls: 'px-4 py-3' },
+                    { col: 'clicks',   label: 'Cliques',        cls: 'px-4 py-3 text-right' },
+                    { col: 'desktop',  label: '% Desktop',      cls: 'px-4 py-3 text-right' },
+                    { col: 'favorite', label: 'Página Favorita',cls: 'px-4 py-3' },
+                    { col: 'last',     label: 'Última Ação',    cls: 'px-4 py-3' },
+                  ] as { col: typeof sortCol; label: string; cls: string }[]
+                ).map(({ col, label, cls }) => (
+                  <th
+                    key={col}
+                    onClick={() => handleSort(col)}
+                    className={`${cls} cursor-pointer select-none hover:bg-[#002D80] transition-colors`}
+                  >
+                    {label}
+                    {sortCol === col
+                      ? <span className="ml-1 opacity-80">{sortDir === 'asc' ? '▲' : '▼'}</span>
+                      : <span className="ml-1 opacity-30">↕</span>}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-sm text-gray-400">
+                  <td colSpan={6} className="py-8 text-center text-sm text-gray-400">
                     {search ? 'Nenhum participante encontrado' : 'Nenhum dado disponível'}
                   </td>
                 </tr>
@@ -413,6 +445,9 @@ export function TelemetriaClient({
                     </td>
                     <td className="px-4 py-3 text-right font-black text-gray-900">
                       {u.totalClicks.toLocaleString('pt-BR')}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums text-gray-600">
+                      {u.totalClicks > 0 ? `${u.desktopPct}%` : '—'}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">
                       <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium">

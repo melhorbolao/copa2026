@@ -21,6 +21,7 @@ interface UserEngagementEntry {
   name: string
   apelido: string | null
   totalClicks: number
+  desktopPct: number
   favoritePage: string
   lastAction: string
   rankingPosition: number | null
@@ -106,11 +107,14 @@ function buildStats(
     .map((row: any) => {
       const info       = usersMap.get(row.user_id as string)
       const primaryPId = userToPrimary.get(row.user_id as string)
+      const total      = (row.total_views as number) || 0
+      const desktop    = (row.desktop_views as number) || 0
       return {
         userId:          row.user_id as string,
         name:            info?.name ?? 'Desconhecido',
         apelido:         info?.apelido ?? null,
-        totalClicks:     row.total_views as number,
+        totalClicks:     total,
+        desktopPct:      total > 0 ? Math.round((desktop / total) * 100) : 0,
         favoritePage:    (row.favorite_page as string) ?? '/',
         lastAction:      row.last_action as string,
         rankingPosition: primaryPId ? (rankingPositions.get(primaryPId) ?? null) : null,
@@ -150,7 +154,7 @@ export default async function TelemetriaAdminPage() {
 
       // ~60 linhas — uma por usuário, agregação feita no banco
       admin.from('vw_analytics_user_stats')
-        .select('user_id, total_views, last_action, favorite_page'),
+        .select('user_id, total_views, desktop_views, mobile_views, last_action, favorite_page'),
 
       // 24 linhas — uma por hora do dia
       admin.from('vw_analytics_hourly')
