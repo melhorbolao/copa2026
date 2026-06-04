@@ -240,7 +240,7 @@ export function TelemetriaClient({
         <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
           Métricas Gerais
         </h3>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           <KpiCard
             label="Visualizações totais"
             value={kpis.totalViews.toLocaleString('pt-BR')}
@@ -255,6 +255,12 @@ export function TelemetriaClient({
             label="Média de páginas/usuário"
             value={kpis.avgPagesPerUser.toLocaleString('pt-BR')}
             icon="📄"
+          />
+          <KpiCard
+            label="Acessos via desktop"
+            value={isEmpty ? '—' : `${kpis.desktopPct}%`}
+            sub={isEmpty ? undefined : `${100 - kpis.desktopPct}% mobile`}
+            icon="🖥️"
           />
           <KpiCard
             label="Pico de acesso"

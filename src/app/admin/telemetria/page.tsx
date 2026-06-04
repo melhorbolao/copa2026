@@ -37,6 +37,7 @@ export interface TelemetriaStats {
     totalViews: number
     uniqueUsers: number
     avgPagesPerUser: number
+    desktopPct: number
     peakHour: number
     peakHourCount: number
   }
@@ -62,11 +63,13 @@ function buildStats(
   scores: any[],
 ): TelemetriaStats {
   // KPIs — derivados dos contadores de página
-  const totalViews = pageCounters.reduce((s, r) => s + (r.total_views as number), 0)
+  const totalViews   = pageCounters.reduce((s, r) => s + (r.total_views   as number), 0)
+  const totalDesktop = pageCounters.reduce((s, r) => s + (r.desktop_views as number), 0)
   const uniqueUsers = userStats.length
   const avgPagesPerUser = uniqueUsers > 0
     ? Math.round((totalViews / uniqueUsers) * 10) / 10
     : 0
+  const desktopPct = totalViews > 0 ? Math.round((totalDesktop / totalViews) * 100) : 0
 
   // Pico de acesso por hora (já em BRT)
   let peakHour = 0, peakHourCount = 0
@@ -133,7 +136,7 @@ function buildStats(
   }))
 
   return {
-    kpis: { totalViews, uniqueUsers, avgPagesPerUser, peakHour, peakHourCount },
+    kpis: { totalViews, uniqueUsers, avgPagesPerUser, desktopPct, peakHour, peakHourCount },
     pageStats,
     userEngagement,
     temporalData,
