@@ -32,6 +32,12 @@ interface TemporalPoint {
   count: number
 }
 
+interface DailyPoint {
+  day:    string   // "DD/MM"
+  total:  number
+  unique: number
+}
+
 export interface TelemetriaStats {
   kpis: {
     totalViews: number
@@ -44,6 +50,7 @@ export interface TelemetriaStats {
   pageStats: PageStat[]
   userEngagement: UserEngagementEntry[]
   temporalData: TemporalPoint[]
+  dailyData: DailyPoint[]
 }
 
 // ── Monta stats a partir de dados pré-agregados pelas views SQL ────────────────
@@ -55,6 +62,8 @@ function buildStats(
   userStats: any[],      // vw_analytics_user_stats   → ~60 linhas
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   hourlyRows: any[],     // vw_analytics_hourly       → 24 linhas
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  dailyRows: any[],      // vw_analytics_daily        → N dias
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   users: any[],
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -135,11 +144,19 @@ function buildStats(
     count: hourMap.get(h) ?? 0,
   }))
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const dailyData: DailyPoint[] = dailyRows.map((r: any) => {
+    const d = new Date(r.day + 'T12:00:00Z')
+    const label = `${d.getUTCDate().toString().padStart(2, '0')}/${(d.getUTCMonth() + 1).toString().padStart(2, '0')}`
+    return { day: label, total: r.total_views as number, unique: r.unique_users as number }
+  })
+
   return {
     kpis: { totalViews, uniqueUsers, avgPagesPerUser, desktopPct, peakHour, peakHourCount },
     pageStats,
     userEngagement,
     temporalData,
+    dailyData,
   }
 }
 
@@ -149,7 +166,7 @@ export default async function TelemetriaAdminPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAuthAdminClient() as any
 
-  const [pageCountersRes, userStatsRes, hourlyRes, usersRes, upRes, scoresRes, masterRes] =
+  const [pageCountersRes, userStatsRes, hourlyRes, dailyRes, usersRes, upRes, scoresRes, masterRes] =
     await Promise.all([
       // ~15 linhas (era: 36.000 linhas brutas de page_views)
       admin.from('vw_analytics_page_counters')
@@ -162,6 +179,10 @@ export default async function TelemetriaAdminPage() {
       // 24 linhas — uma por hora do dia
       admin.from('vw_analytics_hourly')
         .select('hour_brt, cnt'),
+
+      // N linhas — uma por dia
+      admin.from('vw_analytics_daily')
+        .select('day, total_views, unique_users'),
 
       admin.from('users').select('id, name, apelido').eq('status', 'aprovado'),
       admin.from('user_participants').select('user_id, participant_id').eq('is_primary', true),
@@ -178,6 +199,8 @@ export default async function TelemetriaAdminPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const hourlyRows: any[]   = hourlyRes.data      ?? []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const dailyRows: any[]    = dailyRes.data       ?? []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const users: any[]        = usersRes.data        ?? []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const up: any[]           = upRes.data           ?? []
@@ -185,7 +208,7 @@ export default async function TelemetriaAdminPage() {
   const scores: any[]       = scoresRes.data       ?? []
   const masterUserId: string | null = masterRes.data?.id ?? null
 
-  const fullStats = buildStats(pageCounters, userStats, hourlyRows, users, up, scores)
+  const fullStats = buildStats(pageCounters, userStats, hourlyRows, dailyRows, users, up, scores)
 
   // Stats filtrados excluem o dono do bolão (master user)
   let filteredStats = fullStats
@@ -254,6 +277,7 @@ export default async function TelemetriaAdminPage() {
       filteredPageCountersWithPct,
       filteredUserStats,
       hourlyRows,
+      dailyRows,
       users,
       up,
       scores,

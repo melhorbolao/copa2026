@@ -178,7 +178,7 @@ export function TelemetriaClient({
 
   const data = excludeAdmin ? filteredStats : fullStats
 
-  const { kpis, pageStats, userEngagement, temporalData } = data
+  const { kpis, pageStats, userEngagement, temporalData, dailyData } = data
 
   const handleSort = (col: typeof sortCol) => {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -474,11 +474,9 @@ export function TelemetriaClient({
       {/* ── 4. Distribuição Temporal por Hora ─────────────────────────────── */}
       <section>
         <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-gray-500">
-          Distribuição Temporal
+          Volume de acessos por hora do dia
         </h3>
-        <p className="mb-3 text-xs text-gray-400">
-          Volume de acessos por hora do dia (horário de Brasília)
-        </p>
+        <p className="mb-3 text-xs text-gray-400">Horário de Brasília</p>
         <div className="rounded-xl border border-gray-200 bg-[#001133] p-5 shadow-sm">
           <ResponsiveContainer width="100%" height={220}>
             <LineChart
@@ -486,19 +484,12 @@ export function TelemetriaClient({
               margin={{ top: 8, right: 16, left: 0, bottom: 4 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
-              <XAxis
-                dataKey="label"
-                tick={{ fontSize: 10, fill: '#9ca3af' }}
-                interval={1}
-              />
+              <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#9ca3af' }} interval={1} />
               <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} />
               <Tooltip content={<ChartTooltip />} />
               <Line
-                type="monotone"
-                dataKey="count"
-                name="Acessos"
-                stroke={LINE_GOLD}
-                strokeWidth={2}
+                type="monotone" dataKey="count" name="Acessos"
+                stroke={LINE_GOLD} strokeWidth={2}
                 dot={{ fill: LINE_GOLD, r: 3 }}
                 activeDot={{ r: 5, fill: '#fff', stroke: LINE_GOLD }}
               />
@@ -506,6 +497,57 @@ export function TelemetriaClient({
           </ResponsiveContainer>
         </div>
       </section>
+
+      {/* ── 5. Volume por dia ─────────────────────────────────────────────── */}
+      {dailyData.length > 0 && (
+        <section>
+          <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-gray-500">
+            Volume de acessos por dia
+          </h3>
+          <p className="mb-3 text-xs text-gray-400">Total de page views por dia</p>
+          <div className="rounded-xl border border-gray-200 bg-[#001133] p-5 shadow-sm overflow-x-auto">
+            <div style={{ minWidth: Math.max(dailyData.length * 32, 400) }}>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={dailyData} margin={{ top: 8, right: 16, left: 0, bottom: 4 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
+                  <XAxis dataKey="day" tick={{ fontSize: 10, fill: '#9ca3af' }} interval={0} />
+                  <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Bar dataKey="total" name="Acessos" fill={BAR_GOLD} radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── 6. Usuários únicos por dia ────────────────────────────────────── */}
+      {dailyData.length > 0 && (
+        <section>
+          <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-gray-500">
+            Volume de acessos únicos por dia
+          </h3>
+          <p className="mb-3 text-xs text-gray-400">Usuários distintos que acessaram o bolão</p>
+          <div className="rounded-xl border border-gray-200 bg-[#001133] p-5 shadow-sm overflow-x-auto">
+            <div style={{ minWidth: Math.max(dailyData.length * 32, 400) }}>
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={dailyData} margin={{ top: 8, right: 16, left: 0, bottom: 4 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
+                  <XAxis dataKey="day" tick={{ fontSize: 10, fill: '#9ca3af' }} interval={0} />
+                  <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Line
+                    type="monotone" dataKey="unique" name="Usuários únicos"
+                    stroke={LINE_GOLD} strokeWidth={2}
+                    dot={{ fill: LINE_GOLD, r: 3 }}
+                    activeDot={{ r: 5, fill: '#fff', stroke: LINE_GOLD }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </section>
+      )}
     </div>
   )
 }
