@@ -1,5 +1,7 @@
 -- Adiciona desktop_views e mobile_views à view de engajamento por usuário
-CREATE OR REPLACE VIEW public.vw_analytics_user_stats AS
+-- CREATE OR REPLACE não permite inserir colunas no meio — precisa recriar
+DROP VIEW IF EXISTS public.vw_analytics_user_stats;
+CREATE VIEW public.vw_analytics_user_stats AS
 SELECT
   user_id,
   COUNT(*)::int                                                     AS total_views,
