@@ -21,10 +21,11 @@ const STATUS_OPTIONS: { value: StatusFilter; label: string; active: string; inac
 ]
 
 export function UsuariosClient({ users }: Props) {
-  const [search,       setSearch]       = useState('')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
-  const [sortField,    setSortField]    = useState<SortField>('num')
-  const [sortDir,      setSortDir]      = useState<SortDir>('desc')
+  const [search,         setSearch]         = useState('')
+  const [statusFilter,   setStatusFilter]   = useState<StatusFilter>('all')
+  const [padrinhoFilter, setPadrinhoFilter] = useState('all')
+  const [sortField,      setSortField]      = useState<SortField>('num')
+  const [sortDir,        setSortDir]        = useState<SortDir>('desc')
 
   // Número sequencial por ordem de criação (mais antigo = #1)
   const usersWithNum = useMemo(() => {
@@ -33,6 +34,13 @@ export function UsuariosClient({ users }: Props) {
     )
     return sorted.map((u, i) => ({ ...u, num: i + 1 }))
   }, [users])
+
+  // Lista de padrinhos únicos presentes nos usuários
+  const padrinhos = useMemo(() => {
+    const set = new Set<string>()
+    for (const u of usersWithNum) if (u.padrinho) set.add(u.padrinho)
+    return [...set].sort()
+  }, [usersWithNum])
 
   const isIncomplete = (u: User) => !u.is_manual && (!u.whatsapp || !u.padrinho)
 
@@ -52,6 +60,9 @@ export function UsuariosClient({ users }: Props) {
     else if (statusFilter !== 'all')
       result = result.filter(u => u.status === statusFilter)
 
+    if (padrinhoFilter !== 'all')
+      result = result.filter(u => u.padrinho === padrinhoFilter)
+
     if (search.trim()) {
       const q = search.toLowerCase()
       result = result.filter(u =>
@@ -67,7 +78,7 @@ export function UsuariosClient({ users }: Props) {
         : a.name.localeCompare(b.name, 'pt-BR')
       return sortDir === 'asc' ? cmp : -cmp
     })
-  }, [usersWithNum, search, statusFilter, sortField, sortDir])
+  }, [usersWithNum, search, statusFilter, padrinhoFilter, sortField, sortDir])
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
@@ -94,6 +105,16 @@ export function UsuariosClient({ users }: Props) {
           onChange={e => setSearch(e.target.value)}
           className="w-56 rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:border-verde-400 focus:outline-none"
         />
+        <select
+          value={padrinhoFilter}
+          onChange={e => setPadrinhoFilter(e.target.value)}
+          className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 focus:border-verde-400 focus:outline-none"
+        >
+          <option value="all">Todos os padrinhos</option>
+          {padrinhos.map(p => (
+            <option key={p} value={p}>{p}</option>
+          ))}
+        </select>
         <div className="flex flex-wrap gap-1.5">
           {STATUS_OPTIONS.map(opt => (
             <button
