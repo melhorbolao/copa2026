@@ -189,15 +189,15 @@ export default async function ZebrasPage() {
   // Conceito: prazo de apostas JÁ ENCERRADO, mas resultado/classificação ainda
   // não definido. Apostas estão bloqueadas — distribuição final.
 
-  // 1. Jogos com prazo encerrado e sem placar oficial
-  const { data: pendingMatchesRaw } = await admin
+  // 1. Jogos sem placar oficial (admin vê todos; outros só os com prazo encerrado)
+  const pendingQuery = admin
     .from('matches')
     .select('id, team_home, team_away, flag_home, flag_away, match_datetime, phase, group_name, round, city')
-    .lte('betting_deadline', now)
     .is('score_home', null)
     .neq('team_home', 'TBD')
     .neq('team_away', 'TBD')
     .order('match_datetime', { ascending: true })
+  const { data: pendingMatchesRaw } = await (isAdmin ? pendingQuery : pendingQuery.lte('betting_deadline', now))
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   // Completa teamFlags com times das partidas ainda não realizadas
@@ -317,7 +317,9 @@ export default async function ZebrasPage() {
   // 3. G4 da Copa: slots ainda não definidos (prazo de bonus já encerrado)
   const potentialG4Zebras: PotentialG4Zebra[] = []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const bonusDeadlinePassed = (matchesRaw ?? []).some((m: any) => m.phase === 'group')
+  // Admin: sempre mostra G4 potencial; outros: exige resultados de grupos
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const bonusDeadlinePassed = isAdmin || (matchesRaw ?? []).some((m: any) => m.phase === 'group')
   if (bonusDeadlinePassed) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: tBetsData } = await admin.from('tournament_bets').select('champion, runner_up, semi1, semi2') as any

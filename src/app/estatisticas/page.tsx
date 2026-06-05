@@ -58,7 +58,7 @@ export default async function EstatisticasPage() {
   // Bloqueia estatísticas enquanto o prazo de palpites estiver aberto
   const bonusDeadlineStr = allMatches.find((m: any) => m.phase === 'group' && m.round === 1)?.betting_deadline ?? null
   const now = new Date()
-  if (!bonusDeadlineStr || new Date(bonusDeadlineStr) > now) {
+  if (!isAdmin && (!bonusDeadlineStr || new Date(bonusDeadlineStr) > now)) {
     const deadlineLabel = bonusDeadlineStr
       ? new Date(bonusDeadlineStr).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
       : 'data indefinida'

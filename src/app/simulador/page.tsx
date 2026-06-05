@@ -284,7 +284,7 @@ export default async function SimuladorPage() {
   const bonusDeadlineIso: string | null = round1Group.length > 0
     ? round1Group.map((m: any) => m.betting_deadline as string).sort()[0]
     : null
-  const bonusUnlocked = !!(bonusDeadlineIso && bonusDeadlineIso <= now)
+  const bonusUnlocked = isAdmin || !!(bonusDeadlineIso && bonusDeadlineIso <= now)
 
   // Times por grupo (para os pickers do simulador). Vem de teams ou, se a
   // tabela teams não estiver populada, de matches.
