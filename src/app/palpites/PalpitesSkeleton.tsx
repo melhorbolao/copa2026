@@ -7,7 +7,7 @@ export function PalpitesSkeleton() {
   return (
     <>
       {/* Sticky stats placeholder */}
-      <div className="sticky top-14 sm:top-0 z-40 border-b border-white/10 bg-gray-950/90 backdrop-blur-md">
+      <div className="sticky z-40 border-b border-white/10 bg-gray-950/90 backdrop-blur-md" style={{ top: 'var(--sticky-top)' }}>
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-2">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="h-4 w-12 animate-pulse rounded bg-white/10" />

@@ -7,6 +7,30 @@ html {
   overflow-x: clip;
 }
 
+/* Altura do aviso amarelo (definida via JS pelo AlertBanner quando ativo) */
+:root {
+  --banner-h: 0px;
+  /* mobile: navbar (3.5rem) + aviso */
+  --sticky-top: calc(3.5rem + var(--banner-h));
+}
+@media (min-width: 640px) {
+  :root {
+    /* desktop: sem navbar, só o aviso */
+    --sticky-top: var(--banner-h);
+  }
+}
+
+/* Offset dinâmico para o conteúdo abaixo do ScoreHeader fixo em /jogos */
+.jogos-content-top {
+  padding-top: calc(9rem + var(--banner-h));
+  padding-bottom: 1rem;
+}
+@media (min-width: 640px) {
+  .jogos-content-top {
+    padding-top: calc(6rem + var(--banner-h));
+  }
+}
+
 /* Scrollbar sutil para containers com overflow-x */
 .scrollbar-thin {
   scrollbar-width: thin;

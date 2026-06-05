@@ -267,6 +267,7 @@ function ScorerCard({
   scorer,
   rank,
   showBettors,
+  showBettorCount,
   showPositions,
   isAdmin,
   artillaryPointsActive,
@@ -279,6 +280,7 @@ function ScorerCard({
   scorer: TopScorerItem
   rank: number
   showBettors: boolean
+  showBettorCount: boolean
   showPositions: boolean
   isAdmin: boolean
   artillaryPointsActive: boolean
@@ -399,9 +401,14 @@ function ScorerCard({
           )}
         </div>
 
-        {/* Goals control + delete */}
+        {/* Goals control + bettor count + delete */}
         <div className="flex shrink-0 flex-col items-end gap-2">
           <GoalsControl id={scorer.id} count={scorer.goals_count} onUpdate={onUpdate} />
+          {showBettorCount && (
+            <span className="text-[11px] text-gray-400">
+              👥 {scorer.bettors.length} apostador{scorer.bettors.length !== 1 ? 'es' : ''}
+            </span>
+          )}
           {isAdmin && !confirmDelete && (
             <button
               onClick={() => setConfirmDelete(true)}
@@ -578,16 +585,22 @@ export function ArtilhariaClient({
     })
   }
 
+  const sortScorers = (list: TopScorerItem[]) =>
+    list.sort((a, b) =>
+      b.goals_count - a.goals_count ||
+      b.bettors.length - a.bettors.length ||
+      a.player_name.localeCompare(b.player_name, 'pt-BR')
+    )
+
   const updateScorer = (id: string, newCount: number) => {
     setScorers(prev =>
-      [...prev.map(s => s.id === id ? { ...s, goals_count: newCount } : s)]
-        .sort((a, b) => b.goals_count - a.goals_count || a.player_name.localeCompare(b.player_name, 'pt-BR'))
+      sortScorers([...prev.map(s => s.id === id ? { ...s, goals_count: newCount } : s)])
     )
   }
 
   const addScorer = (s: TopScorerItem) => {
     setScorers(prev =>
-      [...prev, s].sort((a, b) => b.goals_count - a.goals_count || a.player_name.localeCompare(b.player_name, 'pt-BR'))
+      sortScorers([...prev, s])
     )
     setShowAddForm(false)
   }
@@ -616,17 +629,16 @@ export function ArtilhariaClient({
           if (payload.eventType === 'UPDATE') {
             const row = payload.new as { id: string; goals_count: number; player_name: string; team: string; photo_url?: string }
             setScorers(prev =>
-              [...prev.map(s => s.id === row.id
+              sortScorers([...prev.map(s => s.id === row.id
                 ? { ...s, goals_count: row.goals_count, player_name: row.player_name, team: row.team, photo_url: row.photo_url ?? undefined }
                 : s
-              )].sort((a, b) => b.goals_count - a.goals_count || a.player_name.localeCompare(b.player_name, 'pt-BR'))
+              )])
             )
           } else if (payload.eventType === 'INSERT') {
             const row = payload.new as { id: string; goals_count: number; player_name: string; team: string; photo_url?: string }
             setScorers(prev => {
               if (prev.find(s => s.id === row.id)) return prev
-              return [...prev, { ...row, bettors: [] }]
-                .sort((a, b) => b.goals_count - a.goals_count || a.player_name.localeCompare(b.player_name, 'pt-BR'))
+              return sortScorers([...prev, { ...row, bettors: [] }])
             })
           }
         }
@@ -702,6 +714,7 @@ export function ArtilhariaClient({
               scorer={scorer}
               rank={ranks[i]}
               showBettors={showBettors && bettorsVisible}
+              showBettorCount={showBettors}
               showPositions={showPositions}
               isAdmin={isAdmin}
               artillaryPointsActive={artillaryActive}

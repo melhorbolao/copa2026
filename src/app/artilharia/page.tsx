@@ -158,7 +158,11 @@ export default async function ArtilhariaPage() {
     }
   }
   const scorersWithBettors: TopScorerItem[] = [...mergedMap.values()]
-    .sort((a, b) => b.goals_count - a.goals_count || a.player_name.localeCompare(b.player_name, 'pt-BR'))
+    .sort((a, b) =>
+      b.goals_count - a.goals_count ||
+      b.bettors.length - a.bettors.length ||
+      a.player_name.localeCompare(b.player_name, 'pt-BR')
+    )
 
   return (
     <>

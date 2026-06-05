@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { AdminAlertRow } from '@/types/database'
 
@@ -15,6 +15,7 @@ function isAlertActive(alert: AdminAlertRow): boolean {
 export function AlertBanner() {
   const [alerts,    setAlerts]    = useState<AdminAlertRow[]>([])
   const [dismissed, setDismissed] = useState<string[]>([])
+  const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const supabase = createClient()
@@ -51,10 +52,27 @@ export function AlertBanner() {
   }, [])
 
   const visible = alerts.filter(a => isAlertActive(a) && !dismissed.includes(a.id))
-  if (visible.length === 0) return null
 
+  // Mantém --banner-h atualizado para que sticky/fixed de todas as páginas se desloquem
+  useLayoutEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    // Leitura inicial — o div existe mas pode estar vazio (altura 0)
+    document.documentElement.style.setProperty('--banner-h', `${el.offsetHeight}px`)
+    const observer = new ResizeObserver(() => {
+      document.documentElement.style.setProperty('--banner-h', `${el.offsetHeight}px`)
+    })
+    observer.observe(el)
+    return () => {
+      observer.disconnect()
+      document.documentElement.style.setProperty('--banner-h', '0px')
+    }
+  }, [])
+
+  // Renderiza sempre o wrapper para que o ref exista e o ResizeObserver funcione.
+  // Quando não há alertas visíveis, o div tem altura 0 e --banner-h permanece 0px.
   return (
-    <div className="w-full">
+    <div ref={containerRef} className="w-full">
       {visible.map(alert => (
         <div
           key={alert.id}

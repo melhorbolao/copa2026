@@ -312,7 +312,7 @@ export default async function ControlePage({
       <Navbar />
 
       {hasAnyError && (
-        <div className="sticky top-14 z-40 border-b border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700 font-medium">
+        <div className="sticky z-40 border-b border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700 font-medium" style={{ top: 'var(--sticky-top)' }}>
           ⚠️ Existem erros de lógica nos palpites de alguns participantes. Verifique a lista abaixo.
         </div>
       )}

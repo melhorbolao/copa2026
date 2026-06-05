@@ -350,7 +350,7 @@ export function JogosDashboard({
       />
 
       {/* Page content — offset from fixed header */}
-      <div className="pt-36 sm:pt-24 max-w-3xl mx-auto px-3 sm:px-4 space-y-4 py-4">
+      <div className="jogos-content-top max-w-3xl mx-auto px-3 sm:px-4 space-y-4">
 
         <BetStats
           match={match}

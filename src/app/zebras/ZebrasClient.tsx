@@ -379,12 +379,6 @@ function PotentialUpsetCard({ upset }: { upset: PotentialUpset }) {
           <Flag code={upset.flagAway} size="xs" />
         </div>
         <UpsetDistBar upset={upset} />
-        <p className="text-[10px] text-gray-400">
-          <span className="font-semibold text-amber-600">Potencial zebra:</span>{' '}
-          {upset.zebraColumns.map(c =>
-            `apenas ${c === 'H' ? upset.homePct : c === 'A' ? upset.awayPct : upset.drawPct}% apostaram em ${c === 'H' ? upset.teamHome : c === 'A' ? upset.teamAway : 'Empate'}`
-          ).join(' · ')}
-        </p>
       </div>
     </div>
   )
