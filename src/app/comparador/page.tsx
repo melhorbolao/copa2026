@@ -157,7 +157,7 @@ export default async function ComparadorPage() {
   const zebraThreshold = rulesMap['percentual_zebra'] ?? 15
 
   // ── Visibilidade em Modo Produção ─────────────────────────────────────────
-  const isTestModeAdmin = isAdmin && !visibilitySettings.productionMode
+  const isTestModeAdmin = isAdmin
   const serverNow = await getServerNow()
   const now = serverNow
   const bonusDeadline = rawMatches.find((m: any) => m.phase === 'group' && m.round === 1)?.betting_deadline ?? null

@@ -76,7 +76,7 @@ export default async function ClassificacaoMBPage() {
   }
 
   const [visibilitySettings] = await Promise.all([getVisibilitySettings()])
-  const isTestModeAdmin = isAdmin && !visibilitySettings.productionMode
+  const isTestModeAdmin = isAdmin
 
   // ── Fetch #1: dados base ───────────────────────────────────────────────────
   const [participantsRes, matchesRes, betsRes, groupBetsRes, tournamentBetsRes, scoresRes, rulesRes] = await Promise.all([

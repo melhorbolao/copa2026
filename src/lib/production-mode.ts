@@ -109,7 +109,7 @@ export function buildAvailableRounds(
 }
 
 // Returns true if this match's bets should be visible given current settings.
-// isAdmin: when true AND productionMode=false (test mode), bypass all filters.
+// isAdmin: admins sempre veem tudo, independente do productionMode.
 export function isMatchBetsVisible(
   phase: string,
   round: number | null,
@@ -118,7 +118,7 @@ export function isMatchBetsVisible(
   settings: VisibilitySettings,
   isAdmin = false,
 ): boolean {
-  if (isAdmin && !settings.productionMode) return true   // test-mode admin: vê tudo
+  if (isAdmin) return true                               // admin: vê tudo sempre
   if (new Date(betting_deadline) > now) return false     // prazo não passou: oculto
   return settings.releasedRounds.has(getRoundKey(phase, round))
 }
@@ -130,13 +130,13 @@ export function isBonusVisible(
   settings: VisibilitySettings,
   isAdmin = false,
 ): boolean {
-  if (isAdmin && !settings.productionMode) return true
+  if (isAdmin) return true
   if (!bonusDeadline || new Date(bonusDeadline) > now) return false
   return settings.releasedRounds.has('bonus')
 }
 
 // Filtra palpites pelo prazo da partida.
-// - Test-mode admin (isAdmin && !productionMode): vê todos.
+// - Admin: vê todos sempre.
 // - Demais: vê só palpites de partidas cujo prazo já passou,
 //   mais os seus próprios (ownParticipantId) para qualquer partida.
 export function filterBetsByDeadline<T extends { match_id: string; participant_id?: string }>(

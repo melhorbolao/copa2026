@@ -52,7 +52,7 @@ export default async function SimuladorPage() {
   const admin = createAuthAdminClient() as any
   const now = new Date().toISOString()
   const visibilitySettings = await getVisibilitySettings()
-  const isTestModeAdmin = isAdmin && !visibilitySettings.productionMode
+  const isTestModeAdmin = isAdmin
 
   // PostgREST aplica max-rows=1000 mesmo com service_role.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

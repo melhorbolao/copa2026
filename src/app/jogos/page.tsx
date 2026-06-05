@@ -26,7 +26,7 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
   const admin = createAuthAdminClient() as any
   const { m: initialMatchId } = await searchParams
   const visibilitySettings = await getVisibilitySettings()
-  const isTestModeAdmin = isAdmin && !visibilitySettings.productionMode
+  const isTestModeAdmin = isAdmin
 
   // PostgREST aplica max-rows=1000 mesmo com service_role.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
