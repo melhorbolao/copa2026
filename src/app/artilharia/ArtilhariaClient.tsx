@@ -563,6 +563,7 @@ export function ArtilhariaClient({
   const [artillaryActive, setArtillaryActive] = useState(initActive)
   const [togglePending, startToggleTransition] = useProgressTransition()
   const [toggleError, setToggleError] = useState('')
+  const [bettorsVisible, setBettorsVisible] = useState(true)
 
   const handleToggleArtillary = () => {
     const next = !artillaryActive
@@ -638,58 +639,29 @@ export function ArtilhariaClient({
   return (
     <div>
       {/* Header */}
-      <div className="mb-6 flex items-start justify-between gap-4">
+      <div className="mb-4 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-gray-900">Artilharia</h1>
           <p className="mt-1 text-sm text-gray-500">
             Artilheiros da Copa — atualizado em tempo real pela torcida
           </p>
         </div>
-        {!showAddForm && (
-          <button
-            onClick={() => setShowAddForm(true)}
-            className="shrink-0 rounded-lg bg-azul-navy px-4 py-2 text-sm font-semibold text-white transition hover:bg-azul-mid"
-          >
-            + Inserir artilheiro
-          </button>
-        )}
-      </div>
-
-      {/* Controle de pontos de artilharia */}
-      <div className="mb-5 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-semibold text-gray-800">Contar pontos de artilharia no ranking geral?</p>
-            {isAdmin ? (
-              <p className="mt-0.5 text-xs text-gray-500">
-                {artillaryActive
-                  ? 'Ativado — pontos de artilheiro estão sendo somados no ranking.'
-                  : 'Desativado — pontos de artilheiro não entram no total do ranking.'}
-              </p>
-            ) : (
-              <p className="mt-0.5 text-xs text-gray-500">Configurado pelo administrador do bolão.</p>
-            )}
-            {toggleError && <p className="mt-1 text-xs text-red-500">{toggleError}</p>}
-          </div>
-          {isAdmin ? (
+        <div className="flex items-center gap-2 shrink-0">
+          {showBettors && (
             <button
-              onClick={handleToggleArtillary}
-              disabled={togglePending}
-              title={artillaryActive ? 'Clique para desativar' : 'Clique para ativar'}
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:cursor-not-allowed ${
-                artillaryActive ? 'bg-verde-600' : 'bg-gray-300'
-              }`}
+              onClick={() => setBettorsVisible(v => !v)}
+              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 shadow-sm transition hover:bg-gray-50"
             >
-              <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${artillaryActive ? 'translate-x-5' : 'translate-x-0'}`} />
+              {bettorsVisible ? 'Ocultar apostadores' : 'Mostrar apostadores'}
             </button>
-          ) : (
-            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-              artillaryActive
-                ? 'bg-green-100 text-green-800'
-                : 'bg-amber-100 text-amber-800'
-            }`}>
-              {artillaryActive ? 'Pontos Computados' : 'Aguardando Validação'}
-            </span>
+          )}
+          {!showAddForm && isAdmin && (
+            <button
+              onClick={() => setShowAddForm(true)}
+              className="rounded-lg bg-azul-navy px-4 py-2 text-sm font-semibold text-white transition hover:bg-azul-mid"
+            >
+              + Inserir artilheiro
+            </button>
           )}
         </div>
       </div>
@@ -729,7 +701,7 @@ export function ArtilhariaClient({
               key={scorer.id}
               scorer={scorer}
               rank={ranks[i]}
-              showBettors={showBettors}
+              showBettors={showBettors && bettorsVisible}
               showPositions={showPositions}
               isAdmin={isAdmin}
               artillaryPointsActive={artillaryActive}
@@ -748,6 +720,44 @@ export function ArtilhariaClient({
         <p className="mt-4 text-right text-xs text-gray-400">
           {scorers.length} jogador{scorers.length !== 1 ? 'es' : ''} · atualizações em tempo real
         </p>
+      )}
+
+      {/* Controle de pontos de artilharia — admin: no final da página */}
+      {isAdmin && (
+        <div className="mt-6 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-gray-800">Contar pontos de artilharia no ranking geral?</p>
+              <p className="mt-0.5 text-xs text-gray-500">
+                {artillaryActive
+                  ? 'Ativado — pontos de artilheiro estão sendo somados no ranking.'
+                  : 'Desativado — pontos de artilheiro não entram no total do ranking.'}
+              </p>
+              {toggleError && <p className="mt-1 text-xs text-red-500">{toggleError}</p>}
+            </div>
+            <button
+              onClick={handleToggleArtillary}
+              disabled={togglePending}
+              title={artillaryActive ? 'Clique para desativar' : 'Clique para ativar'}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:cursor-not-allowed ${
+                artillaryActive ? 'bg-verde-600' : 'bg-gray-300'
+              }`}
+            >
+              <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${artillaryActive ? 'translate-x-5' : 'translate-x-0'}`} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Badge de status para não-admin */}
+      {!isAdmin && (
+        <div className="mt-4 flex justify-end">
+          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+            artillaryActive ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
+          }`}>
+            {artillaryActive ? 'Pontos de artilharia computados' : 'Pontos de artilharia aguardando validação'}
+          </span>
+        </div>
       )}
     </div>
   )
