@@ -29,6 +29,32 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
   )
   const [selGroup, setSelGroup] = useState<string | null>(null)
 
+  // ── Sort: Seleções ────────────────────────────────────────────────────────
+  type SelCol = 'group' | 'name' | 'first' | 'second' | 'third' | 'elim' |
+                'champ' | 'vice' | 'third4' | 'fourth' | 'nemSemi'
+  const [selSort, setSelSort] = useState<SelCol>('name')
+  const [selDir,  setSelDir]  = useState<'asc' | 'desc'>('asc')
+
+  const handleSelSort = (col: SelCol) => {
+    if (selSort === col) setSelDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSelSort(col); setSelDir(col === 'name' || col === 'group' ? 'asc' : 'desc') }
+  }
+
+  // ── Sort: Placar favorito por participante ────────────────────────────────
+  type PartCol = 'apelido' | 'topLabel' | 'topPct' | 'avgGoals' | 'draws' | 'zebras'
+  const [partSort, setPartSort] = useState<PartCol>('apelido')
+  const [partDir,  setPartDir]  = useState<'asc' | 'desc'>('asc')
+
+  const handlePartSort = (col: PartCol) => {
+    if (partSort === col) setPartDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setPartSort(col); setPartDir(col === 'apelido' || col === 'topLabel' ? 'asc' : 'desc') }
+  }
+
+  const SortIcon = ({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) =>
+    active
+      ? <span className="ml-0.5">{dir === 'asc' ? '▲' : '▼'}</span>
+      : <span className="ml-0.5 opacity-30">↕</span>
+
   const n      = participants.length
   const tBetsN = tournamentBets.length
 
@@ -60,7 +86,24 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
     }).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
   }, [teams, groupBets, thirdBets, tournamentBets, n, tBetsN, zebraThreshold])
 
-  const rows = selGroup ? allStats.filter(t => t.group === selGroup) : allStats
+  const rows = useMemo(() => {
+    const base = selGroup ? allStats.filter(t => t.group === selGroup) : allStats
+    return [...base].sort((a, b) => {
+      let cmp = 0
+      if      (selSort === 'group')   cmp = a.group.localeCompare(b.group)
+      else if (selSort === 'name')    cmp = a.name.localeCompare(b.name, 'pt-BR')
+      else if (selSort === 'first')   cmp = a.first   - b.first
+      else if (selSort === 'second')  cmp = a.second  - b.second
+      else if (selSort === 'third')   cmp = a.third   - b.third
+      else if (selSort === 'elim')    cmp = a.elim    - b.elim
+      else if (selSort === 'champ')   cmp = a.champ   - b.champ
+      else if (selSort === 'vice')    cmp = a.vice    - b.vice
+      else if (selSort === 'third4')  cmp = a.third4  - b.third4
+      else if (selSort === 'fourth')  cmp = a.fourth  - b.fourth
+      else if (selSort === 'nemSemi') cmp = a.nemSemi - b.nemSemi
+      return selDir === 'asc' ? cmp : -cmp
+    })
+  }, [allStats, selGroup, selSort, selDir])
 
   const tot = rows.reduce((a, t) => ({
     first: a.first + t.first, second: a.second + t.second, third: a.third + t.third,
@@ -155,6 +198,19 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
     })
   }, [matchBets, participants, zebraThreshold])
 
+  const sortedPartStats = useMemo(() => {
+    return [...participantBetStats].sort((a, b) => {
+      let cmp = 0
+      if      (partSort === 'apelido')  cmp = a.apelido.localeCompare(b.apelido, 'pt-BR')
+      else if (partSort === 'topLabel') cmp = a.topLabel.localeCompare(b.topLabel, 'pt-BR')
+      else if (partSort === 'topPct')   cmp = a.topPct   - b.topPct
+      else if (partSort === 'avgGoals') cmp = a.avgGoals - b.avgGoals
+      else if (partSort === 'draws')    cmp = a.draws    - b.draws
+      else if (partSort === 'zebras')   cmp = a.zebras   - b.zebras
+      return partDir === 'asc' ? cmp : -cmp
+    })
+  }, [participantBetStats, partSort, partDir])
+
   // Returns td className and inner element for a numeric cell
   function C(v: number, z = false, dim = false) {
     return {
@@ -195,17 +251,25 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
                 <th colSpan={5} className="border-b border-l border-gray-100 py-1 text-center px-1">Torneio</th>
               </tr>
               <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-bold text-gray-400 uppercase tracking-wide">
-                <th className="pl-3 pr-1 py-1.5 text-left">G</th>
-                <th className="px-2 py-1.5 text-left">Seleção</th>
-                <th className="px-2 py-1.5 text-center border-l border-gray-100" title="1º do grupo">1º</th>
-                <th className="px-2 py-1.5 text-center" title="2º do grupo">2º</th>
-                <th className="px-2 py-1.5 text-center" title="3º do grupo (classif)">3ºC</th>
-                <th className="px-2 py-1.5 text-center" title="Eliminado na 1ª fase">Elim</th>
-                <th className="px-2 py-1.5 text-center border-l border-gray-100" title="Campeão">Cam</th>
-                <th className="px-2 py-1.5 text-center" title="Vice-campeão">Vice</th>
-                <th className="px-2 py-1.5 text-center" title="Terceiro lugar">3º</th>
-                <th className="px-2 py-1.5 text-center" title="Quarto lugar">4º</th>
-                <th className="pr-3 pl-2 py-1.5 text-center" title="Não chegou às semifinais">Nem</th>
+                {([
+                  { col: 'group'  as SelCol, label: 'G',    cls: 'pl-3 pr-1 py-1.5 text-left',                          title: undefined },
+                  { col: 'name'   as SelCol, label: 'Seleção',cls:'px-2 py-1.5 text-left',                               title: undefined },
+                  { col: 'first'  as SelCol, label: '1º',   cls: 'px-2 py-1.5 text-center border-l border-gray-100',    title: '1º do grupo' },
+                  { col: 'second' as SelCol, label: '2º',   cls: 'px-2 py-1.5 text-center',                             title: '2º do grupo' },
+                  { col: 'third'  as SelCol, label: '3ºC',  cls: 'px-2 py-1.5 text-center',                             title: '3º do grupo (classif)' },
+                  { col: 'elim'   as SelCol, label: 'Elim', cls: 'px-2 py-1.5 text-center',                             title: 'Eliminado na 1ª fase' },
+                  { col: 'champ'  as SelCol, label: 'Cam',  cls: 'px-2 py-1.5 text-center border-l border-gray-100',    title: 'Campeão' },
+                  { col: 'vice'   as SelCol, label: 'Vice', cls: 'px-2 py-1.5 text-center',                             title: 'Vice-campeão' },
+                  { col: 'third4' as SelCol, label: '3º',   cls: 'px-2 py-1.5 text-center',                             title: 'Terceiro lugar' },
+                  { col: 'fourth' as SelCol, label: '4º',   cls: 'px-2 py-1.5 text-center',                             title: 'Quarto lugar' },
+                  { col: 'nemSemi'as SelCol, label: 'Nem',  cls: 'pr-3 pl-2 py-1.5 text-center',                        title: 'Não chegou às semifinais' },
+                ] as { col: SelCol; label: string; cls: string; title?: string }[]).map(({ col, label, cls, title }) => (
+                  <th key={col} className={`${cls} cursor-pointer select-none hover:bg-gray-100 transition-colors`} title={title}>
+                    <button type="button" onClick={() => handleSelSort(col)} className="inline-flex items-center gap-0">
+                      {label}<SortIcon active={selSort === col} dir={selDir} />
+                    </button>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -347,16 +411,24 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
             <table className="w-full text-xs whitespace-nowrap">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-bold text-gray-400 uppercase tracking-wide">
-                  <th className="text-left px-4 py-2">Participante</th>
-                  <th className="text-center px-3 py-2">Placar Mais Frequente</th>
-                  <th className="text-right px-3 py-2">% do Placar</th>
-                  <th className="text-right px-3 py-2">Média Gols</th>
-                  <th className="text-right px-3 py-2">Empates</th>
-                  <th className="text-right px-4 py-2">Zebras</th>
+                  {([
+                    { col: 'apelido'  as PartCol, label: 'Participante',         cls: 'text-left  px-4 py-2' },
+                    { col: 'topLabel' as PartCol, label: 'Placar Mais Frequente',cls: 'text-center px-3 py-2' },
+                    { col: 'topPct'   as PartCol, label: '% do Placar',          cls: 'text-right px-3 py-2' },
+                    { col: 'avgGoals' as PartCol, label: 'Média Gols',           cls: 'text-right px-3 py-2' },
+                    { col: 'draws'    as PartCol, label: 'Empates',              cls: 'text-right px-3 py-2' },
+                    { col: 'zebras'   as PartCol, label: 'Zebras',               cls: 'text-right px-4 py-2' },
+                  ] as { col: PartCol; label: string; cls: string }[]).map(({ col, label, cls }) => (
+                    <th key={col} className={`${cls} cursor-pointer select-none hover:bg-gray-100 transition-colors`}>
+                      <button type="button" onClick={() => handlePartSort(col)} className="inline-flex items-center gap-0 w-full justify-inherit">
+                        {label}<SortIcon active={partSort === col} dir={partDir} />
+                      </button>
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {participantBetStats.map(s => (
+                {sortedPartStats.map(s => (
                   <tr key={s.apelido} className="hover:bg-gray-50/60">
                     <td className="px-4 py-1.5 font-medium text-gray-800">{s.apelido}</td>
                     <td className="px-3 py-1.5 text-center font-bold tabular-nums text-gray-800 tracking-wider">
