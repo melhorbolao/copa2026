@@ -41,7 +41,7 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
   }
 
   // ── Sort: Placar favorito por participante ────────────────────────────────
-  type PartCol = 'apelido' | 'topLabel' | 'topPct' | 'avgGoals' | 'draws' | 'zebras'
+  type PartCol = 'apelido' | 'topLabel' | 'topPct' | 'avgGoals' | 'draws' | 'zebras' | 'zebraGrp' | 'zebraG4'
   const [partSort, setPartSort] = useState<PartCol>('apelido')
   const [partDir,  setPartDir]  = useState<'asc' | 'desc'>('asc')
 
@@ -143,7 +143,7 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
   }, [tournamentBets, scorerMapping])
 
   const participantBetStats = useMemo(() => {
-    // Distribuição de resultados por partida (para detectar zebra)
+    // Distribuição de resultados por partida (para detectar zebra de jogo)
     const matchDist = new Map<string, { H: number; D: number; A: number; total: number }>()
     for (const b of matchBets) {
       const res = b.score_home > b.score_away ? 'H' : b.score_home < b.score_away ? 'A' : 'D'
@@ -152,7 +152,28 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
       matchDist.set(b.match_id, d)
     }
 
-    // Agrupa apostas por participante
+    // Distribuição de 1º lugar por grupo (para zebra de grupo)
+    const grpFirstDist = new Map<string, Map<string, number>>()
+    for (const b of groupBets) {
+      if (!b.first_place) continue
+      if (!grpFirstDist.has(b.group_name)) grpFirstDist.set(b.group_name, new Map())
+      const m = grpFirstDist.get(b.group_name)!
+      m.set(b.first_place, (m.get(b.first_place) ?? 0) + 1)
+    }
+
+    // Distribuição de picks G4 por slot (para zebra G4)
+    const G4_FIELDS = ['champion', 'runner_up', 'semi1', 'semi2'] as const
+    const g4Dist = new Map<string, Map<string, number>>()
+    for (const b of tournamentBets) {
+      for (const f of G4_FIELDS) {
+        const team = b[f]; if (!team) continue
+        if (!g4Dist.has(f)) g4Dist.set(f, new Map())
+        const m = g4Dist.get(f)!
+        m.set(team, (m.get(team) ?? 0) + 1)
+      }
+    }
+
+    // Agrupa apostas de jogos por participante
     const betsByPid = new Map<string, MBet[]>()
     for (const b of matchBets) {
       const arr = betsByPid.get(b.participant_id) ?? []
@@ -186,6 +207,7 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
         ? bets.reduce((s, b) => s + b.score_home + b.score_away, 0) / total
         : 0
 
+      // Zebras de jogos
       let zebras = 0
       for (const b of bets) {
         const dist = matchDist.get(b.match_id)
@@ -194,9 +216,32 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
         if ((dist[res] / dist.total) * 100 <= zebraThreshold) zebras++
       }
 
-      return { apelido: p.apelido, total, topLabel, topPct, draws, zebras, avgGoals }
+      // Zebras de 1º lugar por grupo
+      let zebraGrp = 0
+      for (const b of groupBets.filter(g => g.participant_id === p.id)) {
+        if (!b.first_place) continue
+        const dist = grpFirstDist.get(b.group_name)
+        if (!dist) continue
+        const tot = [...dist.values()].reduce((s, v) => s + v, 0)
+        if (tot > 0 && ((dist.get(b.first_place) ?? 0) / tot) * 100 <= zebraThreshold) zebraGrp++
+      }
+
+      // Zebras G4
+      let zebraG4 = 0
+      const myTBet = tournamentBets.find(b => b.participant_id === p.id)
+      if (myTBet) {
+        for (const f of G4_FIELDS) {
+          const team = myTBet[f]; if (!team) continue
+          const dist = g4Dist.get(f)
+          if (!dist) continue
+          const tot = [...dist.values()].reduce((s, v) => s + v, 0)
+          if (tot > 0 && ((dist.get(team) ?? 0) / tot) * 100 <= zebraThreshold) zebraG4++
+        }
+      }
+
+      return { apelido: p.apelido, total, topLabel, topPct, draws, zebras, zebraGrp, zebraG4, avgGoals }
     })
-  }, [matchBets, participants, zebraThreshold])
+  }, [matchBets, groupBets, tournamentBets, participants, zebraThreshold])
 
   const sortedPartStats = useMemo(() => {
     return [...participantBetStats].sort((a, b) => {
@@ -207,6 +252,8 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
       else if (partSort === 'avgGoals') cmp = a.avgGoals - b.avgGoals
       else if (partSort === 'draws')    cmp = a.draws    - b.draws
       else if (partSort === 'zebras')   cmp = a.zebras   - b.zebras
+      else if (partSort === 'zebraGrp') cmp = a.zebraGrp - b.zebraGrp
+      else if (partSort === 'zebraG4')  cmp = a.zebraG4  - b.zebraG4
       return partDir === 'asc' ? cmp : -cmp
     })
   }, [participantBetStats, partSort, partDir])
@@ -324,6 +371,41 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
         </div>
       </div>
 
+      {/* ── Artilharia ──────────────────────────────────────────────── */}
+      <div className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
+        <div className="px-4 pt-3 pb-2 border-b border-gray-100">
+          <h2 className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Artilharia</h2>
+        </div>
+        {artilharia.length === 0 ? (
+          <p className="px-4 py-6 text-sm text-center text-gray-400">Sem palpites de artilheiro registrados.</p>
+        ) : (
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                <th className="text-left px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wide">Artilheiro</th>
+                <th className="text-right px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wide">Palpites</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {artilharia.map(a => (
+                <tr key={a.name} className="hover:bg-gray-50/60">
+                  <td className="px-4 py-2 font-medium text-gray-800">{a.name}</td>
+                  <td className="px-4 py-2 text-right font-bold tabular-nums text-gray-700">{a.count}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="bg-gray-50 border-t-2 border-gray-200 font-bold">
+                <td className="px-4 py-2 text-[10px] uppercase text-gray-500">Total</td>
+                <td className="px-4 py-2 text-right tabular-nums text-gray-700">
+                  {artilharia.reduce((s, a) => s + a.count, 0)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        )}
+      </div>
+
       {/* ── Placares mais frequentes ────────────────────────────────── */}
       <div className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-4 pt-3 pb-2 border-b border-gray-100">
@@ -363,41 +445,6 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
         )}
       </div>
 
-      {/* ── Artilharia ──────────────────────────────────────────────── */}
-      <div className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
-        <div className="px-4 pt-3 pb-2 border-b border-gray-100">
-          <h2 className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Artilharia</h2>
-        </div>
-        {artilharia.length === 0 ? (
-          <p className="px-4 py-6 text-sm text-center text-gray-400">Sem palpites de artilheiro registrados.</p>
-        ) : (
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-left px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wide">Artilheiro</th>
-                <th className="text-right px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wide">Palpites</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {artilharia.map(a => (
-                <tr key={a.name} className="hover:bg-gray-50/60">
-                  <td className="px-4 py-2 font-medium text-gray-800">{a.name}</td>
-                  <td className="px-4 py-2 text-right font-bold tabular-nums text-gray-700">{a.count}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="bg-gray-50 border-t-2 border-gray-200 font-bold">
-                <td className="px-4 py-2 text-[10px] uppercase text-gray-500">Total</td>
-                <td className="px-4 py-2 text-right tabular-nums text-gray-700">
-                  {artilharia.reduce((s, a) => s + a.count, 0)}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        )}
-      </div>
-
       {/* ── Placar favorito por participante ────────────────────── */}
       <div className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-4 pt-3 pb-2 border-b border-gray-100">
@@ -417,7 +464,9 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
                     { col: 'topPct'   as PartCol, label: '% do Placar',          cls: 'text-right px-3 py-2' },
                     { col: 'avgGoals' as PartCol, label: 'Média Gols',           cls: 'text-right px-3 py-2' },
                     { col: 'draws'    as PartCol, label: 'Empates',              cls: 'text-right px-3 py-2' },
-                    { col: 'zebras'   as PartCol, label: 'Zebras',               cls: 'text-right px-4 py-2' },
+                    { col: 'zebras'   as PartCol, label: 'Zebras Jogos',         cls: 'text-right px-3 py-2' },
+                    { col: 'zebraGrp' as PartCol, label: 'Zebras 1º Grupo',      cls: 'text-right px-3 py-2' },
+                    { col: 'zebraG4'  as PartCol, label: 'Zebras G4',            cls: 'text-right px-4 py-2' },
                   ] as { col: PartCol; label: string; cls: string }[]).map(({ col, label, cls }) => (
                     <th key={col} className={`${cls} cursor-pointer select-none hover:bg-gray-100 transition-colors`}>
                       <button type="button" onClick={() => handlePartSort(col)} className="inline-flex items-center gap-0 w-full justify-inherit">
@@ -443,8 +492,14 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
                     <td className="px-3 py-1.5 text-right tabular-nums text-gray-700">
                       {s.draws === 0 ? <span className="text-gray-300">–</span> : s.draws}
                     </td>
-                    <td className="px-4 py-1.5 text-right tabular-nums text-gray-700">
+                    <td className="px-3 py-1.5 text-right tabular-nums text-gray-700">
                       {s.zebras === 0 ? <span className="text-gray-300">–</span> : s.zebras}
+                    </td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-gray-700">
+                      {s.zebraGrp === 0 ? <span className="text-gray-300">–</span> : s.zebraGrp}
+                    </td>
+                    <td className="px-4 py-1.5 text-right tabular-nums text-gray-700">
+                      {s.zebraG4 === 0 ? <span className="text-gray-300">–</span> : s.zebraG4}
                     </td>
                   </tr>
                 ))}
