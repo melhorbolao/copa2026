@@ -35,6 +35,7 @@ interface Props {
   zebraThreshold: number
   currentParticipantId: string
   snapshots: Snapshot[]
+  isAdmin: boolean
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -44,6 +45,7 @@ export function ComparadorClient(props: Props) {
     participants, matches,
     betsByParticipant, groupBetsByParticipant, thirdBetsByParticipant, tBetByParticipant,
     scoresByParticipant, colPopMap, rulesMap, zebraThreshold, currentParticipantId, snapshots,
+    isAdmin,
   } = props
 
   const [pidA, setPidA] = useState(currentParticipantId)
@@ -61,7 +63,7 @@ export function ComparadorClient(props: Props) {
     if (!pidA || !pidB) return []
     const bA = betsByParticipant[pidA] ?? {}
     const bB = betsByParticipant[pidB] ?? {}
-    return buildDuelMatrix(matches, bA, bB, colPopMap, zebraThreshold, rulesMap, false)
+    return buildDuelMatrix(matches, bA, bB, colPopMap, zebraThreshold, rulesMap, isAdmin)
   }, [pidA, pidB, matches, betsByParticipant, colPopMap, zebraThreshold, rulesMap])
 
   const breakdown = useMemo(() =>

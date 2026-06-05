@@ -286,6 +286,7 @@ export default async function ComparadorPage() {
         zebraThreshold={zebraThreshold}
         currentParticipantId={participantId}
         snapshots={snapshots}
+        isAdmin={isAdmin}
       />
     </>
   )
