@@ -39,7 +39,8 @@ function fmtPct(n: number) {
 }
 
 export function BetStats({ match, matchBets, participants, isZebra, rules, rankAfter, hasAnyScore }: Props) {
-  const hasResult = match.score_home !== null && match.score_away !== null
+  const hasResult      = match.score_home !== null && match.score_away !== null
+  const zebraThreshold = rules['percentual_zebra'] ?? 15
 
   const medalTier = useMemo(() => {
     const m = new Map<string, number>()
@@ -130,12 +131,20 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
         matching the ScoreHeader pill which uses the same px-3 + flex-1 structure.
       */}
 
-      {/* % column headers */}
+      {/* % column headers — destaca possíveis zebras (% ≤ threshold) */}
       <div className="flex items-center px-3 pb-2 border-b border-gray-100">
         <div className="flex-1" />
-        <span className={`${H_W} text-center text-[10px] font-bold text-gray-400 tabular-nums`}>{fmtPct(colTotals.H)}</span>
-        <span className={`${D_W} text-center text-[10px] font-bold text-gray-400 tabular-nums`}>{fmtPct(colTotals.D)}</span>
-        <span className={`${A_W} text-center text-[10px] font-bold text-gray-400 tabular-nums`}>{fmtPct(colTotals.A)}</span>
+        {(['H', 'D', 'A'] as const).map(r => {
+          const pct  = colTotals[r]
+          const w    = r === 'H' ? H_W : r === 'D' ? D_W : A_W
+          const isZebraCol = matchBets.length > 0 && pct <= zebraThreshold
+          return (
+            <span key={r} className={`${w} text-center text-[10px] font-bold tabular-nums flex flex-col items-center leading-none gap-0.5 ${isZebraCol ? 'text-amber-500' : 'text-gray-400'}`}>
+              {isZebraCol && <span title="Possível zebra">🦓</span>}
+              {fmtPct(pct)}
+            </span>
+          )
+        })}
         <div className="flex-1" />
       </div>
 
