@@ -18,6 +18,7 @@ interface Props {
   isZebra: boolean
   rules: Record<string, number>
   rankAfter: Record<string, number>
+  hasAnyScore: boolean
 }
 
 type BetGroup = {
@@ -37,7 +38,7 @@ function fmtPct(n: number) {
   return n.toFixed(1).replace('.', ',') + '%'
 }
 
-export function BetStats({ match, matchBets, participants, isZebra, rules, rankAfter }: Props) {
+export function BetStats({ match, matchBets, participants, isZebra, rules, rankAfter, hasAnyScore }: Props) {
   const hasResult = match.score_home !== null && match.score_away !== null
 
   const medalTier = useMemo(() => {
@@ -72,11 +73,11 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
           ? scoreMatchBet(sh, sa, match.score_home!, match.score_away!, isZebra, match.is_brazil, rules)
           : null
         const pidSet = new Set(pids)
-        const medals = [1, 2, 3].filter(rank => {
+        const medals = hasAnyScore ? [1, 2, 3].filter(rank => {
           for (const [pid, r] of medalTier) if (r === rank && pidSet.has(pid)) return true
           return false
-        })
-        const hasLantern = [...pidSet].some(pid => lanternPids.has(pid))
+        }) : []
+        const hasLantern = hasAnyScore && [...pidSet].some(pid => lanternPids.has(pid))
         return { score_home: sh, score_away: sa, result, count, pct: (count / total) * 100, pts, isExact, isImpossible, medals, hasLantern }
       })
       .sort((a, b) => b.count - a.count)
