@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { Combobox } from '@/components/ui/Combobox'
 import dynamic from 'next/dynamic'
 import type { MatchInfo, FlatBet, ColPop } from './engine'
 import {
@@ -351,22 +352,25 @@ function ParticipantPicker({ participants, value, onChange, exclude, label, colo
   label: string
   color: 'blue' | 'red'
 }) {
-  const border = color === 'blue' ? 'border-azul-escuro/30 focus:border-azul-escuro' : 'border-red-300 focus:border-red-500'
   const labelColor = color === 'blue' ? 'text-azul-escuro' : 'text-red-600'
+  const borderCls  = color === 'blue'
+    ? '[&_input]:border-azul-escuro/30 [&_input]:focus:border-azul-escuro [&_input]:focus:ring-azul-escuro/20'
+    : '[&_input]:border-red-300 [&_input]:focus:border-red-500 [&_input]:focus:ring-red-200'
+
+  const options = participants
+    .filter(p => p.id !== exclude)
+    .map(p => ({ value: p.id, label: p.apelido }))
 
   return (
     <div>
       <label className={`block text-xs font-bold mb-1 ${labelColor}`}>{label}</label>
-      <select
+      <Combobox
         value={value}
-        onChange={e => onChange(e.target.value)}
-        className={`w-full rounded-xl border-2 bg-white py-2.5 pl-3 pr-8 text-sm font-semibold focus:outline-none ${border}`}
-      >
-        {color === 'red' && <option value="">— Selecionar participante —</option>}
-        {participants.filter(p => p.id !== exclude).map(p => (
-          <option key={p.id} value={p.id}>{p.apelido}</option>
-        ))}
-      </select>
+        onChange={onChange}
+        options={options}
+        placeholder="— buscar participante —"
+        className={`w-full rounded-xl border-2 bg-white py-2.5 pl-3 pr-8 text-sm font-semibold focus:outline-none ${borderCls}`}
+      />
     </div>
   )
 }
