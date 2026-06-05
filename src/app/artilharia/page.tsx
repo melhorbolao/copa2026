@@ -60,7 +60,8 @@ export default async function ArtilhariaPage() {
   const tSettingsMap = Object.fromEntries(
     ((tSettings ?? []) as { key: string; value: string }[]).map(r => [r.key, r.value])
   )
-  const showPositions = tSettingsMap['tournament_started'] === 'true' && showBettors
+  const hasRealScores = ((scores ?? []) as { pts_total: number }[]).some(s => (s.pts_total ?? 0) > 0)
+  const showPositions = tSettingsMap['tournament_started'] === 'true' && showBettors && hasRealScores
   const artillaryPointsActive = tSettingsMap['artillary_points_active'] === 'true'
   const artilheiroPoints = (artilhRule as { points: number } | null)?.points ?? 18
 
