@@ -253,7 +253,7 @@ export function ComparadorClient(props: Props) {
           <div className="mb-4 flex gap-1 border-b border-gray-200 overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             {([
               { key: 'analise',  label: '📊 Análise'   },
-              { key: 'projecao', label: '🔮 Projeção'  },
+              { key: 'projecao', label: '🔮 Próximos'  },
               { key: 'matrix',   label: '📋 Matriz'    },
               { key: 'diaadia',  label: '📅 Dia a dia' },
             ] as const).map(t => (
@@ -319,6 +319,7 @@ export function ComparadorClient(props: Props) {
               nameA={nameA}
               nameB={nameB}
               deltaMatchesTotal={breakdown.delta}
+              rulesMap={rulesMap}
             />
           )}
 

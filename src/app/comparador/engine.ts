@@ -290,15 +290,16 @@ export function computeProjection(
   const onlyBBet    = future.filter(r => r.betB && !r.betA)
   const noBet       = future.filter(r => !r.betA && !r.betB && r.status !== 'concordant' && r.status !== 'battlefield' && r.status !== 'zebra_battle')
 
-  const maxMatch = (isBrazil: boolean) => {
-    const base = rules['placar_exato'] ?? 12
+  // Max pts a given side can score in a match (includes zebra bonus only if on minority)
+  const rowMaxPts = (r: MatchDuelRow, onMinority: boolean) => {
+    const base  = rules['placar_exato']     ?? 12
     const zebra = rules['bonus_zebra_jogo'] ?? 6
-    const mult  = isBrazil ? (rules['multiplicador_brasil'] ?? 2) : 1
-    return Math.round((base + zebra) * mult)
+    const mult  = r.match.isBrazil ? (rules['multiplicador_brasil'] ?? 2) : 1
+    return Math.round((base + (onMinority ? zebra : 0)) * mult)
   }
 
-  const maxSwingA = battlefields.reduce((sum, r) => sum + maxMatch(r.match.isBrazil), 0)
-  const maxSwingB = maxSwingA  // symmetric worst case
+  const maxSwingA = battlefields.reduce((sum, r) => sum + rowMaxPts(r, r.aOnMinority), 0)
+  const maxSwingB = battlefields.reduce((sum, r) => sum + rowMaxPts(r, r.bOnMinority), 0)
 
   return { concordant, battlefields, onlyABet, onlyBBet, noBet, maxSwingA, maxSwingB }
 }

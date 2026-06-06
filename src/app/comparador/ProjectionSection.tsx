@@ -9,9 +9,10 @@ interface Props {
   nameA: string
   nameB: string
   deltaMatchesTotal: number  // current Δ from played matches
+  rulesMap: Record<string, number>
 }
 
-export function ProjectionSection({ projection, nameA, nameB, deltaMatchesTotal }: Props) {
+export function ProjectionSection({ projection, nameA, nameB, deltaMatchesTotal, rulesMap }: Props) {
   const { concordant, battlefields, maxSwingA, maxSwingB } = projection
 
   const shortA = nameA.split(' ')[0]
@@ -20,8 +21,8 @@ export function ProjectionSection({ projection, nameA, nameB, deltaMatchesTotal 
   return (
     <div className="space-y-6">
 
-      {/* Risk summary */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {/* Summary cards — 4 columns */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard
           icon="🤝"
           label="Zonas de Concordância"
@@ -36,15 +37,31 @@ export function ProjectionSection({ projection, nameA, nameB, deltaMatchesTotal 
           sub={`${battlefields.filter(r => r.status === 'zebra_battle').length} com duelo de zebra ⚡`}
           color="red"
         />
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-          <div className="text-xs font-bold text-amber-700 mb-1">⚠️ Risco de Virada</div>
+
+        {/* Max swing A */}
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+          <div className="text-xs font-bold text-azul-escuro mb-1">🔼 Máx. vantagem de {shortA}</div>
           <div className="flex items-baseline gap-1">
-            <span className="text-2xl font-black text-amber-800">{maxSwingB}</span>
-            <span className="text-xs text-amber-600">pts max que {shortB} pode tirar de {shortA}</span>
+            <span className="text-2xl font-black text-azul-escuro">+{maxSwingA}</span>
+            <span className="text-xs text-azul-mid">pts sobre {shortB}</span>
+          </div>
+          {deltaMatchesTotal < 0 && maxSwingA >= Math.abs(deltaMatchesTotal) && (
+            <p className="mt-1 text-[10px] text-azul-escuro font-semibold">
+              ✅ {shortA} pode virar nos jogos restantes!
+            </p>
+          )}
+        </div>
+
+        {/* Max swing B */}
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+          <div className="text-xs font-bold text-amber-700 mb-1">⚠️ Máx. vantagem de {shortB}</div>
+          <div className="flex items-baseline gap-1">
+            <span className="text-2xl font-black text-amber-800">+{maxSwingB}</span>
+            <span className="text-xs text-amber-600">pts sobre {shortA}</span>
           </div>
           {deltaMatchesTotal > 0 && maxSwingB >= deltaMatchesTotal && (
             <p className="mt-1 text-[10px] text-amber-700 font-semibold">
-              ⚠️ {shortB} pode virar a partida nos jogos restantes!
+              ⚠️ {shortB} pode virar nos jogos restantes!
             </p>
           )}
           {deltaMatchesTotal > 0 && maxSwingB < deltaMatchesTotal && (
@@ -71,11 +88,12 @@ export function ProjectionSection({ projection, nameA, nameB, deltaMatchesTotal 
                   <th className="px-3 py-2 text-center">{shortA}</th>
                   <th className="px-3 py-2 text-center">{shortB}</th>
                   <th className="px-3 py-2 text-center">Tipo</th>
+                  <th className="px-3 py-2 text-center">Δ pts</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-red-50">
                 {battlefields.map(row => (
-                  <BattlefieldRow key={row.match.id} row={row} shortA={shortA} shortB={shortB} />
+                  <BattlefieldRow key={row.match.id} row={row} shortA={shortA} shortB={shortB} rulesMap={rulesMap} />
                 ))}
               </tbody>
             </table>
@@ -116,10 +134,19 @@ export function ProjectionSection({ projection, nameA, nameB, deltaMatchesTotal 
   )
 }
 
-function BattlefieldRow({ row, shortA, shortB }: { row: MatchDuelRow; shortA: string; shortB: string }) {
+function BattlefieldRow({ row, shortA, shortB, rulesMap }: {
+  row: MatchDuelRow; shortA: string; shortB: string
+  rulesMap: Record<string, number>
+}) {
   const isZebraBattle = row.status === 'zebra_battle'
   const colLabel = (c: string | null) =>
     c === 'H' ? 'Casa 🏠' : c === 'A' ? 'Fora ✈️' : c === 'D' ? 'Empate 🤝' : '—'
+
+  const base  = rulesMap['placar_exato']     ?? 12
+  const zebra = rulesMap['bonus_zebra_jogo'] ?? 6
+  const mult  = row.match.isBrazil ? (rulesMap['multiplicador_brasil'] ?? 2) : 1
+  const maxA  = Math.round((base + (row.aOnMinority ? zebra : 0)) * mult)
+  const maxB  = Math.round((base + (row.bOnMinority ? zebra : 0)) * mult)
 
   return (
     <tr className={`hover:bg-red-50 ${isZebraBattle ? 'bg-orange-50/50' : ''}`}>
@@ -161,8 +188,13 @@ function BattlefieldRow({ row, shortA, shortB }: { row: MatchDuelRow; shortA: st
       </td>
       <td className="px-3 py-2 text-center">
         <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${isZebraBattle ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700'}`}>
-          {isZebraBattle ? '⚡ Zebra Battle' : '⚔️ Batalha'}
+          {isZebraBattle ? '⚡ Batalha Zebra' : '⚔️ Batalha'}
         </span>
+      </td>
+      <td className="px-3 py-2 text-center whitespace-nowrap">
+        <span className="font-bold text-azul-escuro">+{maxA}</span>
+        <span className="text-gray-400 mx-0.5">|</span>
+        <span className="font-bold text-red-500">−{maxB}</span>
       </td>
     </tr>
   )
