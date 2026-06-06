@@ -356,9 +356,12 @@ function UpsetDistBar({ upset }: { upset: PotentialUpset }) {
 }
 
 function PotentialUpsetCard({ upset }: { upset: PotentialUpset }) {
+  const pctOf = (c: 'H' | 'D' | 'A') => c === 'H' ? upset.homePct : c === 'A' ? upset.awayPct : upset.drawPct
+  const hasZeroBet = upset.zebraColumns.some(c => pctOf(c) === 0)
+
   return (
-    <div className="overflow-hidden rounded-xl border border-ouro/25 bg-white shadow-sm">
-      <div className="flex items-center justify-between gap-2 border-b border-gray-100 bg-azul-dark/5 px-3 py-2">
+    <div className={`overflow-hidden rounded-xl border bg-white shadow-sm ${hasZeroBet ? 'border-gray-200' : 'border-ouro/25'}`}>
+      <div className={`flex items-center justify-between gap-2 border-b border-gray-100 px-3 py-2 ${hasZeroBet ? 'bg-gray-50' : 'bg-azul-dark/5'}`}>
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
             {phaseLabel(upset.phase, upset.round, upset.groupName)}
@@ -366,18 +369,11 @@ function PotentialUpsetCard({ upset }: { upset: PotentialUpset }) {
           </p>
           <p className="text-[10px] text-gray-400">{formatMatchDatetime(upset.matchDatetime)}</p>
         </div>
-        <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-          🔒 apostas encerradas
-        </span>
+        {hasZeroBet && (
+          <span className="shrink-0 text-[10px] italic text-gray-400">nenhum apostou</span>
+        )}
       </div>
-      <div className="space-y-2.5 px-3 py-2.5">
-        <div className="flex items-center justify-center gap-2 text-sm font-bold text-gray-800">
-          <Flag code={upset.flagHome} size="xs" />
-          <span>{upset.teamHome}</span>
-          <span className="text-gray-300">×</span>
-          <span>{upset.teamAway}</span>
-          <Flag code={upset.flagAway} size="xs" />
-        </div>
+      <div className="px-3 py-2.5">
         <UpsetDistBar upset={upset} />
       </div>
     </div>
