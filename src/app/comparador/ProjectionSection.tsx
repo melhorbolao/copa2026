@@ -2,6 +2,7 @@
 
 import { Flag } from '@/components/ui/Flag'
 import { formatBrasilia } from '@/utils/date'
+import { scoreMatchBet } from '@/lib/scoring/engine'
 import type { ProjectionData, MatchDuelRow } from './engine'
 
 interface Props {
@@ -257,15 +258,16 @@ function ConcordantRow({ row, rulesMap }: { row: MatchDuelRow; rulesMap: Record<
   const colLabel = (c: string | null) =>
     c === 'H' ? '🏠 Casa' : c === 'A' ? '✈️ Fora' : c === 'D' ? '🤝 Empate' : '—'
 
-  const hasBoth = row.betA !== null && row.betB !== null
-  const exact = hasBoth ? (() => {
-    const maxPts = rulesMap['placar_exato']       ?? 12
-    const minW   = rulesMap['somente_vencedor']   ?? 4
-    const minD   = rulesMap['empate_gols_errados'] ?? 7
-    const isDrawCol = row.colA === 'D'
-    const mult   = row.match.isBrazil ? (rulesMap['multiplicador_brasil'] ?? 2) : 1
-    return Math.round((maxPts - (isDrawCol ? minD : minW)) * mult)
-  })() : null
+  let deltaA: number | null = null
+  let deltaB: number | null = null
+  if (row.betA && row.betB) {
+    const mult     = row.match.isBrazil ? (rulesMap['multiplicador_brasil'] ?? 2) : 1
+    const exactPts = Math.round((rulesMap['placar_exato'] ?? 12) * mult)
+    const bScore   = scoreMatchBet(row.betB.scoreHome, row.betB.scoreAway, row.betA.scoreHome, row.betA.scoreAway, false, row.match.isBrazil, rulesMap)
+    const aScore   = scoreMatchBet(row.betA.scoreHome, row.betA.scoreAway, row.betB.scoreHome, row.betB.scoreAway, false, row.match.isBrazil, rulesMap)
+    deltaA = exactPts - bScore
+    deltaB = exactPts - aScore
+  }
 
   return (
     <tr className="hover:bg-teal-50">
@@ -293,11 +295,11 @@ function ConcordantRow({ row, rulesMap }: { row: MatchDuelRow; rulesMap: Record<
         </span>
       </td>
       <td className="px-3 py-2 text-center whitespace-nowrap">
-        {exact !== null ? (
+        {deltaA !== null && deltaB !== null ? (
           <>
-            <span className="font-bold text-azul-escuro">+{exact}</span>
+            <span className="font-bold text-azul-escuro">+{deltaA}</span>
             <span className="text-gray-400 mx-0.5">|</span>
-            <span className="font-bold text-red-500">−{exact}</span>
+            <span className="font-bold text-red-500">−{deltaB}</span>
           </>
         ) : <span className="text-gray-300">—</span>}
       </td>

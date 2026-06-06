@@ -1,7 +1,7 @@
 // Pure computation engine for the MB Comparador — no DB, no React.
 // All functions are safe to call inside useMemo.
 
-import { getMatchResult } from '@/lib/scoring/engine'
+import { getMatchResult, scoreMatchBet } from '@/lib/scoring/engine'
 import type { MatchResult } from '@/lib/scoring/engine'
 export type { MatchResult }
 
@@ -307,21 +307,22 @@ export function computeProjection(
     return Math.round((base + (onMinority ? zebra : 0)) * mult)
   }
 
-  // Max Δ from a concordant row: one gets exact (placar_exato), the other still
-  // scores at least the minimum for that column — so Δ = exato − min_col.
-  const rowConcordantMax = (r: MatchDuelRow) => {
-    if (!r.betA || !r.betB) return 0
-    const exact = rules['placar_exato']          ?? 12
-    const minW  = rules['somente_vencedor']       ?? 4   // winner column, no other match
-    const minD  = rules['empate_gols_errados']    ?? 7   // draw column, wrong goals
-    const isDrawCol = r.colA === 'D'
-    const mult  = r.match.isBrazil ? (rules['multiplicador_brasil'] ?? 2) : 1
-    return Math.round((exact - (isDrawCol ? minD : minW)) * mult)
+  // Exact Δ for a concordant row: one gets placar_exato, the other scores
+  // whatever their specific bet would earn against the exact result.
+  // isZebra=false because the zebra bonus would apply equally to both (same col).
+  const rowConcordantPts = (r: MatchDuelRow): { forA: number; forB: number } => {
+    if (!r.betA || !r.betB) return { forA: 0, forB: 0 }
+    const mult     = r.match.isBrazil ? (rules['multiplicador_brasil'] ?? 2) : 1
+    const exactPts = Math.round((rules['placar_exato'] ?? 12) * mult)
+    const bScore   = scoreMatchBet(r.betB.scoreHome, r.betB.scoreAway, r.betA.scoreHome, r.betA.scoreAway, false, r.match.isBrazil, rules)
+    const aScore   = scoreMatchBet(r.betA.scoreHome, r.betA.scoreAway, r.betB.scoreHome, r.betB.scoreAway, false, r.match.isBrazil, rules)
+    return { forA: exactPts - bScore, forB: exactPts - aScore }
   }
-  const concordantContrib = concordant.reduce((sum, r) => sum + rowConcordantMax(r), 0)
+  const concordantContribA = concordant.reduce((sum, r) => sum + rowConcordantPts(r).forA, 0)
+  const concordantContribB = concordant.reduce((sum, r) => sum + rowConcordantPts(r).forB, 0)
 
-  const maxSwingA = battlefields.reduce((sum, r) => sum + rowMaxPts(r, r.aOnMinority), 0) + concordantContrib
-  const maxSwingB = battlefields.reduce((sum, r) => sum + rowMaxPts(r, r.bOnMinority), 0) + concordantContrib
+  const maxSwingA = battlefields.reduce((sum, r) => sum + rowMaxPts(r, r.aOnMinority), 0) + concordantContribA
+  const maxSwingB = battlefields.reduce((sum, r) => sum + rowMaxPts(r, r.bOnMinority), 0) + concordantContribB
 
   return { neutral, concordant, battlefields, onlyABet, onlyBBet, noBet, maxSwingA, maxSwingB }
 }
