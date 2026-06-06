@@ -166,6 +166,7 @@ export function MatchMatrix({ rows, nameA, nameB }: Props) {
                     {betA
                       ? <span className={`font-mono ${row.colA === row.realCol && played ? 'text-verde-600 font-bold' : 'text-gray-600'}`}>
                           {betA.scoreHome}–{betA.scoreAway}
+                          {row.aOnMinority && <span className="ml-0.5 text-orange-500">⚡</span>}
                         </span>
                       : isHidden
                         ? <span className="text-gray-300 text-[11px]" title="Prazo em aberto">🔒</span>
@@ -188,6 +189,7 @@ export function MatchMatrix({ rows, nameA, nameB }: Props) {
                     {betB
                       ? <span className={`font-mono ${row.colB === row.realCol && played ? 'text-verde-600 font-bold' : 'text-gray-600'}`}>
                           {betB.scoreHome}–{betB.scoreAway}
+                          {row.bOnMinority && <span className="ml-0.5 text-orange-500">⚡</span>}
                         </span>
                       : isHidden
                         ? <span className="text-gray-300 text-[11px]" title="Prazo em aberto">🔒</span>
