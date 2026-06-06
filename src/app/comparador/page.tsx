@@ -117,7 +117,7 @@ export default async function ComparadorPage() {
     // ao vivo: apostas mudam a cada salvamento
     fetchAll('bets', 'participant_id, match_id, score_home, score_away, points'),
     fetchAll('group_bets', 'participant_id, group_name, first_place, second_place, points'),
-    fetchAll('third_place_bets', 'participant_id, group_name, team'),
+    fetchAll('third_place_bets', 'participant_id, group_name, team, points'),
     admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer'),
     admin.from('participant_scores')
       .select('participant_id, pts_matches, pts_groups, pts_thirds, pts_tournament, pts_total'),
@@ -236,11 +236,14 @@ export default async function ComparadorPage() {
   }
 
   // ── thirdBetsByParticipant ────────────────────────────────────────────────
-  const thirdBetsByParticipant: Record<string, Record<string, string>> = {}
+  const thirdBetsByParticipant: Record<string, Record<string, { team: string; points: number | null }>> = {}
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const b of allThirdBets as any[]) {
     if (!bonusVis && b.participant_id !== participantId) continue
-    ;(thirdBetsByParticipant[b.participant_id] ??= {})[b.group_name] = b.team ?? ''
+    ;(thirdBetsByParticipant[b.participant_id] ??= {})[b.group_name] = {
+      team: b.team ?? '',
+      points: b.points ?? null,
+    }
   }
 
   // ── tBetByParticipant ─────────────────────────────────────────────────────

@@ -20,6 +20,7 @@ const DuelCard = dynamic(() => import('./DuelCard').then(m => ({ default: m.Duel
 interface Participant { id: string; apelido: string }
 interface Score { ptsMatches: number; ptsGroups: number; ptsThirds: number; ptsTournament: number; ptsTotal: number }
 type GroupBet = { first: string; second: string; points: number | null }
+type ThirdBet = { team: string; points: number | null }
 type TBet = { champion: string; runner_up: string; semi1: string; semi2: string; top_scorer: string }
 
 interface Props {
@@ -27,7 +28,7 @@ interface Props {
   matches: MatchInfo[]
   betsByParticipant: Record<string, Record<string, FlatBet>>
   groupBetsByParticipant: Record<string, Record<string, GroupBet>>
-  thirdBetsByParticipant: Record<string, Record<string, string>>
+  thirdBetsByParticipant: Record<string, Record<string, ThirdBet>>
   tBetByParticipant: Record<string, TBet>
   scoresByParticipant: Record<string, Score>
   colPopMap: Record<string, ColPop>
@@ -96,6 +97,16 @@ export function ComparadorClient(props: Props) {
       betB: tBetByParticipant[pidB] ?? null,
     }
   }, [pidA, pidB, tBetByParticipant])
+
+  const thirdDuel = useMemo(() => {
+    if (!pidA || !pidB) return []
+    const tbA = thirdBetsByParticipant[pidA] ?? {}
+    const tbB = thirdBetsByParticipant[pidB] ?? {}
+    return GROUP_ORDER
+      .map(g => ({ group: g, betA: tbA[g] ?? null, betB: tbB[g] ?? null }))
+      .filter(r => r.betA || r.betB)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pidA, pidB, thirdBetsByParticipant])
 
   // Total across all categories
   const totalA = scoreA?.ptsTotal ?? 0
@@ -274,6 +285,17 @@ export function ComparadorClient(props: Props) {
                   rows={groupDuel}
                   nameA={nameA.split(' ')[0]}
                   nameB={nameB.split(' ')[0]}
+                  ptsGroupsA={scoreA?.ptsGroups ?? 0}
+                  ptsGroupsB={scoreB?.ptsGroups ?? 0}
+                />
+              )}
+              {thirdDuel.length > 0 && (
+                <ThirdBetsDuel
+                  rows={thirdDuel}
+                  nameA={nameA.split(' ')[0]}
+                  nameB={nameB.split(' ')[0]}
+                  ptsThirdsA={scoreA?.ptsThirds ?? 0}
+                  ptsThirdsB={scoreB?.ptsThirds ?? 0}
                 />
               )}
               {/* Tournament bets */}
@@ -406,7 +428,7 @@ function ScoreBreakdownRow({ labelA, labelB, scoreA, scoreB }: {
     { key: 'ptsMatches',    label: '⚽ Jogos'   },
     { key: 'ptsGroups',     label: '📊 Classif.' },
     { key: 'ptsThirds',     label: '3️⃣ Terceiros' },
-    { key: 'ptsTournament', label: '🏆 G4'       },
+    { key: 'ptsTournament', label: '🏆 G4+Art.'   },
   ]
 
   return (
@@ -498,7 +520,7 @@ function DeltaBreakdownSection({ breakdown, nameA, nameB }: {
 
   return (
     <div>
-      <h2 className="text-sm font-bold text-gray-800 mb-3">📊 Decomposição da Diferença</h2>
+      <h2 className="text-sm font-bold text-gray-800 mb-3">📊 Decomposição da Diferença dos Jogos</h2>
       <div className="rounded-xl border border-gray-200 overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-[10px] uppercase tracking-wide text-gray-400">
@@ -571,9 +593,10 @@ function DeltaBreakdownSection({ breakdown, nameA, nameB }: {
   )
 }
 
-function GroupBetsDuel({ rows, nameA, nameB }: {
+function GroupBetsDuel({ rows, nameA, nameB, ptsGroupsA, ptsGroupsB }: {
   rows: { group: string; betA: GroupBet | null; betB: GroupBet | null }[]
   nameA: string; nameB: string
+  ptsGroupsA: number; ptsGroupsB: number
 }) {
   return (
     <div>
@@ -595,13 +618,13 @@ function GroupBetsDuel({ rows, nameA, nameB }: {
               return (
                 <tr key={r.group} className={diff ? 'bg-amber-50/30' : ''}>
                   <td className="px-3 py-2 font-bold text-gray-700">Grupo {r.group}</td>
-                  <td className="px-3 py-2 text-center text-gray-600">
+                  <td className="px-3 py-2 text-center text-azul-escuro">
                     {r.betA ? `${r.betA.first || '—'} / ${r.betA.second || '—'}` : '—'}
                   </td>
                   <td className="px-3 py-2 text-center font-bold text-azul-escuro">
                     {r.betA?.points != null ? (r.betA.points > 0 ? `+${r.betA.points}` : r.betA.points) : '—'}
                   </td>
-                  <td className="px-3 py-2 text-center text-gray-600">
+                  <td className="px-3 py-2 text-center text-red-600">
                     {r.betB ? `${r.betB.first || '—'} / ${r.betB.second || '—'}` : '—'}
                   </td>
                   <td className="px-3 py-2 text-center font-bold text-red-500">
@@ -611,6 +634,79 @@ function GroupBetsDuel({ rows, nameA, nameB }: {
               )
             })}
           </tbody>
+          <tfoot className="bg-gray-50 border-t border-gray-200 font-bold text-xs">
+            <tr>
+              <td className="px-3 py-2 text-gray-700">Total</td>
+              <td className="px-3 py-2" />
+              <td className="px-3 py-2 text-center text-azul-escuro">
+                {ptsGroupsA > 0 ? `+${ptsGroupsA}` : ptsGroupsA} pts
+              </td>
+              <td className="px-3 py-2" />
+              <td className="px-3 py-2 text-center text-red-500">
+                {ptsGroupsB > 0 ? `+${ptsGroupsB}` : ptsGroupsB} pts
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function ThirdBetsDuel({ rows, nameA, nameB, ptsThirdsA, ptsThirdsB }: {
+  rows: { group: string; betA: ThirdBet | null; betB: ThirdBet | null }[]
+  nameA: string; nameB: string
+  ptsThirdsA: number; ptsThirdsB: number
+}) {
+  return (
+    <div>
+      <h2 className="text-sm font-bold text-gray-800 mb-3">3️⃣ Terceiros Colocados por Grupo</h2>
+      <div className="rounded-xl border border-gray-200 overflow-hidden">
+        <table className="w-full text-xs">
+          <thead className="bg-gray-50 text-[10px] uppercase text-gray-400">
+            <tr>
+              <th className="px-3 py-2 text-left">Grupo</th>
+              <th className="px-3 py-2 text-center text-azul-escuro">{nameA}</th>
+              <th className="px-3 py-2 text-center text-azul-escuro">Pts A</th>
+              <th className="px-3 py-2 text-center text-red-500">{nameB}</th>
+              <th className="px-3 py-2 text-center text-red-500">Pts B</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {rows.map(r => {
+              const diff = r.betA?.team !== r.betB?.team
+              return (
+                <tr key={r.group} className={diff ? 'bg-amber-50/30' : ''}>
+                  <td className="px-3 py-2 font-bold text-gray-700">Grupo {r.group}</td>
+                  <td className="px-3 py-2 text-center text-azul-escuro">
+                    {r.betA?.team || '—'}
+                  </td>
+                  <td className="px-3 py-2 text-center font-bold text-azul-escuro">
+                    {r.betA?.points != null ? (r.betA.points > 0 ? `+${r.betA.points}` : r.betA.points) : '—'}
+                  </td>
+                  <td className="px-3 py-2 text-center text-red-600">
+                    {r.betB?.team || '—'}
+                  </td>
+                  <td className="px-3 py-2 text-center font-bold text-red-500">
+                    {r.betB?.points != null ? (r.betB.points > 0 ? `+${r.betB.points}` : r.betB.points) : '—'}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+          <tfoot className="bg-gray-50 border-t border-gray-200 font-bold text-xs">
+            <tr>
+              <td className="px-3 py-2 text-gray-700">Total</td>
+              <td className="px-3 py-2" />
+              <td className="px-3 py-2 text-center text-azul-escuro">
+                {ptsThirdsA > 0 ? `+${ptsThirdsA}` : ptsThirdsA} pts
+              </td>
+              <td className="px-3 py-2" />
+              <td className="px-3 py-2 text-center text-red-500">
+                {ptsThirdsB > 0 ? `+${ptsThirdsB}` : ptsThirdsB} pts
+              </td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>
@@ -662,7 +758,7 @@ function TournamentBetsDuel({ betA, betB, nameA, nameB, scoreA, scoreB }: {
           </tbody>
           <tfoot className="bg-gray-50 font-bold text-xs">
             <tr>
-              <td className="px-3 py-2 text-gray-700">Total G4</td>
+              <td className="px-3 py-2 text-gray-700">Total G4+Art.</td>
               <td className="px-3 py-2 text-center text-azul-escuro">{scoreA > 0 ? `+${scoreA}` : scoreA} pts</td>
               <td className="px-3 py-2 text-center text-red-500">{scoreB > 0 ? `+${scoreB}` : scoreB} pts</td>
               <td className="px-3 py-2 text-center">
