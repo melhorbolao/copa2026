@@ -496,7 +496,7 @@ function PalpitesTabPane({
                 />
               )}
 
-              {showBonusBets && !grupo && (
+              {showBonusBets && (
                 <TournamentSection
                   allTeams={allTeams}
                   deadline={tournamentDeadline}
