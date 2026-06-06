@@ -360,8 +360,16 @@ function PotentialUpsetCard({ upset }: { upset: PotentialUpset }) {
   const hasZeroBet = upset.zebraColumns.some(c => pctOf(c) === 0)
 
   return (
-    <div className={`overflow-hidden rounded-xl border bg-white shadow-sm ${hasZeroBet ? 'border-gray-200' : 'border-ouro/25'}`}>
-      <div className={`flex items-center justify-between gap-2 border-b border-gray-100 px-3 py-2 ${hasZeroBet ? 'bg-gray-50' : 'bg-azul-dark/5'}`}>
+    <div className={`overflow-hidden rounded-xl border shadow-sm ${
+      hasZeroBet
+        ? 'border-gray-200 bg-gray-50 opacity-50'
+        : 'border-ouro/40 bg-white'
+    }`}>
+      <div className={`flex items-center justify-between gap-2 border-b px-3 py-2 ${
+        hasZeroBet
+          ? 'border-gray-200 bg-gray-100'
+          : 'border-ouro/20 bg-azul-dark/5'
+      }`}>
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
             {phaseLabel(upset.phase, upset.round, upset.groupName)}
