@@ -60,10 +60,9 @@ export interface PotentialGroupZebra {
 }
 
 export interface PotentialG4Zebra {
-  slot: 'champion' | 'runner_up' | 'semi'
   teamName: string
   flagCode: string
-  pct: number
-  count: number
-  total: number
+  pct: number   // % de bets G4 que incluem este time em qualquer posição
+  count: number // quantos participantes apostaram neste time em qualquer posição G4
+  total: number // total de bets G4
 }

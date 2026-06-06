@@ -380,19 +380,13 @@ function PotentialUpsetCard({ upset }: { upset: PotentialUpset }) {
   )
 }
 
-const G4_SLOT_LABEL: Record<PotentialG4Zebra['slot'], string> = {
-  champion:  'Campeão',
-  runner_up: 'Vice-campeão',
-  semi:      'Semifinal',
-}
-
 function PotentialG4Card({ z }: { z: PotentialG4Zebra }) {
   return (
     <div className="flex items-center gap-3 rounded-xl border border-ouro/25 bg-white px-3 py-2.5 shadow-sm">
       <Flag code={z.flagCode} size="xs" className="shrink-0" />
       <div className="min-w-0 flex-1">
         <p className="text-xs font-bold text-gray-800">{z.teamName}</p>
-        <p className="text-[10px] text-gray-400">{G4_SLOT_LABEL[z.slot]}</p>
+        <p className="text-[10px] text-gray-400">qualquer posição G4</p>
       </div>
       <div className="text-right shrink-0">
         <p className="text-sm font-black text-ouro">{z.pct}%</p>
@@ -471,7 +465,7 @@ function PotentialUpsetsTab({
         <div className="space-y-2">
           <h3 className="text-[11px] font-bold uppercase tracking-wide text-gray-500">🌟 G4 da Copa</h3>
           <div className="grid gap-2 sm:grid-cols-2">
-            {g4Zebras.map(z => <PotentialG4Card key={`${z.slot}-${z.teamName}`} z={z} />)}
+            {g4Zebras.map(z => <PotentialG4Card key={z.teamName} z={z} />)}
           </div>
         </div>
       )}

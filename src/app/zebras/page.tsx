@@ -314,10 +314,8 @@ export default async function ZebrasPage() {
     potentialGroupZebras.sort((a, b) => a.pct - b.pct || a.groupName.localeCompare(b.groupName))
   }
 
-  // 3. G4 da Copa: slots ainda não definidos (prazo de bonus já encerrado)
+  // 3. G4 da Copa: seleções apostadas em ≤ 15% dos bets (em qualquer posição do G4)
   const potentialG4Zebras: PotentialG4Zebra[] = []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  // Admin: sempre mostra G4 potencial; outros: exige resultados de grupos
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const bonusDeadlinePassed = isAdmin || (matchesRaw ?? []).some((m: any) => m.phase === 'group')
   if (bonusDeadlinePassed) {
@@ -325,37 +323,33 @@ export default async function ZebrasPage() {
     const { data: tBetsData } = await admin.from('tournament_bets').select('champion, runner_up, semi1, semi2') as any
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tBets: any[] = tBetsData ?? []
+    const total = tBets.length
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const completedPhases = new Set((matchesRaw ?? []).map((m: any) => m.phase as string))
     const hasChampion = completedPhases.has('final')
-    const hasSemis    = completedPhases.has('semifinal')
 
-    const slotDefs: { slot: PotentialG4Zebra['slot']; field: string; decided: boolean }[] = [
-      { slot: 'champion',  field: 'champion',  decided: hasChampion },
-      { slot: 'runner_up', field: 'runner_up', decided: hasChampion },
-      { slot: 'semi',      field: 'semi1',     decided: hasSemis },
-      { slot: 'semi',      field: 'semi2',     decided: hasSemis },
-    ]
-
-    for (const { slot, field, decided } of slotDefs) {
-      if (decided) continue
+    if (total > 0 && !hasChampion) {
+      // Conta quantos participantes incluem cada time em QUALQUER posição do G4
+      // (deduplicado por participante: um time conta uma vez mesmo em dois slots)
+      const teamCounts = new Map<string, number>()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const picks = tBets.filter((b: any) => b[field])
-      const total = picks.length
-      if (total === 0) continue
-      const counts = new Map<string, number>()
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      for (const b of picks) counts.set(b[field], (counts.get(b[field]) ?? 0) + 1)
-      for (const [team, count] of counts) {
+      for (const b of tBets) {
+        const seen = new Set<string>()
+        for (const field of ['champion', 'runner_up', 'semi1', 'semi2']) {
+          const team: string = b[field]
+          if (team && !seen.has(team)) {
+            seen.add(team)
+            teamCounts.set(team, (teamCounts.get(team) ?? 0) + 1)
+          }
+        }
+      }
+      for (const [team, count] of teamCounts) {
         const pct = Math.round((count / total) * 100)
         if (pct > ZEBRA_THRESHOLD) continue
-        // Semi: evita duplicar se o mesmo time aparece em semi1 e semi2
-        const dup = potentialG4Zebras.find(z => z.slot === 'semi' && z.teamName === team)
-        if (dup) { if (pct < dup.pct) { dup.pct = pct; dup.count = count } ; continue }
-        potentialG4Zebras.push({ slot, teamName: team, flagCode: teamFlags[team] ?? '', pct, count, total })
+        potentialG4Zebras.push({ teamName: team, flagCode: teamFlags[team] ?? '', pct, count, total })
       }
+      potentialG4Zebras.sort((a, b) => a.pct - b.pct)
     }
-    potentialG4Zebras.sort((a, b) => a.pct - b.pct)
   }
 
   return (
