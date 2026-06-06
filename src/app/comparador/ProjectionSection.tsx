@@ -135,7 +135,6 @@ export function ProjectionSection({ projection, nameA, nameB, deltaMatchesTotal,
                   <th className="px-3 py-2 text-center">Data</th>
                   <th className="px-3 py-2 text-center">{shortA}</th>
                   <th className="px-3 py-2 text-center">{shortB}</th>
-                  <th className="px-3 py-2 text-center">Coluna</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -159,8 +158,6 @@ function BattlefieldRow({ row, shortA, shortB, rulesMap }: {
   rulesMap: Record<string, number>
 }) {
   const isZebraBattle = row.status === 'zebra_battle'
-  const colLabel = (c: string | null) =>
-    c === 'H' ? 'Casa 🏠' : c === 'A' ? 'Fora ✈️' : c === 'D' ? 'Empate 🤝' : '—'
 
   const base  = rulesMap['placar_exato']     ?? 12
   const zebra = rulesMap['bonus_zebra_jogo'] ?? 6
@@ -195,7 +192,6 @@ function BattlefieldRow({ row, shortA, shortB, rulesMap }: {
             {row.aOnMinority && <span className="ml-0.5 text-[10px]">⚡</span>}
           </span>
         ) : <span className="text-gray-300">—</span>}
-        <div className="text-[10px] text-gray-400">{colLabel(row.colA)}</div>
       </td>
       <td className="px-3 py-2 text-center">
         {row.betB ? (
@@ -204,7 +200,6 @@ function BattlefieldRow({ row, shortA, shortB, rulesMap }: {
             {row.bOnMinority && <span className="ml-0.5 text-[10px]">⚡</span>}
           </span>
         ) : <span className="text-gray-300">—</span>}
-        <div className="text-[10px] text-gray-400">{colLabel(row.colB)}</div>
       </td>
       <td className="px-3 py-2 text-center">
         <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${isZebraBattle ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700'}`}>
@@ -221,9 +216,6 @@ function BattlefieldRow({ row, shortA, shortB, rulesMap }: {
 }
 
 function NeutralRow({ row }: { row: MatchDuelRow }) {
-  const colLabel = (c: string | null) =>
-    c === 'H' ? '🏠 Casa' : c === 'A' ? '✈️ Fora' : c === 'D' ? '🤝 Empate' : '—'
-
   return (
     <tr className="hover:bg-gray-50">
       <td className="px-3 py-2">
@@ -243,11 +235,6 @@ function NeutralRow({ row }: { row: MatchDuelRow }) {
       </td>
       <td className="px-3 py-2 text-center font-mono text-gray-600">
         {row.betB ? `${row.betB.scoreHome}–${row.betB.scoreAway}` : '—'}
-      </td>
-      <td className="px-3 py-2 text-center">
-        <span className="inline-block rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
-          {colLabel(row.colA ?? row.colB)}
-        </span>
       </td>
     </tr>
   )
