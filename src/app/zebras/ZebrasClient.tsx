@@ -357,7 +357,7 @@ function UpsetDistBar({ upset }: { upset: PotentialUpset }) {
 
 function PotentialUpsetCard({ upset }: { upset: PotentialUpset }) {
   const pctOf = (c: 'H' | 'D' | 'A') => c === 'H' ? upset.homePct : c === 'A' ? upset.awayPct : upset.drawPct
-  const hasZeroBet = upset.zebraColumns.some(c => pctOf(c) === 0)
+  const hasZeroBet = upset.zebraColumns.every(c => pctOf(c) === 0)
 
   return (
     <div className={`overflow-hidden rounded-xl border shadow-sm ${
