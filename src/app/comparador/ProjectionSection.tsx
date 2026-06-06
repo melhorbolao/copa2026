@@ -88,6 +88,36 @@ export function ProjectionSection({ projection, nameA, nameB, deltaMatchesTotal,
         </div>
       )}
 
+      {/* ── Zona de Concordância ── */}
+      {concordant.length > 0 && (
+        <details className="group">
+          <summary className="text-sm font-bold text-gray-700 cursor-pointer list-none flex items-center gap-2 select-none">
+            <span className="group-open:rotate-90 transition-transform inline-block">▶</span>
+            🤝 Zona de Concordância
+            <span className="text-xs font-normal text-gray-400">— mesma coluna, placares diferentes</span>
+            <span className="ml-auto text-xs font-normal text-gray-400">{concordant.length} jogo{concordant.length !== 1 ? 's' : ''}</span>
+          </summary>
+          <div className="mt-2 rounded-xl border border-teal-100 overflow-hidden">
+            <table className="w-full text-xs">
+              <thead className="bg-teal-50 text-gray-500 uppercase text-[10px]">
+                <tr>
+                  <th className="px-3 py-2 text-left">Jogo</th>
+                  <th className="px-3 py-2 text-center">Data</th>
+                  <th className="px-3 py-2 text-center">{shortA}</th>
+                  <th className="px-3 py-2 text-center">{shortB}</th>
+                  <th className="px-3 py-2 text-center">Δ pts</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-teal-50">
+                {concordant.map(row => (
+                  <ConcordantRow key={row.match.id} row={row} rulesMap={rulesMap} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
+
       {/* ── Zona Neutra ── */}
       {neutral.length > 0 && (
         <details className="group">
@@ -111,37 +141,6 @@ export function ProjectionSection({ projection, nameA, nameB, deltaMatchesTotal,
               <tbody className="divide-y divide-gray-50">
                 {neutral.map(row => (
                   <NeutralRow key={row.match.id} row={row} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </details>
-      )}
-
-      {/* ── Zona de Concordância ── */}
-      {concordant.length > 0 && (
-        <details className="group">
-          <summary className="text-sm font-bold text-gray-700 cursor-pointer list-none flex items-center gap-2 select-none">
-            <span className="group-open:rotate-90 transition-transform inline-block">▶</span>
-            🤝 Zona de Concordância
-            <span className="text-xs font-normal text-gray-400">— mesma coluna, placares diferentes</span>
-            <span className="ml-auto text-xs font-normal text-gray-400">{concordant.length} jogo{concordant.length !== 1 ? 's' : ''}</span>
-          </summary>
-          <div className="mt-2 rounded-xl border border-teal-100 overflow-hidden">
-            <table className="w-full text-xs">
-              <thead className="bg-teal-50 text-gray-500 uppercase text-[10px]">
-                <tr>
-                  <th className="px-3 py-2 text-left">Jogo</th>
-                  <th className="px-3 py-2 text-center">Data</th>
-                  <th className="px-3 py-2 text-center">{shortA}</th>
-                  <th className="px-3 py-2 text-center">{shortB}</th>
-                  <th className="px-3 py-2 text-center">Coluna</th>
-                  <th className="px-3 py-2 text-center">Δ pts</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-teal-50">
-                {concordant.map(row => (
-                  <ConcordantRow key={row.match.id} row={row} rulesMap={rulesMap} />
                 ))}
               </tbody>
             </table>
@@ -255,9 +254,6 @@ function NeutralRow({ row }: { row: MatchDuelRow }) {
 }
 
 function ConcordantRow({ row, rulesMap }: { row: MatchDuelRow; rulesMap: Record<string, number> }) {
-  const colLabel = (c: string | null) =>
-    c === 'H' ? '🏠 Casa' : c === 'A' ? '✈️ Fora' : c === 'D' ? '🤝 Empate' : '—'
-
   let deltaA: number | null = null
   let deltaB: number | null = null
   if (row.betA && row.betB) {
@@ -288,11 +284,6 @@ function ConcordantRow({ row, rulesMap }: { row: MatchDuelRow; rulesMap: Record<
       </td>
       <td className="px-3 py-2 text-center font-mono text-gray-600">
         {row.betB ? `${row.betB.scoreHome}–${row.betB.scoreAway}` : '—'}
-      </td>
-      <td className="px-3 py-2 text-center">
-        <span className="inline-block rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-medium text-teal-700">
-          {colLabel(row.colA ?? row.colB)}
-        </span>
       </td>
       <td className="px-3 py-2 text-center whitespace-nowrap">
         {deltaA !== null && deltaB !== null ? (
