@@ -62,8 +62,7 @@ export function MatchMatrix({ rows, nameA, nameB }: Props) {
     { key: 'all',          label: 'Todos' },
     { key: 'played',       label: 'Realizados' },
     { key: 'future',       label: 'Futuros' },
-    { key: 'battlefield',  label: '⚔️ Batalhas' },
-    { key: 'diff',         label: '↔ Divergentes' },
+    { key: 'diff',         label: '⚔️ Batalhas' },
     { key: 'exact_vs_zero', label: '🎯 Cravou vs Zerou' },
     { key: 'zebra',        label: '⚡ Zebra' },
   ]
