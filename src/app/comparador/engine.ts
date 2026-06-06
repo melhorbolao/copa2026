@@ -97,12 +97,13 @@ export interface DeltaBreakdown {
 }
 
 export interface ProjectionData {
-  concordant:  MatchDuelRow[]
+  neutral:      MatchDuelRow[]   // same exact score — Δ always 0
+  concordant:   MatchDuelRow[]   // same column, diff score (or only one bet)
   battlefields: MatchDuelRow[]
-  onlyABet:    MatchDuelRow[]
-  onlyBBet:    MatchDuelRow[]
-  noBet:       MatchDuelRow[]
-  maxSwingA: number    // max pts A can gain (all battlefields go A's way)
+  onlyABet:     MatchDuelRow[]
+  onlyBBet:     MatchDuelRow[]
+  noBet:        MatchDuelRow[]
+  maxSwingA: number    // max pts A can gain (battlefields + concordant exact bonus)
   maxSwingB: number    // max pts B can gain (risk for A)
 }
 
@@ -284,13 +285,21 @@ export function computeProjection(
     r.match.scoreHome === null && r.status !== 'hidden'
   )
 
-  const concordant  = future.filter(r => r.status === 'concordant')
+  // Split concordant into neutral (identical score) and concordant (same col, diff score)
+  const isNeutral = (r: MatchDuelRow) =>
+    r.betA !== null && r.betB !== null &&
+    r.betA.scoreHome === r.betB.scoreHome &&
+    r.betA.scoreAway === r.betB.scoreAway
+  const allConcordant = future.filter(r => r.status === 'concordant')
+  const neutral     = allConcordant.filter(isNeutral)
+  const concordant  = allConcordant.filter(r => !isNeutral(r))
+
   const battlefields = future.filter(r => r.status === 'battlefield' || r.status === 'zebra_battle')
   const onlyABet    = future.filter(r => r.betA && !r.betB)
   const onlyBBet    = future.filter(r => r.betB && !r.betA)
   const noBet       = future.filter(r => !r.betA && !r.betB && r.status !== 'concordant' && r.status !== 'battlefield' && r.status !== 'zebra_battle')
 
-  // Max pts a given side can score in a match (includes zebra bonus only if on minority)
+  // Max pts a given side can score in a battlefield (includes zebra bonus only if on minority)
   const rowMaxPts = (r: MatchDuelRow, onMinority: boolean) => {
     const base  = rules['placar_exato']     ?? 12
     const zebra = rules['bonus_zebra_jogo'] ?? 6
@@ -298,10 +307,19 @@ export function computeProjection(
     return Math.round((base + (onMinority ? zebra : 0)) * mult)
   }
 
-  const maxSwingA = battlefields.reduce((sum, r) => sum + rowMaxPts(r, r.aOnMinority), 0)
-  const maxSwingB = battlefields.reduce((sum, r) => sum + rowMaxPts(r, r.bOnMinority), 0)
+  // Max Δ from a concordant row: one gets exact score, other doesn't (symmetric)
+  const rowConcordantMax = (r: MatchDuelRow) => {
+    if (!r.betA || !r.betB) return 0
+    const base = rules['placar_exato'] ?? 12
+    const mult = r.match.isBrazil ? (rules['multiplicador_brasil'] ?? 2) : 1
+    return Math.round(base * mult)
+  }
+  const concordantContrib = concordant.reduce((sum, r) => sum + rowConcordantMax(r), 0)
 
-  return { concordant, battlefields, onlyABet, onlyBBet, noBet, maxSwingA, maxSwingB }
+  const maxSwingA = battlefields.reduce((sum, r) => sum + rowMaxPts(r, r.aOnMinority), 0) + concordantContrib
+  const maxSwingB = battlefields.reduce((sum, r) => sum + rowMaxPts(r, r.bOnMinority), 0) + concordantContrib
+
+  return { neutral, concordant, battlefields, onlyABet, onlyBBet, noBet, maxSwingA, maxSwingB }
 }
 
 // ── Badges ───────────────────────────────────────────────────────────────────
