@@ -307,12 +307,16 @@ export function computeProjection(
     return Math.round((base + (onMinority ? zebra : 0)) * mult)
   }
 
-  // Max Δ from a concordant row: one gets exact score, other doesn't (symmetric)
+  // Max Δ from a concordant row: one gets exact (placar_exato), the other still
+  // scores at least the minimum for that column — so Δ = exato − min_col.
   const rowConcordantMax = (r: MatchDuelRow) => {
     if (!r.betA || !r.betB) return 0
-    const base = rules['placar_exato'] ?? 12
-    const mult = r.match.isBrazil ? (rules['multiplicador_brasil'] ?? 2) : 1
-    return Math.round(base * mult)
+    const exact = rules['placar_exato']          ?? 12
+    const minW  = rules['somente_vencedor']       ?? 4   // winner column, no other match
+    const minD  = rules['empate_gols_errados']    ?? 7   // draw column, wrong goals
+    const isDrawCol = r.colA === 'D'
+    const mult  = r.match.isBrazil ? (rules['multiplicador_brasil'] ?? 2) : 1
+    return Math.round((exact - (isDrawCol ? minD : minW)) * mult)
   }
   const concordantContrib = concordant.reduce((sum, r) => sum + rowConcordantMax(r), 0)
 
