@@ -77,7 +77,7 @@ export function ProjectionSection({ projection, nameA, nameB, deltaMatchesTotal,
         <div>
           <h3 className="text-sm font-bold text-gray-800 mb-2 flex items-center gap-2">
             <span>⚔️</span> Campos de Batalha
-            <span className="text-xs font-normal text-gray-500">— apostas em colunas opostas</span>
+            <span className="text-xs font-normal text-gray-500">— apostas em colunas diferentes</span>
           </h3>
           <div className="rounded-xl border border-red-100 overflow-hidden">
             <table className="w-full text-xs">
