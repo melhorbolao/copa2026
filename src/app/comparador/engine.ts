@@ -334,8 +334,8 @@ export const STATUS_LABEL: Record<DuelStatus, string> = {
   zebra_vs_fav:  'Zebra vs Favorito',
   diff_column:   'Colunas Diferentes',
   concordant:    'Concordante',
-  battlefield:   'Campo de Batalha',
-  zebra_battle:  'Duelo de Zebra',
+  battlefield:   'Batalha',
+  zebra_battle:  'Batalha Zebra',
   no_bets:       'Sem palpites',
   hidden:        'A fazer',
 }
