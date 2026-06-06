@@ -462,7 +462,7 @@ function PotentialUpsetsTab({
         <div className="space-y-2">
           <h3 className="text-[11px] font-bold uppercase tracking-wide text-gray-500">🏆 1º do Grupo</h3>
           <div className="grid gap-2 sm:grid-cols-2">
-            {groupZebras.map(z => <PotentialGroupCard key={`${z.groupName}-${z.teamName}`} z={z} />)}
+            {[...groupZebras].sort((a, b) => a.groupName.localeCompare(b.groupName)).map(z => <PotentialGroupCard key={`${z.groupName}-${z.teamName}`} z={z} />)}
           </div>
         </div>
       )}
