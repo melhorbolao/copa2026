@@ -39,7 +39,7 @@ export default async function EstatisticasPage() {
 
   const [participantsRes, matchesRes, teamsRes, rulesRes, groupBetsRes, thirdBetsRes, tournamentBetsRes, matchBetsRes] = await Promise.all([
     supabase.from('participants').select('id, apelido').order('apelido', { ascending: true }),
-    supabase.from('matches').select('team_home, team_away, flag_home, flag_away, phase, round, betting_deadline'),
+    supabase.from('matches').select('id, team_home, team_away, flag_home, flag_away, phase, round, betting_deadline'),
     admin.from('teams').select('name, abbr_br, group_name'),
     supabase.from('scoring_rules').select('key, points'),
     fetchAll('group_bets', 'participant_id, group_name, first_place, second_place'),
@@ -78,6 +78,14 @@ export default async function EstatisticasPage() {
       </>
     )
   }
+
+  // Apenas partidas cujo prazo de apostas já encerrou — vale para todos, incluindo admin.
+  // Impede que apostas de rodadas futuras (já preenchidas) apareçam nas tabelas de placares.
+  const closedMatchIds = new Set<string>(
+    allMatches
+      .filter((m: any) => m.betting_deadline && new Date(m.betting_deadline) <= now)
+      .map((m: any) => String(m.id))
+  )
 
   const teamFlags: Record<string, string> = {}
   for (const m of allMatches) {
@@ -119,7 +127,9 @@ export default async function EstatisticasPage() {
             groupBets={groupBetsRes as any[]}
             thirdBets={thirdBetsRes as any[]}
             tournamentBets={(tournamentBetsRes.data ?? []) as any[]}
-            matchBets={(matchBetsRes as any[]).filter((b: any) => b.score_home !== null && b.score_away !== null)}
+            matchBets={(matchBetsRes as any[]).filter((b: any) =>
+              b.score_home !== null && b.score_away !== null && closedMatchIds.has(b.match_id)
+            )}
             zebraThreshold={zebraThreshold}
             scorerMapping={scorerMapping}
           />
