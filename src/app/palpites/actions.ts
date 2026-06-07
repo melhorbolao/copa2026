@@ -1,5 +1,6 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { createClient, createAuthAdminClient } from '@/lib/supabase/server'
 import { getActiveParticipantId } from '@/lib/participant'
 import { calcGroupStandings, rankThirds } from '@/lib/bracket/engine'
@@ -407,11 +408,21 @@ export async function fillG4FromBracket(data: {
   const { data: existing } = await supabase
     .from('tournament_bets').select('top_scorer').eq('participant_id', participantId).maybeSingle()
 
+  // Limpa os campos G4 antes de gravar os novos valores. Isso evita que
+  // valores antigos conflitem com os novos (ex.: mesmo time em outra posição).
+  await admin.from('tournament_bets')
+    .update({ champion: null, runner_up: null, semi1: null, semi2: null })
+    .eq('participant_id', participantId)
+
   const { error } = await admin.from('tournament_bets').upsert(
     { participant_id: participantId, champion, runner_up, semi1, semi2, top_scorer: existing?.top_scorer ?? '' },
     { onConflict: 'participant_id' },
   )
   if (error) throw new Error(error.message)
+
+  // Invalida o cache de /palpites para que o form não sirva dados antigos ao
+  // usuário e sobrescreva os novos valores com o auto-save.
+  revalidatePath('/palpites')
 }
 
 // ── Aposta de torneio ─────────────────────────────────────────
