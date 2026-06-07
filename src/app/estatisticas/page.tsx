@@ -128,7 +128,8 @@ export default async function EstatisticasPage() {
             thirdBets={thirdBetsRes as any[]}
             tournamentBets={(tournamentBetsRes.data ?? []) as any[]}
             matchBets={(matchBetsRes as any[]).filter((b: any) =>
-              b.score_home !== null && b.score_away !== null && closedMatchIds.has(b.match_id)
+              b.score_home !== null && b.score_away !== null &&
+              (isAdmin || closedMatchIds.has(b.match_id))
             )}
             zebraThreshold={zebraThreshold}
             scorerMapping={scorerMapping}
