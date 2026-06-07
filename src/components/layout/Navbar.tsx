@@ -56,14 +56,21 @@ export async function Navbar() {
             <ParticipantSelector participants={participants} />
           )}
           {user ? (
-            <form action="/auth/signout" method="post">
-              <button
-                type="submit"
-                className="rounded-lg border border-ouro/40 px-3 py-1.5 text-xs font-medium text-ouro transition hover:bg-azul-mid"
-              >
-                Sair
-              </button>
-            </form>
+            <div className="flex flex-col items-end gap-0.5">
+              {user.email && (
+                <span className="max-w-[120px] truncate text-[9px] text-white/40" title={user.email}>
+                  {user.email}
+                </span>
+              )}
+              <form action="/auth/signout" method="post">
+                <button
+                  type="submit"
+                  className="rounded-lg border border-ouro/40 px-3 py-1.5 text-xs font-medium text-ouro transition hover:bg-azul-mid"
+                >
+                  Sair
+                </button>
+              </form>
+            </div>
           ) : (
             <Link
               href="/login"

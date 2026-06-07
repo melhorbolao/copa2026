@@ -56,6 +56,11 @@ export async function Sidebar() {
           </div>
         )}
         {profile?.is_admin && <AdminModeToggle />}
+        {user.email && (
+          <p className="mb-1.5 truncate px-1 text-[10px] text-white/40" title={user.email}>
+            {user.email}
+          </p>
+        )}
         <form action="/auth/signout" method="post">
           <button
             type="submit"
