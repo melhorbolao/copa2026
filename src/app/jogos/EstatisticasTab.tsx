@@ -461,18 +461,28 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
           <p className="px-4 py-6 text-sm text-center text-gray-400">Sem apostas de placar registradas.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs whitespace-nowrap">
+            <table className="w-full text-xs">
+              <colgroup>
+                <col className="w-auto min-w-[7rem]" />
+                <col className="w-16" />
+                <col className="w-12" />
+                <col className="w-12" />
+                <col className="w-12" />
+                <col className="w-12" />
+                <col className="w-12" />
+                <col className="w-12" />
+              </colgroup>
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-bold text-gray-400 uppercase tracking-wide">
                   {([
-                    { col: 'apelido'  as PartCol, label: 'Participante',         cls: 'text-left  px-4 py-2' },
-                    { col: 'topLabel' as PartCol, label: 'Placar Mais Frequente',cls: 'text-center px-3 py-2' },
-                    { col: 'topPct'   as PartCol, label: '% do Placar',          cls: 'text-right px-3 py-2' },
-                    { col: 'avgGoals' as PartCol, label: 'Média Gols',           cls: 'text-right px-3 py-2' },
-                    { col: 'draws'    as PartCol, label: 'Empates',              cls: 'text-right px-3 py-2' },
-                    { col: 'zebras'   as PartCol, label: 'Zebras Jogos',         cls: 'text-right px-3 py-2' },
-                    { col: 'zebraGrp' as PartCol, label: 'Zebras 1º Grupo',      cls: 'text-right px-3 py-2' },
-                    { col: 'zebraG4'  as PartCol, label: 'Zebras G4',            cls: 'text-right px-4 py-2' },
+                    { col: 'apelido'  as PartCol, label: 'Participante',      cls: 'text-left  px-4 py-1.5 whitespace-nowrap' },
+                    { col: 'topLabel' as PartCol, label: 'Placar Favorito',   cls: 'text-center px-2 py-1.5 whitespace-normal leading-tight' },
+                    { col: 'topPct'   as PartCol, label: '% Placar',          cls: 'text-right px-2 py-1.5 whitespace-normal leading-tight' },
+                    { col: 'avgGoals' as PartCol, label: 'Média Gols',        cls: 'text-right px-2 py-1.5 whitespace-normal leading-tight' },
+                    { col: 'draws'    as PartCol, label: 'Empates',        cls: 'text-right px-2 py-1.5 whitespace-normal leading-tight' },
+                    { col: 'zebras'   as PartCol, label: 'Zebras Jogos',      cls: 'text-right px-2 py-1.5 whitespace-normal leading-tight' },
+                    { col: 'zebraGrp' as PartCol, label: 'Zebras 1º Grp',     cls: 'text-right px-2 py-1.5 whitespace-normal leading-tight' },
+                    { col: 'zebraG4'  as PartCol, label: 'Zebras G4',         cls: 'text-right px-4 py-1.5 whitespace-normal leading-tight' },
                   ] as { col: PartCol; label: string; cls: string }[]).map(({ col, label, cls }) => (
                     <th key={col} className={`${cls} cursor-pointer select-none hover:bg-gray-100 transition-colors`}>
                       <button type="button" onClick={() => handlePartSort(col)} className="inline-flex items-center gap-0 w-full justify-inherit">
@@ -485,26 +495,26 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
               <tbody className="divide-y divide-gray-50">
                 {sortedPartStats.map(s => (
                   <tr key={s.apelido} className="hover:bg-gray-50/60">
-                    <td className="px-4 py-1.5 font-medium text-gray-800">{s.apelido}</td>
-                    <td className="px-3 py-1.5 text-center font-bold tabular-nums text-gray-800 tracking-wider">
+                    <td className="px-4 py-1.5 font-medium text-gray-800 whitespace-nowrap">{s.apelido}</td>
+                    <td className="px-2 py-1.5 text-center font-bold tabular-nums text-gray-800 tracking-wider whitespace-nowrap">
                       {s.total === 0 ? <span className="text-gray-300">–</span> : s.topLabel}
                     </td>
-                    <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-gray-700">
+                    <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-gray-700 whitespace-nowrap">
                       {s.total === 0 ? <span className="text-gray-300">–</span> : `${s.topPct.toFixed(1)}%`}
                     </td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-gray-700">
+                    <td className="px-2 py-1.5 text-right tabular-nums text-gray-700 whitespace-nowrap">
                       {s.total === 0 ? <span className="text-gray-300">–</span> : s.avgGoals.toFixed(2)}
                     </td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-gray-700">
+                    <td className="px-2 py-1.5 text-right tabular-nums text-gray-700 whitespace-nowrap">
                       {s.draws === 0 ? <span className="text-gray-300">–</span> : s.draws}
                     </td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-gray-700">
+                    <td className="px-2 py-1.5 text-right tabular-nums text-gray-700 whitespace-nowrap">
                       {s.zebras === 0 ? <span className="text-gray-300">–</span> : s.zebras}
                     </td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-gray-700">
+                    <td className="px-2 py-1.5 text-right tabular-nums text-gray-700 whitespace-nowrap">
                       {s.zebraGrp === 0 ? <span className="text-gray-300">–</span> : s.zebraGrp}
                     </td>
-                    <td className="px-4 py-1.5 text-right tabular-nums text-gray-700">
+                    <td className="px-4 py-1.5 text-right tabular-nums text-gray-700 whitespace-nowrap">
                       {s.zebraG4 === 0 ? <span className="text-gray-300">–</span> : s.zebraG4}
                     </td>
                   </tr>
