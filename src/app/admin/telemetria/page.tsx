@@ -103,7 +103,8 @@ function buildStats(
   const rankingPositions = new Map<string, number>()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   scores.forEach((s: any, i: number) => {
-    if (s.participant_id) rankingPositions.set(s.participant_id, i + 1)
+    if (s.participant_id && (s.pts_total ?? 0) > 0)
+      rankingPositions.set(s.participant_id, i + 1)
   })
   const userToPrimary = new Map<string, string>()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
