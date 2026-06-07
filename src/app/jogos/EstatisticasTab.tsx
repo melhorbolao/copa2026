@@ -274,7 +274,13 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
       {/* ── Seleções ────────────────────────────────────────────────── */}
       <div className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-4 pt-3 pb-2 border-b border-gray-100 flex flex-wrap items-center gap-2">
-          <h2 className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mr-auto">Seleções</h2>
+          <div className="flex items-center gap-2 mr-auto">
+            <h2 className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Seleções</h2>
+            <span className="flex items-center gap-1 rounded px-1.5 py-0.5 bg-gray-100 text-[10px] text-gray-500">
+              <span className="inline-block w-3 h-3 rounded-[2px] bg-black shrink-0" />
+              Zebra potencial
+            </span>
+          </div>
           <div className="flex flex-wrap gap-1">
             <button
               onClick={() => setSelGroup(null)}
