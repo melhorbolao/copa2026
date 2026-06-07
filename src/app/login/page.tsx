@@ -37,6 +37,8 @@ export default async function LoginPage({
             <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
               {error === 'auth_error'
                 ? 'Erro ao autenticar. Tente novamente.'
+                : error === 'link_invalido'
+                ? 'O link de recuperação é inválido ou expirou. Solicite um novo link abaixo.'
                 : `Erro: ${error}`}
             </div>
           )}

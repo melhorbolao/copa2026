@@ -1,17 +1,39 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { notifyAdminNewUser } from '@/lib/email'
+import type { EmailOtpType } from '@supabase/supabase-js'
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
-  const code  = requestUrl.searchParams.get('code')
-  const next  = requestUrl.searchParams.get('next') ?? '/palpites'
-  const error = requestUrl.searchParams.get('error')
+  const code       = requestUrl.searchParams.get('code')
+  const token_hash = requestUrl.searchParams.get('token_hash')
+  const type       = requestUrl.searchParams.get('type') as EmailOtpType | null
+  const next       = requestUrl.searchParams.get('next') ?? '/palpites'
+  const error      = requestUrl.searchParams.get('error')
 
   if (error) {
     return NextResponse.redirect(`${requestUrl.origin}/login?error=${error}`)
   }
 
+  // ── Fluxo OTP / recuperação de senha (token_hash + type) ─────────────────
+  // Ocorre quando o link de recuperação é aberto em browser/dispositivo
+  // diferente do que fez o pedido (sem o verifier PKCE em cookie) ou quando
+  // o projeto Supabase não usa PKCE para e-mails de recovery.
+  if (token_hash && type) {
+    const supabase = await createClient()
+    const { error: verifyError } = await supabase.auth.verifyOtp({ type, token_hash })
+
+    if (!verifyError) {
+      if (type === 'recovery') {
+        return NextResponse.redirect(`${requestUrl.origin}/auth/redefinir-senha`)
+      }
+      return NextResponse.redirect(`${requestUrl.origin}${next}`)
+    }
+
+    return NextResponse.redirect(`${requestUrl.origin}/login?error=link_invalido`)
+  }
+
+  // ── Fluxo PKCE (code) ─────────────────────────────────────────────────────
   if (code) {
     const supabase = await createClient()
     const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
