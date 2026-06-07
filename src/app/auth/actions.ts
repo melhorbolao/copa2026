@@ -2,8 +2,35 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient, createAdminClient, createAuthAdminClient } from '@/lib/supabase/server'
-import { notifyAdminNewUser, notifyUserRegistered } from '@/lib/email'
+import { notifyAdminNewUser, notifyUserRegistered, sendPasswordRecoveryEmail } from '@/lib/email'
 import { isEmailEnabled } from '@/lib/email-settings'
+
+// ── Recuperação de senha via admin API (sem PKCE) ──────────────────────────────
+// O fluxo cliente usa PKCE e falha quando o link é aberto em outro dispositivo.
+// Aqui geramos o token via admin, enviamos nós mesmos e o callback usa verifyOtp.
+export async function requestPasswordReset(email: string): Promise<{ error?: string }> {
+  const adminAuth = createAuthAdminClient()
+
+  const { data, error } = await adminAuth.auth.admin.generateLink({
+    type: 'recovery',
+    email: email.toLowerCase().trim(),
+  })
+
+  if (error || !data?.properties?.hashed_token) {
+    return { error: 'Não foi possível gerar o link de recuperação. Verifique o e-mail informado.' }
+  }
+
+  const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://melhorbolao.app.br'
+  const recoveryLink = `${BASE_URL}/auth/callback?token_hash=${data.properties.hashed_token}&type=recovery`
+
+  try {
+    await sendPasswordRecoveryEmail({ email: email.toLowerCase().trim(), link: recoveryLink })
+  } catch {
+    return { error: 'Não foi possível enviar o e-mail. Tente novamente.' }
+  }
+
+  return {}
+}
 
 // ── Cadastro completo via admin (sem e-mail de confirmação do Supabase) ───────
 export async function signUpAndCreateProfile(params: {

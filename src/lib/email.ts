@@ -155,6 +155,30 @@ export async function notifyProfileReminder({ name, email }: { name: string; ema
   })
 }
 
+// ── 2c. Recuperação de senha ──────────────────────────────────
+export async function sendPasswordRecoveryEmail({ email, link }: { email: string; link: string }) {
+  await resend.emails.send({
+    from: `Melhor Bolão <${FROM}>`,
+    to:   email,
+    subject: 'Redefinir senha — Melhor Bolão Copa 2026',
+    html: htmlWrapper(`
+      <h2 style="margin:0 0 8px;color:#111827;font-size:20px">Redefinição de senha</h2>
+      <p style="margin:0 0 20px;color:#374151;font-size:15px;line-height:1.6">
+        Recebemos um pedido para redefinir a senha da sua conta no
+        <strong>Melhor Bolão Copa do Mundo 2026</strong>.
+        Clique no botão abaixo para criar uma nova senha.
+      </p>
+      <a href="${link}"
+         style="display:inline-block;background:#009c3b;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px">
+        Redefinir minha senha →
+      </a>
+      <p style="margin:20px 0 0;font-size:12px;color:#9ca3af">
+        Este link expira em 1 hora. Se você não solicitou a redefinição, ignore este e-mail.
+      </p>
+    `),
+  })
+}
+
 // ── 3. E-mail em massa (com anexo opcional) ───────────────────
 export async function sendReminderEmail({
   name,

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { signUpAndCreateProfile } from '@/app/auth/actions'
+import { signUpAndCreateProfile, requestPasswordReset } from '@/app/auth/actions'
 
 type Mode = 'login' | 'signup' | 'forgot'
 
@@ -92,12 +92,10 @@ export function LoginForm() {
     setError('')
     if (!email.trim()) { setError('Informe seu e-mail cadastrado.'); return }
     setLoading(true)
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?next=/auth/redefinir-senha`,
-    })
+    const result = await requestPasswordReset(email.trim())
     setLoading(false)
-    if (resetError) {
-      setError('Não foi possível enviar o e-mail. Verifique o endereço informado.')
+    if (result.error) {
+      setError(result.error)
     } else {
       setInfo('E-mail de recuperação enviado! Verifique sua caixa de entrada e siga as instruções.')
       setError('')
