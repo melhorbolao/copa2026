@@ -243,7 +243,7 @@ async function _updateTournamentBetPoints(admin: AdminClient, rules: RuleMap): P
 
   const scorerMapping: Record<string, string> = Object.fromEntries(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ((mappingRows ?? []) as any[]).map((m: any) => [m.raw_name, m.standardized_name])
+    ((mappingRows ?? []) as any[]).map((m: any) => [m.raw_name.toLowerCase().trim(), m.standardized_name])
   )
 
   const { data: tournamentBets } = await admin

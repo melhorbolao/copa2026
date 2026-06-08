@@ -111,7 +111,7 @@ export default async function ClassificacaoPage() {
     }
     if (mappingRows.data) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      scorerMapping = Object.fromEntries(mappingRows.data.map((m: any) => [m.raw_name, m.standardized_name]))
+      scorerMapping = Object.fromEntries(mappingRows.data.map((m: any) => [m.raw_name.toLowerCase().trim(), m.standardized_name]))
     }
   } catch { /* tabelas ainda não criadas */ }
 

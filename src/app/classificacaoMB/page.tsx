@@ -173,7 +173,7 @@ export default async function ClassificacaoMBPage() {
     if (scorerRes.data) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const row of scorerRes.data as any[]) {
-        if (row.standardized_name) scorerMapping[row.raw_name] = row.standardized_name
+        if (row.standardized_name) scorerMapping[row.raw_name.toLowerCase().trim()] = row.standardized_name
         if (row.is_eliminated && row.standardized_name)
           eliminatedStdScorers.push(row.standardized_name.trim().toLowerCase())
       }

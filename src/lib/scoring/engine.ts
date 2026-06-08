@@ -184,7 +184,7 @@ export function scoreTournamentBetBreakdown(
 
   let top_scorer = 0
   if (bet.top_scorer && results.officialScorers.length > 0) {
-    const normalized = (scorerMapping[bet.top_scorer] ?? bet.top_scorer).trim().toLowerCase()
+    const normalized = (scorerMapping[bet.top_scorer.toLowerCase().trim()] ?? bet.top_scorer).trim().toLowerCase()
     const isCorrect  = results.officialScorers.some(s => s.trim().toLowerCase() === normalized)
     if (isCorrect) top_scorer += r.artilh
   }

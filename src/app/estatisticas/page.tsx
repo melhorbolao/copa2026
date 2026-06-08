@@ -108,8 +108,7 @@ export default async function EstatisticasPage() {
     if (mappingErr) console.error('[estatisticas] top_scorer_mapping error:', mappingErr.message)
     for (const r of (mappingRows ?? []) as any[]) {
       if (r.raw_name && r.standardized_name) {
-        scorerMapping[r.raw_name]        = r.standardized_name
-        scorerMapping[r.raw_name.trim()] = r.standardized_name
+        scorerMapping[r.raw_name.toLowerCase().trim()] = r.standardized_name
       }
     }
   } catch (e) {

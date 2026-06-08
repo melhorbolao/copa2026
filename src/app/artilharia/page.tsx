@@ -67,8 +67,8 @@ export default async function ArtilhariaPage() {
 
   // ── Normalização de nomes via mapeamento ──────────────────────────────────
   const mappingRows = (mapping ?? []) as { raw_name: string; standardized_name: string }[]
-  const nameMap = Object.fromEntries(mappingRows.map(m => [m.raw_name, m.standardized_name ?? m.raw_name]))
-  const normalize = (name: string) => nameMap[name] ?? name
+  const nameMap = Object.fromEntries(mappingRows.map(m => [m.raw_name.toLowerCase().trim(), m.standardized_name ?? m.raw_name]))
+  const normalize = (name: string) => nameMap[name.toLowerCase().trim()] ?? name
 
   // ── Auto-seeding: insere jogadores apostados que ainda não estão na tabela ─
   const predictedNamesRaw: string[] = [

@@ -260,7 +260,7 @@ export default async function IaNoMbPage() {
 
   const scorerMapping: Record<string, string> = {}
   for (const row of (scorerMappingRes.data ?? []) as { raw_name: string; standardized_name: string | null }[]) {
-    if (row.standardized_name) scorerMapping[row.raw_name] = row.standardized_name
+    if (row.standardized_name) scorerMapping[row.raw_name.toLowerCase().trim()] = row.standardized_name
   }
 
   const myBets: MyBet[]        = (myBetsRes.data ?? []) as MyBet[]

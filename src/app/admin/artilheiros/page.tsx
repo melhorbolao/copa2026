@@ -13,14 +13,15 @@ export default async function ArtilheirosPage() {
   ])
 
   const rawNames = [...new Set(
-    (bets ?? []).map((b: { top_scorer: string }) => b.top_scorer).filter(Boolean)
+    (bets ?? []).map((b: { top_scorer: string }) => b.top_scorer?.toLowerCase().trim()).filter(Boolean)
   )].sort() as string[]
 
   const initialMappings: Record<string, string> = {}
   const initialEliminations: Record<string, boolean> = {}
   for (const m of (mappings ?? []) as { raw_name: string; standardized_name: string; is_eliminated: boolean }[]) {
-    if (m.standardized_name) initialMappings[m.raw_name] = m.standardized_name
-    if (m.is_eliminated)     initialEliminations[m.raw_name] = true
+    const key = m.raw_name.toLowerCase().trim()
+    if (m.standardized_name) initialMappings[key] = m.standardized_name
+    if (m.is_eliminated)     initialEliminations[key] = true
   }
 
   return (

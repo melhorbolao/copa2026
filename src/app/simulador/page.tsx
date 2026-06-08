@@ -193,7 +193,7 @@ export default async function SimuladorPage() {
 
   const scorerMapping: Record<string, string> = {}
   for (const row of (scorerRes.data ?? []) as any[])
-    if (row.standardized_name) scorerMapping[row.raw_name] = row.standardized_name
+    if (row.standardized_name) scorerMapping[row.raw_name.toLowerCase().trim()] = row.standardized_name
 
   let officialScorers: string[] = []
   if (scorerSettingRes.data?.value) {

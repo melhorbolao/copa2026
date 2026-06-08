@@ -134,7 +134,7 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
     for (const b of tournamentBets) {
       const raw = b.top_scorer
       if (!raw?.trim()) continue
-      const std = scorerMapping[raw] ?? scorerMapping[raw.trim()] ?? raw.trim()
+      const std = scorerMapping[raw.toLowerCase().trim()] ?? raw.trim()
       m.set(std, (m.get(std) ?? 0) + 1)
     }
     return [...m.entries()]

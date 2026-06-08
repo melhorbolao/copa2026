@@ -30,7 +30,7 @@ export const getCachedScorerMapping = unstable_cache(
     const { data } = await admin.from('top_scorer_mapping').select('raw_name, standardized_name')
     return Object.fromEntries(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ((data ?? []) as any[]).map((m: any) => [m.raw_name, m.standardized_name])
+      ((data ?? []) as any[]).map((m: any) => [m.raw_name.toLowerCase().trim(), m.standardized_name])
     )
   },
   ['palpites:top_scorer_mapping'],

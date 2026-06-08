@@ -290,7 +290,7 @@ function scorerEventStats(parts: Participant[], tournamentBetMap: Map<string, To
   for (const p of parts) {
     const bet = tournamentBetMap.get(p.id)
     if (!bet?.top_scorer) continue
-    const norm      = (scorerMapping[bet.top_scorer] ?? bet.top_scorer).trim().toLowerCase()
+    const norm      = (scorerMapping[bet.top_scorer.toLowerCase().trim()] ?? bet.top_scorer).trim().toLowerCase()
     const isCorrect = localScorers.length > 0 && localScorers.some(s => s.trim().toLowerCase() === norm)
     const pts       = localScorers.length > 0 ? (isCorrect ? artilhPts : 0) : 0
     if (pts > 0) pontuaram++
@@ -809,7 +809,7 @@ export function TabelaMBClient({
     const opts: string[] = []
     for (const b of tournamentBetMap.values()) {
       if (!b.top_scorer) continue
-      const display = (scorerMapping[b.top_scorer] ?? b.top_scorer).trim()
+      const display = (scorerMapping[b.top_scorer.toLowerCase().trim()] ?? b.top_scorer).trim()
       if (display && !seen.has(display.toLowerCase())) {
         seen.add(display.toLowerCase())
         opts.push(display)
@@ -1005,7 +1005,7 @@ export function TabelaMBClient({
                 const s = scorerEventStats(participants, tournamentBetMap, localScorers, artPts, scorerMapping)
                 ws.addRow(['Artilheiro', 'Top scorer', localScorers.join(', ') || '–',
                   s.pontuaram, s.cravaram, s.media > 0 ? +s.media.toFixed(1) : '–',
-                  ...sortedParts.map(p => { const b = tournamentBetMap.get(p.id); const raw = b?.top_scorer ?? ''; return raw ? (scorerMapping[raw] ?? raw) : '–' })])
+                  ...sortedParts.map(p => { const b = tournamentBetMap.get(p.id); const raw = b?.top_scorer ?? ''; return raw ? (scorerMapping[raw.toLowerCase().trim()] ?? raw) : '–' })])
               }
             }
 
@@ -1480,7 +1480,7 @@ export function TabelaMBClient({
                       const stats     = scorerEventStats(participants, tournamentBetMap, localScorers, artilhPts, scorerMapping)
                       const lb        = tournamentBetMap.get(leaderId)
                       const rawLb     = lb?.top_scorer ?? ''
-                      const lbDisplay = rawLb ? (scorerMapping[rawLb] ?? rawLb) : ''
+                      const lbDisplay = rawLb ? (scorerMapping[rawLb.toLowerCase().trim()] ?? rawLb) : ''
                       const lbCorrect = lbDisplay.length > 0 && localScorers.length > 0
                         && localScorers.some(s => s.trim().toLowerCase() === lbDisplay.trim().toLowerCase())
                       const lbPts     = localScorers.length > 0 && lbDisplay ? (lbCorrect ? artilhPts : 0) : null
@@ -1517,7 +1517,7 @@ export function TabelaMBClient({
                           <span className="text-gray-200">—</span>
                         </td>
                       )
-                      const displayName = scorerMapping[bet.top_scorer] ?? bet.top_scorer
+                      const displayName = scorerMapping[bet.top_scorer.toLowerCase().trim()] ?? bet.top_scorer
                       const norm      = displayName.trim().toLowerCase()
                       const isCorrect = localScorers.length > 0 && localScorers.some(s => s.trim().toLowerCase() === norm)
                       const pts       = localScorers.length > 0 ? (isCorrect ? artilhPts : 0) : null

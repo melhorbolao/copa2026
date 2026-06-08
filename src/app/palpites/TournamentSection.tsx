@@ -172,7 +172,7 @@ export function TournamentSection({ allTeams, deadline, existingBet, scorerMappi
       { label: '🥈 Vice',       val: existingBet?.runner_up  ?? '',  key: 'runner_up'  },
       { label: '3º Lugar',      val: existingBet?.semi1      ?? '',  key: 'semi1'      },
       { label: '4º Lugar',      val: existingBet?.semi2      ?? '',  key: 'semi2'      },
-      { label: '⚽ Artilheiro', val: scorerMapping?.[existingBet?.top_scorer ?? ''] ?? existingBet?.top_scorer ?? '', key: 'top_scorer' },
+      { label: '⚽ Artilheiro', val: scorerMapping?.[existingBet?.top_scorer?.toLowerCase().trim() ?? ''] ?? existingBet?.top_scorer ?? '', key: 'top_scorer' },
     ]
 
     return (

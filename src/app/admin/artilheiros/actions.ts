@@ -19,7 +19,7 @@ export async function upsertTopScorerMapping(
     const admin = await createAdminClient()
     const { error } = await admin
       .from('top_scorer_mapping')
-      .upsert({ raw_name: rawName, standardized_name: standardizedName.trim() }, { onConflict: 'raw_name' })
+      .upsert({ raw_name: rawName.toLowerCase().trim(), standardized_name: standardizedName.trim() }, { onConflict: 'raw_name' })
     if (error) return { error: error.message }
     return {}
   } catch (err) {
@@ -34,7 +34,7 @@ export async function deleteTopScorerMapping(rawName: string): Promise<{ error?:
     const { error } = await admin
       .from('top_scorer_mapping')
       .delete()
-      .eq('raw_name', rawName)
+      .eq('raw_name', rawName.toLowerCase().trim())
     if (error) return { error: error.message }
     return {}
   } catch (err) {
@@ -53,7 +53,7 @@ export async function updateTopScorerMappingTeam(
     const { error } = await (admin as any)
       .from('top_scorer_mapping')
       .update({ team: team || null })
-      .eq('raw_name', rawName)
+      .eq('raw_name', rawName.toLowerCase().trim())
     if (error) return { error: error.message }
     return {}
   } catch (err) {
@@ -72,7 +72,7 @@ export async function updateScorerElimination(
     const { error } = await (admin as any)
       .from('top_scorer_mapping')
       .update({ is_eliminated: isEliminated })
-      .eq('raw_name', rawName)
+      .eq('raw_name', rawName.toLowerCase().trim())
     if (error) return { error: error.message }
     return {}
   } catch (err) {
