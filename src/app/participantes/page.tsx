@@ -277,10 +277,6 @@ export default async function ControlePage({
   // Estado de uma célula (participante, etapa) na tabela
   type CellStatus = { kind: 'unavailable' | 'cut' | 'open'; pct: number }
   const cellStatus = (pid: string, k: StageKey): CellStatus => {
-    // Antes do prazo: não-admins não podem ver o preenchimento de outros
-    if (!isAdmin && stageDeadlines[k] && new Date(stageDeadlines[k]) > nowTs) {
-      return { kind: 'unavailable', pct: -1 }
-    }
     const v = calcPct(pid, k)
     if (v === -1) return { kind: 'unavailable', pct: -1 }
     if (!canFillStage(k, pid, phaseSettings, qualified)) {
@@ -300,12 +296,11 @@ export default async function ControlePage({
     padrinho:  padrinhoByPid.get(p.id) ?? null,
     stages: STAGE_KEYS.map(k => {
       const status = cellStatus(p.id, k)
-      const deadlinePassed = !stageDeadlines[k] || new Date(stageDeadlines[k]) <= nowTs
       return {
         kind:       status.kind,
         pct:        status.pct,
-        lastSaved:  (isAdmin || deadlinePassed) ? getLastSaved(p.id, k) : null,
-        missingTip: (isAdmin || deadlinePassed) ? getMissingTooltip(p.id, k) : null,
+        lastSaved:  getLastSaved(p.id, k),
+        missingTip: getMissingTooltip(p.id, k),
       } satisfies StageData
     }),
   }))
@@ -317,14 +312,8 @@ export default async function ControlePage({
 
   const nextStageIdx = nextStageKey ? STAGE_KEYS.indexOf(nextStageKey) : null
 
-  // Prazo da próxima etapa ainda não passou → filtros de preenchimento ficam ocultos para não-admins
-  const nextStageDeadlinePassed = nextStageKey
-    ? !stageDeadlines[nextStageKey] || new Date(stageDeadlines[nextStageKey]) <= nowTs
-    : true
-  const fillsVisible = isAdmin || nextStageDeadlinePassed
-
-  // Subtotais de preenchimento para os chips de filtro (apenas quando visíveis)
-  const fillCounts = (fillsVisible && nextStageIdx !== null) ? (() => {
+  // Subtotais de preenchimento para os chips de filtro
+  const fillCounts = nextStageIdx !== null ? (() => {
     let zerado = 0, parcial = 0, completo = 0
     for (const r of allRows) {
       const pct = r.stages[nextStageIdx!].pct
@@ -357,7 +346,7 @@ export default async function ControlePage({
         <div className="mb-4">
           <Suspense fallback={null}>
             <ParticipantesFilter
-              nextStageLabel={fillsVisible ? nextStageLabel : null}
+              nextStageLabel={nextStageLabel}
               hasAnyEliminated={hasAnyEliminated}
               fillCounts={fillCounts}
               isAdmin={isAdmin}
@@ -370,10 +359,10 @@ export default async function ControlePage({
           rows={allRows}
           activeFilter={filter}
           paymentFilter={pagamento}
-          fillFilter={fillsVisible ? palpite : ''}
+          fillFilter={palpite}
           padrinhoFilter={padrinho}
           hasAnyEliminated={hasAnyEliminated}
-          nextStageIdx={fillsVisible ? nextStageIdx : null}
+          nextStageIdx={nextStageIdx}
           stageMeta={stageMeta}
           stageTotals={STAGE_KEYS.map(k => stageTotals[k])}
           hasAnyError={hasAnyError}
