@@ -199,8 +199,8 @@ function CompactRanking({
     : 'grid grid-cols-[1.5rem_1fr_2rem]'
   const minW = sdActive ? 600 : 480
 
-  const blockSize = Math.ceil(n / 4)
-  const blocks = [0, 1, 2, 3]
+  const blockSize = Math.ceil(n / 5)
+  const blocks = [0, 1, 2, 3, 4]
     .map(i => ranked.slice(i * blockSize, (i + 1) * blockSize))
     .filter(b => b.length > 0)
 
@@ -227,9 +227,9 @@ function CompactRanking({
         </p>
       </div>
 
-      {/* 4 blocos lado a lado */}
+      {/* 5 blocos lado a lado */}
       <div className="overflow-x-auto">
-        <div className="grid grid-cols-4 divide-x divide-gray-100" style={{ minWidth: `${minW}px` }}>
+        <div className="grid grid-cols-5 divide-x divide-gray-100" style={{ minWidth: `${minW}px` }}>
           {blocks.map((block, bi) => (
             <div key={bi}>
               {/* cabeçalho do bloco */}
