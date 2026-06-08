@@ -339,6 +339,8 @@ export default async function ClassificacaoMBPage() {
   const lastMatchBets: Record<string, { score_home: number; score_away: number }> = {}
   const nextMatchBets: Record<string, { score_home: number; score_away: number }> = {}
 
+  const deadlineByMatchId = new Map<string, string>(matches.map(m => [m.id, m.betting_deadline]))
+
   for (const bet of allBets) {
     const pid = bet.participant_id
     const official = matchResultMap[bet.match_id]
@@ -366,9 +368,11 @@ export default async function ClassificacaoMBPage() {
       }
     }
 
-    // 🦓 apostada: apostou em resultado minoritário (possível zebra) em qualquer jogo
+    // 🦓 apostada: apostou em resultado minoritário em jogos com prazo já passado
+    const betDeadline = deadlineByMatchId.get(bet.match_id)
+    const betDeadlinePassed = betDeadline && new Date(betDeadline) <= now
     const dist = matchResultDist[bet.match_id]
-    if (dist && dist.total > 0) {
+    if (dist && dist.total > 0 && (isTestModeAdmin || betDeadlinePassed)) {
       const betRes = getMatchResult(bet.score_home, bet.score_away)
       if ((dist[betRes] / dist.total) * 100 <= zebraThreshold)
         zebraApostMap[pid] = (zebraApostMap[pid] ?? 0) + 1
