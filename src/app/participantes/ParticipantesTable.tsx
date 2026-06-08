@@ -24,6 +24,7 @@ export interface TableRow {
   paid: boolean
   eliminated: boolean
   g4Errors: string[] | null
+  padrinho: string | null
   stages: StageData[]   // aligned with STAGE_KEYS order
 }
 
@@ -37,6 +38,7 @@ interface Props {
   activeFilter: string   // view: ativos | todos
   paymentFilter: string  // pagamento: pago | pendente | ''
   fillFilter: string     // palpite: completo | incompleto | ''
+  padrinhoFilter: string // padrinho: nome | ''
   hasAnyEliminated: boolean
   nextStageIdx: number | null
   stageMeta: StageMeta[]
@@ -58,7 +60,7 @@ const pctCls = (v: number) =>
   v > 0     ? 'text-amber-600' : 'text-red-400'
 
 export function ParticipantesTable({
-  rows, activeFilter, paymentFilter, fillFilter, hasAnyEliminated, nextStageIdx, stageMeta, stageTotals, hasAnyError,
+  rows, activeFilter, paymentFilter, fillFilter, padrinhoFilter, hasAnyEliminated, nextStageIdx, stageMeta, stageTotals, hasAnyError,
 }: Props) {
   const [nameQuery, setNameQuery] = useState('')
   const [sortCol, setSortCol]     = useState<SortCol | null>(null)
@@ -95,6 +97,9 @@ export function ParticipantesTable({
         if (fillFilter === 'incompleto'){ if (!(pct !== -1 && pct < 100))   return false }
       }
 
+      // Padrinho (admin)
+      if (padrinhoFilter && r.padrinho !== padrinhoFilter) return false
+
       return true
     })
 
@@ -122,7 +127,7 @@ export function ParticipantesTable({
     }
 
     return result
-  }, [rows, activeFilter, paymentFilter, fillFilter, hasAnyEliminated, nextStageIdx, nameQuery, sortCol, sortDir])
+  }, [rows, activeFilter, paymentFilter, fillFilter, padrinhoFilter, hasAnyEliminated, nextStageIdx, nameQuery, sortCol, sortDir])
 
   const displayPaidCount  = display.filter(r => r.paid).length
   const displayFullPct    = stageTotals.map((total, i) =>

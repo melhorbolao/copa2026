@@ -35,9 +35,9 @@ const STAGE_LABELS: Record<StageKey, string> = {
 export default async function ControlePage({
   searchParams,
 }: {
-  searchParams: Promise<{ filter?: string; pagamento?: string; palpite?: string }>
+  searchParams: Promise<{ filter?: string; pagamento?: string; palpite?: string; padrinho?: string }>
 }) {
-  const { filter = '', pagamento = '', palpite = '' } = await searchParams
+  const { filter = '', pagamento = '', palpite = '', padrinho = '' } = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   let isAdmin = false
@@ -77,6 +77,7 @@ export default async function ControlePage({
     thirdBets,
     phaseSettings,
     qualified,
+    userParticipants,
   ] = await Promise.all([
     supabase.from('participants')
       .select('id, apelido, paid')
@@ -88,7 +89,23 @@ export default async function ControlePage({
     fetchAll('third_place_bets', 'participant_id, group_name'),
     getPhaseSettings(),
     getQualifiedSets(),
+    isAdmin
+      ? fetchAll('user_participants', 'participant_id, users(padrinho)') as Promise<{ participant_id: string; users: { padrinho: string | null } | null }[]>
+      : Promise.resolve([]),
   ])
+
+  // Mapa de padrinho por participante (apenas admin)
+  const padrinhoByPid = new Map<string, string | null>()
+  for (const up of userParticipants) {
+    if (!padrinhoByPid.has(up.participant_id)) {
+      padrinhoByPid.set(up.participant_id, up.users?.padrinho ?? null)
+    }
+  }
+  const padrinhoOptions = isAdmin
+    ? [...new Set(
+        [...padrinhoByPid.values()].filter((v): v is string => v !== null && v.trim() !== '')
+      )].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }))
+    : []
 
   // Valida duplicidade G4 por participante
   function getG4Errors(bet: { champion?: string|null; runner_up?: string|null; semi1?: string|null; semi2?: string|null }): string[] {
@@ -276,6 +293,7 @@ export default async function ControlePage({
     paid:      p.paid,
     eliminated: eliminatedSet.has(p.id),
     g4Errors:  g4ErrorMap.get(p.id) ?? null,
+    padrinho:  padrinhoByPid.get(p.id) ?? null,
     stages: STAGE_KEYS.map(k => {
       const status = cellStatus(p.id, k)
       return {
@@ -331,6 +349,8 @@ export default async function ControlePage({
               nextStageLabel={nextStageLabel}
               hasAnyEliminated={hasAnyEliminated}
               fillCounts={fillCounts}
+              isAdmin={isAdmin}
+              padrinhos={padrinhoOptions}
             />
           </Suspense>
         </div>
@@ -340,6 +360,7 @@ export default async function ControlePage({
           activeFilter={filter}
           paymentFilter={pagamento}
           fillFilter={palpite}
+          padrinhoFilter={padrinho}
           hasAnyEliminated={hasAnyEliminated}
           nextStageIdx={nextStageIdx}
           stageMeta={stageMeta}

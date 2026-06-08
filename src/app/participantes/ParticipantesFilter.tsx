@@ -6,15 +6,18 @@ interface Props {
   nextStageLabel: string | null
   hasAnyEliminated: boolean
   fillCounts: { zerado: number; parcial: number; completo: number } | null
+  isAdmin: boolean
+  padrinhos: string[]
 }
 
-export function ParticipantesFilter({ nextStageLabel, hasAnyEliminated, fillCounts }: Props) {
+export function ParticipantesFilter({ nextStageLabel, hasAnyEliminated, fillCounts, isAdmin, padrinhos }: Props) {
   const router      = useRouter()
   const searchParams = useSearchParams()
 
   const currentFilter    = searchParams.get('filter')    ?? ''
   const currentPagamento = searchParams.get('pagamento') ?? ''
   const currentPalpite   = searchParams.get('palpite')   ?? ''
+  const currentPadrinho  = searchParams.get('padrinho')  ?? ''
 
   const viewFilter = currentFilter || (hasAnyEliminated ? 'ativos' : '')
 
@@ -114,6 +117,23 @@ export function ParticipantesFilter({ nextStageLabel, hasAnyEliminated, fillCoun
           </button>
         )}
       </div>
+
+      {/* Filtro por padrinho — apenas admins */}
+      {isAdmin && padrinhos.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-gray-400 font-medium">Padrinho:</span>
+          <select
+            value={currentPadrinho}
+            onChange={e => setParam('padrinho', e.target.value)}
+            className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-600 focus:border-azul-escuro focus:outline-none transition cursor-pointer"
+          >
+            <option value="">Todos</option>
+            {padrinhos.map(p => (
+              <option key={p} value={p}>{p}</option>
+            ))}
+          </select>
+        </div>
+      )}
     </div>
   )
 }
