@@ -161,15 +161,14 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
       m.set(b.first_place, (m.get(b.first_place) ?? 0) + 1)
     }
 
-    // Distribuição de picks G4 por slot (para zebra G4)
+    // Contagem de aparições de cada time em qualquer posição do G4 (para zebra G4)
+    // Critério idêntico ao da tabela Seleções: inG4 / tBetsN < zebraThreshold
     const G4_FIELDS = ['champion', 'runner_up', 'semi1', 'semi2'] as const
-    const g4Dist = new Map<string, Map<string, number>>()
+    const g4TeamCount = new Map<string, number>()
     for (const b of tournamentBets) {
       for (const f of G4_FIELDS) {
         const team = b[f]; if (!team) continue
-        if (!g4Dist.has(f)) g4Dist.set(f, new Map())
-        const m = g4Dist.get(f)!
-        m.set(team, (m.get(team) ?? 0) + 1)
+        g4TeamCount.set(team, (g4TeamCount.get(team) ?? 0) + 1)
       }
     }
 
@@ -226,16 +225,14 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
         if (tot > 0 && ((dist.get(b.first_place) ?? 0) / tot) * 100 <= zebraThreshold) zebraGrp++
       }
 
-      // Zebras G4
+      // Zebras G4: times do participante que aparecem em < zebraThreshold% dos G4 totais
       let zebraG4 = 0
       const myTBet = tournamentBets.find(b => b.participant_id === p.id)
-      if (myTBet) {
+      if (myTBet && tBetsN > 0) {
         for (const f of G4_FIELDS) {
           const team = myTBet[f]; if (!team) continue
-          const dist = g4Dist.get(f)
-          if (!dist) continue
-          const tot = [...dist.values()].reduce((s, v) => s + v, 0)
-          if (tot > 0 && ((dist.get(team) ?? 0) / tot) * 100 <= zebraThreshold) zebraG4++
+          const cnt = g4TeamCount.get(team) ?? 0
+          if ((cnt / tBetsN) * 100 < zebraThreshold) zebraG4++
         }
       }
 
