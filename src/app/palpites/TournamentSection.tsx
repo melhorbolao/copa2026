@@ -134,6 +134,12 @@ export function TournamentSection({ allTeams, deadline, existingBet, scorerMappi
     triggerSave(updated, 800)
   }
 
+  const handleClear = (field: keyof TBet) => {
+    const updated = { ...form, [field]: '' }
+    setForm(updated)
+    triggerSave(updated)
+  }
+
   const handleManualSave = () => {
     clearTimeout(timerRef.current)
     hasPendingRef.current = false
@@ -242,7 +248,19 @@ export function TournamentSection({ allTeams, deadline, existingBet, scorerMappi
               <div key={field}>
                 <label className={`mb-1 flex items-center justify-between gap-1 text-xs font-semibold ${hasConflict ? 'text-red-500' : 'text-gray-500'}`}>
                   <span>{label}{hasConflict && ' ⚠️'}</span>
-                  {liveBreakdown && form[field] && <ScoreBadge pts={pts} compact />}
+                  <span className="flex items-center gap-1.5">
+                    {liveBreakdown && form[field] && <ScoreBadge pts={pts} compact />}
+                    {form[field] && (
+                      <button
+                        type="button"
+                        onClick={() => handleClear(field)}
+                        title="Limpar campo"
+                        className="text-gray-300 hover:text-red-400 transition-colors leading-none"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </span>
                 </label>
                 <select
                   value={form[field] as string}
@@ -263,7 +281,19 @@ export function TournamentSection({ allTeams, deadline, existingBet, scorerMappi
           <div>
             <label className="mb-1 flex items-center justify-between gap-1 text-xs font-semibold text-gray-500">
               <span>⚽ Artilheiro</span>
-              {liveBreakdown && form.top_scorer && <ScoreBadge pts={liveBreakdown.top_scorer} compact />}
+              <span className="flex items-center gap-1.5">
+                {liveBreakdown && form.top_scorer && <ScoreBadge pts={liveBreakdown.top_scorer} compact />}
+                {form.top_scorer && (
+                  <button
+                    type="button"
+                    onClick={() => handleClear('top_scorer')}
+                    title="Limpar campo"
+                    className="text-gray-300 hover:text-red-400 transition-colors leading-none"
+                  >
+                    ×
+                  </button>
+                )}
+              </span>
             </label>
             <input
               type="text"
