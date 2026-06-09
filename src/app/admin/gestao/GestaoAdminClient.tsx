@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { useProgressTransition } from '@/hooks/useProgressTransition'
 import { setProductionMode, setRoundReleased, setRoundAvailable, clearAllBets, clearAllResults, setSobeDesceVisible } from './actions'
+import { RecalcButton } from '@/components/admin/RecalcButton'
 import type { RoundInfo } from '@/lib/production-mode'
 
 interface Props {
@@ -313,6 +314,18 @@ export function GestaoAdminClient({ productionMode: initProdMode, releasedRounds
             </table>
           </div>
         )}
+      </section>
+
+      <hr className="border-gray-100" />
+
+      {/* ── RECALCULAR PONTUAÇÕES ── */}
+      <section>
+        <h3 className="text-sm font-semibold text-gray-900 mb-1">Recalcular pontuações</h3>
+        <p className="mb-3 text-xs text-gray-500">
+          Reprocessa todos os palpites pontuados e atualiza os totais de cada participante.
+          Use após corrigir um placar, alterar uma regra de pontuação ou atualizar o de-para de artilheiros.
+        </p>
+        <RecalcButton />
       </section>
 
       <hr className="border-gray-100" />

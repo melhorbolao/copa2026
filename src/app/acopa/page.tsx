@@ -4,7 +4,6 @@ import { getActiveParticipantId } from '@/lib/participant'
 import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { ACopaClient } from './ACopaClient'
-import { RecalcButton } from '@/components/admin/RecalcButton'
 
 export const metadata = {}
 
@@ -60,8 +59,6 @@ export default async function ACopaPage() {
           </p>
 
         </div>
-
-        <RecalcButton />
 
         <ACopaClient
           initialMatches={matches}
