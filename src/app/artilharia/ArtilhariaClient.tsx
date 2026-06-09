@@ -630,7 +630,7 @@ export function ArtilhariaClient({
             const row = payload.new as { id: string; goals_count: number; player_name: string; team: string; photo_url?: string }
             setScorers(prev =>
               sortScorers([...prev.map(s => s.id === row.id
-                ? { ...s, goals_count: row.goals_count, player_name: row.player_name, team: row.team, photo_url: row.photo_url ?? undefined }
+                ? { ...s, goals_count: row.goals_count, team: row.team, photo_url: row.photo_url ?? undefined }
                 : s
               )])
             )
