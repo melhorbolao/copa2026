@@ -66,8 +66,14 @@ export default async function ArtilhariaPage() {
   const artilheiroPoints = (artilhRule as { points: number } | null)?.points ?? 18
 
   // ── Normalização de nomes via mapeamento ──────────────────────────────────
-  const mappingRows = (mapping ?? []) as { raw_name: string; standardized_name: string }[]
-  const nameMap = Object.fromEntries(mappingRows.map(m => [m.raw_name.toLowerCase().trim(), m.standardized_name ?? m.raw_name]))
+  const mappingRows = (mapping ?? []) as { raw_name: string; standardized_name: string | null }[]
+  // Constrói nameMap ignorando entradas com standardized_name nulo ou trivial (alias = canônico)
+  const nameMap: Record<string, string> = {}
+  for (const m of mappingRows) {
+    const key = m.raw_name.toLowerCase().trim()
+    const val = (m.standardized_name ?? '').trim()
+    if (val && val.toLowerCase() !== key) nameMap[key] = val
+  }
   const normalize = (name: string) => nameMap[name.toLowerCase().trim()] ?? name
 
   // ── Auto-seeding: insere jogadores apostados que ainda não estão na tabela ─
@@ -82,7 +88,14 @@ export default async function ArtilhariaPage() {
   const existingNamesSet = new Set(
     ((existingScorers ?? []) as { player_name: string }[]).map(s => s.player_name.toLowerCase())
   )
-  const toSeed = predictedNamesRaw.filter(n => !existingNamesSet.has(n.toLowerCase()))
+  const toSeedFromBets = predictedNamesRaw.filter(n => !existingNamesSet.has(n.toLowerCase()))
+  // Garante que aliases já no banco tenham o nome canônico inserido
+  const toSeedCanonicals = ((existingScorers ?? []) as { player_name: string }[])
+    .flatMap(s => {
+      const canonical = nameMap[s.player_name.toLowerCase().trim()]
+      return canonical && !existingNamesSet.has(canonical.toLowerCase()) ? [canonical] : []
+    })
+  const toSeed = [...new Set([...toSeedFromBets, ...toSeedCanonicals])]
   if (toSeed.length > 0) {
     // Ignora erros: o índice único no banco rejeita corridas concorrentes silenciosamente.
     await admin.from('top_scorers').insert(
@@ -157,7 +170,10 @@ export default async function ArtilhariaPage() {
       }
     }
   }
+  // Remove aliases que escaparam do merge (player_name é raw_name conhecido com canônico diferente)
+  const knownAliases = new Set(Object.keys(nameMap))
   const scorersWithBettors: TopScorerItem[] = [...mergedMap.values()]
+    .filter(s => !knownAliases.has(s.player_name.toLowerCase().trim()))
     .sort((a, b) =>
       b.goals_count - a.goals_count ||
       b.bettors.length - a.bettors.length ||

@@ -638,6 +638,8 @@ export function ArtilhariaClient({
             const row = payload.new as { id: string; goals_count: number; player_name: string; team: string; photo_url?: string }
             setScorers(prev => {
               if (prev.find(s => s.id === row.id)) return prev
+              // Ignora INSERT se já existe entry com mesmo nome (evita duplicata por alias)
+              if (prev.find(s => s.player_name.toLowerCase() === row.player_name.toLowerCase())) return prev
               return sortScorers([...prev, { ...row, bettors: [] }])
             })
           }
