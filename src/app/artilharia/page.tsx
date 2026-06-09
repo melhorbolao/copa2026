@@ -143,13 +143,14 @@ export default async function ArtilhariaPage() {
     }
   }
 
-  // ── Monta lista final com apostadores (mescla duplicatas pelo nome normalizado) ──
+  // ── Monta lista final com apostadores (mescla duplicatas pelo nome normalizado, case-insensitive) ──
   const mergedMap = new Map<string, TopScorerItem>()
   for (const s of (allScorers ?? []) as { id: string; player_name: string; team: string; goals_count: number; photo_url?: string }[]) {
     const displayName = normalize(s.player_name)
-    const existing = mergedMap.get(displayName)
+    const mergeKey = displayName.toLowerCase().trim()  // chave case-insensitive evita duplicatas de capitalização
+    const existing = mergedMap.get(mergeKey)
     if (!existing) {
-      mergedMap.set(displayName, {
+      mergedMap.set(mergeKey, {
         id: s.id,
         player_name: displayName,
         team: s.team || '',
@@ -158,14 +159,16 @@ export default async function ArtilhariaPage() {
         bettors: scorerBettors[displayName] ?? [],
       })
     } else {
-      // Mantém o maior goals_count; prioriza a entrada que tem foto
+      // Mantém o maior goals_count; prioriza a entrada que tem foto; usa nome do entry mais completo
       const useThis = s.goals_count > existing.goals_count || (!existing.photo_url && s.photo_url)
       if (useThis) {
-        mergedMap.set(displayName, {
+        mergedMap.set(mergeKey, {
           ...existing,
+          player_name: displayName,
           team: s.team || existing.team || '',
           goals_count: Math.max(existing.goals_count, s.goals_count),
           photo_url: s.photo_url ?? existing.photo_url ?? undefined,
+          bettors: scorerBettors[displayName] ?? existing.bettors,
         })
       }
     }
