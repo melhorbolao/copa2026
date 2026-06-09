@@ -259,6 +259,7 @@ export async function getParticipantesSummaryText(): Promise<string> {
 
   // % médio de preenchimento da Rodada 1 (sempre incluído quando houver dados)
   let round1AvgPct: number | null = null
+  let round1ReadyCount: number | null = null  // pagamento ok + R1 100% preenchido
 
   const round1Matches = (allMatches ?? []).filter(
     (m: { phase: string; round: number | null }) => m.phase === 'group' && m.round === 1
@@ -280,6 +281,7 @@ export async function getParticipantesSummaryText(): Promise<string> {
     for (const b of r1Bets) r1BetCount.set(b.participant_id, (r1BetCount.get(b.participant_id) ?? 0) + 1)
 
     let totalPct = 0
+    let readyCount = 0
     for (const p of (participants ?? [])) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let count = r1BetCount.get(p.id) ?? 0
@@ -291,9 +293,12 @@ export async function getParticipantesSummaryText(): Promise<string> {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       count += Math.min(r1ThrdBets.filter((t: any) => t.participant_id === p.id).length, 8)
       totalPct += Math.min(count / r1Total, 1) * 100
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((p as any).paid && count >= r1Total) readyCount++
     }
 
     round1AvgPct = totalPct / totalParticipants
+    round1ReadyCount = readyCount
   }
 
   const lines: string[] = []
@@ -313,6 +318,10 @@ export async function getParticipantesSummaryText(): Promise<string> {
 
   if (round1AvgPct !== null) {
     lines.push(`% médio de preenchimento (Rodada 1): ${round1AvgPct.toFixed(1).replace('.', ',')}%`)
+  }
+
+  if (round1ReadyCount !== null) {
+    lines.push(`*${round1ReadyCount} participantes 100% prontos (pagamento ok, palpites preenchidos)*`)
   }
 
   return lines.join('\n')
