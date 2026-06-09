@@ -195,9 +195,9 @@ function CompactRanking({
   }
 
   const colsGrid  = sdActive
-    ? 'grid grid-cols-[1.4rem_1.6rem_minmax(5rem,1fr)_2.2rem_2.5rem]'
-    : 'grid grid-cols-[1.5rem_minmax(5rem,1fr)_2rem]'
-  const minW = sdActive ? 860 : 680
+    ? 'grid grid-cols-[1.4rem_1.6rem_1fr_2.2rem_2.5rem]'
+    : 'grid grid-cols-[1.5rem_1fr_2rem]'
+  const minW = sdActive ? 900 : 800
 
   const blockSize = Math.ceil(n / 5)
   const blocks = [0, 1, 2, 3, 4]
@@ -493,8 +493,9 @@ export function ClassificacaoMBClient({
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
-          <table className="w-full text-xs" style={{ minWidth: '480px' }}>
+      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="overflow-x-auto">
+          <table className="w-full text-xs" style={{ minWidth: '900px' }}>
             <thead className="sticky top-0 z-10 border-b border-gray-200 bg-gray-50 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
               <tr>
                 {/* Prêmio (opcional, antes de #) */}
@@ -504,7 +505,7 @@ export function ClassificacaoMBClient({
 
                 {/* Identidade */}
                 <th className="px-1.5 py-2 text-left w-8">#</th>
-                <th className="px-1.5 py-2 text-left min-w-[90px]">Participante</th>
+                <th className="px-1.5 py-2 text-left w-[110px]">Participante</th>
                 <th className="px-1.5 py-2 text-right w-10" title="Pontuação total">Pts</th>
 
                 {/* Último / Próximo jogo */}
@@ -526,10 +527,10 @@ export function ClassificacaoMBClient({
                 )}
 
                 {/* Estatísticas de jogos */}
-                {th('Cravou', 'Jogos Cravados (placar exato)', 'hidden sm:table-cell w-12')}
-                {th('Pontuou', 'Jogos Pontuados', 'hidden sm:table-cell w-14')}
-                {th('🦓 Apost.', '🦓 Apostada — número de apostas em resultados minoritários (possíveis zebras)', 'hidden sm:table-cell w-16')}
-                {th('🦓 Pont.', '🦓 Pontuada — zebras reais em que acertou o resultado', 'hidden sm:table-cell w-14')}
+                {th('Cravou', 'Jogos Cravados (placar exato)', 'table-cell w-12')}
+                {th('Pontuou', 'Jogos Pontuados', 'table-cell w-14')}
+                {th('🦓 Apost.', '🦓 Apostada — número de apostas em resultados minoritários (possíveis zebras)', 'table-cell w-16')}
+                {th('🦓 Pont.', '🦓 Pontuada — zebras reais em que acertou o resultado', 'table-cell w-14')}
 
                 {/* Diferenças */}
                 {th('∆ Líder', 'Diferença pro Líder', 'hidden md:table-cell w-14')}
@@ -544,9 +545,9 @@ export function ClassificacaoMBClient({
                 {/* G4 picks */}
                 {th('1º', 'Aposta: Campeão', 'w-11')}
                 {th('2º', 'Aposta: Vice-campeão', 'w-11')}
-                {th('3°', 'Aposta: 3º Lugar', 'hidden sm:table-cell w-11')}
-                {th('4°', 'Aposta: 4º Lugar', 'hidden sm:table-cell w-11')}
-                <th className="hidden sm:table-cell px-1.5 py-2 text-left min-w-[80px]" title="Aposta: Artilheiro">⚽</th>
+                {th('3°', 'Aposta: 3º Lugar', 'table-cell w-11')}
+                {th('4°', 'Aposta: 4º Lugar', 'table-cell w-11')}
+                <th className="table-cell px-1.5 py-2 text-left min-w-[80px]" title="Aposta: Artilheiro">⚽</th>
               </tr>
             </thead>
             <tbody>
@@ -598,7 +599,7 @@ export function ClassificacaoMBClient({
                       {boundary && <span className={`ml-0.5 ${z === 'last' ? 'text-white' : 'text-amber-500'}`} title="Empate no corte">⚠</span>}
                     </td>
 
-                    <td className={`px-1.5 py-1 max-w-[120px] truncate ${z === 'last' ? 'text-white' : 'text-gray-900'}`}>
+                    <td className={`px-1.5 py-1 max-w-[110px] truncate ${z === 'last' ? 'text-white' : 'text-gray-900'}`}>
                       {row.apelido}
                       {z === 'last' && <span className="ml-1 text-[11px]">🔦</span>}
                       {isActive && highlighted && <span className={`ml-1 text-[10px] ${z === 'last' ? 'text-white' : 'text-verde-600'}`}>◀</span>}
@@ -620,16 +621,16 @@ export function ClassificacaoMBClient({
                     )}
 
                     {/* Estatísticas */}
-                    <td className="hidden sm:table-cell px-1.5 py-1 text-center">
+                    <td className="table-cell px-1.5 py-1 text-center">
                       <Num v={row.cravados} green />
                     </td>
-                    <td className="hidden sm:table-cell px-1.5 py-1 text-center">
+                    <td className="table-cell px-1.5 py-1 text-center">
                       <Num v={row.pontuados} />
                     </td>
-                    <td className="hidden sm:table-cell px-1.5 py-1 text-center">
+                    <td className="table-cell px-1.5 py-1 text-center">
                       <Num v={row.zebraApostada} green />
                     </td>
-                    <td className="hidden sm:table-cell px-1.5 py-1 text-center">
+                    <td className="table-cell px-1.5 py-1 text-center">
                       <Num v={row.zebraPontuada} green />
                     </td>
 
@@ -672,13 +673,13 @@ export function ClassificacaoMBClient({
                     <td className="px-1.5 py-1 text-center">
                       <TeamCell team={row.tournamentBet?.runner_up} abbrs={teamAbbrs} elTeams={elTeams} />
                     </td>
-                    <td className="hidden sm:table-cell px-1.5 py-1 text-center">
+                    <td className="table-cell px-1.5 py-1 text-center">
                       <TeamCell team={row.tournamentBet?.semi1}     abbrs={teamAbbrs} elTeams={elTeams} />
                     </td>
-                    <td className="hidden sm:table-cell px-1.5 py-1 text-center">
+                    <td className="table-cell px-1.5 py-1 text-center">
                       <TeamCell team={row.tournamentBet?.semi2}     abbrs={teamAbbrs} elTeams={elTeams} />
                     </td>
-                    <td className="hidden sm:table-cell px-1.5 py-1 max-w-[100px] truncate">
+                    <td className="table-cell px-1.5 py-1 max-w-[100px] truncate">
                       <ScorerCell raw={row.tournamentBet?.top_scorer} mapping={scorerMapping} elStd={elStd} />
                     </td>
                   </tr>
@@ -686,6 +687,7 @@ export function ClassificacaoMBClient({
               })}
             </tbody>
           </table>
+      </div>
       </div>
     </div>
   )
