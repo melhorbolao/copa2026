@@ -195,9 +195,9 @@ function CompactRanking({
   }
 
   const colsGrid  = sdActive
-    ? 'grid grid-cols-[1.4rem_1.6rem_1fr_2.2rem_2.5rem]'
-    : 'grid grid-cols-[1.5rem_1fr_2rem]'
-  const minW = sdActive ? 600 : 480
+    ? 'grid grid-cols-[1.4rem_1.6rem_minmax(5rem,1fr)_2.2rem_2.5rem]'
+    : 'grid grid-cols-[1.5rem_minmax(5rem,1fr)_2rem]'
+  const minW = sdActive ? 860 : 680
 
   const blockSize = Math.ceil(n / 5)
   const blocks = [0, 1, 2, 3, 4]
@@ -214,7 +214,7 @@ function CompactRanking({
   ]
 
   return (
-    <div className="mb-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+    <div className="mb-6 rounded-2xl border border-gray-200 bg-white shadow-sm">
 
       {/* Header */}
       <div className="border-b border-gray-100 px-4 py-2.5">
@@ -493,9 +493,8 @@ export function ClassificacaoMBClient({
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
+      <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <table className="w-full text-xs" style={{ minWidth: '480px' }}>
             <thead className="sticky top-0 z-10 border-b border-gray-200 bg-gray-50 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
               <tr>
                 {/* Prêmio (opcional, antes de #) */}
@@ -687,7 +686,6 @@ export function ClassificacaoMBClient({
               })}
             </tbody>
           </table>
-        </div>
       </div>
     </div>
   )
