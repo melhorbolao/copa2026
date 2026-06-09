@@ -131,8 +131,9 @@ export default async function ArtilhariaPage() {
     for (const bet of (tBets ?? []) as { participant_id: string; top_scorer: string }[]) {
       if (!bet.top_scorer) continue
       const normalizedName = normalize(bet.top_scorer)
-      if (!scorerBettors[normalizedName]) scorerBettors[normalizedName] = []
-      scorerBettors[normalizedName].push({
+      const betKey = normalizedName.toLowerCase().trim()  // lowercase: consistente com mergeKey
+      if (!scorerBettors[betKey]) scorerBettors[betKey] = []
+      scorerBettors[betKey].push({
         apelido: participantMap[bet.participant_id] ?? '?',
         position: showPositions ? (positionMap[bet.participant_id] ?? null) : null,
       })
@@ -156,7 +157,7 @@ export default async function ArtilhariaPage() {
         team: s.team || '',
         goals_count: s.goals_count,
         photo_url: s.photo_url ?? undefined,
-        bettors: scorerBettors[displayName] ?? [],
+        bettors: scorerBettors[mergeKey] ?? [],  // usa mergeKey (lowercase) para achar apostadores
       })
     } else {
       // Mantém o maior goals_count; prioriza a entrada que tem foto; usa nome do entry mais completo
@@ -168,7 +169,7 @@ export default async function ArtilhariaPage() {
           team: s.team || existing.team || '',
           goals_count: Math.max(existing.goals_count, s.goals_count),
           photo_url: s.photo_url ?? existing.photo_url ?? undefined,
-          bettors: scorerBettors[displayName] ?? existing.bettors,
+          bettors: scorerBettors[mergeKey] ?? existing.bettors,
         })
       }
     }
