@@ -415,7 +415,7 @@ function ScorePanel({ name, score, color, isLeading }: {
         </div>
       )}
       <div className={`text-sm font-bold ${nameColor} mb-2 leading-tight`}>{name}</div>
-      <div className={`text-3xl font-black ${ptsColor}`}>{score?.ptsTotal ?? '—'}</div>
+      <div className={`text-3xl font-black ${ptsColor}`}>{score?.ptsTotal ?? 0}</div>
       <div className="text-xs text-gray-400">pts totais</div>
     </div>
   )
