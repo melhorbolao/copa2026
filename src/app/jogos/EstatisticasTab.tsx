@@ -20,9 +20,10 @@ interface Props {
   matchBets:       MBet[]
   zebraThreshold:  number
   scorerMapping:   Record<string, string>
+  scorerFlagMap?:  Record<string, string>
 }
 
-export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tournamentBets, matchBets, zebraThreshold, scorerMapping }: Props) {
+export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tournamentBets, matchBets, zebraThreshold, scorerMapping, scorerFlagMap = {} }: Props) {
   const groups = useMemo(
     () => [...new Set(teams.map(t => t.group))].filter(Boolean).sort(),
     [teams],
@@ -139,8 +140,8 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
     }
     return [...m.entries()]
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'pt-BR'))
-      .map(([name, count]) => ({ name, count }))
-  }, [tournamentBets, scorerMapping])
+      .map(([name, count]) => ({ name, count, flag: scorerFlagMap[name] ?? '' }))
+  }, [tournamentBets, scorerMapping, scorerFlagMap])
 
   const participantBetStats = useMemo(() => {
     // Distribuição de resultados por partida (para detectar zebra de jogo)
@@ -392,7 +393,12 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
             <tbody className="divide-y divide-gray-50">
               {artilharia.map(a => (
                 <tr key={a.name} className="hover:bg-gray-50/60">
-                  <td className="px-4 py-2 font-medium text-gray-800">{a.name}</td>
+                  <td className="px-4 py-2 font-medium text-gray-800">
+                    <div className="flex items-center gap-1.5">
+                      {a.flag && <Flag code={a.flag} size="sm" className="w-5 h-[14px] shrink-0 rounded-[1px]" />}
+                      {a.name}
+                    </div>
+                  </td>
                   <td className="px-4 py-2 text-right font-bold tabular-nums text-gray-700">{a.count}</td>
                 </tr>
               ))}

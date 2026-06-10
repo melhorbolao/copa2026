@@ -103,12 +103,16 @@ export default async function EstatisticasPage() {
     }))
 
   let scorerMapping: Record<string, string> = {}
+  let scorerFlagMap: Record<string, string> = {}
   try {
-    const { data: mappingRows, error: mappingErr } = await admin.from('top_scorer_mapping').select('raw_name, standardized_name')
+    const { data: mappingRows, error: mappingErr } = await admin.from('top_scorer_mapping').select('raw_name, standardized_name, team')
     if (mappingErr) console.error('[estatisticas] top_scorer_mapping error:', mappingErr.message)
     for (const r of (mappingRows ?? []) as any[]) {
       if (r.raw_name && r.standardized_name) {
         scorerMapping[r.raw_name.toLowerCase().trim()] = r.standardized_name
+        if (r.team && teamFlags[r.team]) {
+          scorerFlagMap[r.standardized_name] = teamFlags[r.team]
+        }
       }
     }
   } catch (e) {
@@ -132,6 +136,7 @@ export default async function EstatisticasPage() {
             )}
             zebraThreshold={zebraThreshold}
             scorerMapping={scorerMapping}
+            scorerFlagMap={scorerFlagMap}
           />
         </div>
       </div>
