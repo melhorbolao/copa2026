@@ -800,6 +800,9 @@ export function TabelaMBClient({
     return bestId
   }, [participants, computedTotals])
 
+  const hasAnyResult = useMemo(() => matches.some(m => m.score_home !== null), [matches])
+  const effectiveLeaderId = hasAnyResult ? leaderId : ''
+
   // If the logged-in user is leading, their column is already the frozen Líder column — don't show twice
   const isActiveLeader    = !!activeParticipantId && activeParticipantId === leaderId
   const displayParts      = isActiveLeader ? otherParts : orderedParts
@@ -1113,11 +1116,11 @@ export function TabelaMBClient({
                 <div className="flex items-center justify-center gap-0.5">
                   <span className="text-[9px] leading-none">🥇</span>
                   <span className="truncate font-semibold text-[9px] text-gray-300" style={{ maxWidth: STAT_COL_W - 18 }}>
-                    {participants.find(p => p.id === leaderId)?.apelido ?? 'Líder'}
+                    {participants.find(p => p.id === effectiveLeaderId)?.apelido ?? 'Líder'}
                   </span>
                 </div>
                 <span className="block text-[11px] font-semibold text-gray-500">
-                  {leaderId && (computedTotals[leaderId] ?? 0) > 0 ? computedTotals[leaderId] : '–'}
+                  {effectiveLeaderId && (computedTotals[effectiveLeaderId] ?? 0) > 0 ? computedTotals[effectiveLeaderId] : '–'}
                 </span>
               </th>
               {displayParts.map((p, idx) => {
@@ -1136,8 +1139,8 @@ export function TabelaMBClient({
                     className={`text-center px-0.5 ${isMe ? 'text-verde-200' : 'text-gray-300'}`}
                   >
                     <div className="flex items-center justify-center gap-0.5">
-                      {p.id === leaderId && <span className="text-[9px] leading-none">🥇</span>}
-                      <span className="truncate font-semibold" style={{ maxWidth: PART_COL_W - (p.id === leaderId ? 16 : 4) }}>{p.apelido}</span>
+                      {p.id === effectiveLeaderId && <span className="text-[9px] leading-none">🥇</span>}
+                      <span className="truncate font-semibold" style={{ maxWidth: PART_COL_W - (p.id === effectiveLeaderId ? 16 : 4) }}>{p.apelido}</span>
                     </div>
                     <span className={`block text-[11px] font-semibold ${isMe ? 'text-verde-300' : 'text-gray-500'}`}>
                       {total > 0 ? total : '–'}
@@ -1222,7 +1225,7 @@ export function TabelaMBClient({
                     {/* Colunas de stats */}
                     {(() => {
                       const stats  = groupStatsMap.get(g) ?? { pontuaram: 0, cravaram: 0, media: 0 }
-                      const lb     = groupBetMap.get(`${leaderId}:${g}`)
+                      const lb     = groupBetMap.get(`${effectiveLeaderId}:${g}`)
                       const lbKind = groupCellKind(lb, of1, of2)
                       const lbBg   = CELL_KIND_BG_HEX[lbKind] || '#eff6ff'
                       const media  = stats.media > 0 ? stats.media.toFixed(1) : '—'
@@ -1323,7 +1326,7 @@ export function TabelaMBClient({
                     {(() => {
                       const thirdPts = rules['terceiro_classificado'] ?? 3
                       const stats    = thirdStatsMap.get(g) ?? { pontuaram: 0, cravaram: 0, media: 0 }
-                      const lb       = thirdBetMap.get(`${leaderId}:${g}`)
+                      const lb       = thirdBetMap.get(`${effectiveLeaderId}:${g}`)
                       const lbKind   = thirdCellKind(lb?.team, ot)
                       const lbPts    = lbKind === 'exact' ? thirdPts : lbKind === 'wrong' ? 0 : null
                       const lbBg     = CELL_KIND_BG_HEX[lbKind] || '#faf5ff'
@@ -1391,7 +1394,7 @@ export function TabelaMBClient({
                 const FULL:   Record<typeof field, string> = { champion: '🏆 Campeão', runner_up: '🥈 Vice', semi1: '3º Lugar', semi2: '4º Lugar' }
                 const official = field === 'champion' ? kr.champion : field === 'runner_up' ? kr.runnerUp : field === 'semi1' ? kr.third : kr.fourth
                 const stats = g4FieldStats(field, participants, tournamentBetMap, knockoutResults, rules, isZebraChampion)
-                const lb = tournamentBetMap.get(leaderId)
+                const lb = tournamentBetMap.get(effectiveLeaderId)
                 const lbVal = lb?.[field] ?? ''
                 const lbPts = lbVal ? scoreG4FieldBet(field, lbVal, knockoutResults, rules, isZebraChampion) : null
                 const lbBg  = lbPts !== null ? (lbPts > 0 ? '#d1fae5' : '#fff1f2') : '#fffbeb'
@@ -1480,7 +1483,7 @@ export function TabelaMBClient({
                     {/* Colunas de stats */}
                     {(() => {
                       const stats     = scorerEventStats(participants, tournamentBetMap, localScorers, artilhPts, scorerMapping)
-                      const lb        = tournamentBetMap.get(leaderId)
+                      const lb        = tournamentBetMap.get(effectiveLeaderId)
                       const rawLb     = lb?.top_scorer ?? ''
                       const lbDisplay = rawLb ? (scorerMapping[rawLb.toLowerCase().trim()] ?? rawLb) : ''
                       const lbCorrect = lbDisplay.length > 0 && localScorers.length > 0
@@ -1620,9 +1623,9 @@ export function TabelaMBClient({
                   {/* Colunas de stats */}
                   {(() => {
                     const stats  = matchStatsMap.get(match.id) ?? { pontuaram: 0, cravaram: 0, media: 0 }
-                    const lb     = betMap.get(`${leaderId}:${match.id}`)
+                    const lb     = betMap.get(`${effectiveLeaderId}:${match.id}`)
                     const lbKind = matchCellKind(lb, match.score_home, match.score_away)
-                    const lbPts  = getMatchPts(leaderId, match.id)
+                    const lbPts  = getMatchPts(effectiveLeaderId, match.id)
                     const lbBg   = CELL_KIND_BG_HEX[lbKind] || bg
                     const media  = stats.media > 0 ? stats.media.toFixed(1) : '—'
                     const s0 = !isMobile ? { position: 'sticky' as const, zIndex: 20, background: bg } : {}
