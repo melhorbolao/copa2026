@@ -105,19 +105,24 @@ export default async function EstatisticasPage() {
   let scorerMapping: Record<string, string> = {}
   let scorerFlagMap: Record<string, string> = {}
   try {
-    const { data: mappingRows, error: mappingErr } = await admin.from('top_scorer_mapping').select('raw_name, standardized_name, team')
+    const { data: mappingRows, error: mappingErr } = await admin.from('top_scorer_mapping').select('raw_name, standardized_name')
     if (mappingErr) console.error('[estatisticas] top_scorer_mapping error:', mappingErr.message)
     for (const r of (mappingRows ?? []) as any[]) {
       if (r.raw_name && r.standardized_name) {
         scorerMapping[r.raw_name.toLowerCase().trim()] = r.standardized_name
-        if (r.team && teamFlags[r.team]) {
-          scorerFlagMap[r.standardized_name] = teamFlags[r.team]
-        }
       }
     }
   } catch (e) {
     console.error('[estatisticas] top_scorer_mapping fetch failed:', e)
   }
+  try {
+    const { data: topScorersData } = await admin.from('top_scorers').select('player_name, team')
+    for (const s of (topScorersData ?? []) as any[]) {
+      if (s.player_name && s.team && teamFlags[s.team]) {
+        scorerFlagMap[s.player_name] = teamFlags[s.team]
+      }
+    }
+  } catch { /* tabela ainda não criada */ }
 
   return (
     <>

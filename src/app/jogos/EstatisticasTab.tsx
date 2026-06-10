@@ -429,7 +429,7 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
               <tr className="bg-gray-50 border-b border-gray-100">
                 <th className="text-left px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wide">Placar</th>
                 <th className="text-right px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wide w-16">Apostas</th>
-                <th className="text-right px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wide w-16">%</th>
+                <th className="text-right px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wide w-20">%</th>
                 <th className="px-4 py-2 w-32 hidden sm:table-cell" />
               </tr>
             </thead>
@@ -438,7 +438,7 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
                 <tr key={s.label} className="hover:bg-gray-50/60">
                   <td className="px-4 py-1.5 font-bold tabular-nums text-gray-800 tracking-wider">{s.label}</td>
                   <td className="px-4 py-1.5 text-right tabular-nums text-gray-600">{s.count.toLocaleString('pt-BR')}</td>
-                  <td className="px-4 py-1.5 text-right tabular-nums font-semibold text-gray-700">{s.pct.toFixed(1) === '0.0' ? '< 0,1%' : `${s.pct.toFixed(1)}%`}</td>
+                  <td className="px-4 py-1.5 text-right tabular-nums font-semibold text-gray-700 whitespace-nowrap">{s.pct.toFixed(1) === '0.0' ? '< 0,1%' : `${s.pct.toFixed(1)}%`}</td>
                   <td className="px-4 py-1.5 hidden sm:table-cell">
                     <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
                       <div
