@@ -591,6 +591,8 @@ export function TabelaMBClient({
 
   const officialStandings = officialContext.standings
   const officialThirds = useMemo(() => rankThirds(officialStandings), [officialStandings])
+  const completeGroupsSet = officialContext.completion.completeGroups
+  const allGroupsComplete = officialContext.completion.allGroupsComplete
 
   const knockoutTeamMap = useMemo(() => {
     const thirdSlots = resolveThirdSlots(officialThirds)
@@ -685,9 +687,9 @@ export function TabelaMBClient({
     return result
   }, [rules, participants, groupBetMap, officialStandings])
 
-  const offFirstMap  = useMemo(() => new Map(GROUP_ORDER.map(g => [g, officialStandings.find(s => s.group === g)?.teams[0]?.team ?? ''])), [officialStandings])
-  const offSecondMap = useMemo(() => new Map(GROUP_ORDER.map(g => [g, officialStandings.find(s => s.group === g)?.teams[1]?.team ?? ''])), [officialStandings])
-  const offThirdMap  = useMemo(() => new Map(GROUP_ORDER.map(g => [g, officialThirds.find(t => t.group === g && t.advances)?.team ?? ''])), [officialThirds])
+  const offFirstMap  = useMemo(() => new Map(GROUP_ORDER.map(g => [g, completeGroupsSet.has(g) ? (officialStandings.find(s => s.group === g)?.teams[0]?.team ?? '') : ''])), [officialStandings, completeGroupsSet])
+  const offSecondMap = useMemo(() => new Map(GROUP_ORDER.map(g => [g, completeGroupsSet.has(g) ? (officialStandings.find(s => s.group === g)?.teams[1]?.team ?? '') : ''])), [officialStandings, completeGroupsSet])
+  const offThirdMap  = useMemo(() => new Map(GROUP_ORDER.map(g => [g, allGroupsComplete ? (officialThirds.find(t => t.group === g && t.advances)?.team ?? '') : ''])), [officialThirds, allGroupsComplete])
 
   const teamFlagMap = useMemo(() => {
     const m = new Map<string, string>()
@@ -778,7 +780,7 @@ export function TabelaMBClient({
         if (gb?.points) sum += gb.points
         const tb = thirdBetMap.get(`${p.id}:${g}`)
         if (tb?.team) {
-          const actualThird = officialThirds.find(t => t.group === g && t.advances)?.team ?? ''
+          const actualThird = allGroupsComplete ? (officialThirds.find(t => t.group === g && t.advances)?.team ?? '') : ''
           if (actualThird && tb.team === actualThird) sum += thirdPts
         }
       })
@@ -787,7 +789,7 @@ export function TabelaMBClient({
       totals[p.id] = sum
     }
     return totals
-  }, [participants, matches, betMap, groupBetMap, thirdBetMap, officialThirds, rules, tournamentBetMap, knockoutResults, isZebraChampion, scorerMapping])
+  }, [participants, matches, betMap, groupBetMap, thirdBetMap, officialThirds, allGroupsComplete, rules, tournamentBetMap, knockoutResults, isZebraChampion, scorerMapping])
 
   const leaderId = useMemo(() => {
     let best = -Infinity, bestId = ''
