@@ -72,7 +72,7 @@ export default async function ArtilhariaPage() {
   for (const m of mappingRows) {
     const key = m.raw_name.toLowerCase().trim()
     const val = (m.standardized_name ?? '').trim()
-    if (val && val.toLowerCase() !== key) nameMap[key] = val
+    if (val) nameMap[key] = val
   }
   const normalize = (name: string) => nameMap[name.toLowerCase().trim()] ?? name
 

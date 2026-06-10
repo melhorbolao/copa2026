@@ -119,7 +119,7 @@ export default async function EstatisticasPage() {
     const { data: topScorersData } = await admin.from('top_scorers').select('player_name, team')
     for (const s of (topScorersData ?? []) as any[]) {
       if (s.player_name && s.team && teamFlags[s.team]) {
-        scorerFlagMap[s.player_name] = teamFlags[s.team]
+        scorerFlagMap[s.player_name.toLowerCase().trim()] = teamFlags[s.team]
       }
     }
   } catch { /* tabela ainda não criada */ }

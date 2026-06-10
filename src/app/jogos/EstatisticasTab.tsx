@@ -140,7 +140,7 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
     }
     return [...m.entries()]
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'pt-BR'))
-      .map(([name, count]) => ({ name, count, flag: scorerFlagMap[name] ?? '' }))
+      .map(([name, count]) => ({ name, count, flag: scorerFlagMap[name.toLowerCase().trim()] ?? '' }))
   }, [tournamentBets, scorerMapping, scorerFlagMap])
 
   const participantBetStats = useMemo(() => {
