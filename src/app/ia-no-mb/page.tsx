@@ -6,6 +6,7 @@ import { Navbar } from '@/components/layout/Navbar'
 import { createClient, createAuthAdminClient } from '@/lib/supabase/server'
 import { requirePageAccess } from '@/lib/page-visibility'
 import { getActiveParticipantId } from '@/lib/participant'
+import { getServerNow } from '@/lib/production-mode'
 import { ImportButton } from './ImportButton'
 import {
   scoreMatchBet, scoreGroupBet, scoreTournamentBet,
@@ -221,6 +222,7 @@ export default async function IaNoMbPage() {
     myThirdBetsRes,
     myTournamentBetRes,
     myParticipantRes,
+    totalParticipantsRes,
   ] = await Promise.all([
     admin.from('ai_models_performance').select('id, model_name, model_version, sort_order, palpites').order('sort_order'),
     supabase.from('matches').select('id, match_number, phase, round, group_name, team_home, team_away, match_datetime, score_home, score_away, is_brazil, betting_deadline').order('match_datetime', { ascending: true }),
@@ -245,7 +247,11 @@ export default async function IaNoMbPage() {
     participantId
       ? supabase.from('participants').select('apelido').eq('id', participantId).maybeSingle()
       : Promise.resolve({ data: null }),
+    admin.from('participants').select('id', { count: 'exact', head: true }),
   ])
+
+  const serverNow = await getServerNow()
+  const isPastDeadline = (deadline: string) => new Date(deadline) <= serverNow
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const aiModels: AiModel[]  = (aiRes.data ?? []) as any[]
@@ -253,6 +259,8 @@ export default async function IaNoMbPage() {
   const matches: Match[]     = (matchesRes.data ?? []) as any[]
   const rules: RuleMap       = Object.fromEntries((rulesRes.data ?? []).map((r: { key: string; points: number }) => [r.key, r.points]))
   const allParticipantTotals = (scoresRes.data ?? []).map((s: { pts_total: number | null }) => s.pts_total ?? 0)
+  const totalParticipants   = (totalParticipantsRes as { count: number | null }).count ?? allParticipantTotals.length
+  const hasRealScores       = allParticipantTotals.some((p: number) => p > 0)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const realGroupBets: RealGroupBet[]       = groupBetsRes as any[]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -262,6 +270,7 @@ export default async function IaNoMbPage() {
   for (const row of (scorerMappingRes.data ?? []) as { raw_name: string; standardized_name: string | null }[]) {
     if (row.standardized_name) scorerMapping[row.raw_name.toLowerCase().trim()] = row.standardized_name
   }
+  const normalizeScorer = (name: string) => scorerMapping[name.toLowerCase().trim()] ?? name
 
   const myBets: MyBet[]        = (myBetsRes.data ?? []) as MyBet[]
   const myGroupBets: MyGroupBet[] = (myGroupBetsRes.data ?? []) as MyGroupBet[]
@@ -272,6 +281,9 @@ export default async function IaNoMbPage() {
   const myBetMap      = new Map(myBets.map(b => [b.match_id, b]))
   const myGroupBetMap = new Map(myGroupBets.map(b => [b.group_name, b]))
   const myThirdBetMap = new Map(myThirdBets.map(b => [b.group_name, b.team]))
+
+  // Palpites de torneio (G4, grupos) ficam visíveis após o primeiro prazo da rodada 1
+  const tournamentStarted = matches.some(m => isPastDeadline(m.betting_deadline))
 
   const knockoutPhases  = new Set(['quarterfinal', 'semifinal', 'third_place', 'final'])
   const knockoutMatches = matches.filter(m => knockoutPhases.has(m.phase))
@@ -297,6 +309,7 @@ export default async function IaNoMbPage() {
 
   let divergeAgree = 0, divergeTotal = 0
   for (const match of matches) {
+    if (!isAdmin && !isPastDeadline(match.betting_deadline)) continue
     const bets = aiModels.map(m => m.palpites.matches[match.id]).filter(Boolean)
     if (bets.length < 2) continue
     divergeTotal++
@@ -366,8 +379,7 @@ export default async function IaNoMbPage() {
               </h2>
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 {aiRanked.map((ai, rankIdx) => {
-                  const pos       = humanRankPosition(ai.score.total)
-                  const totalPart = allParticipantTotals.length
+                  const pos = humanRankPosition(ai.score.total)
                   return (
                     <div key={ai.id} className="relative rounded-xl border border-white/10 bg-azul-dark p-4">
                       {rankIdx === 0 && <span className="absolute right-3 top-3 text-lg">🥇</span>}
@@ -384,14 +396,14 @@ export default async function IaNoMbPage() {
                         <span>📊 Grupos: <span className="text-white/70">{ai.score.groupPts} pts</span></span>
                         <span>🏆 G4+Art: <span className="text-white/70">{ai.score.tournamentPts} pts</span></span>
                       </div>
-                      {totalPart > 0 ? (
+                      {hasRealScores && totalParticipants > 0 ? (
                         <div className="mt-3 rounded-lg bg-azul-mid px-2 py-1.5 text-center">
                           <p className="text-[10px] text-white/50">se fosse humano</p>
-                          <p className="text-xs font-bold text-amarelo-400">{pos}ª posição de {totalPart}</p>
+                          <p className="text-xs font-bold text-amarelo-400">{pos}ª posição de {totalParticipants}</p>
                         </div>
                       ) : (
                         <div className="mt-3 rounded-lg bg-azul-mid px-2 py-1.5 text-center">
-                          <p className="text-[10px] text-white/40">sem participantes ainda</p>
+                          <p className="text-[10px] text-white/40">aguardando resultados</p>
                         </div>
                       )}
                     </div>
@@ -456,11 +468,17 @@ export default async function IaNoMbPage() {
                         <td className="px-3 py-2 font-semibold text-white/60">{label}</td>
                         {showYou && (
                           <td className="px-3 py-2 text-center text-white/80">
-                            {myTournamentBet?.[key] || <span className="text-white/20">—</span>}
+                            {myTournamentBet?.[key]
+                              ? (key === 'top_scorer' ? normalizeScorer(myTournamentBet[key]) : myTournamentBet[key])
+                              : <span className="text-white/20">—</span>}
                           </td>
                         )}
                         {aiScored.map(ai => {
-                          const val = ai.palpites.tournament_bet?.[key]
+                          if (!isAdmin && !tournamentStarted) {
+                            return <td key={ai.id} className="px-3 py-2 text-center text-white/20">—</td>
+                          }
+                          const raw = ai.palpites.tournament_bet?.[key]
+                          const val = raw && key === 'top_scorer' ? normalizeScorer(raw) : raw
                           return (
                             <td key={ai.id} className="px-3 py-2 text-center text-white/70">
                               {val || <span className="text-white/20">—</span>}
@@ -520,7 +538,7 @@ export default async function IaNoMbPage() {
                             )}
                             {aiScored.map(ai => (
                               <td key={ai.id} className="px-3 py-2 text-center text-white/70">
-                                {ai.palpites.group_bets[group]?.first_place || <span className="text-white/20">—</span>}
+                                {(!isAdmin && !tournamentStarted) ? <span className="text-white/20">—</span> : (ai.palpites.group_bets[group]?.first_place || <span className="text-white/20">—</span>)}
                               </td>
                             ))}
                           </tr>
@@ -535,7 +553,7 @@ export default async function IaNoMbPage() {
                             )}
                             {aiScored.map(ai => (
                               <td key={ai.id} className="px-3 py-2 text-center text-white/70">
-                                {ai.palpites.group_bets[group]?.second_place || <span className="text-white/20">—</span>}
+                                {(!isAdmin && !tournamentStarted) ? <span className="text-white/20">—</span> : (ai.palpites.group_bets[group]?.second_place || <span className="text-white/20">—</span>)}
                               </td>
                             ))}
                           </tr>
@@ -550,7 +568,7 @@ export default async function IaNoMbPage() {
                             )}
                             {aiScored.map(ai => (
                               <td key={ai.id} className="px-3 py-2 text-center text-white/70">
-                                {ai.palpites.third_place_bets[group] || <span className="text-white/20">—</span>}
+                                {(!isAdmin && !tournamentStarted) ? <span className="text-white/20">—</span> : (ai.palpites.third_place_bets[group] || <span className="text-white/20">—</span>)}
                               </td>
                             ))}
                           </tr>
@@ -643,6 +661,9 @@ export default async function IaNoMbPage() {
 
                               {/* AI bets */}
                               {aiScored.map(ai => {
+                                if (!isAdmin && !isPastDeadline(match.betting_deadline)) {
+                                  return <td key={ai.id} className="px-3 py-2.5 text-center text-white/20">—</td>
+                                }
                                 const aiBet = ai.palpites.matches[match.id]
                                 const res   = ai.score.perMatch[match.id]
                                 if (!aiBet) {
