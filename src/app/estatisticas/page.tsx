@@ -6,6 +6,7 @@ import { createClient, createAuthAdminClient } from '@/lib/supabase/server'
 import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { EstatisticasTab } from '@/app/jogos/EstatisticasTab'
+import { TEAM_CODES } from '@/lib/team-flags'
 
 export const metadata = {}
 
@@ -118,8 +119,9 @@ export default async function EstatisticasPage() {
   try {
     const { data: topScorersData } = await admin.from('top_scorers').select('player_name, team')
     for (const s of (topScorersData ?? []) as any[]) {
-      if (s.player_name && s.team && teamFlags[s.team]) {
-        scorerFlagMap[s.player_name.toLowerCase().trim()] = teamFlags[s.team]
+      const code = s.team ? TEAM_CODES[s.team] : null
+      if (s.player_name && code) {
+        scorerFlagMap[s.player_name.toLowerCase().trim()] = code
       }
     }
   } catch { /* tabela ainda não criada */ }
