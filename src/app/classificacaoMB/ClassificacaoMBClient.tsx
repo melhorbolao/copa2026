@@ -92,7 +92,7 @@ const ScorerCell = memo(function ScorerCell({ raw, mapping, elStd }: {
   raw: string | undefined; mapping: Record<string, string>; elStd: Set<string>
 }) {
   if (!raw) return <span className="text-gray-300">—</span>
-  const std = mapping[raw] ?? raw
+  const std = mapping[raw.toLowerCase().trim()] ?? raw
   return (
     <span className={elStd.has(std.trim().toLowerCase()) ? 'line-through text-gray-400' : ''} title={raw}>
       {std}
