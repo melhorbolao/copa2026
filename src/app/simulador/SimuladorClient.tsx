@@ -106,7 +106,7 @@ const PHASE_FILTERS = [
 
 const ROW_H        = 44
 const ROW_H_BONUS  = 38
-const ROW_H_SCORER = 80
+const ROW_H_SCORER = 120
 const ROW_H_SEC    = 26
 
 // Frozen column pixel offsets (desktop)
@@ -1844,7 +1844,7 @@ export function SimuladorClient({
                           <span>Art.</span>
                         ) : !bonusIsLocked ? (
                           allBettedScorers.length > 0 ? (
-                            <select multiple size={3}
+                            <select multiple size={5}
                               value={simTournament.top_scorer ? simTournament.top_scorer.split('|').filter(Boolean) : []}
                               onChange={e => {
                                 const selected = Array.from(e.target.selectedOptions).map(o => o.value)
