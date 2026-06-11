@@ -104,7 +104,7 @@ export function SimuladorClient({
   allGroupBets, allThirdBets, allTournamentBets,
   rules, teamAbbrs, teamsByGroup, storedTotals, existingSimulations,
   existingGroupSims, existingThirdSims, existingTournamentSim,
-  bonusUnlocked, officialScorers, scorerMapping,
+  bonusUnlocked, scorerMapping,
 }: Props) {
   const [simMap, setSimMap] = useState<Map<string, SimScore>>(() => {
     const m = new Map<string, SimScore>()
@@ -151,6 +151,32 @@ export function SimuladorClient({
     const t = allTeams.find(x => x.name === team)
     return t?.flag ?? ''
   }, [allTeams])
+
+  // ── Lista de artilheiros apostados (nomes padronizados, únicos) ──────────────
+  const apostadosScorers = useMemo(() => {
+    const seen = new Set<string>()
+    const out: string[] = []
+    for (const tb of allTournamentBets) {
+      if (!tb.top_scorer) continue
+      const norm = scorerMapping[tb.top_scorer.toLowerCase().trim()] ?? tb.top_scorer
+      if (!seen.has(norm)) { seen.add(norm); out.push(norm) }
+    }
+    return out.sort((a, b) => a.localeCompare(b, 'pt-BR'))
+  }, [allTournamentBets, scorerMapping])
+
+  // ── Artilheiros simulados: top_scorer armazena JSON array ───────────────────
+  const simTopScorers = useMemo((): string[] => {
+    if (!tournamentSim.top_scorer) return []
+    try { return JSON.parse(tournamentSim.top_scorer) as string[] }
+    catch { return tournamentSim.top_scorer ? [tournamentSim.top_scorer] : [] }
+  }, [tournamentSim.top_scorer])
+
+  function toggleSimTopScorer(name: string) {
+    const updated = simTopScorers.includes(name)
+      ? simTopScorers.filter(s => s !== name)
+      : [...simTopScorers, name]
+    setTournamentSimField('top_scorer', updated.length > 0 ? JSON.stringify(updated) : '')
+  }
 
   // ── Editable rule ─────────────────────────────────────────────────────────────
   const isEditable = useCallback((m: Match) => {
@@ -207,7 +233,7 @@ export function SimuladorClient({
       runnerUp:      tournamentSim.runner_up || null,
       third:         tournamentSim.semi1 || null,
       fourth:        tournamentSim.semi2 || null,
-      officialScorers: tournamentSim.top_scorer ? [tournamentSim.top_scorer] : [],
+      officialScorers: simTopScorers,
     }
     for (const tb of allTournamentBets) {
       const bet = {
@@ -223,7 +249,7 @@ export function SimuladorClient({
     return result
   }, [
     simMap, visibleMatches, allBets, rules, bonusUnlocked,
-    groupSim, thirdSim, tournamentSim,
+    groupSim, thirdSim, tournamentSim, simTopScorers,
     allGroupBets, allThirdBets, allTournamentBets, scorerMapping,
   ])
 
@@ -368,8 +394,9 @@ export function SimuladorClient({
     })
   }
 
-  // ── Gabaritar (apenas placares de jogos) ──────────────────────────────────────
-  const handleGabaritar = useCallback(async () => {
+  // ── Gabaritar por seção ───────────────────────────────────────────────────────
+
+  const handleGabaritarMatches = useCallback(async () => {
     if (!activeParticipantId) return
     const myBets = allBets.filter(b => b.participant_id === activeParticipantId)
     const nonOfficialEditable = new Set(
@@ -391,31 +418,120 @@ export function SimuladorClient({
         { onConflict: 'user_id,match_id' },
       )
       flashStatus('saved')
-      toast.success(`${toSet.length} palpite${toSet.length !== 1 ? 's' : ''} preenchido${toSet.length !== 1 ? 's' : ''}.`)
-    } catch { flashStatus('error'); toast.error('Erro ao salvar simulações.') }
+      toast.success(`${toSet.length} jogo${toSet.length !== 1 ? 's' : ''} preenchido${toSet.length !== 1 ? 's' : ''}.`)
+    } catch { flashStatus('error'); toast.error('Erro ao salvar.') }
   }, [activeParticipantId, allBets, visibleMatches, isEditable, userId, flashStatus])
 
-  // ── Limpar (todas as simulações) ──────────────────────────────────────────────
-  const handleLimpar = useCallback(async () => {
+  const handleGabaritarGroups = useCallback(async () => {
+    if (!activeParticipantId) return
+    const myBets = allGroupBets.filter(b => b.participant_id === activeParticipantId)
+    if (myBets.length === 0) { toast('Nenhum palpite de grupos disponível.'); return }
+    const updates: Record<string, { first_place: string; second_place: string }> = {}
+    for (const b of myBets) updates[b.group_name] = { first_place: b.first_place ?? '', second_place: b.second_place ?? '' }
+    setGroupSim(prev => ({ ...prev, ...updates }))
+    setSaveStatus('saving')
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase.current as any).from('user_group_simulations').upsert(
+        Object.entries(updates).map(([group_name, u]) => ({
+          user_id: userId, group_name, ...u, updated_at: new Date().toISOString(),
+        })),
+        { onConflict: 'user_id,group_name' },
+      )
+      flashStatus('saved')
+      toast.success(`${myBets.length} grupo${myBets.length !== 1 ? 's' : ''} preenchido${myBets.length !== 1 ? 's' : ''}.`)
+    } catch { flashStatus('error'); toast.error('Erro ao salvar.') }
+  }, [activeParticipantId, allGroupBets, userId, flashStatus])
+
+  const handleGabaritarThirds = useCallback(async () => {
+    if (!activeParticipantId) return
+    const myBets = allThirdBets.filter(b => b.participant_id === activeParticipantId)
+    if (myBets.length === 0) { toast('Nenhum palpite de terceiros disponível.'); return }
+    const myGroupSet = new Set(myBets.map(b => b.group_name))
+    const updates: Record<string, { team: string; qualifies: boolean }> = {}
+    for (const g of groupNames) updates[g] = { team: '', qualifies: false }
+    for (const b of myBets) updates[b.group_name] = { team: b.team ?? '', qualifies: true }
+    setThirdSim(updates)
+    setSaveStatus('saving')
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const c = supabase.current as any
+      await c.from('user_third_simulations').delete().eq('user_id', userId)
+      const rows = Object.entries(updates)
+        .filter(([, v]) => v.team)
+        .map(([group_name, v]) => ({ user_id: userId, group_name, team: v.team, qualifies: v.qualifies, updated_at: new Date().toISOString() }))
+      if (rows.length > 0) await c.from('user_third_simulations').upsert(rows, { onConflict: 'user_id,group_name' })
+      flashStatus('saved')
+      toast.success(`${myGroupSet.size} terceiro${myGroupSet.size !== 1 ? 's' : ''} preenchido${myGroupSet.size !== 1 ? 's' : ''}.`)
+    } catch { flashStatus('error'); toast.error('Erro ao salvar.') }
+  }, [activeParticipantId, allThirdBets, groupNames, userId, flashStatus])
+
+  const handleGabaritarTournament = useCallback(async () => {
+    if (!activeParticipantId) return
+    const myBet = allTournamentBets.find(b => b.participant_id === activeParticipantId)
+    if (!myBet) { toast('Nenhum palpite de G4 disponível.'); return }
+    const rawScorer = myBet.top_scorer ?? ''
+    const normScorer = rawScorer ? (scorerMapping[rawScorer.toLowerCase().trim()] ?? rawScorer) : ''
+    const payload: TournamentSim = {
+      champion:   myBet.champion  ?? '',
+      runner_up:  myBet.runner_up ?? '',
+      semi1:      myBet.semi1     ?? '',
+      semi2:      myBet.semi2     ?? '',
+      top_scorer: normScorer ? JSON.stringify([normScorer]) : '',
+    }
+    setTournamentSim(payload)
+    setSaveStatus('saving')
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase.current as any).from('user_tournament_simulations').upsert(
+        { user_id: userId, ...payload, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id' },
+      )
+      flashStatus('saved')
+      toast.success('G4 e artilheiro preenchidos.')
+    } catch { flashStatus('error'); toast.error('Erro ao salvar.') }
+  }, [activeParticipantId, allTournamentBets, scorerMapping, userId, flashStatus])
+
+  // ── Limpar por seção ──────────────────────────────────────────────────────────
+
+  const handleLimparMatches = useCallback(async () => {
     setSimMap(new Map())
-    setGroupSim({}); setThirdSim({})
+    setSaveStatus('saving')
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase.current as any).from('user_simulations').delete().eq('user_id', userId)
+      flashStatus('saved'); toast.success('Jogos limpos.')
+    } catch { flashStatus('error'); toast.error('Erro ao limpar.') }
+  }, [userId, flashStatus])
+
+  const handleLimparGroups = useCallback(async () => {
+    setGroupSim({})
+    setSaveStatus('saving')
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase.current as any).from('user_group_simulations').delete().eq('user_id', userId)
+      flashStatus('saved'); toast.success('Grupos limpos.')
+    } catch { flashStatus('error'); toast.error('Erro ao limpar.') }
+  }, [userId, flashStatus])
+
+  const handleLimparThirds = useCallback(async () => {
+    setThirdSim({})
+    setSaveStatus('saving')
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase.current as any).from('user_third_simulations').delete().eq('user_id', userId)
+      flashStatus('saved'); toast.success('Terceiros limpos.')
+    } catch { flashStatus('error'); toast.error('Erro ao limpar.') }
+  }, [userId, flashStatus])
+
+  const handleLimparTournament = useCallback(async () => {
     setTournamentSim({ champion: '', runner_up: '', semi1: '', semi2: '', top_scorer: '' })
     setSaveStatus('saving')
     try {
-      const c = supabase.current
-      await Promise.all([
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (c as any).from('user_simulations').delete().eq('user_id', userId),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (c as any).from('user_group_simulations').delete().eq('user_id', userId),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (c as any).from('user_third_simulations').delete().eq('user_id', userId),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (c as any).from('user_tournament_simulations').delete().eq('user_id', userId),
-      ])
-      flashStatus('saved')
-      toast.success('Simulações apagadas.')
-    } catch { flashStatus('error'); toast.error('Erro ao apagar simulações.') }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase.current as any).from('user_tournament_simulations').delete().eq('user_id', userId)
+      flashStatus('saved'); toast.success('G4 e artilheiro limpos.')
+    } catch { flashStatus('error'); toast.error('Erro ao limpar.') }
   }, [userId, flashStatus])
 
   // ── Sort header ───────────────────────────────────────────────────────────────
@@ -440,6 +556,7 @@ export function SimuladorClient({
   return (
     <div className="space-y-4">
 
+      {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-base font-bold text-gray-800">Meu Simulador</h1>
@@ -447,160 +564,26 @@ export function SimuladorClient({
             Projete cenários e veja o impacto no ranking. Os palpites reais não são alterados.
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
           {saveStatus === 'saving' && <span className="text-[11px] text-gray-400">Salvando…</span>}
           {saveStatus === 'saved'  && <span className="text-[11px] text-green-500">Salvo ✓</span>}
           {saveStatus === 'error'  && <span className="text-[11px] text-red-500">Erro ao salvar</span>}
-          <button onClick={handleGabaritar} disabled={!activeParticipantId}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-100 text-amber-800 hover:bg-amber-200 disabled:opacity-40 transition"
-            title="Preenche jogos sem resultado com seus palpites originais">
-            Gabaritar
-          </button>
-          <button onClick={handleLimpar}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200 transition">
-            Limpar tudo
-          </button>
         </div>
       </div>
 
-      {/* Classificação simulada */}
-      <div className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
-        <div className="px-4 pt-3 pb-2 border-b border-gray-100 flex items-center gap-2">
-          <h2 className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Classificação Simulada</h2>
-          {simCount > 0 && <span className="text-[11px] text-amber-500 font-semibold">{simCount} jogo{simCount !== 1 ? 's' : ''} simulado{simCount !== 1 ? 's' : ''}</span>}
-        </div>
-        <div className="overflow-x-auto">
-          <table className="text-xs w-full whitespace-nowrap">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-bold text-gray-400 uppercase tracking-wide">
-                <th onClick={() => handleSort('ptsTotal')}    className="pl-3 pr-2 py-2 text-left  cursor-pointer select-none hover:text-gray-600">#{sortArrow('ptsTotal')}</th>
-                <th onClick={() => handleSort('apelido')}     className="px-2 py-2 text-left  cursor-pointer select-none hover:text-gray-600">Participante{sortArrow('apelido')}</th>
-                <th onClick={() => handleSort('ptsOfficial')} className="px-2 py-2 text-right cursor-pointer select-none hover:text-gray-600">PTS Oficial{sortArrow('ptsOfficial')}</th>
-                <th onClick={() => handleSort('ptsSim')}      className="px-2 py-2 text-right cursor-pointer select-none hover:text-amber-600 text-amber-500">+ Simulação{sortArrow('ptsSim')}</th>
-                <th onClick={() => handleSort('ptsTotal')}    className="pr-3 pl-2 py-2 text-right cursor-pointer select-none hover:text-gray-600">= Total{sortArrow('ptsTotal')}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {ranking.map(row => (
-                <tr key={row.id} className={`hover:bg-gray-50/60 ${row.id === activeParticipantId ? 'bg-amber-50/50' : ''}`}>
-                  <td className="pl-3 pr-2 py-2 font-bold text-gray-400 tabular-nums">{row.rank}</td>
-                  <td className="px-2 py-2 font-medium text-gray-800">{row.apelido}</td>
-                  <td className="px-2 py-2 text-right tabular-nums text-gray-500">{row.ptsOfficial}</td>
-                  <td className="px-2 py-2 text-right tabular-nums font-bold text-amber-600">
-                    {row.ptsSim !== 0 ? (row.ptsSim > 0 ? `+${row.ptsSim}` : `${row.ptsSim}`) : <span className="text-gray-300 font-normal">–</span>}
-                  </td>
-                  <td className="pr-3 pl-2 py-2 text-right tabular-nums font-bold text-gray-800">{row.ptsTotal}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* ── Bonus simulations: 1º/2º, thirds, G4 + artilheiro ────────────────── */}
-      {bonusUnlocked && (
-        <>
-          {/* 1º e 2º de cada grupo */}
-          <div className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-4 pt-3 pb-2 border-b border-gray-100">
-              <h2 className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Simular 1º e 2º de cada grupo</h2>
-              <p className="text-[10px] text-gray-400 mt-0.5">Os pontos de cada participante em group_bets são recalculados contra essas escolhas.</p>
-            </div>
-            <div className="divide-y divide-gray-50">
-              {groupNames.map(g => {
-                const cur = groupSim[g] ?? { first_place: '', second_place: '' }
-                const opts = teamsByGroup[g] ?? []
-                return (
-                  <div key={g} className="px-4 py-2.5 flex items-center gap-3 text-xs">
-                    <span className="font-bold text-gray-400 w-14">Grupo {g}</span>
-                    <TeamSelect label={`1º Grupo ${g}`} value={cur.first_place} options={opts}
-                      excludeValue={cur.second_place}
-                      onChange={v => setGroupSimField(g, 'first_place', v)} />
-                    <TeamSelect label={`2º Grupo ${g}`} value={cur.second_place} options={opts}
-                      excludeValue={cur.first_place}
-                      onChange={v => setGroupSimField(g, 'second_place', v)} />
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* 8 terceiros que se classificam */}
-          <div className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-4 pt-3 pb-2 border-b border-gray-100 flex items-center gap-2">
-              <h2 className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Simular os 8 terceiros classificados</h2>
-              <span className={`text-[10px] font-semibold ${qualifiedThirdsCount === 8 ? 'text-green-600' : 'text-amber-500'}`}>
-                {qualifiedThirdsCount}/8 marcados
-              </span>
-            </div>
-            <p className="px-4 pt-1 text-[10px] text-gray-400">Para cada grupo, escolha o 3º colocado. Marque "classifica" para os 8 que avançam (4 grupos ficam fora).</p>
-            <div className="divide-y divide-gray-50">
-              {groupNames.map(g => {
-                const cur = thirdSim[g] ?? { team: '', qualifies: true }
-                const opts = teamsByGroup[g] ?? []
-                return (
-                  <div key={g} className="px-4 py-2.5 flex items-center gap-3 text-xs">
-                    <span className="font-bold text-gray-400 w-14">Grupo {g}</span>
-                    <TeamSelect label={`3º Grupo ${g}`} value={cur.team} options={opts}
-                      onChange={v => setThirdSimField(g, 'team', v)} />
-                    <label className="flex items-center gap-1.5 cursor-pointer">
-                      <input type="checkbox" checked={cur.qualifies}
-                        onChange={e => setThirdSimField(g, 'qualifies', e.target.checked)}
-                        className="h-3.5 w-3.5 accent-amber-500" />
-                      <span className="text-[11px] text-gray-600">classifica</span>
-                    </label>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* G4 + artilheiro */}
-          <div className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-4 pt-3 pb-2 border-b border-gray-100">
-              <h2 className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Simular G4 e artilheiro</h2>
-            </div>
-            <div className="divide-y divide-gray-50 text-xs">
-              <FieldRow label="Campeão">
-                <TeamSelect label="Campeão" value={tournamentSim.champion} options={allTeams}
-                  onChange={v => setTournamentSimField('champion', v)} />
-              </FieldRow>
-              <FieldRow label="Vice">
-                <TeamSelect label="Vice" value={tournamentSim.runner_up} options={allTeams}
-                  excludeValue={tournamentSim.champion}
-                  onChange={v => setTournamentSimField('runner_up', v)} />
-              </FieldRow>
-              <FieldRow label="3º lugar">
-                <TeamSelect label="3º lugar" value={tournamentSim.semi1} options={allTeams}
-                  excludeValues={[tournamentSim.champion, tournamentSim.runner_up, tournamentSim.semi2]}
-                  onChange={v => setTournamentSimField('semi1', v)} />
-              </FieldRow>
-              <FieldRow label="4º lugar">
-                <TeamSelect label="4º lugar" value={tournamentSim.semi2} options={allTeams}
-                  excludeValues={[tournamentSim.champion, tournamentSim.runner_up, tournamentSim.semi1]}
-                  onChange={v => setTournamentSimField('semi2', v)} />
-              </FieldRow>
-              <FieldRow label="Artilheiro">
-                <input type="text" value={tournamentSim.top_scorer}
-                  onChange={e => setTournamentSimField('top_scorer', e.target.value)}
-                  placeholder={officialScorers.length > 0 ? officialScorers.join(', ') : 'Nome do artilheiro'}
-                  className="rounded border border-gray-200 px-2 py-1 text-xs w-60 focus:outline-none focus:border-amber-400" />
-              </FieldRow>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Inputs de placar de jogo */}
+      {/* ── 1. Jogos sem resultado oficial ───────────────────────────────────────── */}
       {chronologicalMatches.length === 0 ? (
         <div className="rounded-2xl bg-white shadow-sm border border-gray-100 px-4 py-10 text-sm text-center text-gray-400">
           Nenhum jogo disponível para simulação no momento.
         </div>
       ) : (
         <div className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
-          <div className="px-4 pt-3 pb-2 border-b border-gray-100">
-            <h2 className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Jogos sem resultado oficial</h2>
-          </div>
+          <SectionHeader
+            title="Jogos sem resultado oficial"
+            badge={simCount > 0 ? `${simCount} simulado${simCount !== 1 ? 's' : ''}` : undefined}
+            onGabaritar={activeParticipantId ? handleGabaritarMatches : undefined}
+            onLimpar={handleLimparMatches}
+          />
           <div className="divide-y divide-gray-50">
             {chronologicalMatches.map(match => {
               const editable = isEditable(match)
@@ -650,12 +633,217 @@ export function SimuladorClient({
         </div>
       )}
 
-      {/* Hint no início se ainda não rolou nada */}
+      {/* ── 2 + 3 + 5. Seções de bônus ───────────────────────────────────────────── */}
+      {bonusUnlocked && (
+        <>
+          {/* 2. 1º e 2º de cada grupo */}
+          <div className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
+            <SectionHeader
+              title="Simular 1º e 2º de cada grupo"
+              subtitle="Os pontos de cada participante em group_bets são recalculados contra essas escolhas."
+              onGabaritar={activeParticipantId ? handleGabaritarGroups : undefined}
+              onLimpar={handleLimparGroups}
+            />
+            <div className="divide-y divide-gray-50">
+              {groupNames.map(g => {
+                const cur = groupSim[g] ?? { first_place: '', second_place: '' }
+                const opts = teamsByGroup[g] ?? []
+                return (
+                  <div key={g} className="px-4 py-2.5 flex items-center gap-3 text-xs">
+                    <span className="font-bold text-gray-400 w-14">Grupo {g}</span>
+                    <TeamSelect label={`1º Grupo ${g}`} value={cur.first_place} options={opts}
+                      excludeValue={cur.second_place}
+                      onChange={v => setGroupSimField(g, 'first_place', v)} />
+                    <TeamSelect label={`2º Grupo ${g}`} value={cur.second_place} options={opts}
+                      excludeValue={cur.first_place}
+                      onChange={v => setGroupSimField(g, 'second_place', v)} />
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* 3. 8 terceiros que se classificam */}
+          <div className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
+            <SectionHeader
+              title="Simular os 8 terceiros classificados"
+              badge={`${qualifiedThirdsCount}/8 marcados`}
+              badgeColor={qualifiedThirdsCount === 8 ? 'text-green-600' : 'text-amber-500'}
+              subtitle="Para cada grupo, escolha o 3º colocado. Marque &quot;classifica&quot; para os 8 que avançam."
+              onGabaritar={activeParticipantId ? handleGabaritarThirds : undefined}
+              onLimpar={handleLimparThirds}
+            />
+            <div className="divide-y divide-gray-50">
+              {groupNames.map(g => {
+                const cur = thirdSim[g] ?? { team: '', qualifies: true }
+                const opts = teamsByGroup[g] ?? []
+                return (
+                  <div key={g} className="px-4 py-2.5 flex items-center gap-3 text-xs">
+                    <span className="font-bold text-gray-400 w-14">Grupo {g}</span>
+                    <TeamSelect label={`3º Grupo ${g}`} value={cur.team} options={opts}
+                      onChange={v => setThirdSimField(g, 'team', v)} />
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input type="checkbox" checked={cur.qualifies}
+                        onChange={e => setThirdSimField(g, 'qualifies', e.target.checked)}
+                        className="h-3.5 w-3.5 accent-amber-500" />
+                      <span className="text-[11px] text-gray-600">classifica</span>
+                    </label>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── 4. Classificação Simulada ─────────────────────────────────────────────── */}
+      <div className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
+        <div className="px-4 pt-3 pb-2 border-b border-gray-100 flex items-center gap-2">
+          <h2 className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Classificação Simulada</h2>
+          {simCount > 0 && <span className="text-[11px] text-amber-500 font-semibold">{simCount} jogo{simCount !== 1 ? 's' : ''} simulado{simCount !== 1 ? 's' : ''}</span>}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="text-xs w-full whitespace-nowrap">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-bold text-gray-400 uppercase tracking-wide">
+                <th onClick={() => handleSort('ptsTotal')}    className="pl-3 pr-2 py-2 text-left  cursor-pointer select-none hover:text-gray-600">#{sortArrow('ptsTotal')}</th>
+                <th onClick={() => handleSort('apelido')}     className="px-2 py-2 text-left  cursor-pointer select-none hover:text-gray-600">Participante{sortArrow('apelido')}</th>
+                <th onClick={() => handleSort('ptsOfficial')} className="px-2 py-2 text-right cursor-pointer select-none hover:text-gray-600">PTS Oficial{sortArrow('ptsOfficial')}</th>
+                <th onClick={() => handleSort('ptsSim')}      className="px-2 py-2 text-right cursor-pointer select-none hover:text-amber-600 text-amber-500">+ Simulação{sortArrow('ptsSim')}</th>
+                <th onClick={() => handleSort('ptsTotal')}    className="pr-3 pl-2 py-2 text-right cursor-pointer select-none hover:text-gray-600">= Total{sortArrow('ptsTotal')}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {ranking.map(row => (
+                <tr key={row.id} className={`hover:bg-gray-50/60 ${row.id === activeParticipantId ? 'bg-amber-50/50' : ''}`}>
+                  <td className="pl-3 pr-2 py-2 font-bold text-gray-400 tabular-nums">{row.rank}</td>
+                  <td className="px-2 py-2 font-medium text-gray-800">{row.apelido}</td>
+                  <td className="px-2 py-2 text-right tabular-nums text-gray-500">{row.ptsOfficial}</td>
+                  <td className="px-2 py-2 text-right tabular-nums font-bold text-amber-600">
+                    {row.ptsSim !== 0 ? (row.ptsSim > 0 ? `+${row.ptsSim}` : `${row.ptsSim}`) : <span className="text-gray-300 font-normal">–</span>}
+                  </td>
+                  <td className="pr-3 pl-2 py-2 text-right tabular-nums font-bold text-gray-800">{row.ptsTotal}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ── 5. G4 + artilheiro ────────────────────────────────────────────────────── */}
+      {bonusUnlocked && (
+        <div className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
+          <SectionHeader
+            title="Simular G4 e artilheiro"
+            onGabaritar={activeParticipantId ? handleGabaritarTournament : undefined}
+            onLimpar={handleLimparTournament}
+          />
+          <div className="divide-y divide-gray-50 text-xs">
+            <FieldRow label="Campeão">
+              <TeamSelect label="Campeão" value={tournamentSim.champion} options={allTeams}
+                onChange={v => setTournamentSimField('champion', v)} />
+            </FieldRow>
+            <FieldRow label="Vice">
+              <TeamSelect label="Vice" value={tournamentSim.runner_up} options={allTeams}
+                excludeValue={tournamentSim.champion}
+                onChange={v => setTournamentSimField('runner_up', v)} />
+            </FieldRow>
+            <FieldRow label="3º lugar">
+              <TeamSelect label="3º lugar" value={tournamentSim.semi1} options={allTeams}
+                excludeValues={[tournamentSim.champion, tournamentSim.runner_up, tournamentSim.semi2]}
+                onChange={v => setTournamentSimField('semi1', v)} />
+            </FieldRow>
+            <FieldRow label="4º lugar">
+              <TeamSelect label="4º lugar" value={tournamentSim.semi2} options={allTeams}
+                excludeValues={[tournamentSim.champion, tournamentSim.runner_up, tournamentSim.semi1]}
+                onChange={v => setTournamentSimField('semi2', v)} />
+            </FieldRow>
+            <FieldRow label="Artilheiro">
+              <div className="flex-1">
+                {simTopScorers.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {simTopScorers.map(n => (
+                      <span key={n} className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-800">
+                        {n}
+                        <button
+                          onClick={() => toggleSimTopScorer(n)}
+                          className="text-amber-500 hover:text-red-500 transition leading-none ml-0.5"
+                          title="Remover"
+                        >×</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {apostadosScorers.filter(s => !simTopScorers.includes(s)).length > 0 && (
+                  <select
+                    value=""
+                    onChange={e => { if (e.target.value) toggleSimTopScorer(e.target.value) }}
+                    className="rounded border border-gray-200 px-2 py-1 text-xs focus:outline-none focus:border-amber-400"
+                  >
+                    <option value="">+ adicionar artilheiro…</option>
+                    {apostadosScorers.filter(s => !simTopScorers.includes(s)).map(n => (
+                      <option key={n} value={n}>{n}</option>
+                    ))}
+                  </select>
+                )}
+                {apostadosScorers.length === 0 && simTopScorers.length === 0 && (
+                  <span className="text-[11px] text-gray-400 italic">Nenhum artilheiro apostado disponível.</span>
+                )}
+              </div>
+            </FieldRow>
+          </div>
+        </div>
+      )}
+
+      {/* Hint se bônus ainda bloqueado */}
       {!bonusUnlocked && (
         <p className="text-center text-[11px] text-gray-400">
           Simulação de 1º/2º de grupos, 8 terceiros e G4 + artilheiro ficam disponíveis quando o prazo dos palpites bonus acabar.
         </p>
       )}
+    </div>
+  )
+}
+
+// ── SectionHeader ─────────────────────────────────────────────────────────────
+
+function SectionHeader({
+  title, subtitle, badge, badgeColor = 'text-amber-500',
+  onGabaritar, onLimpar,
+}: {
+  title: string
+  subtitle?: string
+  badge?: string
+  badgeColor?: string
+  onGabaritar?: () => void
+  onLimpar?: () => void
+}) {
+  return (
+    <div className="px-4 pt-3 pb-2 border-b border-gray-100 flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h2 className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">{title}</h2>
+          {badge && <span className={`text-[10px] font-semibold ${badgeColor}`}>{badge}</span>}
+        </div>
+        {subtitle && <p className="text-[10px] text-gray-400 mt-0.5">{subtitle}</p>}
+      </div>
+      <div className="flex items-center gap-1.5 shrink-0">
+        {onGabaritar && (
+          <button
+            onClick={onGabaritar}
+            className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-100 text-amber-800 hover:bg-amber-200 transition"
+            title="Preenche com seus palpites originais"
+          >
+            Gabaritar
+          </button>
+        )}
+        <button
+          onClick={onLimpar}
+          className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+        >
+          Limpar
+        </button>
+      </div>
     </div>
   )
 }
@@ -690,8 +878,8 @@ function TeamSelect({
 
 function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="px-4 py-2.5 flex items-center gap-3">
-      <span className="font-bold text-gray-400 w-20 shrink-0">{label}</span>
+    <div className="px-4 py-2.5 flex items-start gap-3">
+      <span className="font-bold text-gray-400 w-20 shrink-0 pt-0.5">{label}</span>
       {children}
     </div>
   )
