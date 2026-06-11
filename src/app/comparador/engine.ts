@@ -98,7 +98,7 @@ export interface DeltaBreakdown {
 
 export interface ProjectionData {
   neutral:      MatchDuelRow[]   // same exact score — Δ always 0
-  concordant:   MatchDuelRow[]   // same column, diff score (or only one bet)
+  concordant:   MatchDuelRow[]   // same column, diff score (both bets visible)
   battlefields: MatchDuelRow[]
   onlyABet:     MatchDuelRow[]
   onlyBBet:     MatchDuelRow[]
@@ -174,8 +174,8 @@ export function buildDuelMatrix(
       } else if (colA && colB && colA !== colB) {
         status = (aMin || bMin) ? 'zebra_battle' : 'battlefield'
       } else {
-        // only one has a bet
-        status = 'concordant'
+        // only one bet visible (other filtered or never bet) — not a concordance
+        status = 'no_bets'
       }
     } else {
       if (!betA && !betB) {

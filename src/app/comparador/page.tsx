@@ -9,7 +9,7 @@ import { Navbar } from '@/components/layout/Navbar'
 import { ComparadorClient } from './ComparadorClient'
 import type { Snapshot } from './DiaDiaSection'
 import { getMatchResult, detectMatchZebra } from '@/lib/scoring/engine'
-import { getVisibilitySettings, isBonusVisible, filterBetsByDeadline, getServerNow } from '@/lib/production-mode'
+import { getVisibilitySettings, isBonusVisible, isMatchBetsVisible, getServerNow } from '@/lib/production-mode'
 import type { MatchInfo, FlatBet, ColPop } from './engine'
 
 // Dados quasi-estáticos: participantes mudam ao aprovação, matches ao resultado,
@@ -172,10 +172,22 @@ export default async function ComparadorPage() {
   const bonusDeadline = rawMatches.find((m: any) => m.phase === 'group' && m.round === 1)?.betting_deadline ?? null
   const bonusVis = isBonusVisible(bonusDeadline, now, visibilitySettings, isAdmin)
   const deadlineByMatch: Record<string, string> = {}
-  for (const m of rawMatches as any[]) deadlineByMatch[m.id] = m.betting_deadline
-  const filteredMatchBets = filterBetsByDeadline(
-    allBets as any[], deadlineByMatch, now, isTestModeAdmin, participantId,
-  )
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const matchById: Record<string, any> = {}
+  for (const m of rawMatches as any[]) {
+    deadlineByMatch[m.id] = m.betting_deadline
+    matchById[m.id] = m
+  }
+  // Apostas alheias: respeita productionMode + releasedRounds (não só o prazo)
+  // Apostas próprias: sempre visíveis após o prazo
+  const filteredMatchBets = (allBets as any[]).filter((bet: any) => {
+    const dl = deadlineByMatch[bet.match_id]
+    if (!dl) return false
+    if (bet.participant_id === participantId) return new Date(dl) <= now
+    const m = matchById[bet.match_id]
+    if (!m) return false
+    return isMatchBetsVisible(m.phase, m.round, dl, now, visibilitySettings, isTestModeAdmin)
+  })
 
   // ── Bets grouped by match ─────────────────────────────────────────────────
   const betsByMatch = groupBy(filteredMatchBets, b => b.match_id)
