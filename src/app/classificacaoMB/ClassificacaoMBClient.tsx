@@ -149,6 +149,27 @@ const ZONE_DOT: Record<Zone, string> = {
   out:    'bg-gray-200',
   last:   'bg-red-400',
 }
+const BANNER_BG: Record<Zone, string> = {
+  premio: 'bg-green-50 border-green-300',
+  corte2: 'bg-sky-50 border-sky-300',
+  corte1: 'bg-amber-50 border-amber-300',
+  out:    'bg-gray-50 border-gray-200',
+  last:   'bg-red-50 border-red-400',
+}
+const BANNER_RANK: Record<Zone, string> = {
+  premio: 'text-green-700',
+  corte2: 'text-sky-700',
+  corte1: 'text-amber-700',
+  out:    'text-gray-600',
+  last:   'text-red-600',
+}
+const ZONE_STATUS: Record<Zone, string> = {
+  premio: '🏆 Zona de premiação',
+  corte2: '2º corte',
+  corte1: '1º corte',
+  out:    'Fora dos cortes',
+  last:   '🔦 Lanterna',
+}
 
 function CompactRanking({
   ranked, premioSpots, isUniqueLast, renderedAt, matchesRegistered, groupsDefined,
@@ -197,10 +218,10 @@ function CompactRanking({
   const colsGrid  = sdActive
     ? 'grid grid-cols-[1.4rem_1.6rem_1fr_2.2rem_2.5rem]'
     : 'grid grid-cols-[1.5rem_1fr_2rem]'
-  const minW = sdActive ? 900 : 800
+  const minW = sdActive ? 1200 : 1000
 
-  const blockSize = Math.ceil(n / 5)
-  const blocks = [0, 1, 2, 3, 4]
+  const blockSize = Math.ceil(n / 7)
+  const blocks = [0, 1, 2, 3, 4, 5, 6]
     .map(i => ranked.slice(i * blockSize, (i + 1) * blockSize))
     .filter(b => b.length > 0)
 
@@ -229,7 +250,7 @@ function CompactRanking({
 
       {/* 5 blocos lado a lado */}
       <div className="overflow-x-auto">
-        <div className="grid grid-cols-5 divide-x divide-gray-100" style={{ minWidth: `${minW}px` }}>
+        <div className="grid grid-cols-7 divide-x divide-gray-100" style={{ minWidth: `${minW}px` }}>
           {blocks.map((block, bi) => (
             <div key={bi}>
               {/* cabeçalho do bloco */}
@@ -247,7 +268,7 @@ function CompactRanking({
                 return (
                   <div
                     key={r.id}
-                    className={`${colsGrid} px-2 py-[3px] text-[11px] ${ZONE_ROW[z]} ${boundary ? 'border-t border-gray-200' : ''} ${sdBorder(r.id)}`}
+                    className={`${colsGrid} px-2 py-[3px] text-[12px] ${ZONE_ROW[z]} ${boundary ? 'border-t border-gray-200' : ''} ${sdBorder(r.id)}`}
                   >
                     <span className={`text-right pr-0.5 tabular-nums ${ZONE_TEXT[z]}`}>{r.rank}</span>
 
@@ -425,6 +446,12 @@ export function ClassificacaoMBClient({
     return atCut.length > 1 && atCut.some(r => r.rank <= prizeSpots) && atCut.some(r => r.rank > prizeSpots)
   }, [ranked, cutPts, prizeSpots])
 
+  const myRow = useMemo(
+    () => ranked.find(r => r.id === activeParticipantId) ?? null,
+    [ranked, activeParticipantId],
+  )
+  const myZone: Zone | null = myRow ? zoneOf(myRow) : null
+
   const th = (label: string, title?: string, cls = '') => (
     <th className={`px-1.5 py-2 text-center whitespace-nowrap ${cls}`} title={title ?? label}>
       {label}
@@ -433,6 +460,38 @@ export function ClassificacaoMBClient({
 
   return (
     <div className="mx-auto max-w-full px-2 py-4 pb-32 sm:px-4 sm:py-6">
+
+      {/* Banner: Minha Posição */}
+      {myRow && myZone && (
+        <div className={`mb-4 rounded-xl border-2 ${BANNER_BG[myZone]} px-4 py-3`}>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <div className="flex items-baseline gap-1.5">
+              <span className={`text-4xl font-black tabular-nums leading-none ${BANNER_RANK[myZone]}`}>
+                #{myRow.rank}
+              </span>
+              <span className="text-sm text-gray-400 leading-none">/ {ranked.length}</span>
+            </div>
+            <div className="flex flex-col min-w-0">
+              <span className="text-base font-bold text-gray-900 leading-tight truncate">{myRow.apelido}</span>
+              <span className="text-xs text-gray-400">{ZONE_STATUS[myZone]}</span>
+            </div>
+            <div className={`text-2xl font-black tabular-nums leading-none ${BANNER_RANK[myZone]}`}>
+              {myRow.pts}<span className="text-sm font-semibold text-gray-400 ml-1">pts</span>
+            </div>
+            <div className="ml-auto flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-500">
+              {myRow.diffLider < 0 && (
+                <span><span className="font-semibold text-red-500">{myRow.diffLider}</span> p/ líder</span>
+              )}
+              {myRow.diffPremio !== null && myRow.diffPremio < 0 && (
+                <span><span className="font-semibold text-red-500">{myRow.diffPremio}</span> p/ prêmio</span>
+              )}
+              {myRow.diffPremio !== null && myRow.diffPremio > 0 && (
+                <span><span className="font-semibold text-green-600">+{myRow.diffPremio}</span> s/ prêmio</span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sobe e Desce — seletor de modo (oculto para usuários quando admin desabilitou) */}
       {sdAllowed && (

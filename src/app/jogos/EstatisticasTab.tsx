@@ -363,12 +363,12 @@ export function EstatisticasTab({ participants, teams, groupBets, thirdBets, tou
                 <td className="px-2 py-2 text-center border-l border-gray-100 tabular-nums text-gray-700">{tot.first   || '–'}</td>
                 <td className="px-2 py-2 text-center tabular-nums text-gray-700">{tot.second  || '–'}</td>
                 <td className="px-2 py-2 text-center tabular-nums text-gray-700">{tot.third   || '–'}</td>
-                <td className="px-2 py-2 text-center tabular-nums text-gray-600">{tot.elim    || '–'}</td>
+                <td className="px-2 py-2 text-center tabular-nums text-gray-600">–</td>
                 <td className="px-2 py-2 text-center border-l border-gray-100 tabular-nums text-gray-700">{tot.champ   || '–'}</td>
                 <td className="px-2 py-2 text-center tabular-nums text-gray-700">{tot.vice    || '–'}</td>
                 <td className="px-2 py-2 text-center tabular-nums text-gray-700">{tot.third4  || '–'}</td>
                 <td className="px-2 py-2 text-center tabular-nums text-gray-700">{tot.fourth  || '–'}</td>
-                <td className="pr-3 pl-2 py-2 text-center tabular-nums text-gray-600">{tot.nemSemi || '–'}</td>
+                <td className="pr-3 pl-2 py-2 text-center tabular-nums text-gray-600">–</td>
               </tr>
             </tfoot>
           </table>

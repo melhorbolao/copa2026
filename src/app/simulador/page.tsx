@@ -16,7 +16,7 @@ import {
   computeGroupCompletion,
 } from '@/lib/bracket/engine'
 import type { MatchSlim, BetSlim } from '@/lib/bracket/engine'
-import { getVisibilitySettings, filterBetsByDeadline } from '@/lib/production-mode'
+import { getVisibilitySettings, filterBetsByDeadline, isBonusVisible, getServerNow } from '@/lib/production-mode'
 
 export const metadata = {}
 
@@ -50,15 +50,12 @@ export default async function SimuladorPage() {
 
   const activeParticipantId = await getActiveParticipantId(supabase, user.id).catch(() => null)
   const admin = createAuthAdminClient() as any
-  const now = new Date().toISOString()
+  const serverNow = await getServerNow()
+  const now = serverNow.toISOString()
   const visibilitySettings = await getVisibilitySettings()
-  const isTestModeAdmin = isAdmin
 
-  // PostgREST aplica max-rows=1000 mesmo com service_role.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async function fetchAll(table: string, select: string): Promise<any[]> {
     const PAGE = 1000
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rows: any[] = []
     let from = 0
     for (;;) {
@@ -98,7 +95,7 @@ export default async function SimuladorPage() {
       .eq('user_id', user.id)
       .then((r: any) => r, () => ({ data: [] })),
     (supabase as any).from('user_third_simulations')
-      .select('group_name, team, qualifies')
+      .select('group_name, team')
       .eq('user_id', user.id)
       .then((r: any) => r, () => ({ data: [] })),
     (supabase as any).from('user_tournament_simulations')
@@ -118,15 +115,14 @@ export default async function SimuladorPage() {
   )
 
   const allMatches    = (matchesRes.data ?? []) as any[]
-  // Filtrar palpites por prazo antes de expor ao cliente
   const deadlineByMatch: Record<string, string> = Object.fromEntries(
     allMatches.map((m: any) => [m.id, m.betting_deadline])
   )
   const allBets = filterBetsByDeadline(
     betsRes as any[],
     deadlineByMatch,
-    new Date(now),
-    isTestModeAdmin,
+    serverNow,
+    isAdmin,
     activeParticipantId,
   )
   const allGroupBets  = groupBetsRes as any[]
@@ -134,11 +130,28 @@ export default async function SimuladorPage() {
   const thirdScores   = (thirdScoresRes.data      ?? []) as any[]
   const allThirdBets  = thirdBetsRes as any[]
 
-  // ── Compute PTS Oficial live (mirrors ClassificacaoMB) ─────────────────────
+  // ── Bonus deadline + visibility ────────────────────────────────────────────
+  const round1Group = allMatches.filter((m: any) => m.phase === 'group' && m.round === 1)
+  const bonusDeadlineIso: string | null = round1Group.length > 0
+    ? round1Group.map((m: any) => m.betting_deadline as string).sort()[0]
+    : null
+  const bonusViz = isBonusVisible(bonusDeadlineIso, serverNow, visibilitySettings, isAdmin)
+  const bonusIsLocked = !bonusViz
+
+  // ── Matches com prazo ainda aberto (bloqueados para simulação) ─────────────
+  const deadlineLockedIds = allMatches
+    .filter((m: any) => m.betting_deadline && m.betting_deadline > now)
+    .map((m: any) => m.id as string)
+
+  // ── Filtrar bets de bônus por visibilidade ─────────────────────────────────
+  const visGroupBets = bonusViz ? allGroupBets : allGroupBets.filter((b: any) => b.participant_id === activeParticipantId)
+  const visThirdBets = bonusViz ? allThirdBets : allThirdBets.filter((b: any) => b.participant_id === activeParticipantId)
+  const visTBets     = bonusViz ? allTBets     : allTBets.filter((b: any) => b.participant_id === activeParticipantId)
+
+  // ── Compute PTS Oficial live (base para split Oficial/+Sim na aba Classificação) ─
 
   const completedMatches = allMatches.filter((m: any) => m.score_home !== null && m.score_away !== null)
 
-  // Zebra per match
   const betsByMatch: Record<string, { score_home: number; score_away: number }[]> = {}
   for (const bet of allBets) {
     if (!betsByMatch[bet.match_id]) betsByMatch[bet.match_id] = []
@@ -153,7 +166,6 @@ export default async function SimuladorPage() {
     )
   }
 
-  // pts from match bets (live)
   const completedMap: Record<string, any> = Object.fromEntries(completedMatches.map((m: any) => [m.id, m]))
   const ptsMatchesMap: Record<string, number> = {}
   for (const bet of allBets) {
@@ -168,17 +180,14 @@ export default async function SimuladorPage() {
     ptsMatchesMap[bet.participant_id] = (ptsMatchesMap[bet.participant_id] ?? 0) + pts
   }
 
-  // pts from group bets (stored in DB)
   const ptsGroupsMap: Record<string, number> = {}
   for (const gb of allGroupBets)
     ptsGroupsMap[gb.participant_id] = (ptsGroupsMap[gb.participant_id] ?? 0) + (gb.points ?? 0)
 
-  // pts from third-place qualifiers (stored in participant_scores)
   const ptsThirdsMap: Record<string, number> = Object.fromEntries(
     thirdScores.map((s: any) => [s.participant_id, s.pts_thirds ?? 0])
   )
 
-  // pts from tournament bets (live via scoreTournamentBet)
   const sfDone  = completedMatches.filter((m: any) => m.phase === 'semifinal')
   const qfDone  = completedMatches.filter((m: any) => m.phase === 'quarterfinal')
   const finDone = completedMatches.filter((m: any) => m.phase === 'final')
@@ -195,17 +204,17 @@ export default async function SimuladorPage() {
   for (const row of (scorerRes.data ?? []) as any[])
     if (row.standardized_name) scorerMapping[row.raw_name.toLowerCase().trim()] = row.standardized_name
 
-  let officialScorers: string[] = []
+  let officialTopScorers: string[] = []
   if (scorerSettingRes.data?.value) {
-    try { officialScorers = JSON.parse(scorerSettingRes.data.value) }
-    catch { officialScorers = [scorerSettingRes.data.value] }
+    try { officialTopScorers = JSON.parse(scorerSettingRes.data.value) }
+    catch { officialTopScorers = [scorerSettingRes.data.value] }
   }
 
   const tournamentResults: TournamentResults = {
     semifinalists, finalists,
     champion: champion ?? null, runnerUp: runnerUp ?? null,
     third: third ?? null, fourth: fourth ?? null,
-    officialScorers,
+    officialScorers: officialTopScorers,
   }
 
   const chamTotal    = allTBets.filter((b: any) => b.champion).length
@@ -221,7 +230,6 @@ export default async function SimuladorPage() {
     )
   }
 
-  // storedTotals = live sum of all four categories
   const participants = (participantsRes.data ?? []) as { id: string; apelido: string }[]
   const storedTotals: Record<string, number> = {}
   for (const p of participants) {
@@ -233,8 +241,6 @@ export default async function SimuladorPage() {
   }
 
   // ── Resolve knockout team names via bracket engine ────────────────────────
-  // Knockout matches in the DB often store placeholder names (e.g. "Vencedor Q1").
-  // The bracket engine derives the real teams from group standings + previous results.
   const groupMatches = allMatches.filter((m: any) => m.phase === 'group')
   const scoreMap = new Map<string, BetSlim>()
   for (const m of groupMatches) {
@@ -261,84 +267,44 @@ export default async function SimuladorPage() {
       )
     : new Map<string, { team_home: string; flag_home: string; team_away: string; flag_away: string }>()
 
-  // ── Filter visible matches and apply team overrides ───────────────────────
-  // Regra: só aparece para simulação se o prazo de envio de palpite já passou.
-  // Vale para todos (inclusive admin).
-  const visibleMatches = allMatches
-    .filter((m: any) => m.betting_deadline && m.betting_deadline <= now)
-    .map((m: any) => {
-      const ov = knockoutTeamMap.get(m.id)
-      if (!ov) return m
-      return {
-        ...m,
-        team_home: ov.team_home || m.team_home,
-        team_away: ov.team_away || m.team_away,
-        flag_home: ov.flag_home || m.flag_home,
-        flag_away: ov.flag_away || m.flag_away,
-      }
-    })
-
-  // ── Bonus deadlines (group_bets / third_place_bets / tournament_bets) ─────
-  // Mesmo prazo: menor betting_deadline da rodada 1 da fase de grupos.
-  const round1Group = allMatches.filter((m: any) => m.phase === 'group' && m.round === 1)
-  const bonusDeadlineIso: string | null = round1Group.length > 0
-    ? round1Group.map((m: any) => m.betting_deadline as string).sort()[0]
-    : null
-  const bonusUnlocked = isAdmin || !!(bonusDeadlineIso && bonusDeadlineIso <= now)
-
-  // Times por grupo (para os pickers do simulador). Vem de teams ou, se a
-  // tabela teams não estiver populada, de matches.
-  const teamsByGroup: Record<string, { name: string; flag: string }[]> = {}
-  for (const t of (teamAbbrRes.data ?? []) as any[]) {
-    if (!t.group_name) continue
-    if (!teamsByGroup[t.group_name]) teamsByGroup[t.group_name] = []
-    if (!teamsByGroup[t.group_name].find(x => x.name === t.name)) {
-      teamsByGroup[t.group_name].push({ name: t.name, flag: '' })
+  // ── Todos os jogos com overrides de times aplicados ───────────────────────
+  const allMatchesWithOverrides = allMatches.map((m: any) => {
+    const ov = knockoutTeamMap.get(m.id)
+    if (!ov) return m
+    return {
+      ...m,
+      team_home: ov.team_home || m.team_home,
+      team_away: ov.team_away || m.team_away,
+      flag_home: ov.flag_home || m.flag_home,
+      flag_away: ov.flag_away || m.flag_away,
     }
-  }
-  // Preenche flags a partir de matches (teams.name pode não ter flag)
-  for (const m of allMatches) {
-    if (!m.group_name) continue
-    const list = teamsByGroup[m.group_name]
-    if (!list) continue
-    for (const [team, flag] of [[m.team_home, m.flag_home], [m.team_away, m.flag_away]] as [string, string][]) {
-      const t = list.find(x => x.name === team)
-      if (t && !t.flag) t.flag = flag
-    }
-  }
-  for (const g of Object.keys(teamsByGroup)) {
-    teamsByGroup[g].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
-  }
+  })
 
   return (
     <>
       <Navbar />
-      <div className="min-h-screen bg-gray-50 pb-16 pt-16 sm:pt-6">
-        <div className="max-w-3xl mx-auto px-3 sm:px-4 py-4">
-          <SimuladorClient
-            userId={user.id}
-            isAdmin={isAdmin}
-            activeParticipantId={activeParticipantId ?? null}
-            participants={participants as any[]}
-            visibleMatches={visibleMatches}
-            allBets={allBets}
-            allGroupBets={allGroupBets}
-            allThirdBets={allThirdBets}
-            allTournamentBets={allTBets}
-            rules={rules}
-            teamAbbrs={teamAbbrs}
-            teamsByGroup={teamsByGroup}
-            storedTotals={storedTotals}
-            existingSimulations={(simRes.data ?? []) as any[]}
-            existingGroupSims={(groupSimRes.data ?? []) as any[]}
-            existingThirdSims={(thirdSimRes.data ?? []) as any[]}
-            existingTournamentSim={tournamentSimRes.data ?? null}
-            bonusUnlocked={bonusUnlocked}
-            officialScorers={officialScorers}
-            scorerMapping={scorerMapping}
-          />
-        </div>
-      </div>
+      <SimuladorClient
+        userId={user.id}
+        isAdmin={isAdmin}
+        activeParticipantId={activeParticipantId ?? ''}
+        participants={participants}
+        initialMatches={allMatchesWithOverrides}
+        initialBets={allBets}
+        initialGroupBets={visGroupBets}
+        initialThirdBets={visThirdBets}
+        initialTournamentBets={visTBets}
+        participantTotals={storedTotals}
+        rules={rules}
+        teamAbbrs={teamAbbrs}
+        lockedMatchIds={deadlineLockedIds}
+        bonusIsLocked={bonusIsLocked}
+        existingSimulations={(simRes.data ?? []) as any[]}
+        existingGroupSims={(groupSimRes.data ?? []) as any[]}
+        existingThirdSims={(thirdSimRes.data ?? []) as any[]}
+        existingTournamentSim={tournamentSimRes.data ?? null}
+        officialTopScorers={officialTopScorers}
+        scorerMapping={scorerMapping}
+      />
     </>
   )
 }

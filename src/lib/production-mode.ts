@@ -110,8 +110,9 @@ export function buildAvailableRounds(
 
 // Returns true if this match's bets should be visible given current settings.
 // Nenhum papel (admin/master/user) pode ver palpites alheios antes do prazo.
-// Após o prazo: admin bypassa o gate de releasedRounds; usuário comum precisa
-// que a rodada esteja explicitamente liberada.
+// Após o prazo:
+//   - Modo teste (productionMode=false): visível para todos
+//   - Modo produção: admin vê tudo; usuário comum precisa de rodada liberada
 export function isMatchBetsVisible(
   phase: string,
   round: number | null,
@@ -121,7 +122,8 @@ export function isMatchBetsVisible(
   isAdmin = false,
 ): boolean {
   if (new Date(betting_deadline) > now) return false     // prazo não passou: oculto para todos
-  if (isAdmin) return true                               // prazo passou: admin vê sem precisar liberar a rodada
+  if (!settings.productionMode) return true              // modo teste: visível para todos após prazo
+  if (isAdmin) return true                               // modo produção: admin vê sem precisar liberar
   return settings.releasedRounds.has(getRoundKey(phase, round))
 }
 
@@ -133,6 +135,7 @@ export function isBonusVisible(
   isAdmin = false,
 ): boolean {
   if (!bonusDeadline || new Date(bonusDeadline) > now) return false  // prazo não passou: oculto para todos
+  if (!settings.productionMode) return true              // modo teste: visível para todos após prazo
   if (isAdmin) return true
   return settings.releasedRounds.has('bonus')
 }
