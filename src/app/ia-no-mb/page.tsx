@@ -7,6 +7,7 @@ import { createClient, createAuthAdminClient } from '@/lib/supabase/server'
 import { requirePageAccess } from '@/lib/page-visibility'
 import { getActiveParticipantId } from '@/lib/participant'
 import { getServerNow } from '@/lib/production-mode'
+import { TEAM_CODES } from '@/lib/team-flags'
 import { ImportButton } from './ImportButton'
 import {
   scoreMatchBet, scoreGroupBet, scoreTournamentBet,
@@ -175,6 +176,81 @@ const G4_ROWS: { key: keyof NonNullable<AIPalpites['tournament_bet']>; label: st
   { key: 'top_scorer', label: 'Artilheiro' },
 ]
 
+// Mapeamento de variantes de nome usadas pelas IAs → nome padrão do bolão
+const TEAM_NORM: Record<string, string> = {
+  'estados unidos': 'EUA', 'usa': 'EUA', 'united states': 'EUA', 'estados unidos da america': 'EUA', 'estados unidos da américa': 'EUA',
+  'paises baixos': 'Holanda', 'países baixos': 'Holanda', 'netherlands': 'Holanda',
+  'republica tcheca': 'Tchéquia', 'república tcheca': 'Tchéquia', 'czech republic': 'Tchéquia', 'tchecia': 'Tchéquia',
+  'congo': 'RD Congo', 'dr congo': 'RD Congo', 'rep. dem. do congo': 'RD Congo',
+  'república democrática do congo': 'RD Congo', 'republica democratica do congo': 'RD Congo',
+  'coreia': 'Coreia do Sul', 'south korea': 'Coreia do Sul', 'korea': 'Coreia do Sul',
+  "côte d'ivoire": 'Costa do Marfim', "cote d'ivoire": 'Costa do Marfim',
+  'qatar': 'Catar',
+  'iran': 'Irã',
+  'uzbekistao': 'Uzbequistão', 'uzbekistão': 'Uzbequistão', 'uzbekistan': 'Uzbequistão',
+  'bosnia-herzegovina': 'Bósnia', 'bósnia-herzegovina': 'Bósnia',
+  'bosnia e herzegovina': 'Bósnia', 'bósnia e herzegovina': 'Bósnia',
+  'new zealand': 'Nova Zelândia', 'nova zelândia': 'Nova Zelândia', 'nova zelandia': 'Nova Zelândia',
+  'algeria': 'Argélia', 'argelia': 'Argélia',
+  'egypt': 'Egito',
+  'tunisia': 'Tunísia', 'tunissia': 'Tunísia',
+  'turkey': 'Turquia',
+  'ghana': 'Gana',
+  'morocco': 'Marrocos',
+  'norway': 'Noruega',
+  'sweden': 'Suécia', 'suecia': 'Suécia',
+  'switzerland': 'Suíça', 'suica': 'Suíça',
+  'canada': 'Canadá',
+  'scotland': 'Escócia', 'escocia': 'Escócia',
+  'colombia': 'Colômbia',
+  'panama': 'Panamá',
+  'saudi arabia': 'Arábia Saudita', 'arabia saudita': 'Arábia Saudita', 'arabia saúdita': 'Arábia Saudita',
+  'mexico': 'México',
+  'japan': 'Japão',
+  'curacao': 'Curaçao',
+  'jordan': 'Jordânia', 'jordania': 'Jordânia',
+  'iraq': 'Iraque',
+  'austria': 'Áustria',
+  'paraguay': 'Paraguai',
+  'ecuador': 'Equador',
+  'uruguay': 'Uruguai',
+  'croatia': 'Croácia', 'croacia': 'Croácia',
+  'belgium': 'Bélgica', 'belgica': 'Bélgica',
+  'france': 'França', 'franca': 'França',
+  'germany': 'Alemanha',
+  'spain': 'Espanha',
+  'brazil': 'Brasil',
+  'australia': 'Austrália',
+  'cape verde': 'Cabo Verde',
+  'africa do sul': 'África do Sul', 'south africa': 'África do Sul', 'africa do sul (rsa)': 'África do Sul',
+  'senegal': 'Senegal',
+  'portugal': 'Portugal',
+  'argentina': 'Argentina',
+  'japao': 'Japão',
+}
+
+function normalizeTeam(raw: string | undefined | null): string {
+  if (!raw) return ''
+  if (TEAM_CODES[raw]) return raw
+  return TEAM_NORM[raw.toLowerCase().trim()] ?? raw
+}
+
+function getAiDuplicates(model: AiModel): Set<string> {
+  const seen = new Set<string>()
+  const dups = new Set<string>()
+  const track = (raw: string | undefined | null) => {
+    const t = normalizeTeam(raw)
+    if (!t) return
+    if (seen.has(t)) dups.add(t); else seen.add(t)
+  }
+  for (const bet of Object.values(model.palpites.group_bets)) {
+    track(bet.first_place)
+    track(bet.second_place)
+  }
+  for (const team of Object.values(model.palpites.third_place_bets)) track(team)
+  return dups
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default async function IaNoMbPage() {
@@ -266,6 +342,12 @@ export default async function IaNoMbPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const realTournamentBets: RealTournamentBet[] = (trnBetsRes.data ?? []) as any[]
 
+  // Bônus: só usa para cálculo de zebra após o prazo da rodada 1 ter vencido
+  const bonusDeadlineStr = matches.find(m => m.phase === 'group' && m.round === 1)?.betting_deadline ?? null
+  const bonusPastDeadline = bonusDeadlineStr ? isPastDeadline(bonusDeadlineStr) : false
+  const realGroupBetsForScore     = bonusPastDeadline ? realGroupBets     : []
+  const realTrnBetsForScore       = bonusPastDeadline ? realTournamentBets : []
+
   const scorerMapping: Record<string, string> = {}
   for (const row of (scorerMappingRes.data ?? []) as { raw_name: string; standardized_name: string | null }[]) {
     if (row.standardized_name) scorerMapping[row.raw_name.toLowerCase().trim()] = row.standardized_name
@@ -288,8 +370,13 @@ export default async function IaNoMbPage() {
   const knockoutPhases  = new Set(['quarterfinal', 'semifinal', 'third_place', 'final'])
   const knockoutMatches = matches.filter(m => knockoutPhases.has(m.phase))
 
+  // Só usa palpites reais de partidas com prazo já vencido para detecção de zebra
+  const pastDeadlineMatchIds = new Set(
+    matches.filter(m => isPastDeadline(m.betting_deadline)).map(m => m.id)
+  )
   const realBetsByMatch = new Map<string, RealBet[]>()
   for (const bet of allRealBets) {
+    if (!pastDeadlineMatchIds.has(bet.match_id)) continue
     const arr = realBetsByMatch.get(bet.match_id) ?? []
     arr.push(bet)
     realBetsByMatch.set(bet.match_id, arr)
@@ -298,8 +385,10 @@ export default async function IaNoMbPage() {
   type AiScored = AiModel & { score: ReturnType<typeof calcAiScore> }
   const aiScored: AiScored[] = aiModels.map(model => ({
     ...model,
-    score: calcAiScore(model, matches, realBetsByMatch, realGroupBets, realTournamentBets, rules, knockoutMatches, scorerMapping),
+    score: calcAiScore(model, matches, realBetsByMatch, realGroupBetsForScore, realTrnBetsForScore, rules, knockoutMatches, scorerMapping),
   }))
+
+  const aiDuplicatesMap = new Map(aiScored.map(ai => [ai.id, getAiDuplicates(ai)]))
 
   const aiRanked = [...aiScored].sort((a, b) => b.score.total - a.score.total)
 
@@ -309,7 +398,7 @@ export default async function IaNoMbPage() {
 
   let divergeAgree = 0, divergeTotal = 0
   for (const match of matches) {
-    if (!isAdmin && !isPastDeadline(match.betting_deadline)) continue
+    if (!isPastDeadline(match.betting_deadline)) continue
     const bets = aiModels.map(m => m.palpites.matches[match.id]).filter(Boolean)
     if (bets.length < 2) continue
     divergeTotal++
@@ -474,11 +563,13 @@ export default async function IaNoMbPage() {
                           </td>
                         )}
                         {aiScored.map(ai => {
-                          if (!isAdmin && !tournamentStarted) {
+                          if (!tournamentStarted) {
                             return <td key={ai.id} className="px-3 py-2 text-center text-white/20">—</td>
                           }
                           const raw = ai.palpites.tournament_bet?.[key]
-                          const val = raw && key === 'top_scorer' ? normalizeScorer(raw) : raw
+                          const val = raw
+                            ? (key === 'top_scorer' ? normalizeScorer(raw) : normalizeTeam(raw))
+                            : undefined
                           return (
                             <td key={ai.id} className="px-3 py-2 text-center text-white/70">
                               {val || <span className="text-white/20">—</span>}
@@ -498,6 +589,16 @@ export default async function IaNoMbPage() {
                 <h2 className="mb-3 text-xs font-bold uppercase tracking-widest text-white/40">
                   Classificação de Grupos
                 </h2>
+                {/* Aviso de países duplicados entre classificados por IA */}
+                {aiScored.map(ai => {
+                  const dups = aiDuplicatesMap.get(ai.id)
+                  if (!dups || dups.size === 0) return null
+                  return (
+                    <div key={ai.id} className="mb-2 rounded-lg border border-amarelo-400/40 bg-amarelo-400/10 px-3 py-2 text-xs text-amarelo-400">
+                      ⚠️ <span className="font-semibold">{aiShortNames[ai.model_name] ?? ai.model_name}</span>: país repetido entre classificados — {[...dups].join(', ')}
+                    </div>
+                  )
+                })}
                 <div className="overflow-x-auto rounded-xl border border-white/10">
                   <table className="min-w-full text-xs">
                     <thead>
@@ -536,11 +637,17 @@ export default async function IaNoMbPage() {
                                 {myGroupBetMap.get(group)?.first_place || <span className="text-white/20">—</span>}
                               </td>
                             )}
-                            {aiScored.map(ai => (
-                              <td key={ai.id} className="px-3 py-2 text-center text-white/70">
-                                {(!isAdmin && !tournamentStarted) ? <span className="text-white/20">—</span> : (ai.palpites.group_bets[group]?.first_place || <span className="text-white/20">—</span>)}
-                              </td>
-                            ))}
+                            {aiScored.map(ai => {
+                              if (!tournamentStarted) return <td key={ai.id} className="px-3 py-2 text-center text-white/20">—</td>
+                              const raw = ai.palpites.group_bets[group]?.first_place
+                              const val = raw ? normalizeTeam(raw) : ''
+                              const isDup = !!val && (aiDuplicatesMap.get(ai.id)?.has(val) ?? false)
+                              return (
+                                <td key={ai.id} className={`px-3 py-2 text-center ${isDup ? 'text-red-400 font-semibold' : 'text-white/70'}`}>
+                                  {val || <span className="text-white/20">—</span>}
+                                </td>
+                              )
+                            })}
                           </tr>
 
                           {/* 2º lugar */}
@@ -551,11 +658,17 @@ export default async function IaNoMbPage() {
                                 {myGroupBetMap.get(group)?.second_place || <span className="text-white/20">—</span>}
                               </td>
                             )}
-                            {aiScored.map(ai => (
-                              <td key={ai.id} className="px-3 py-2 text-center text-white/70">
-                                {(!isAdmin && !tournamentStarted) ? <span className="text-white/20">—</span> : (ai.palpites.group_bets[group]?.second_place || <span className="text-white/20">—</span>)}
-                              </td>
-                            ))}
+                            {aiScored.map(ai => {
+                              if (!tournamentStarted) return <td key={ai.id} className="px-3 py-2 text-center text-white/20">—</td>
+                              const raw = ai.palpites.group_bets[group]?.second_place
+                              const val = raw ? normalizeTeam(raw) : ''
+                              const isDup = !!val && (aiDuplicatesMap.get(ai.id)?.has(val) ?? false)
+                              return (
+                                <td key={ai.id} className={`px-3 py-2 text-center ${isDup ? 'text-red-400 font-semibold' : 'text-white/70'}`}>
+                                  {val || <span className="text-white/20">—</span>}
+                                </td>
+                              )
+                            })}
                           </tr>
 
                           {/* 3º avança */}
@@ -566,11 +679,17 @@ export default async function IaNoMbPage() {
                                 {myThirdBetMap.get(group) || <span className="text-white/20">—</span>}
                               </td>
                             )}
-                            {aiScored.map(ai => (
-                              <td key={ai.id} className="px-3 py-2 text-center text-white/70">
-                                {(!isAdmin && !tournamentStarted) ? <span className="text-white/20">—</span> : (ai.palpites.third_place_bets[group] || <span className="text-white/20">—</span>)}
-                              </td>
-                            ))}
+                            {aiScored.map(ai => {
+                              if (!tournamentStarted) return <td key={ai.id} className="px-3 py-2 text-center text-white/20">—</td>
+                              const raw = ai.palpites.third_place_bets[group]
+                              const val = raw ? normalizeTeam(raw) : ''
+                              const isDup = !!val && (aiDuplicatesMap.get(ai.id)?.has(val) ?? false)
+                              return (
+                                <td key={ai.id} className={`px-3 py-2 text-center ${isDup ? 'text-red-400 font-semibold' : 'text-white/70'}`}>
+                                  {val || <span className="text-white/20">—</span>}
+                                </td>
+                              )
+                            })}
                           </tr>
                         </Fragment>
                       ))}
@@ -661,7 +780,7 @@ export default async function IaNoMbPage() {
 
                               {/* AI bets */}
                               {aiScored.map(ai => {
-                                if (!isAdmin && !isPastDeadline(match.betting_deadline)) {
+                                if (!isPastDeadline(match.betting_deadline)) {
                                   return <td key={ai.id} className="px-3 py-2.5 text-center text-white/20">—</td>
                                 }
                                 const aiBet = ai.palpites.matches[match.id]
