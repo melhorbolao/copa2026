@@ -25,21 +25,6 @@ const getCachedParticipants = unstable_cache(
   { revalidate: 300, tags: ['participants'] },
 )
 
-const getCachedMatches = unstable_cache(
-  async () => {
-    // admin client: não depende de cookies, seguro dentro de unstable_cache
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const admin = createAuthAdminClient() as any
-    const { data } = await admin
-      .from('matches')
-      .select('id, match_number, phase, group_name, round, team_home, team_away, flag_home, flag_away, match_datetime, betting_deadline, score_home, score_away, is_brazil')
-      .order('match_datetime', { ascending: true })
-    return (data ?? []) as object[]
-  },
-  ['comparador:matches'],
-  { revalidate: 60, tags: ['matches'] },
-)
-
 const getCachedScoringRules = unstable_cache(
   async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -111,9 +96,13 @@ export default async function ComparadorPage() {
     scorerMappingRes,
     snapshotsRes,
   ] = await Promise.all([
-    // cacheados: participantes (5 min), partidas (1 min), regras (1 h)
+    // cacheados: participantes (5 min), regras (1 h); partidas: direto (placar precisa ser fresco)
     getCachedParticipants(),
-    getCachedMatches(),
+    admin
+      .from('matches')
+      .select('id, match_number, phase, group_name, round, team_home, team_away, flag_home, flag_away, match_datetime, betting_deadline, score_home, score_away, is_brazil')
+      .order('match_datetime', { ascending: true })
+      .then((r: { data: object[] | null }) => (r.data ?? []) as object[]),
     getCachedScoringRules(),
     // ao vivo: apostas mudam a cada salvamento
     fetchAll('bets', 'participant_id, match_id, score_home, score_away, points'),
