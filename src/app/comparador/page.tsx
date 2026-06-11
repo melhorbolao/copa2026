@@ -108,6 +108,7 @@ export default async function ComparadorPage() {
     allTBetsRes,
     scoresRes,
     visibilitySettings,
+    scorerMappingRes,
     snapshotsRes,
   ] = await Promise.all([
     // cacheados: participantes (5 min), partidas (1 min), regras (1 h)
@@ -122,6 +123,7 @@ export default async function ComparadorPage() {
     admin.from('participant_scores')
       .select('participant_id, pts_matches, pts_groups, pts_thirds, pts_tournament, pts_total'),
     getVisibilitySettings(),
+    admin.from('top_scorer_mapping').select('raw_name, standardized_name'),
     // daily_rankings_snapshot: cresce 200 linhas/dia — pagina com .order() preservado
     (async () => {
       const PAGE = 1000
@@ -149,6 +151,13 @@ export default async function ComparadorPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const scores: any[]     = scoresRes.data ?? []
   const snapshots: Snapshot[] = snapshotsRes as Snapshot[]
+
+  // Mapeamento De-Para de artilheiros
+  const scorerMapping: Record<string, string> = {}
+  for (const row of (scorerMappingRes.data ?? []) as { raw_name: string; standardized_name: string | null }[]) {
+    if (row.standardized_name) scorerMapping[row.raw_name.toLowerCase().trim()] = row.standardized_name
+  }
+  const normalizeScorer = (name: string) => scorerMapping[name.toLowerCase().trim()] ?? name
 
   // ── Build scoring rules map ───────────────────────────────────────────────
   const rulesMap: Record<string, number> = {}
@@ -256,7 +265,7 @@ export default async function ComparadorPage() {
       runner_up:  b.runner_up ?? '',
       semi1:      b.semi1 ?? '',
       semi2:      b.semi2 ?? '',
-      top_scorer: b.top_scorer ?? '',
+      top_scorer: b.top_scorer ? normalizeScorer(b.top_scorer) : '',
     }
   }
 

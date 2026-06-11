@@ -13,7 +13,7 @@ export interface PageVisibilityRow {
 
 const PAGE_ORDER = [
   'jogos', 'palpites', 'acopa', 'tabelaMB', 'classificacaoMB',
-  'estatisticas', 'artilharia', 'simulador', 'comparador', 'minhaPanela', 'participantes', 'pontuacao', 'premiacaoMB', 'regulamento',
+  'estatisticas', 'artilharia', 'simulador', 'comparador', 'minhaPanela', 'participantes', 'premiacaoMB', 'regulamento',
 ]
 
 // Pages that always appear in nav when missing from DB (admin can override once row exists)

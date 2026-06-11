@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
-import { RegulamentoContent } from './RegulamentoContent'
+import { RegulamentoTabs } from './RegulamentoTabs'
 
 export const metadata = {}
 
@@ -183,7 +183,14 @@ Os prazos são sempre às **23:59 (horário de Brasília)**. Na fase de grupos h
 
 export default async function RegulamentoPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const [
+    { data: { user } },
+    { data: rules },
+  ] = await Promise.all([
+    supabase.auth.getUser(),
+    supabase.from('scoring_rules').select('*'),
+  ])
+
   let isAdmin = false
   let userRole = 'user'
   if (user) {
@@ -198,8 +205,12 @@ export default async function RegulamentoPage() {
       <Navbar />
       <div className="mx-auto max-w-3xl px-4 py-8">
         <h1 className="text-3xl font-black text-gray-900 mb-1">Regulamento</h1>
-        <p className="text-sm text-gray-500 mb-8">Melhor Bolão · Copa do Mundo 2026</p>
-        <RegulamentoContent content={REGULAMENTO} />
+        <p className="text-sm text-gray-500 mb-6">Melhor Bolão · Copa do Mundo 2026</p>
+        <RegulamentoTabs
+          regulamentoContent={REGULAMENTO}
+          rules={rules ?? []}
+          isAdmin={isAdmin}
+        />
       </div>
     </>
   )
