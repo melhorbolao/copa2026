@@ -259,7 +259,6 @@ function PalpitesTabPane({
   const isKnockoutEtapa = etapa ? KNOCKOUT_ETAPAS.has(etapa) : false
   const isGroupEtapa    = !etapa || etapa === 'r1' || etapa === 'r2' || etapa === 'r3'
   const groupRound      = etapa === 'r1' ? 1 : etapa === 'r2' ? 2 : etapa === 'r3' ? 3 : null
-  const showBonusBets   = !etapa || etapa === 'r1'
 
   // Etapa específica selecionada e indisponível para este participante:
   // não monta nada e exibe um aviso. 'todos' (etapa vazia) sempre passa —
@@ -329,9 +328,9 @@ function PalpitesTabPane({
 
   const hasAnything = useMemo(
     () => visibleGroupMatches.length > 0
-      || (showBonusBets && visibleGroupOrder.some(g => groupTeams[g]))
+      || (isGroupEtapa && visibleGroupOrder.some(g => groupTeams[g]))
       || visibleKnockoutPhases.some(p => resolvedKnockoutByPhase[p]?.length),
-    [visibleGroupMatches, showBonusBets, visibleGroupOrder, groupTeams, visibleKnockoutPhases, resolvedKnockoutByPhase],
+    [visibleGroupMatches, isGroupEtapa, visibleGroupOrder, groupTeams, visibleKnockoutPhases, resolvedKnockoutByPhase],
   )
 
   const tableHead = (
@@ -408,10 +407,10 @@ function PalpitesTabPane({
                       <MatchBetRow key={m.id} match={m} bet={betMap[m.id] ?? null} />
                     ))}
 
-                    {showBonusBets && visibleGroupOrder.some(g => groupTeams[g]) && (
+                    {isGroupEtapa && visibleGroupOrder.some(g => groupTeams[g]) && (
                       <SectionRow label="Classificação dos Grupos" deadline={tournamentDeadline} sub />
                     )}
-                    {showBonusBets && visibleGroupOrder.map(g => {
+                    {isGroupEtapa && visibleGroupOrder.map(g => {
                       const data = groupTeams[g]
                       if (!data) return null
                       return (
@@ -477,7 +476,7 @@ function PalpitesTabPane({
                 </table>
               </div>
 
-              {showBonusBets && (
+              {isGroupEtapa && (
                 <ThirdPlaceSection
                   groupTeams={groupTeams}
                   deadline={tournamentDeadline}
@@ -491,7 +490,7 @@ function PalpitesTabPane({
                 />
               )}
 
-              {showBonusBets && (
+              {!etapaIsBlocked && (
                 <TournamentSection
                   allTeams={allTeams}
                   deadline={tournamentDeadline}
