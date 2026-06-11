@@ -14,7 +14,7 @@ interface Props {
 }
 
 export function ProjectionSection({ projection, nameA, nameB, deltaMatchesTotal, rulesMap }: Props) {
-  const { neutral, concordant, battlefields, maxSwingA, maxSwingB } = projection
+  const { neutral, concordant, battlefields, pending, maxSwingA, maxSwingB } = projection
 
   const shortA = nameA.split(' ')[0]
   const shortB = nameB.split(' ')[0]
@@ -25,10 +25,13 @@ export function ProjectionSection({ projection, nameA, nameB, deltaMatchesTotal,
       {/* ── Summary cards ── */}
       <div className="space-y-3">
         {/* Row 1: counts */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className={`grid grid-cols-1 gap-3 ${pending.length > 0 ? 'sm:grid-cols-2 md:grid-cols-4' : 'sm:grid-cols-3'}`}>
           <SummaryCard icon="🟰" label="Zona Neutra"          value={neutral.length}     sub="palpites idênticos — Δ sempre 0"         color="gray" />
           <SummaryCard icon="⚔️" label="Campos de Batalha"   value={battlefields.length} sub={`${battlefields.filter(r => r.status === 'zebra_battle').length} com duelo de zebra ⚡`} color="red" />
           <SummaryCard icon="🤝" label="Zona de Concordância" value={concordant.length}   sub="mesma coluna, placares diferentes"       color="teal" />
+          {pending.length > 0 && (
+            <SummaryCard icon="⏳" label="Aguardando"         value={pending.length}     sub="prazo aberto ou sem palpites"            color="amber" />
+          )}
         </div>
         {/* Row 2: max swings */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -289,12 +292,13 @@ function ConcordantRow({ row, rulesMap }: { row: MatchDuelRow; rulesMap: Record<
 
 function SummaryCard({ icon, label, value, sub, color }: {
   icon: string; label: string; value: number; sub: string
-  color: 'teal' | 'red' | 'gray'
+  color: 'teal' | 'red' | 'gray' | 'amber'
 }) {
   const styles = {
-    teal: { border: 'border-teal-200 bg-teal-50', text: 'text-teal-800', sub: 'text-teal-600' },
-    red:  { border: 'border-red-200 bg-red-50',   text: 'text-red-800',  sub: 'text-red-500'  },
-    gray: { border: 'border-gray-200 bg-gray-50',  text: 'text-gray-700', sub: 'text-gray-500' },
+    teal:  { border: 'border-teal-200 bg-teal-50',   text: 'text-teal-800',  sub: 'text-teal-600'  },
+    red:   { border: 'border-red-200 bg-red-50',     text: 'text-red-800',   sub: 'text-red-500'   },
+    gray:  { border: 'border-gray-200 bg-gray-50',   text: 'text-gray-700',  sub: 'text-gray-500'  },
+    amber: { border: 'border-amber-200 bg-amber-50', text: 'text-amber-800', sub: 'text-amber-600' },
   }[color]
 
   return (

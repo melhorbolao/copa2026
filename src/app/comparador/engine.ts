@@ -100,6 +100,7 @@ export interface ProjectionData {
   neutral:      MatchDuelRow[]   // same exact score — Δ always 0
   concordant:   MatchDuelRow[]   // same column, diff score (both bets visible)
   battlefields: MatchDuelRow[]
+  pending:      MatchDuelRow[]   // hidden (prazo aberto) + no_bets (nenhum apostou)
   onlyABet:     MatchDuelRow[]
   onlyBBet:     MatchDuelRow[]
   noBet:        MatchDuelRow[]
@@ -281,9 +282,8 @@ export function computeProjection(
   rows: MatchDuelRow[],
   rules: Record<string, number>,
 ): ProjectionData {
-  const future = rows.filter(r =>
-    r.match.scoreHome === null && r.status !== 'hidden'
-  )
+  // Include ALL non-played games (hidden included) so counts sum to total future games
+  const future = rows.filter(r => r.match.scoreHome === null)
 
   // Split concordant into neutral (identical score) and concordant (same col, diff score)
   const isNeutral = (r: MatchDuelRow) =>
@@ -297,7 +297,9 @@ export function computeProjection(
   const battlefields = future.filter(r => r.status === 'battlefield' || r.status === 'zebra_battle')
   const onlyABet    = future.filter(r => r.betA && !r.betB)
   const onlyBBet    = future.filter(r => r.betB && !r.betA)
-  const noBet       = future.filter(r => !r.betA && !r.betB && r.status !== 'concordant' && r.status !== 'battlefield' && r.status !== 'zebra_battle')
+  const noBet       = future.filter(r => r.status === 'no_bets')
+  // pending = jogos que ainda não puderam ser classificados (prazo aberto ou sem palpites)
+  const pending     = future.filter(r => r.status === 'hidden' || r.status === 'no_bets')
 
   // Max pts a given side can score in a battlefield (includes zebra bonus only if on minority)
   const rowMaxPts = (r: MatchDuelRow, onMinority: boolean) => {
@@ -324,7 +326,7 @@ export function computeProjection(
   const maxSwingA = battlefields.reduce((sum, r) => sum + rowMaxPts(r, r.aOnMinority), 0) + concordantContribA
   const maxSwingB = battlefields.reduce((sum, r) => sum + rowMaxPts(r, r.bOnMinority), 0) + concordantContribB
 
-  return { neutral, concordant, battlefields, onlyABet, onlyBBet, noBet, maxSwingA, maxSwingB }
+  return { neutral, concordant, battlefields, pending, onlyABet, onlyBBet, noBet, maxSwingA, maxSwingB }
 }
 
 // ── Badges ───────────────────────────────────────────────────────────────────
