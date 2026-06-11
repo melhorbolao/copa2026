@@ -91,25 +91,35 @@ export function ComparadorClient(props: Props) {
     return buildDuelMatrix(matches, bA, bB, colPopMap, zebraThreshold, rulesMap, isAdmin)
   }, [pidA, pidB, matches, betsByParticipant, colPopMap, zebraThreshold, rulesMap])
 
-  // Diagnóstico: jogos com placar × palpites disponíveis
+  // Diagnóstico: jogos com placar × palpites × pontos calculados × regras
   const debugInfo = useMemo(() => {
     if (!isAdmin || !pidA || !pidB) return null
     const bA = betsByParticipant[pidA] ?? {}
     const bB = betsByParticipant[pidB] ?? {}
     const played = matches.filter(m => m.scoreHome !== null && m.scoreAway !== null)
+    const playedRows = duelRows.filter(r => r.match.scoreHome !== null)
+    const ruleKeys = ['placar_exato','vencedor_gols_vencedor','vencedor_diferenca_gols',
+                      'vencedor_gols_perdedor','somente_vencedor','empate_gols_errados',
+                      'bonus_zebra_jogo','multiplicador_brasil','percentual_zebra']
     return {
       totalMatches: matches.length,
       playedMatches: played.length,
       betsA: Object.keys(bA).length,
       betsB: Object.keys(bB).length,
-      playedDetail: played.slice(0, 5).map(m => ({
-        n: m.matchNumber,
-        score: `${m.scoreHome}-${m.scoreAway}`,
-        betA: bA[m.id] ? `${bA[m.id].scoreHome}-${bA[m.id].scoreAway}` : 'null',
-        betB: bB[m.id] ? `${bB[m.id].scoreHome}-${bB[m.id].scoreAway}` : 'null',
-      })),
+      playedDetail: played.slice(0, 5).map(m => {
+        const row = playedRows.find(r => r.match.id === m.id)
+        return {
+          n: m.matchNumber,
+          score: `${m.scoreHome}-${m.scoreAway}`,
+          betA: bA[m.id] ? `${bA[m.id].scoreHome}-${bA[m.id].scoreAway}` : 'null',
+          betB: bB[m.id] ? `${bB[m.id].scoreHome}-${bB[m.id].scoreAway}` : 'null',
+          ptsA: row?.ptsA ?? '?',
+          ptsB: row?.ptsB ?? '?',
+        }
+      }),
+      rules: ruleKeys.map(k => `${k}=${rulesMap[k] ?? 'undef'}`).join(' | '),
     }
-  }, [isAdmin, pidA, pidB, matches, betsByParticipant])
+  }, [isAdmin, pidA, pidB, matches, betsByParticipant, duelRows, rulesMap])
 
   const breakdown = useMemo(() =>
     computeBreakdown(duelRows, rulesMap), [duelRows, rulesMap])
@@ -195,8 +205,9 @@ export function ComparadorClient(props: Props) {
             <div>Partidas carregadas: {debugInfo.totalMatches} | Com placar: {debugInfo.playedMatches}</div>
             <div>Palpites A: {debugInfo.betsA} | Palpites B: {debugInfo.betsB}</div>
             {debugInfo.playedDetail.map(d => (
-              <div key={d.n}>Jogo #{d.n} [{d.score}] — A: {d.betA} | B: {d.betB}</div>
+              <div key={d.n}>Jogo #{d.n} [{d.score}] — A: {d.betA} ({d.ptsA}pts) | B: {d.betB} ({d.ptsB}pts)</div>
             ))}
+            <div className="mt-1 break-all">{debugInfo.rules}</div>
           </div>
         </details>
       )}
