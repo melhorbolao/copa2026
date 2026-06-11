@@ -351,19 +351,8 @@ const ScoreInput = memo(function ScoreInput({
 
   const hasScore = match.score_home !== null && match.score_away !== null
 
-  if (!canEdit) {
-    if (!hasScore) {
-      // Mostra indicadores de possível zebra mesmo em modo leitura
-      const pz = possibleZebras
-      if (!pz || (!pz.H && !pz.D && !pz.A)) return <span className="text-gray-300 text-xs">–</span>
-      return (
-        <div className="inline-flex items-center gap-0.5">
-          <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[9px] ${pz.H ? 'bg-gray-900' : 'bg-gray-100 border border-gray-200'}`} />
-          <span className={`text-[9px] font-bold ${pz.D ? 'rounded bg-gray-900 text-white px-0.5' : 'text-gray-300'}`}>×</span>
-          <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[9px] ${pz.A ? 'bg-gray-900' : 'bg-gray-100 border border-gray-200'}`} />
-        </div>
-      )
-    }
+  // Resultado já conhecido: sempre mostra display read-only com distinção de cores de zebra
+  if (hasScore) {
     const result = getMatchResult(match.score_home!, match.score_away!)
     const zebraScoreCls = isActualZebraBet ? 'bg-gray-900 text-white' : 'bg-gray-500 text-white'
     const zebraDrawCls  = isActualZebraBet ? 'rounded bg-gray-900 text-white px-0.5' : 'rounded bg-gray-500 text-white px-0.5'
@@ -380,12 +369,22 @@ const ScoreInput = memo(function ScoreInput({
     )
   }
 
+  if (!canEdit) {
+    // Sem resultado ainda, modo leitura: mostra indicadores de possível zebra
+    const pz = possibleZebras
+    if (!pz || (!pz.H && !pz.D && !pz.A)) return <span className="text-gray-300 text-xs">–</span>
+    return (
+      <div className="inline-flex items-center gap-0.5">
+        <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[9px] ${pz.H ? 'bg-gray-900' : 'bg-gray-100 border border-gray-200'}`} />
+        <span className={`text-[9px] font-bold ${pz.D ? 'rounded bg-gray-900 text-white px-0.5' : 'text-gray-300'}`}>×</span>
+        <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[9px] ${pz.A ? 'bg-gray-900' : 'bg-gray-100 border border-gray-200'}`} />
+      </div>
+    )
+  }
+
   const currentH = parseInt(home, 10)
   const currentA = parseInt(away, 10)
   const currentResult = (!isNaN(currentH) && !isNaN(currentA)) ? getMatchResult(currentH, currentA) : null
-
-  const zebraInputCls  = isActualZebraBet ? 'border-gray-700 bg-gray-900 text-white placeholder-gray-500 focus:border-gray-600' : 'border-gray-500 bg-gray-500 text-white placeholder-gray-300 focus:border-gray-400'
-  const zebraInputXCls = isActualZebraBet ? 'rounded bg-gray-900 text-white px-0.5' : 'rounded bg-gray-500 text-white px-0.5'
 
   return (
     <div className="flex items-center justify-center gap-0.5">
@@ -393,23 +392,19 @@ const ScoreInput = memo(function ScoreInput({
         onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0,2); setHome(v); homeRef.current = v; triggerSave(v, awayRef.current) }}
         placeholder="–"
         className={`w-7 rounded border text-center text-xs font-bold py-0.5 focus:outline-none ${
-          possibleZebras?.H       ? 'border-gray-700 bg-gray-900 text-white placeholder-gray-500 focus:border-gray-600'
-          : isActualZebra && currentResult === 'H' ? zebraInputCls
-          : 'border-gray-200 bg-white focus:border-verde-400'
+          possibleZebras?.H
+            ? 'border-gray-700 bg-gray-900 text-white placeholder-gray-500 focus:border-gray-600'
+            : 'border-gray-200 bg-white focus:border-verde-400'
         }`}
       />
-      <span className={`text-[9px] font-bold ${
-        possibleZebras?.D ? 'rounded bg-gray-900 text-white px-0.5'
-        : isActualZebra && currentResult === 'D' ? zebraInputXCls
-        : 'text-gray-300'
-      }`}>×</span>
+      <span className={`text-[9px] font-bold ${possibleZebras?.D ? 'rounded bg-gray-900 text-white px-0.5' : 'text-gray-300'}`}>×</span>
       <input type="text" inputMode="numeric" pattern="[0-9]*" value={away}
         onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0,2); setAway(v); awayRef.current = v; triggerSave(homeRef.current, v) }}
         placeholder="–"
         className={`w-7 rounded border text-center text-xs font-bold py-0.5 focus:outline-none ${
-          possibleZebras?.A       ? 'border-gray-700 bg-gray-900 text-white placeholder-gray-500 focus:border-gray-600'
-          : isActualZebra && currentResult === 'A' ? zebraInputCls
-          : 'border-gray-200 bg-white focus:border-verde-400'
+          possibleZebras?.A
+            ? 'border-gray-700 bg-gray-900 text-white placeholder-gray-500 focus:border-gray-600'
+            : 'border-gray-200 bg-white focus:border-verde-400'
         }`}
       />
       {pending && <span className="text-[9px] text-gray-400 ml-0.5">…</span>}
