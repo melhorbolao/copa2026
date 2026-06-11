@@ -109,7 +109,9 @@ export function buildAvailableRounds(
 }
 
 // Returns true if this match's bets should be visible given current settings.
-// isAdmin: admins sempre veem tudo, independente do productionMode.
+// Nenhum papel (admin/master/user) pode ver palpites alheios antes do prazo.
+// Após o prazo: admin bypassa o gate de releasedRounds; usuário comum precisa
+// que a rodada esteja explicitamente liberada.
 export function isMatchBetsVisible(
   phase: string,
   round: number | null,
@@ -118,8 +120,8 @@ export function isMatchBetsVisible(
   settings: VisibilitySettings,
   isAdmin = false,
 ): boolean {
-  if (isAdmin) return true                               // admin: vê tudo sempre
-  if (new Date(betting_deadline) > now) return false     // prazo não passou: oculto
+  if (new Date(betting_deadline) > now) return false     // prazo não passou: oculto para todos
+  if (isAdmin) return true                               // prazo passou: admin vê sem precisar liberar a rodada
   return settings.releasedRounds.has(getRoundKey(phase, round))
 }
 
@@ -130,23 +132,21 @@ export function isBonusVisible(
   settings: VisibilitySettings,
   isAdmin = false,
 ): boolean {
+  if (!bonusDeadline || new Date(bonusDeadline) > now) return false  // prazo não passou: oculto para todos
   if (isAdmin) return true
-  if (!bonusDeadline || new Date(bonusDeadline) > now) return false
   return settings.releasedRounds.has('bonus')
 }
 
 // Filtra palpites pelo prazo da partida.
-// - Admin: vê todos sempre.
-// - Demais: vê só palpites de partidas cujo prazo já passou,
-//   mais os seus próprios (ownParticipantId) para qualquer partida.
+// Ninguém (nem admin nem master) vê palpites alheios de partidas com prazo aberto.
+// O participante sempre vê os seus próprios (ownParticipantId).
 export function filterBetsByDeadline<T extends { match_id: string; participant_id?: string }>(
   bets: T[],
   deadlineByMatch: Record<string, string>,   // match_id → betting_deadline ISO string
   now: Date,
-  isTestModeAdmin: boolean,
+  _isAdmin: boolean,                         // mantido para compatibilidade, não tem mais efeito
   ownParticipantId?: string | null,
 ): T[] {
-  if (isTestModeAdmin) return bets
   return bets.filter(bet => {
     const dl = deadlineByMatch[bet.match_id]
     if (!dl) return false

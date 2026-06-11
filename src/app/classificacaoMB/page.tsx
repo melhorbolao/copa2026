@@ -76,7 +76,6 @@ export default async function ClassificacaoMBPage() {
   }
 
   const [visibilitySettings] = await Promise.all([getVisibilitySettings()])
-  const isTestModeAdmin = isAdmin
 
   // ── Fetch #1: dados base ───────────────────────────────────────────────────
   const [participantsRes, matchesRes, betsRes, groupBetsRes, tournamentBetsRes, scoresRes, rulesRes] = await Promise.all([
@@ -372,7 +371,7 @@ export default async function ClassificacaoMBPage() {
     const betDeadline = deadlineByMatchId.get(bet.match_id)
     const betDeadlinePassed = betDeadline && new Date(betDeadline) <= now
     const dist = matchResultDist[bet.match_id]
-    if (dist && dist.total > 0 && (isTestModeAdmin || betDeadlinePassed)) {
+    if (dist && dist.total > 0 && betDeadlinePassed) {
       const betRes = getMatchResult(bet.score_home, bet.score_away)
       if ((dist[betRes] / dist.total) * 100 <= zebraThreshold)
         zebraApostMap[pid] = (zebraApostMap[pid] ?? 0) + 1
