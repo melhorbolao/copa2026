@@ -1,5 +1,6 @@
 'use server'
 
+import { revalidateTag } from 'next/cache'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { recalculateAfterMatchScore, recalculateTournamentBets } from '@/lib/scoring/recalculate'
 
@@ -77,6 +78,7 @@ export async function saveOfficialScore(
       .eq('id', matchId)
 
     if (error) return { error: error.message }
+    revalidateTag('matches')
     recalculateAfterMatchScore(matchId).catch(e => console.error('[scoring/match]', e))
     return {}
   } catch (err) {
