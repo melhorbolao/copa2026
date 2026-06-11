@@ -174,8 +174,8 @@ export function buildDuelMatrix(
       } else if (colA && colB && colA !== colB) {
         status = (aMin || bMin) ? 'zebra_battle' : 'battlefield'
       } else {
-        // only one bet visible (other filtered or never bet) — not a concordance
-        status = 'no_bets'
+        // only one has a bet — no conflict expected
+        status = 'concordant'
       }
     } else {
       if (!betA && !betB) {

@@ -178,12 +178,14 @@ export default async function ComparadorPage() {
     deadlineByMatch[m.id] = m.betting_deadline
     matchById[m.id] = m
   }
-  // Apostas alheias: respeita productionMode + releasedRounds (não só o prazo)
-  // Apostas próprias: sempre visíveis após o prazo
+  // Antes do prazo: só apostas próprias (comportamento padrão).
+  // Após o prazo: productionMode + releasedRounds se aplicam a TODOS (inclusive
+  // apostas próprias), garantindo que rodadas não liberadas não apareçam na
+  // projeção mesmo que o prazo único já tenha passado (cenário Copa 2026).
   const filteredMatchBets = (allBets as any[]).filter((bet: any) => {
     const dl = deadlineByMatch[bet.match_id]
     if (!dl) return false
-    if (bet.participant_id === participantId) return new Date(dl) <= now
+    if (new Date(dl) > now) return !!participantId && bet.participant_id === participantId
     const m = matchById[bet.match_id]
     if (!m) return false
     return isMatchBetsVisible(m.phase, m.round, dl, now, visibilitySettings, isTestModeAdmin)
