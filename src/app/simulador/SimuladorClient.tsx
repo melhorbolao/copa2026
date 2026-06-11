@@ -95,6 +95,7 @@ interface Props {
 const GROUP_ORDER = ['A','B','C','D','E','F','G','H','I','J','K','L']
 
 const PHASE_FILTERS = [
+  { value: 'all',   label: 'Todos',   phases: ['group', 'round_of_32', 'round_of_16', 'quarterfinal', 'semifinal', 'third_place', 'final'] },
   { value: 'group', label: 'Grupos',  phases: ['group'] },
   { value: 'r32',   label: '16avos',  phases: ['round_of_32'] },
   { value: 'r16',   label: 'Oitavas', phases: ['round_of_16'] },
@@ -103,9 +104,10 @@ const PHASE_FILTERS = [
   { value: 'final', label: 'Final',   phases: ['third_place', 'final'] },
 ] as const
 
-const ROW_H       = 44
-const ROW_H_BONUS = 38
-const ROW_H_SEC   = 26
+const ROW_H        = 44
+const ROW_H_BONUS  = 38
+const ROW_H_SCORER = 80
+const ROW_H_SEC    = 26
 
 // Frozen column pixel offsets (desktop)
 const COL_DATE_DESKTOP  = 48
@@ -460,7 +462,7 @@ export function SimuladorClient({
 }: Props) {
   const [matches, setMatches] = useState<MatchFull[]>(initialMatches)
   const [betMap,  setBetMap]  = useState<BetMap>(() => buildBetMap(initialBets))
-  const [phase,   setPhase]   = useState('group')
+  const [phase,   setPhase]   = useState('all')
   const [isMobile, setIsMobile] = useState(false)
   const [tab, setTab] = useState<'tabela' | 'classificacao'>('tabela')
   const [isGabaritando, setIsGabaritando] = useState(false)
@@ -529,6 +531,7 @@ export function SimuladorClient({
     const seen = new Set<string>()
     const teams: { name: string; flag: string }[] = []
     for (const match of matches) {
+      if (match.phase !== 'group') continue
       for (const [team, flag] of [[match.team_home, match.flag_home], [match.team_away, match.flag_away]] as [string, string][]) {
         if (!seen.has(team)) { seen.add(team); teams.push({ name: team, flag }) }
       }
@@ -558,6 +561,17 @@ export function SimuladorClient({
     for (const b of initialTournamentBets) m.set(b.participant_id, b)
     return m
   }, [initialTournamentBets])
+
+  const allBettedScorers = useMemo(() => {
+    const seen = new Set<string>()
+    const result: string[] = []
+    for (const bet of tournamentBetMap.values()) {
+      if (!bet.top_scorer) continue
+      const norm = scorerMapping[bet.top_scorer.toLowerCase().trim()] ?? bet.top_scorer
+      if (!seen.has(norm)) { seen.add(norm); result.push(norm) }
+    }
+    return result.sort((a, b) => a.localeCompare(b, 'pt-BR'))
+  }, [tournamentBetMap, scorerMapping])
 
   // Mobile breakpoint (< 640px)
   useEffect(() => {
@@ -668,20 +682,21 @@ export function SimuladorClient({
   const filteredMatches = useMemo(
     () => matches
       .filter(m => (phaseConfig.phases as readonly string[]).includes(m.phase))
+      .filter(m => !lockedSet.has(m.id))
       .sort((a, b) => new Date(a.match_datetime).getTime() - new Date(b.match_datetime).getTime()),
-    [matches, phaseConfig],
+    [matches, phaseConfig, lockedSet],
   )
 
   // Build unified row list
   const allRows = useMemo((): TableRow[] => {
     const rows: TableRow[] = filteredMatches.map(m => ({ kind: 'match', match: m }))
-    if (phase === 'group') {
+    if (phase === 'group' || phase === 'all') {
       rows.push({ kind: 'section', label: '1º e 2º Classificados por Grupo', color: '#1e3a5f' })
       GROUP_ORDER.forEach(g => rows.push({ kind: 'group_bet', groupName: g }))
       rows.push({ kind: 'section', label: 'Melhores Terceiros Classificados', color: '#3b0764' })
       GROUP_ORDER.forEach(g => rows.push({ kind: 'third_bet', groupName: g }))
     }
-    if (phase === 'final') {
+    if (phase === 'final' || phase === 'all') {
       rows.push({ kind: 'section', label: 'G4 — Bônus por Posição', color: '#78350f' })
       rows.push({ kind: 'g4_field', field: 'champion' })
       rows.push({ kind: 'g4_field', field: 'runner_up' })
@@ -700,7 +715,8 @@ export function SimuladorClient({
     estimateSize: i => {
       const r = allRows[i]
       if (r.kind === 'section') return ROW_H_SEC
-      if (r.kind === 'group_bet' || r.kind === 'third_bet' || r.kind === 'g4_field' || r.kind === 'scorer_row') return ROW_H_BONUS
+      if (r.kind === 'scorer_row') return ROW_H_SCORER
+      if (r.kind === 'group_bet' || r.kind === 'third_bet' || r.kind === 'g4_field') return ROW_H_BONUS
       return ROW_H
     },
     overscan: 8,
@@ -798,7 +814,7 @@ export function SimuladorClient({
       : [...new Set([effChampion, effRunnerUp, effThird, effFourth].filter((t): t is string => !!t))]
     const effScorers = kr.officialScorers.length > 0
       ? kr.officialScorers
-      : simTournament.top_scorer ? [simTournament.top_scorer] : []
+      : simTournament.top_scorer.length > 0 ? simTournament.top_scorer.split('|').filter(Boolean) : []
     return { semifinalists: effSemis, finalists: effFinalists, champion: effChampion, runnerUp: effRunnerUp, third: effThird, fourth: effFourth, officialScorers: effScorers }
   }, [knockoutResults, simTournament])
 
@@ -1805,17 +1821,22 @@ export function SimuladorClient({
                         {officialTopScorers.length > 0 ? (
                           <span>Art.</span>
                         ) : !bonusIsLocked ? (
-                          <input
-                            type="text"
-                            value={simTournament.top_scorer}
-                            onChange={e => {
-                              const v = e.target.value
-                              setSimTournament(prev => ({ ...prev, top_scorer: v }))
-                              persistTournamentSim({ top_scorer: v })
-                            }}
-                            placeholder="artilheiro?"
-                            className="w-full rounded border border-amber-200 bg-amber-50 text-[9px] px-0.5 py-px text-gray-700 focus:outline-none placeholder-gray-300"
-                          />
+                          allBettedScorers.length > 0 ? (
+                            <select multiple size={3}
+                              value={simTournament.top_scorer ? simTournament.top_scorer.split('|').filter(Boolean) : []}
+                              onChange={e => {
+                                const selected = Array.from(e.target.selectedOptions).map(o => o.value)
+                                const v = selected.join('|')
+                                setSimTournament(prev => ({ ...prev, top_scorer: v }))
+                                persistTournamentSim({ top_scorer: v })
+                              }}
+                              className="w-full rounded border border-amber-200 bg-amber-50 text-[8px] text-gray-700 focus:outline-none"
+                            >
+                              {allBettedScorers.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                          ) : (
+                            <span className="text-[8px] text-gray-400">sem apostas</span>
+                          )
                         ) : (
                           <span className="text-gray-300">–</span>
                         )}
