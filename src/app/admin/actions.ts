@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath, revalidateTag } from 'next/cache'
+import { refreshParticipantTotals } from '@/lib/scoring/recalculate'
 import { createClient, createAdminClient, createAuthAdminClient } from '@/lib/supabase/server'
 import { notifyUserApproved, notifyUserRegistered, notifyProfileReminder, sendReminderEmail } from '@/lib/email'
 import { buildPalpitesBuffer } from '@/app/api/palpites/_workbook'
@@ -780,7 +781,7 @@ export async function saveMatchScore(
   // 3. Recalcula pontos de todos os palpites desta partida
   if (scoreHome !== null && scoreAway !== null) {
     const { data: bets } = await supabase
-      .from('bets').select('id, score_home, score_away').eq('match_id', matchId)
+      .from('bets').select('id, participant_id, score_home, score_away').eq('match_id', matchId)
 
     if (bets?.length) {
       const totalBets  = bets.length
@@ -808,14 +809,24 @@ export async function saveMatchScore(
           supabase.from('bets').update({ points }).eq('id', id)
         )
       )
+
+      // Atualiza totais em participant_scores
+      const participantIds = [...new Set(bets.map(b => b.participant_id))]
+      refreshParticipantTotals(participantIds).catch(e => console.error('[admin/saveMatchScore]', e))
     }
   } else {
-    // Placar removido → apaga pontuação
+    // Placar removido → apaga pontuação e recalcula totais
     await supabase.from('bets').update({ points: null }).eq('match_id', matchId)
+    const { data: affectedBets } = await supabase
+      .from('bets').select('participant_id').eq('match_id', matchId)
+    if (affectedBets?.length) {
+      const participantIds = [...new Set(affectedBets.map(b => b.participant_id))]
+      refreshParticipantTotals(participantIds).catch(e => console.error('[admin/saveMatchScore/clear]', e))
+    }
   }
 
   revalidatePath('/admin/jogos')
-  revalidateTag('matches')   // invalida cache do comparador e outras páginas que usam partidas
+  revalidateTag('matches')
 }
 
 // ── Regra de pontuação (valores do banco, fallback hardcoded) ─
