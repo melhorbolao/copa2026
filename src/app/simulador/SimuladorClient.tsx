@@ -263,10 +263,12 @@ function scoreG4FieldBet(
     if (results.semifinalists.includes(betValue)) pts += r.semis
     if (results.finalists.includes(betValue))     pts += r.finalist
     if (results.runnerUp === betValue)            pts += r.vice
+  } else if (field === 'semi1') {
+    if (results.semifinalists.includes(betValue)) pts += r.semis
+    if (results.third === betValue)               pts += r.terceiro
   } else {
     if (results.semifinalists.includes(betValue)) pts += r.semis
-    if (results.third  === betValue)              pts += r.terceiro
-    else if (results.fourth === betValue)         pts += r.quarto
+    if (results.fourth === betValue)              pts += r.quarto
   }
   return pts
 }
@@ -1133,18 +1135,26 @@ export function SimuladorClient({
     return m
   }, [matches, betMap, participants, simMap])
 
-  const groupStatsMap = useMemo(() => {
+  const groupIsZebraMap = useMemo(() => {
     const threshold = rules['percentual_zebra'] ?? 15
+    const m = new Map<string, boolean>()
+    for (const g of GROUP_ORDER) {
+      const ef1 = effFirstMap.get(g) ?? ''
+      const allPicks = participants.map(p => groupBetMap.get(`${p.id}:${g}`)?.first_place).filter((x): x is string => !!x)
+      m.set(g, ef1.length > 0 && allPicks.length > 0 && detectGroupZebra(allPicks.map(fp => ({ first_place: fp })), ef1, threshold))
+    }
+    return m
+  }, [effFirstMap, participants, groupBetMap, rules])
+
+  const groupStatsMap = useMemo(() => {
     const m = new Map<string, EventStats>()
     for (const g of GROUP_ORDER) {
       const ef1 = effFirstMap.get(g) ?? ''
       const ef2 = effSecondMap.get(g) ?? ''
-      const allPicks = participants.map(p => groupBetMap.get(`${p.id}:${g}`)?.first_place).filter((x): x is string => !!x)
-      const isZebra1 = ef1.length > 0 && allPicks.length > 0 && detectGroupZebra(allPicks.map(fp => ({ first_place: fp })), ef1, threshold)
-      m.set(g, groupEventStats(g, ef1, ef2, participants, groupBetMap, isZebra1, rules))
+      m.set(g, groupEventStats(g, ef1, ef2, participants, groupBetMap, groupIsZebraMap.get(g) ?? false, rules))
     }
     return m
-  }, [effFirstMap, effSecondMap, participants, groupBetMap, rules])
+  }, [effFirstMap, effSecondMap, participants, groupBetMap, groupIsZebraMap, rules])
 
   const thirdStatsMap = useMemo(() => {
     const thirdPts = rules['terceiro_classificado'] ?? 3
@@ -1543,24 +1553,30 @@ export function SimuladorClient({
                           <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 2 * STAT_COL_W, borderRight: '2px solid #93c5fd' } : {}) }} className="border-r border-blue-50 text-center text-[10px] text-gray-500">{stats.media > 0 ? media : <span className="text-gray-300">–</span>}</td>
                           <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 3 * STAT_COL_W, background: lbBg } : {}) }}
                             className={`border-r border-blue-50 text-center ${isMobile ? CELL_BG[lbKind] : ''}`}>
-                            {lb?.first_place ? (
-                              <div className="flex flex-col items-center leading-none gap-px">
-                                <div className="flex items-center gap-px overflow-hidden" style={{ maxWidth: STAT_COL_W - 4 }}>
-                                  <span className={`text-[9px] font-medium shrink-0 ${groupPotentialZebraTeams.get(g)?.has(lb.first_place) ? 'bg-gray-900 text-white rounded px-0.5' : 'text-gray-600'}`}>
-                                    {teamAbbrs[lb.first_place] ?? abbr(lb.first_place, 4)}
-                                  </span>
-                                  <span className="text-[9px] text-gray-400 shrink-0">/</span>
-                                  <span className="text-[9px] text-gray-600 truncate font-medium">
-                                    {teamAbbrs[lb.second_place] ?? abbr(lb.second_place, 4)}
-                                  </span>
+                            {lb?.first_place ? (() => {
+                              const isZebra1 = groupIsZebraMap.get(g) ?? false
+                              const lbPts = lb.points !== null
+                                ? lb.points
+                                : ef1 ? scoreGroupBet(lb.first_place, lb.second_place, ef1, ef2, isZebra1, rules) : null
+                              return (
+                                <div className="flex flex-col items-center leading-none gap-px">
+                                  <div className="flex items-center gap-px overflow-hidden" style={{ maxWidth: STAT_COL_W - 4 }}>
+                                    <span className={`text-[9px] font-medium shrink-0 ${groupPotentialZebraTeams.get(g)?.has(lb.first_place) ? 'bg-gray-900 text-white rounded px-0.5' : 'text-gray-600'}`}>
+                                      {teamAbbrs[lb.first_place] ?? abbr(lb.first_place, 4)}
+                                    </span>
+                                    <span className="text-[9px] text-gray-400 shrink-0">/</span>
+                                    <span className="text-[9px] text-gray-600 truncate font-medium">
+                                      {teamAbbrs[lb.second_place] ?? abbr(lb.second_place, 4)}
+                                    </span>
+                                  </div>
+                                  {lbPts !== null && (
+                                    <span className={`text-[10px] font-bold ${lbPts > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>
+                                      {lbPts > 0 ? `+${lbPts}` : '0'}
+                                    </span>
+                                  )}
                                 </div>
-                                {lb.points !== null && (
-                                  <span className={`text-[10px] font-bold ${lb.points > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>
-                                    {lb.points > 0 ? `+${lb.points}` : '0'}
-                                  </span>
-                                )}
-                              </div>
-                            ) : <span className="text-gray-200">—</span>}
+                              )
+                            })() : <span className="text-gray-200">—</span>}
                           </td>
                         </>)
                       })()}
@@ -1574,24 +1590,30 @@ export function SimuladorClient({
                           <td key={p.id}
                             style={isFrozen ? { position: 'sticky', left: displayFrozenLeft!, zIndex: 20, background: frozenBg, borderLeft: '2px solid #bfdbfe' } : undefined}
                             className={`border-r border-blue-50 text-center ${!isFrozen ? CELL_BG[kind] : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
-                            {bet?.first_place ? (
-                              <div className="flex flex-col items-center leading-none gap-px">
-                                <div className="flex items-center gap-px overflow-hidden" style={{ maxWidth: PART_COL_W - 4 }}>
-                                  <span className={`text-[9px] font-medium shrink-0 ${groupPotentialZebraTeams.get(g)?.has(bet.first_place) ? 'bg-gray-900 text-white rounded px-0.5' : 'text-gray-600'}`}>
-                                    {teamAbbrs[bet.first_place] ?? abbr(bet.first_place, 5)}
-                                  </span>
-                                  <span className="text-[9px] text-gray-400 shrink-0">/</span>
-                                  <span className="text-[9px] text-gray-600 truncate font-medium">
-                                    {teamAbbrs[bet.second_place] ?? abbr(bet.second_place, 5)}
-                                  </span>
+                            {bet?.first_place ? (() => {
+                              const isZebra1 = groupIsZebraMap.get(g) ?? false
+                              const pts = bet.points !== null
+                                ? bet.points
+                                : ef1 ? scoreGroupBet(bet.first_place, bet.second_place, ef1, ef2, isZebra1, rules) : null
+                              return (
+                                <div className="flex flex-col items-center leading-none gap-px">
+                                  <div className="flex items-center gap-px overflow-hidden" style={{ maxWidth: PART_COL_W - 4 }}>
+                                    <span className={`text-[9px] font-medium shrink-0 ${groupPotentialZebraTeams.get(g)?.has(bet.first_place) ? 'bg-gray-900 text-white rounded px-0.5' : 'text-gray-600'}`}>
+                                      {teamAbbrs[bet.first_place] ?? abbr(bet.first_place, 5)}
+                                    </span>
+                                    <span className="text-[9px] text-gray-400 shrink-0">/</span>
+                                    <span className="text-[9px] text-gray-600 truncate font-medium">
+                                      {teamAbbrs[bet.second_place] ?? abbr(bet.second_place, 5)}
+                                    </span>
+                                  </div>
+                                  {pts !== null && (
+                                    <span className={`text-[10px] font-bold ${pts > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>
+                                      {pts > 0 ? `+${pts}` : '0'}
+                                    </span>
+                                  )}
                                 </div>
-                                {bet.points !== null && (
-                                  <span className={`text-[10px] font-bold ${bet.points > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>
-                                    {bet.points > 0 ? `+${bet.points}` : '0'}
-                                  </span>
-                                )}
-                              </div>
-                            ) : bonusIsLocked && p.id !== activeParticipantId
+                              )
+                            })() : bonusIsLocked && p.id !== activeParticipantId
                               ? <span className="text-gray-300 text-[10px]" title="Prazo em aberto">🔒</span>
                               : <span className="text-gray-200">—</span>
                             }

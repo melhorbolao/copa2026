@@ -171,15 +171,13 @@ export function scoreTournamentBetBreakdown(
   let semi1 = 0
   if (bet.semi1) {
     if (results.semifinalists.includes(bet.semi1)) semi1 += r.semis
-    if (results.third  === bet.semi1)              semi1 += r.terceiro
-    else if (results.fourth === bet.semi1)         semi1 += r.quarto
+    if (results.third === bet.semi1)               semi1 += r.terceiro
   }
 
   let semi2 = 0
   if (bet.semi2) {
     if (results.semifinalists.includes(bet.semi2)) semi2 += r.semis
-    if (results.third  === bet.semi2)              semi2 += r.terceiro
-    else if (results.fourth === bet.semi2)         semi2 += r.quarto
+    if (results.fourth === bet.semi2)              semi2 += r.quarto
   }
 
   let top_scorer = 0
