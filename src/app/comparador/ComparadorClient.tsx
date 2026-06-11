@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Combobox } from '@/components/ui/Combobox'
 import dynamic from 'next/dynamic'
 import type { MatchInfo, FlatBet, ColPop } from './engine'
@@ -49,10 +49,34 @@ export function ComparadorClient(props: Props) {
     isAdmin,
   } = props
 
+  const storageKey = `comparador_last_${currentParticipantId}`
+
   const [pidA, setPidA] = useState(currentParticipantId)
   const [pidB, setPidB] = useState('')
   const [activeTab, setActiveTab] = useState<'analise' | 'projecao' | 'matrix' | 'diaadia'>('analise')
   const [showCard, setShowCard] = useState(false)
+
+  // Restaura última comparação ao montar
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(storageKey)
+      if (saved) {
+        const parsed = JSON.parse(saved) as { pidA?: string; pidB?: string }
+        const validIds = new Set(participants.map(p => p.id))
+        if (parsed.pidA && validIds.has(parsed.pidA)) setPidA(parsed.pidA)
+        if (parsed.pidB && validIds.has(parsed.pidB)) setPidB(parsed.pidB)
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Persiste seleção sempre que mudar (só quando ambos estão selecionados)
+  useEffect(() => {
+    if (!pidB) return
+    try {
+      localStorage.setItem(storageKey, JSON.stringify({ pidA, pidB }))
+    } catch {}
+  }, [storageKey, pidA, pidB])
 
   // ── Computed data ──────────────────────────────────────────────────────────
   const nameA = participants.find(p => p.id === pidA)?.apelido ?? 'Participante A'
