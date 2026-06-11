@@ -11,15 +11,26 @@ import type { MatchPhase } from '@/types/database'
 
 type Rules = Record<string, number>
 
-// ── Guard: garante que o chamador é admin ─────────────────────
+// ── Guards de acesso ─────────────────────────────────────────
 async function requireAdmin() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Não autenticado')
 
   const { data: profile } = await supabase
-    .from('users').select('is_admin').eq('id', user.id).single()
-  if (!profile?.is_admin) throw new Error('Acesso negado')
+    .from('users').select('role').eq('id', user.id).single()
+  if (!profile?.role || !['admin', 'master'].includes(profile.role))
+    throw new Error('Acesso negado')
+}
+
+async function requireMaster() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Não autenticado')
+
+  const { data: profile } = await supabase
+    .from('users').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'master') throw new Error('Acesso exclusivo do Master')
 }
 
 // ── Cadastro manual de participante ──────────────────────────
@@ -543,20 +554,73 @@ function buildStageFilter(stage: string): { phases: string[]; match?: Record<str
   }
 }
 
-// ── Admin toggle (protege master) ────────────────────────────
-const MASTER_ADMIN_EMAIL = 'gmousinho@gmail.com'
-
+// ── Admin toggle ─────────────────────────────────────────────
 export async function toggleAdmin(userId: string, current: boolean) {
   await requireAdmin()
+  const supabase  = await createAdminClient()
+  const auth      = createAuthAdminClient()
+
+  // Verifica se o alvo é master (trigger no banco também rejeita)
+  const { data: target } = await supabase
+    .from('users').select('role').eq('id', userId).single()
+  if (target?.role === 'master') throw new Error('O usuário Master não pode ser alterado')
+
+  const newRole = current ? 'user' : 'admin'
+
+  await supabase.from('users').update({
+    is_admin: !current,
+    role: newRole,
+  }).eq('id', userId)
+
+  // Sincroniza app_metadata → middleware lê permissões do JWT sem queries extras
+  await auth.auth.admin.updateUserById(userId, {
+    app_metadata: { role: newRole, allowed_pages: newRole === 'admin' ? [] : undefined },
+  })
+
+  revalidatePath('/admin/usuarios')
+}
+
+// ── Gestão de permissões (exclusivo do Master) ────────────────
+export async function getAdminsWithPermissions() {
+  await requireMaster()
   const supabase = await createAdminClient()
 
-  // Não permite alterar o master admin
-  const { data: target } = await supabase
-    .from('users').select('email').eq('id', userId).single()
-  if (target?.email === MASTER_ADMIN_EMAIL) throw new Error('O Admin Master não pode ser alterado')
+  const { data: admins } = await supabase
+    .from('users')
+    .select('id, name, email, role')
+    .eq('role', 'admin')
+    .order('name')
 
-  await supabase.from('users').update({ is_admin: !current }).eq('id', userId)
-  revalidatePath('/admin/usuarios')
+  if (!admins || admins.length === 0) return []
+
+  const { data: permissions } = await supabase
+    .from('admin_permissions')
+    .select('user_id, allowed_pages')
+    .in('user_id', admins.map(a => a.id))
+
+  return admins.map(admin => ({
+    ...admin,
+    allowed_pages: permissions?.find(p => p.user_id === admin.id)?.allowed_pages ?? [],
+  }))
+}
+
+export async function saveAdminPermissions(userId: string, allowedGroups: string[]): Promise<void> {
+  await requireMaster()
+  const supabase = await createAdminClient()
+  const auth     = createAuthAdminClient()
+
+  await supabase.from('admin_permissions').upsert({
+    user_id: userId,
+    allowed_pages: allowedGroups,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'user_id' })
+
+  // Sincroniza app_metadata para leitura zero-query no middleware
+  await auth.auth.admin.updateUserById(userId, {
+    app_metadata: { role: 'admin', allowed_pages: allowedGroups },
+  })
+
+  revalidatePath('/admin/acessos')
 }
 
 // ── Alterar e-mail do usuário ─────────────────────────────────

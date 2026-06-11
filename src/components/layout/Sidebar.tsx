@@ -17,7 +17,7 @@ export async function Sidebar() {
 
   const [[{ data }, activeId], visibility] = await Promise.all([
     Promise.all([
-      supabase.from('users').select('name, is_admin').eq('id', user.id).single(),
+      supabase.from('users').select('name, role').eq('id', user.id).single(),
       getActiveParticipantId(supabase, user.id).catch(() => null),
     ]),
     getPageVisibility(),
@@ -43,7 +43,7 @@ export async function Sidebar() {
       {/* Links de navegação */}
       <nav className="flex-1 overflow-y-auto py-2">
         <SidebarLinks
-          isAdmin={profile?.is_admin ?? false}
+          role={profile?.role ?? 'user'}
           visibility={visibility}
         />
       </nav>
@@ -55,7 +55,7 @@ export async function Sidebar() {
             <ParticipantSelector participants={participants} />
           </div>
         )}
-        {profile?.is_admin && <AdminModeToggle />}
+        {profile?.role !== 'user' && profile?.role != null && <AdminModeToggle />}
         {user.email && (
           <p className="mb-1.5 truncate px-1 text-[10px] text-white/40" title={user.email}>
             {user.email}

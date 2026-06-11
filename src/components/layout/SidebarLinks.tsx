@@ -6,14 +6,15 @@ import { useAdminView } from '@/contexts/AdminViewContext'
 import type { PageVisibilityRow } from '@/lib/page-visibility'
 
 interface Props {
-  isAdmin: boolean
+  role: string
   visibility: PageVisibilityRow[]
 }
 
-export function SidebarLinks({ isAdmin, visibility }: Props) {
+export function SidebarLinks({ role, visibility }: Props) {
   const pathname = usePathname()
   const { viewMode } = useAdminView()
 
+  const isAdmin = role === 'admin' || role === 'master'
   const effectiveAdmin = isAdmin && viewMode === 'admin'
 
   const visiblePages = visibility.filter(row =>
@@ -45,7 +46,6 @@ export function SidebarLinks({ isAdmin, visibility }: Props) {
           </Link>
         )
       })}
-
     </div>
   )
 }

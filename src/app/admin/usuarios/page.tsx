@@ -7,7 +7,7 @@ export default async function AdminUsuariosPage() {
   const { data: users } = await supabase.from('users')
     .select(`
       id, name, email, whatsapp, padrinho, apelido, observacao,
-      provider, approved, paid, status, is_manual, is_admin, created_at,
+      provider, approved, paid, status, is_manual, is_admin, role, created_at,
       user_participants(participant_id, is_primary, participants(id, apelido))
     `)
     .order('created_at', { ascending: false })

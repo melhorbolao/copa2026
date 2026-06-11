@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { Database } from '@/types/database'
+import { canAccessPage, type UserRole } from '@/lib/permissions'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -54,7 +55,7 @@ export async function updateSession(request: NextRequest) {
   if (user && !isPublicPath) {
     const { data: profile } = await supabase
       .from('users')
-      .select('status, whatsapp, padrinho, is_manual')
+      .select('status, whatsapp, padrinho, is_manual, role')
       .eq('id', user.id)
       .single()
 
@@ -69,8 +70,7 @@ export async function updateSession(request: NextRequest) {
     const status = profile?.status ?? 'aprovacao_pendente'
     const bypassPaths = ['/completar-perfil', '/aguardando-aprovacao', '/confirmar-email']
 
-    // 3. E-mail pendente → usuário autenticado significa e-mail confirmado no auth;
-    //    redireciona para aguardando aprovação (não para confirmar-email)
+    // 3. E-mail pendente → redireciona para aguardando aprovação
     if (status === 'email_pendente' && !bypassPaths.includes(pathname)) {
       const url = request.nextUrl.clone()
       url.pathname = '/aguardando-aprovacao'
@@ -82,6 +82,43 @@ export async function updateSession(request: NextRequest) {
       const url = request.nextUrl.clone()
       url.pathname = '/aguardando-aprovacao'
       return NextResponse.redirect(url)
+    }
+
+    // 5. Proteção de rotas /admin/*
+    const segments = pathname.split('/')
+    if (segments[1] === 'admin') {
+      const role = (profile?.role ?? 'user') as UserRole
+
+      // Não é admin nem master → home
+      if (role !== 'admin' && role !== 'master') {
+        const url = request.nextUrl.clone()
+        url.pathname = '/'
+        return NextResponse.redirect(url)
+      }
+
+      // Master acessa tudo sem restrição
+      if (role === 'master') return supabaseResponse
+
+      // Admin: valida página específica
+      const pageKey = segments[2] ?? ''
+
+      // Página exclusiva do master
+      if (pageKey === 'acessos') {
+        const url = request.nextUrl.clone()
+        url.pathname = '/acesso-negado'
+        return NextResponse.redirect(url)
+      }
+
+      // Índice /admin → deixa passar (admin/page.tsx redireciona para 1ª página permitida)
+      if (!pageKey) return supabaseResponse
+
+      // allowed_pages armazenado em app_metadata (zero queries extras)
+      const allowedGroups = (user.app_metadata?.allowed_pages as string[] | undefined) ?? []
+      if (!canAccessPage('admin', allowedGroups, pageKey)) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/acesso-negado'
+        return NextResponse.redirect(url)
+      }
     }
   }
 

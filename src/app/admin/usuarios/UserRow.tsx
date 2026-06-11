@@ -30,6 +30,7 @@ interface UserRowProps {
     status: Status
     is_manual: boolean
     is_admin: boolean
+    role: string
     created_at: string
     user_participants: LinkedParticipant[]
   }
@@ -173,7 +174,7 @@ export function UserRow({ user, index }: UserRowProps) {
     )
   }
 
-  const isMaster = user.email === 'gmousinho@gmail.com'
+  const isMaster = user.role === 'master'
 
   return (
     <tr className="border-b border-gray-100 last:border-0 hover:bg-gray-50 text-sm">
@@ -184,8 +185,9 @@ export function UserRow({ user, index }: UserRowProps) {
         <div className="flex items-center gap-1.5">
           <p className="font-medium text-gray-900 whitespace-nowrap">
             {user.name}
-            {user.is_manual && <span className="ml-1.5 rounded bg-gray-200 px-1 py-0.5 text-xs text-gray-500">manual</span>}
-            {user.is_admin  && <span className="ml-1.5 rounded bg-purple-100 px-1 py-0.5 text-xs text-purple-600">admin</span>}
+            {user.is_manual         && <span className="ml-1.5 rounded bg-gray-200 px-1 py-0.5 text-xs text-gray-500">manual</span>}
+            {user.role === 'admin'  && <span className="ml-1.5 rounded bg-purple-100 px-1 py-0.5 text-xs text-purple-600">admin</span>}
+            {user.role === 'master' && <span className="ml-1.5 rounded bg-amber-100 px-1 py-0.5 text-xs text-amber-700 font-bold">master</span>}
             {!profileComplete && <span className="ml-1.5 rounded bg-red-100 px-1 py-0.5 text-xs text-red-600 font-semibold">perfil incompleto</span>}
           </p>
         </div>

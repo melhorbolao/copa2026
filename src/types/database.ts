@@ -25,6 +25,7 @@ export type Database = {
           approved: boolean
           paid: boolean
           is_admin: boolean
+          role: 'user' | 'admin' | 'master'
           status: 'email_pendente' | 'aprovacao_pendente' | 'aprovado'
           created_at: string
         }
@@ -42,6 +43,7 @@ export type Database = {
           approved?: boolean
           paid?: boolean
           is_admin?: boolean
+          role?: 'user' | 'admin' | 'master'
           status?: 'email_pendente' | 'aprovacao_pendente' | 'aprovado'
           created_at?: string
         }
@@ -59,8 +61,30 @@ export type Database = {
           approved?: boolean
           paid?: boolean
           is_admin?: boolean
+          role?: 'user' | 'admin' | 'master'
           status?: 'email_pendente' | 'aprovacao_pendente' | 'aprovado'
           created_at?: string
+        }
+        Relationships: []
+      }
+      admin_permissions: {
+        Row: {
+          id: string
+          user_id: string
+          allowed_pages: string[]
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          allowed_pages?: string[]
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          allowed_pages?: string[]
+          updated_at?: string
         }
         Relationships: []
       }
@@ -568,15 +592,16 @@ export type MatchPhase =
 export type Tables<T extends keyof Database['public']['Tables']> =
   Database['public']['Tables'][T]['Row']
 
-export type UserRow          = Tables<'users'>
-export type MatchRow         = Tables<'matches'>
-export type BetRow           = Tables<'bets'>
-export type GroupBetRow      = Tables<'group_bets'>
-export type TournamentBetRow = Tables<'tournament_bets'>
-export type AdminAlertRow    = Tables<'admin_alerts'>
-export type ParticipantRow   = Tables<'participants'>
-export type TeamRow          = Tables<'teams'>
-export type UserParticipantRow = Tables<'user_participants'>
-export type TopScorerRow        = Tables<'top_scorers'>
-export type ParticipantScoreRow = Tables<'participant_scores'>
-export type AdminSettingsRow    = Tables<'admin_settings'>
+export type UserRow              = Tables<'users'>
+export type MatchRow             = Tables<'matches'>
+export type BetRow               = Tables<'bets'>
+export type GroupBetRow          = Tables<'group_bets'>
+export type TournamentBetRow     = Tables<'tournament_bets'>
+export type AdminAlertRow        = Tables<'admin_alerts'>
+export type ParticipantRow       = Tables<'participants'>
+export type TeamRow              = Tables<'teams'>
+export type UserParticipantRow   = Tables<'user_participants'>
+export type TopScorerRow         = Tables<'top_scorers'>
+export type ParticipantScoreRow  = Tables<'participant_scores'>
+export type AdminSettingsRow     = Tables<'admin_settings'>
+export type AdminPermissionsRow  = Tables<'admin_permissions'>
