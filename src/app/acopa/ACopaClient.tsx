@@ -164,6 +164,7 @@ function buildKnockoutTeamMap(r32Slots: R32Slot[], knockoutMatches: MatchFull[])
 const EDIT_WINDOW_MS = 4 * 60 * 60 * 1000
 
 function computeCanEdit(match: MatchFull, isAdmin: boolean): boolean {
+  if (new Date(match.betting_deadline).getTime() > Date.now()) return false
   if (isAdmin) return true
   const now   = Date.now()
   const start = new Date(match.match_datetime).getTime()

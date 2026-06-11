@@ -704,14 +704,17 @@ export function TabelaMBClient({
   const effectiveIsAdmin = isAdmin && viewMode === 'admin'
 
   const canEdit = useCallback((match: MatchFull) => {
+    if (lockedSet.has(match.id)) return false
     if (effectiveIsAdmin) return true
     const start = new Date(match.match_datetime).getTime()
     return now >= start && now <= start + EDIT_WINDOW_MS
-  }, [effectiveIsAdmin, now])
+  }, [effectiveIsAdmin, now, lockedSet])
 
   const phaseConfig = PHASE_FILTERS.find(f => f.value === phase) ?? PHASE_FILTERS[0]
   const filteredMatches = useMemo(
-    () => matches.filter(m => (phaseConfig.phases as readonly string[]).includes(m.phase)),
+    () => matches
+      .filter(m => (phaseConfig.phases as readonly string[]).includes(m.phase))
+      .sort((a, b) => new Date(a.match_datetime).getTime() - new Date(b.match_datetime).getTime()),
     [matches, phaseConfig],
   )
 
