@@ -313,12 +313,13 @@ function fmtMatchDate(dt: string) {
 // ── ScoreInput ─────────────────────────────────────────────────────────────────
 
 const ScoreInput = memo(function ScoreInput({
-  match, canEdit, possibleZebras, isActualZebra, onSaved,
+  match, canEdit, possibleZebras, isActualZebra, isActualZebraBet, onSaved,
 }: {
   match: MatchFull
   canEdit: boolean
   possibleZebras?: { H: boolean; D: boolean; A: boolean }
   isActualZebra?: boolean
+  isActualZebraBet?: boolean
   onSaved: (sh: number, sa: number) => void
 }) {
   const [home, setHome] = useState(match.score_home?.toString() ?? '')
@@ -364,13 +365,15 @@ const ScoreInput = memo(function ScoreInput({
       )
     }
     const result = getMatchResult(match.score_home!, match.score_away!)
+    const zebraScoreCls = isActualZebraBet ? 'bg-gray-900 text-white' : 'bg-gray-600 text-white'
+    const zebraDrawCls  = isActualZebraBet ? 'rounded bg-gray-900 text-white px-0.5' : 'rounded bg-gray-600 text-white px-0.5'
     return (
       <div className="inline-flex items-center gap-0.5">
-        <span className={`inline-flex items-center justify-center min-w-[18px] rounded px-0.5 text-xs font-bold tabular-nums ${isActualZebra && result === 'H' ? 'bg-gray-900 text-white' : 'text-gray-700'}`}>
+        <span className={`inline-flex items-center justify-center min-w-[18px] rounded px-0.5 text-xs font-bold tabular-nums ${isActualZebra && result === 'H' ? zebraScoreCls : 'text-gray-700'}`}>
           {match.score_home}
         </span>
-        <span className={`text-[9px] font-bold ${isActualZebra && result === 'D' ? 'rounded bg-gray-900 text-white px-0.5' : 'text-gray-300'}`}>×</span>
-        <span className={`inline-flex items-center justify-center min-w-[18px] rounded px-0.5 text-xs font-bold tabular-nums ${isActualZebra && result === 'A' ? 'bg-gray-900 text-white' : 'text-gray-700'}`}>
+        <span className={`text-[9px] font-bold ${isActualZebra && result === 'D' ? zebraDrawCls : 'text-gray-300'}`}>×</span>
+        <span className={`inline-flex items-center justify-center min-w-[18px] rounded px-0.5 text-xs font-bold tabular-nums ${isActualZebra && result === 'A' ? zebraScoreCls : 'text-gray-700'}`}>
           {match.score_away}
         </span>
       </div>
@@ -762,7 +765,9 @@ export function TabelaMBClient({
   const activePart   = participants.find(p => p.id === activeParticipantId)
   const otherParts   = participants.filter(p => p.id !== activeParticipantId)
   const orderedParts = activePart ? [activePart, ...otherParts] : participants
-  const frozenPartLeft = !isMobile && activePart ? frozenTotal + 4 * STAT_COL_W : null
+  const frozenPartLeft = activePart
+    ? (isMobile ? frozenTotal : frozenTotal + 4 * STAT_COL_W)
+    : null
 
   // Compute totals client-side so match livePoints + group + third bets are all included.
   // Third-place points are computed live (DB only stores them after all 72 group matches finish).
@@ -852,22 +857,29 @@ export function TabelaMBClient({
 
   const matchZebraMap = useMemo(() => {
     const threshold = rules['percentual_zebra'] ?? 15
-    const possible = new Map<string, { H: boolean; D: boolean; A: boolean } | undefined>()
-    const actual   = new Map<string, boolean>()
+    const possible  = new Map<string, { H: boolean; D: boolean; A: boolean } | undefined>()
+    const actual    = new Map<string, boolean>()
+    const actualBet = new Map<string, boolean>()
     for (const m of matches) {
       const betsList  = collectMatchBets(m.id, participants, betMap)
       const hasResult = m.score_home !== null && m.score_away !== null
-      // Always compute minority outcomes (used for per-participant cell styling)
       possible.set(m.id, betsList.length > 0 ? {
         H: detectMatchZebra(betsList, 'H', threshold),
         D: detectMatchZebra(betsList, 'D', threshold),
         A: detectMatchZebra(betsList, 'A', threshold),
       } : undefined)
-      actual.set(m.id, hasResult && betsList.length > 0
+      const isZebra = hasResult && betsList.length > 0
         ? detectMatchZebra(betsList, getMatchResult(m.score_home!, m.score_away!), threshold)
-        : false)
+        : false
+      actual.set(m.id, isZebra)
+      if (isZebra && hasResult) {
+        const res = getMatchResult(m.score_home!, m.score_away!)
+        actualBet.set(m.id, betsList.some(b => getMatchResult(b.score_home, b.score_away) === res))
+      } else {
+        actualBet.set(m.id, false)
+      }
     }
-    return { possible, actual }
+    return { possible, actual, actualBet }
   }, [matches, betMap, participants, rules])
 
   // Funções de save do artilheiro (admin)
@@ -1561,8 +1573,9 @@ export function TabelaMBClient({
               const abbrAway = teamAbbrs[teamAway] ?? teamAway.slice(0, 3).toUpperCase()
               const { date: mDate, time: mTime } = fmtMatchDate(match.match_datetime)
               const hasResult      = match.score_home !== null && match.score_away !== null
-              const possibleZebras = matchZebraMap.possible.get(match.id)
-              const isActualZebra  = matchZebraMap.actual.get(match.id) ?? false
+              const possibleZebras    = matchZebraMap.possible.get(match.id)
+              const isActualZebra    = matchZebraMap.actual.get(match.id) ?? false
+              const isActualZebraBet = matchZebraMap.actualBet.get(match.id) ?? false
               const zebraImgW = isMobile ? 18 : 24
               return (
                 <tr key={match.id} style={{ height: ROW_H }}>
@@ -1579,6 +1592,7 @@ export function TabelaMBClient({
                     className="px-1">
                     {isMobile ? (
                       <div className="flex flex-col leading-none gap-0.5 min-w-0">
+                        <span className="text-[8px] text-gray-400 leading-none">{mDate} {mTime}</span>
                         <div className="flex items-center gap-1">
                           <Flag code={flagHome} size="sm" className="shrink-0 w-4 h-3 rounded-[1px]" />
                           <span className="font-bold text-[10px] text-gray-800 tracking-tight">{abbrHome}</span>
@@ -1617,6 +1631,7 @@ export function TabelaMBClient({
                     <ScoreInput match={match} canEdit={canEdit(match)}
                       possibleZebras={possibleZebras}
                       isActualZebra={isActualZebra}
+                      isActualZebraBet={isActualZebraBet}
                       onSaved={(sh, sa) => {
                         setMatches(prev => prev.map(m => m.id === match.id ? { ...m, score_home: sh, score_away: sa } : m))
                         recomputeForMatch(match.id, sh, sa, match.is_brazil)
@@ -1693,10 +1708,12 @@ export function TabelaMBClient({
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-3 border-t border-gray-100 bg-white px-3 py-1.5 text-[10px] text-gray-400 shrink-0">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-gray-100 bg-white px-3 py-1.5 text-[10px] text-gray-400 shrink-0">
         <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-emerald-100" />Cravada</span>
         <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-sky-100" />Vencedor/Parcial</span>
         <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-rose-50 border border-rose-200" />Errou</span>
+        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-gray-900" /><span className="text-gray-500">Zebra apostada</span></span>
+        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-gray-600" /><span className="text-gray-500">Zebra não apostada</span></span>
       </div>
     </div>
   )
