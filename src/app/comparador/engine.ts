@@ -292,14 +292,19 @@ export function computeProjection(
     r.betA.scoreAway === r.betB.scoreAway
   const allConcordant = future.filter(r => r.status === 'concordant')
   const neutral     = allConcordant.filter(isNeutral)
-  const concordant  = allConcordant.filter(r => !isNeutral(r))
+  // Zona de Concordância: mesma coluna, placares diferentes — AMBOS os palpites presentes
+  const concordant  = allConcordant.filter(r => !isNeutral(r) && r.betA !== null && r.betB !== null)
 
   const battlefields = future.filter(r => r.status === 'battlefield' || r.status === 'zebra_battle')
   const onlyABet    = future.filter(r => r.betA && !r.betB)
   const onlyBBet    = future.filter(r => r.betB && !r.betA)
   const noBet       = future.filter(r => r.status === 'no_bets')
-  // pending = jogos que ainda não puderam ser classificados (prazo aberto ou sem palpites)
-  const pending     = future.filter(r => r.status === 'hidden' || r.status === 'no_bets')
+  // pending: não classificável ainda — prazo aberto, sem palpites, ou só um apostou
+  const pending     = future.filter(r =>
+    r.status === 'hidden' ||
+    r.status === 'no_bets' ||
+    (r.status === 'concordant' && !isNeutral(r) && (r.betA === null || r.betB === null))
+  )
 
   // Max pts a given side can score in a battlefield (includes zebra bonus only if on minority)
   const rowMaxPts = (r: MatchDuelRow, onMinority: boolean) => {
