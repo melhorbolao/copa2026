@@ -365,8 +365,8 @@ const ScoreInput = memo(function ScoreInput({
       )
     }
     const result = getMatchResult(match.score_home!, match.score_away!)
-    const zebraScoreCls = isActualZebraBet ? 'bg-gray-900 text-white' : 'bg-gray-600 text-white'
-    const zebraDrawCls  = isActualZebraBet ? 'rounded bg-gray-900 text-white px-0.5' : 'rounded bg-gray-600 text-white px-0.5'
+    const zebraScoreCls = isActualZebraBet ? 'bg-gray-900 text-white' : 'bg-gray-500 text-white'
+    const zebraDrawCls  = isActualZebraBet ? 'rounded bg-gray-900 text-white px-0.5' : 'rounded bg-gray-500 text-white px-0.5'
     return (
       <div className="inline-flex items-center gap-0.5">
         <span className={`inline-flex items-center justify-center min-w-[18px] rounded px-0.5 text-xs font-bold tabular-nums ${isActualZebra && result === 'H' ? zebraScoreCls : 'text-gray-700'}`}>
@@ -1713,7 +1713,7 @@ export function TabelaMBClient({
         <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-sky-100" />Vencedor/Parcial</span>
         <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-rose-50 border border-rose-200" />Errou</span>
         <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-gray-900" /><span className="text-gray-500">Zebra apostada</span></span>
-        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-gray-600" /><span className="text-gray-500">Zebra não apostada</span></span>
+        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-gray-500" /><span className="text-gray-500">Zebra não apostada</span></span>
       </div>
     </div>
   )
