@@ -1,23 +1,60 @@
 'use client'
 
-import { useAdminView } from '@/contexts/AdminViewContext'
+import { useEffect } from 'react'
+import { useAdminView, type AdminViewMode } from '@/contexts/AdminViewContext'
 
-export function AdminModeToggle() {
-  const { viewMode, toggle } = useAdminView()
+interface Props {
+  isMaster: boolean
+}
+
+export function AdminModeToggle({ isMaster }: Props) {
+  const { viewMode, setMode } = useAdminView()
+
+  // Na primeira visita do master, inicia em 'master' (não 'admin')
+  useEffect(() => {
+    if (isMaster && !localStorage.getItem('adminViewMode')) {
+      setMode('master')
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function handleClick() {
+    if (isMaster) {
+      const cycle: AdminViewMode[] = ['master', 'admin', 'user']
+      const next = cycle[(cycle.indexOf(viewMode as AdminViewMode) + 1) % cycle.length]
+      setMode(next)
+    } else {
+      setMode(viewMode === 'admin' ? 'user' : 'admin')
+    }
+  }
+
+  const config = {
+    master: { label: 'Modo master',   dim: false,  icon: <CrownIcon /> },
+    admin:  { label: 'Modo admin',    dim: false,  icon: <ShieldIcon /> },
+    user:   { label: 'Modo usuário',  dim: true,   icon: <UserIcon /> },
+  }[viewMode] ?? { label: 'Modo admin', dim: false, icon: <ShieldIcon /> }
 
   return (
     <button
-      onClick={toggle}
-      title={viewMode === 'admin' ? 'Alternar para visão de usuário' : 'Alternar para modo admin'}
+      onClick={handleClick}
+      title="Alternar modo de visualização"
       className={`mb-2 flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-        viewMode === 'admin'
-          ? 'text-ouro hover:bg-azul-mid'
-          : 'text-ouro/50 hover:bg-azul-mid hover:text-ouro/80'
+        config.dim
+          ? 'text-ouro/50 hover:bg-azul-mid hover:text-ouro/80'
+          : 'text-ouro hover:bg-azul-mid'
       }`}
     >
-      {viewMode === 'admin' ? <ShieldIcon /> : <UserIcon />}
-      {viewMode === 'admin' ? 'Modo admin' : 'Modo usuário'}
+      {config.icon}
+      {config.label}
     </button>
+  )
+}
+
+function CrownIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <path d="M2 19h20v2H2v-2zm2-3l2-8 4 4 4-7 4 7 4-4 2 8H4z" />
+    </svg>
   )
 }
 

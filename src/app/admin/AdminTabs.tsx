@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { canAccessPage, type UserRole } from '@/lib/permissions'
+import { useAdminView } from '@/contexts/AdminViewContext'
 
 const ALL_TABS = [
   { href: '/admin/usuarios',      label: 'Usuários',            key: 'usuarios'      },
@@ -26,9 +27,10 @@ interface Props {
 
 export function AdminTabs({ role, allowedGroups }: Props) {
   const pathname = usePathname()
+  const { viewMode } = useAdminView()
 
   const tabs = ALL_TABS.filter(tab => {
-    if (tab.key === 'acessos') return role === 'master'
+    if (tab.key === 'acessos') return role === 'master' && viewMode === 'master'
     return canAccessPage(role, allowedGroups, tab.key)
   })
 

@@ -55,7 +55,9 @@ export async function Sidebar() {
             <ParticipantSelector participants={participants} />
           </div>
         )}
-        {profile?.role !== 'user' && profile?.role != null && <AdminModeToggle />}
+        {profile?.role !== 'user' && profile?.role != null && (
+          <AdminModeToggle isMaster={profile.role === 'master'} />
+        )}
         {user.email && (
           <p className="mb-1.5 truncate px-1 text-[10px] text-white/40" title={user.email}>
             {user.email}

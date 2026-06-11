@@ -2,35 +2,34 @@
 
 import { createContext, useContext, useState } from 'react'
 
-export type AdminViewMode = 'admin' | 'user'
+export type AdminViewMode = 'admin' | 'user' | 'master'
 
 interface AdminViewCtx {
   viewMode: AdminViewMode
-  toggle: () => void
+  setMode: (mode: AdminViewMode) => void
 }
 
 const AdminViewContext = createContext<AdminViewCtx>({
   viewMode: 'admin',
-  toggle: () => {},
+  setMode: () => {},
 })
 
 export function AdminViewProvider({ children }: { children: React.ReactNode }) {
   const [viewMode, setViewMode] = useState<AdminViewMode>(() => {
-    // Lê do localStorage na primeira renderização client-side (evita flash)
     if (typeof window !== 'undefined') {
-      return (localStorage.getItem('adminViewMode') as AdminViewMode) ?? 'admin'
+      const stored = localStorage.getItem('adminViewMode') as AdminViewMode | null
+      if (stored && ['admin', 'user', 'master'].includes(stored)) return stored
     }
     return 'admin'
   })
 
-  const toggle = () => {
-    const next: AdminViewMode = viewMode === 'admin' ? 'user' : 'admin'
-    setViewMode(next)
-    localStorage.setItem('adminViewMode', next)
+  const setMode = (mode: AdminViewMode) => {
+    setViewMode(mode)
+    localStorage.setItem('adminViewMode', mode)
   }
 
   return (
-    <AdminViewContext.Provider value={{ viewMode, toggle }}>
+    <AdminViewContext.Provider value={{ viewMode, setMode }}>
       {children}
     </AdminViewContext.Provider>
   )

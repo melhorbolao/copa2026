@@ -16,7 +16,7 @@ export async function Navbar() {
 
   if (user) {
     const [{ data }, activeId] = await Promise.all([
-      supabase.from('users').select('name, is_admin').eq('id', user.id).single(),
+      supabase.from('users').select('name, is_admin, role').eq('id', user.id).single(),
       getActiveParticipantId(supabase, user.id).catch(() => null),
     ])
     profile = data
@@ -45,6 +45,7 @@ export async function Navbar() {
           {user && (
             <NavbarLinks
               isAdmin={profile?.is_admin ?? false}
+              isMaster={profile?.role === 'master'}
               visibility={visibility}
             />
           )}

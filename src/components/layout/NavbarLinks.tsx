@@ -2,28 +2,44 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-import { useAdminView } from '@/contexts/AdminViewContext'
+import { useAdminView, type AdminViewMode } from '@/contexts/AdminViewContext'
 import type { PageVisibilityRow } from '@/lib/page-visibility'
 
 interface Props {
   isAdmin: boolean
+  isMaster?: boolean
   visibility: PageVisibilityRow[]
 }
 
-export function NavbarLinks({ isAdmin, visibility }: Props) {
-  const { viewMode, toggle } = useAdminView()
+export function NavbarLinks({ isAdmin, isMaster = false, visibility }: Props) {
+  const { viewMode, setMode } = useAdminView()
   const [open, setOpen] = useState(false)
 
-  const effectiveAdmin = isAdmin && viewMode === 'admin'
+  const effectiveAdmin = isAdmin && viewMode !== 'user'
 
-  const visiblePages = visibility.filter(row =>
-    effectiveAdmin ? row.show_for_admin : row.show_for_users
-  )
+  const visiblePages = visibility.filter(row => {
+    if (!effectiveAdmin) return row.show_for_users
+    if (isMaster && viewMode === 'master') return true
+    return row.show_for_admin
+  })
 
   const links = [
     ...visiblePages.map(row => ({ href: `/${row.page_name}`, label: row.label })),
     ...(effectiveAdmin ? [{ href: '/admin', label: 'Admin', highlight: true }] : []),
   ]
+
+  function cycleMode() {
+    if (isMaster) {
+      const cycle: AdminViewMode[] = ['master', 'admin', 'user']
+      setMode(cycle[(cycle.indexOf(viewMode as AdminViewMode) + 1) % cycle.length])
+    } else {
+      setMode(viewMode === 'admin' ? 'user' : 'admin')
+    }
+  }
+
+  const modeLabel = viewMode === 'master' ? 'Master' : viewMode === 'admin' ? 'Admin' : 'Usuário'
+  const modeIcon = viewMode === 'master' ? <CrownIcon /> : viewMode === 'admin' ? <ShieldIcon /> : <UserIcon />
+  const modeDim = viewMode === 'user'
 
   return (
     <>
@@ -37,18 +53,16 @@ export function NavbarLinks({ isAdmin, visibility }: Props) {
 
         {isAdmin && (
           <button
-            onClick={toggle}
-            title={viewMode === 'admin' ? 'Alternar para visão de usuário' : 'Alternar para modo admin'}
+            onClick={cycleMode}
+            title="Alternar modo de visualização"
             className={`ml-1 flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-semibold transition ${
-              viewMode === 'admin'
-                ? 'bg-amarelo-400/20 text-amarelo-200 hover:bg-amarelo-400/30'
-                : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white'
+              modeDim
+                ? 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white'
+                : 'bg-amarelo-400/20 text-amarelo-200 hover:bg-amarelo-400/30'
             }`}
           >
-            {viewMode === 'admin' ? <ShieldIcon /> : <UserIcon />}
-            <span className="hidden sm:inline">
-              {viewMode === 'admin' ? 'Admin' : 'Usuário'}
-            </span>
+            {modeIcon}
+            <span className="hidden sm:inline">{modeLabel}</span>
           </button>
         )}
       </div>
@@ -65,12 +79,10 @@ export function NavbarLinks({ isAdmin, visibility }: Props) {
 
         {open && (
           <>
-            {/* Backdrop */}
             <div
               className="fixed inset-0 z-40"
               onClick={() => setOpen(false)}
             />
-            {/* Dropdown */}
             <div className="fixed right-4 top-14 z-50 w-52 overflow-hidden rounded-xl border border-ouro/20 bg-azul-dark shadow-xl">
               {links.map(l => (
                 <Link
@@ -87,11 +99,11 @@ export function NavbarLinks({ isAdmin, visibility }: Props) {
 
               {isAdmin && (
                 <button
-                  onClick={() => { toggle(); setOpen(false) }}
+                  onClick={() => { cycleMode(); setOpen(false) }}
                   className="flex w-full items-center gap-2 border-t border-ouro/20 px-4 py-3 text-sm font-medium text-ouro/60 transition hover:bg-azul-mid hover:text-ouro"
                 >
-                  {viewMode === 'admin' ? <UserIcon /> : <ShieldIcon />}
-                  {viewMode === 'admin' ? 'Visão de usuário' : 'Modo admin'}
+                  {modeIcon}
+                  Modo {modeLabel}
                 </button>
               )}
             </div>
@@ -140,6 +152,14 @@ function XIcon() {
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
       <line x1="18" y1="6"  x2="6"  y2="18" />
       <line x1="6"  y1="6"  x2="18" y2="18" />
+    </svg>
+  )
+}
+
+function CrownIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <path d="M2 19h20v2H2v-2zm2-3l2-8 4 4 4-7 4 7 4-4 2 8H4z" />
     </svg>
   )
 }

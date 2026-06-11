@@ -615,18 +615,32 @@ function GroupBetsDuel({ rows, nameA, nameB, ptsGroupsA, ptsGroupsB }: {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {rows.map(r => {
-              const diff = (r.betA?.first !== r.betB?.first || r.betA?.second !== r.betB?.second)
+              const diffFirst  = r.betA?.first  !== r.betB?.first
+              const diffSecond = r.betA?.second !== r.betB?.second
+              const anyDiff = diffFirst || diffSecond
               return (
-                <tr key={r.group} className={diff ? 'bg-amber-50/30' : ''}>
+                <tr key={r.group} className={anyDiff ? 'bg-amber-50/30' : ''}>
                   <td className="px-3 py-2 font-bold text-gray-700">Grupo {r.group}</td>
                   <td className="px-3 py-2 text-center text-azul-escuro">
-                    {r.betA ? `${r.betA.first || '—'} / ${r.betA.second || '—'}` : '—'}
+                    {r.betA ? (
+                      <>
+                        <span className={diffFirst ? 'underline underline-offset-2 decoration-azul-escuro' : ''}>{r.betA.first || '—'}</span>
+                        {' / '}
+                        <span className={diffSecond ? 'underline underline-offset-2 decoration-azul-escuro' : ''}>{r.betA.second || '—'}</span>
+                      </>
+                    ) : '—'}
                   </td>
                   <td className="px-3 py-2 text-center font-bold text-azul-escuro">
                     {r.betA?.points != null ? (r.betA.points > 0 ? `+${r.betA.points}` : r.betA.points) : '—'}
                   </td>
                   <td className="px-3 py-2 text-center text-red-600">
-                    {r.betB ? `${r.betB.first || '—'} / ${r.betB.second || '—'}` : '—'}
+                    {r.betB ? (
+                      <>
+                        <span className={diffFirst ? 'underline underline-offset-2 decoration-red-500' : ''}>{r.betB.first || '—'}</span>
+                        {' / '}
+                        <span className={diffSecond ? 'underline underline-offset-2 decoration-red-500' : ''}>{r.betB.second || '—'}</span>
+                      </>
+                    ) : '—'}
                   </td>
                   <td className="px-3 py-2 text-center font-bold text-red-500">
                     {r.betB?.points != null ? (r.betB.points > 0 ? `+${r.betB.points}` : r.betB.points) : '—'}
@@ -680,13 +694,13 @@ function ThirdBetsDuel({ rows, nameA, nameB, ptsThirdsA, ptsThirdsB }: {
                 <tr key={r.group} className={diff ? 'bg-amber-50/30' : ''}>
                   <td className="px-3 py-2 font-bold text-gray-700">Grupo {r.group}</td>
                   <td className="px-3 py-2 text-center text-azul-escuro">
-                    {r.betA?.team || '—'}
+                    <span className={diff ? 'underline underline-offset-2 decoration-azul-escuro' : ''}>{r.betA?.team || '—'}</span>
                   </td>
                   <td className="px-3 py-2 text-center font-bold text-azul-escuro">
                     {r.betA?.points != null ? (r.betA.points > 0 ? `+${r.betA.points}` : r.betA.points) : '—'}
                   </td>
                   <td className="px-3 py-2 text-center text-red-600">
-                    {r.betB?.team || '—'}
+                    <span className={diff ? 'underline underline-offset-2 decoration-red-500' : ''}>{r.betB?.team || '—'}</span>
                   </td>
                   <td className="px-3 py-2 text-center font-bold text-red-500">
                     {r.betB?.points != null ? (r.betB.points > 0 ? `+${r.betB.points}` : r.betB.points) : '—'}
@@ -744,11 +758,16 @@ function TournamentBetsDuel({ betA, betB, nameA, nameB, scoreA, scoreB }: {
               const a = betA?.[f.key] ?? ''
               const b = betB?.[f.key] ?? ''
               const same = !!a && !!b && a === b
+              const diff = !!a && !!b && !same
               return (
                 <tr key={f.key} className={same ? 'bg-verde-50/30' : ''}>
                   <td className="px-3 py-2 font-medium text-gray-700">{f.label}</td>
-                  <td className="px-3 py-2 text-center font-semibold text-azul-escuro">{a || '—'}</td>
-                  <td className="px-3 py-2 text-center font-semibold text-red-500">{b || '—'}</td>
+                  <td className="px-3 py-2 text-center font-semibold text-azul-escuro">
+                    <span className={diff ? 'underline underline-offset-2 decoration-azul-escuro' : ''}>{a || '—'}</span>
+                  </td>
+                  <td className="px-3 py-2 text-center font-semibold text-red-500">
+                    <span className={diff ? 'underline underline-offset-2 decoration-red-500' : ''}>{b || '—'}</span>
+                  </td>
                   <td className="px-3 py-2 text-center">
                     {same ? <span className="text-verde-600 font-bold">✓</span> :
                      a && b ? <span className="text-gray-400">—</span> : ''}

@@ -15,11 +15,12 @@ export function SidebarLinks({ role, visibility }: Props) {
   const { viewMode } = useAdminView()
 
   const isAdmin = role === 'admin' || role === 'master'
-  const effectiveAdmin = isAdmin && viewMode === 'admin'
+  const effectiveAdmin = isAdmin && viewMode !== 'user'
 
   const visiblePages = visibility.filter(row => {
-    if (role === 'master' && effectiveAdmin) return true
-    return effectiveAdmin ? row.show_for_admin : row.show_for_users
+    if (!effectiveAdmin) return row.show_for_users
+    if (role === 'master' && viewMode === 'master') return true
+    return row.show_for_admin
   })
 
   const links = [
