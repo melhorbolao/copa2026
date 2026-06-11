@@ -1,6 +1,6 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { createClient, createAdminClient, createAuthAdminClient } from '@/lib/supabase/server'
 import { notifyUserApproved, notifyUserRegistered, notifyProfileReminder, sendReminderEmail } from '@/lib/email'
 import { buildPalpitesBuffer } from '@/app/api/palpites/_workbook'
@@ -815,6 +815,7 @@ export async function saveMatchScore(
   }
 
   revalidatePath('/admin/jogos')
+  revalidateTag('matches')   // invalida cache do comparador e outras páginas que usam partidas
 }
 
 // ── Regra de pontuação (valores do banco, fallback hardcoded) ─
