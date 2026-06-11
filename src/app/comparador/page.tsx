@@ -179,7 +179,8 @@ export default async function ComparadorPage() {
     const m = matchById[bet.match_id]
     if (!m) return false
     const isPlayed = m.score_home !== null && m.score_away !== null
-    if (isPlayed && bet.participant_id === participantId) return true
+    // Jogo encerrado: resultado é público — todos os palpites visíveis para comparação
+    if (isPlayed) return true
     return isMatchBetsVisible(m.phase, m.round, dl, now, visibilitySettings, isTestModeAdmin)
   })
 
