@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { updatePanela } from './actions'
 import { getMatchResult } from '@/lib/scoring/engine'
+import { Flag } from '@/components/ui/Flag'
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
 
@@ -285,7 +286,7 @@ function RecentMatchCard({
       <div className="bg-gray-50 border-b border-gray-100 px-4 py-2 flex items-center justify-between">
         <span className="text-xs font-semibold text-gray-500">{fmtDatetime(match.matchDatetime)}</span>
         <span className="font-black text-sm text-gray-900 tracking-tight">
-          {match.flagHome} {match.teamHome} {match.scoreHome} × {match.scoreAway} {match.teamAway} {match.flagAway}
+          <Flag code={match.flagHome} size="sm" /> {match.teamHome} {match.scoreHome} × {match.scoreAway} {match.teamAway} <Flag code={match.flagAway} size="sm" />
         </span>
       </div>
 
@@ -357,7 +358,7 @@ function UpcomingMatchCard({
       <div className="bg-gray-50 border-b border-gray-100 px-4 py-2 flex items-center justify-between gap-2 flex-wrap">
         <span className="text-xs font-semibold text-gray-500">{fmtDatetime(match.matchDatetime)}</span>
         <span className="font-black text-sm text-gray-900 tracking-tight">
-          {match.flagHome} {match.teamHome} × {match.teamAway} {match.flagAway}
+          <Flag code={match.flagHome} size="sm" /> {match.teamHome} × {match.teamAway} <Flag code={match.flagAway} size="sm" />
         </span>
         {isDivergent && (
           <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-bold text-amber-700 whitespace-nowrap">
