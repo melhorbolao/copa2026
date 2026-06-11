@@ -42,10 +42,10 @@ export default async function PalpitesPage() {
 
   const [participantId, { data: userProfile }] = await Promise.all([
     getActiveParticipantId(supabase, user.id).catch(() => null),
-    supabase.from('users').select('is_admin').eq('id', user.id).single(),
+    supabase.from('users').select('is_admin, role').eq('id', user.id).single(),
   ])
   if (!participantId) redirect('/aguardando-aprovacao')
-  await requirePageAccess('palpites', userProfile?.is_admin ?? false)
+  await requirePageAccess('palpites', userProfile?.role ?? 'user')
 
   // Stream: o Navbar já vai. Os dados pesados ficam dentro do Suspense.
   return (

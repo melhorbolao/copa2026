@@ -19,12 +19,12 @@ export default async function ZebrasPage() {
 
   const [participantId, { data: profile }] = await Promise.all([
     getActiveParticipantId(supabase, user.id).catch(() => null),
-    supabase.from('users').select('is_admin').eq('id', user.id).single(),
+    supabase.from('users').select('is_admin, role').eq('id', user.id).single(),
   ])
   if (!participantId) redirect('/aguardando-aprovacao')
 
   const isAdmin = profile?.is_admin ?? false
-  await requirePageAccess('zebras', isAdmin)
+  await requirePageAccess('zebras', profile?.role ?? 'user')
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAuthAdminClient() as any

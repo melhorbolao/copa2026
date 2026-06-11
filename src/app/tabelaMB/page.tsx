@@ -17,9 +17,9 @@ export default async function ClassificacaoPage() {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase
-    .from('users').select('is_admin').eq('id', user.id).single()
+    .from('users').select('is_admin, role').eq('id', user.id).single()
   const isAdmin = profile?.is_admin ?? false
-  await requirePageAccess('tabelaMB', isAdmin)
+  await requirePageAccess('tabelaMB', profile?.role ?? 'user')
 
   const activeParticipantId = await getActiveParticipantId(supabase, user.id).catch(() => null)
 

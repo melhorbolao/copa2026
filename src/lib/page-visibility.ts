@@ -56,15 +56,17 @@ export const getPageVisibility = cache(async (): Promise<PageVisibilityRow[]> =>
 export function isPageVisible(
   rows: PageVisibilityRow[],
   pageName: string,
-  isAdmin: boolean,
+  roleOrIsAdmin: string | boolean,
 ): boolean {
+  if (roleOrIsAdmin === 'master') return true
+  const isAdmin = typeof roleOrIsAdmin === 'string' ? roleOrIsAdmin === 'admin' : roleOrIsAdmin
   const row = rows.find(r => r.page_name === pageName)
   if (!row) return true // safe default when table not yet created
   return isAdmin ? row.show_for_admin : row.show_for_users
 }
 
-// Call in page server components after resolving isAdmin
-export async function requirePageAccess(pageName: string, isAdmin: boolean): Promise<void> {
+// Call in page server components after resolving role or isAdmin
+export async function requirePageAccess(pageName: string, roleOrIsAdmin: string | boolean): Promise<void> {
   const rows = await getPageVisibility()
-  if (!isPageVisible(rows, pageName, isAdmin)) redirect('/')
+  if (!isPageVisible(rows, pageName, roleOrIsAdmin)) redirect('/')
 }

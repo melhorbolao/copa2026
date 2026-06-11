@@ -70,9 +70,9 @@ export default async function ComparadorPage() {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase
-    .from('users').select('is_admin').eq('id', user.id).single()
+    .from('users').select('is_admin, role').eq('id', user.id).single()
   const isAdmin = profile?.is_admin ?? false
-  await requirePageAccess('comparador', isAdmin)
+  await requirePageAccess('comparador', profile?.role ?? 'user')
 
   const participantId = await getActiveParticipantId(supabase, user.id).catch(() => null)
   if (!participantId) redirect('/aguardando-aprovacao')

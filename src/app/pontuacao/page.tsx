@@ -19,12 +19,14 @@ export default async function PontuacaoPage() {
   ])
 
   let isAdmin = false
+  let userRole = 'user'
   if (user) {
     const { data: profile } = await supabase
-      .from('users').select('is_admin').eq('id', user.id).single()
+      .from('users').select('is_admin, role').eq('id', user.id).single()
     isAdmin = profile?.is_admin ?? false
+    userRole = profile?.role ?? 'user'
   }
-  await requirePageAccess('pontuacao', isAdmin)
+  await requirePageAccess('pontuacao', userRole)
 
   return (
     <>

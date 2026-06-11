@@ -182,9 +182,9 @@ export default async function IaNoMbPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase.from('users').select('is_admin').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('users').select('is_admin, role').eq('id', user.id).single()
   const isAdmin = profile?.is_admin ?? false
-  await requirePageAccess('iaMb', isAdmin)
+  await requirePageAccess('iaMb', profile?.role ?? 'user')
 
   const participantId = await getActiveParticipantId(supabase, user.id).catch(() => null)
 

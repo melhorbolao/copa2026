@@ -20,12 +20,12 @@ export default async function ArtilhariaPage() {
 
   const [participantId, { data: userProfile }] = await Promise.all([
     getActiveParticipantId(supabase, user.id).catch(() => null),
-    supabase.from('users').select('is_admin').eq('id', user.id).single(),
+    supabase.from('users').select('is_admin, role').eq('id', user.id).single(),
   ])
   if (!participantId) redirect('/aguardando-aprovacao')
 
   const isAdmin = userProfile?.is_admin ?? false
-  await requirePageAccess('artilharia', isAdmin)
+  await requirePageAccess('artilharia', userProfile?.role ?? 'user')
 
   // ── Carrega dados em paralelo ─────────────────────────────────────────────
   const [
@@ -174,8 +174,9 @@ export default async function ArtilhariaPage() {
       }
     }
   }
-  // Remove aliases que escaparam do merge (player_name é raw_name conhecido com canônico diferente)
-  const knownAliases = new Set(Object.keys(nameMap))
+  // Remove aliases que escaparam do merge (player_name é raw_name com canônico genuinamente diferente)
+  // Exclui entradas que são apenas correções de capitalização (ex: "ferran torres" → "Ferran Torres")
+  const knownAliases = new Set(Object.keys(nameMap).filter(key => nameMap[key].toLowerCase() !== key))
   const scorersWithBettors: TopScorerItem[] = [...mergedMap.values()]
     .filter(s => !knownAliases.has(s.player_name.toLowerCase().trim()))
     .sort((a, b) =>

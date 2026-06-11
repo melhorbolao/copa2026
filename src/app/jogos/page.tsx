@@ -16,10 +16,10 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase.from('users').select('is_admin, name').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('users').select('is_admin, name, role').eq('id', user.id).single()
   const isAdmin = profile?.is_admin ?? false
 
-  await requirePageAccess('jogos', isAdmin)
+  await requirePageAccess('jogos', profile?.role ?? 'user')
 
   const activeParticipantId = await getActiveParticipantId(supabase, user.id).catch(() => null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

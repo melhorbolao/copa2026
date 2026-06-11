@@ -41,11 +41,13 @@ export default async function ControlePage({
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   let isAdmin = false
+  let userRole = 'user'
   if (user) {
-    const { data: p } = await supabase.from('users').select('is_admin').eq('id', user.id).single()
+    const { data: p } = await supabase.from('users').select('is_admin, role').eq('id', user.id).single()
     isAdmin = p?.is_admin ?? false
+    userRole = p?.role ?? 'user'
   }
-  await requirePageAccess('participantes', isAdmin)
+  await requirePageAccess('participantes', userRole)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAuthAdminClient() as any

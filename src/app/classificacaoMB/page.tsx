@@ -38,9 +38,9 @@ export default async function ClassificacaoMBPage() {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase
-    .from('users').select('is_admin').eq('id', user.id).single()
+    .from('users').select('is_admin, role').eq('id', user.id).single()
   const isAdmin = profile?.is_admin ?? false
-  await requirePageAccess('classificacaoMB', isAdmin)
+  await requirePageAccess('classificacaoMB', profile?.role ?? 'user')
 
   const activeParticipantId = await getActiveParticipantId(supabase, user.id).catch(() => null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

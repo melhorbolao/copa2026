@@ -19,12 +19,12 @@ export default async function ACopaPage() {
   // Verifica admin antes de buscar partidas (evita query cara para não-admins)
   const { data: profile } = await supabase
     .from('users')
-    .select('is_admin')
+    .select('is_admin, role')
     .eq('id', user.id)
     .single()
 
   const isAdmin = profile?.is_admin ?? false
-  await requirePageAccess('acopa', isAdmin)
+  await requirePageAccess('acopa', profile?.role ?? 'user')
 
   const [{ data: rawMatches }, settingRow, mappings] = await Promise.all([
     supabase

@@ -15,9 +15,9 @@ export default async function EstatisticasPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase.from('users').select('is_admin').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('users').select('is_admin, role').eq('id', user.id).single()
   const isAdmin = profile?.is_admin ?? false
-  await requirePageAccess('estatisticas', isAdmin)
+  await requirePageAccess('estatisticas', profile?.role ?? 'user')
 
   const admin = createAuthAdminClient() as any
 

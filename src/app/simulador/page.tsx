@@ -44,9 +44,9 @@ export default async function SimuladorPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase.from('users').select('is_admin').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('users').select('is_admin, role').eq('id', user.id).single()
   const isAdmin = profile?.is_admin ?? false
-  await requirePageAccess('simulador', isAdmin)
+  await requirePageAccess('simulador', profile?.role ?? 'user')
 
   const activeParticipantId = await getActiveParticipantId(supabase, user.id).catch(() => null)
   const admin = createAuthAdminClient() as any
