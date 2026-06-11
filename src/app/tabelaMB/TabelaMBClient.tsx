@@ -859,7 +859,6 @@ export function TabelaMBClient({
     const threshold = rules['percentual_zebra'] ?? 15
     const possible  = new Map<string, { H: boolean; D: boolean; A: boolean } | undefined>()
     const actual    = new Map<string, boolean>()
-    const actualBet = new Map<string, boolean>()
     for (const m of matches) {
       const betsList  = collectMatchBets(m.id, participants, betMap)
       const hasResult = m.score_home !== null && m.score_away !== null
@@ -868,18 +867,11 @@ export function TabelaMBClient({
         D: detectMatchZebra(betsList, 'D', threshold),
         A: detectMatchZebra(betsList, 'A', threshold),
       } : undefined)
-      const isZebra = hasResult && betsList.length > 0
+      actual.set(m.id, hasResult && betsList.length > 0
         ? detectMatchZebra(betsList, getMatchResult(m.score_home!, m.score_away!), threshold)
-        : false
-      actual.set(m.id, isZebra)
-      if (isZebra && hasResult) {
-        const res = getMatchResult(m.score_home!, m.score_away!)
-        actualBet.set(m.id, betsList.some(b => getMatchResult(b.score_home, b.score_away) === res))
-      } else {
-        actualBet.set(m.id, false)
-      }
+        : false)
     }
-    return { possible, actual, actualBet }
+    return { possible, actual }
   }, [matches, betMap, participants, rules])
 
   // Funções de save do artilheiro (admin)
@@ -1575,7 +1567,10 @@ export function TabelaMBClient({
               const hasResult      = match.score_home !== null && match.score_away !== null
               const possibleZebras    = matchZebraMap.possible.get(match.id)
               const isActualZebra    = matchZebraMap.actual.get(match.id) ?? false
-              const isActualZebraBet = matchZebraMap.actualBet.get(match.id) ?? false
+              // apostada = o participante ativo acertou o resultado da zebra
+              const activeBet = betMap.get(`${activeParticipantId}:${match.id}`)
+              const isActualZebraBet = isActualZebra && hasResult && !!activeBet &&
+                getMatchResult(activeBet.score_home, activeBet.score_away) === getMatchResult(match.score_home!, match.score_away!)
               const zebraImgW = isMobile ? 18 : 24
               return (
                 <tr key={match.id} style={{ height: ROW_H }}>
@@ -1712,8 +1707,8 @@ export function TabelaMBClient({
         <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-emerald-100" />Cravada</span>
         <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-sky-100" />Vencedor/Parcial</span>
         <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-rose-50 border border-rose-200" />Errou</span>
-        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-gray-900" /><span className="text-gray-500">Zebra apostada</span></span>
-        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-gray-500" /><span className="text-gray-500">Zebra não apostada</span></span>
+        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-gray-900" /><span className="text-gray-500">Zebra (você acertou)</span></span>
+        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-gray-500" /><span className="text-gray-500">Zebra (você errou)</span></span>
       </div>
     </div>
   )
