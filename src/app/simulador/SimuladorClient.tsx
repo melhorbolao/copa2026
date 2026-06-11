@@ -88,6 +88,8 @@ interface Props {
   existingGroupSims: { group_name: string; first_place: string | null; second_place: string | null }[]
   existingThirdSims: { group_name: string; team: string | null }[]
   existingTournamentSim: { champion: string | null; runner_up: string | null; semi1: string | null; semi2: string | null; top_scorer: string | null } | null
+  prizeSpots?: number
+  premioSpots?: number
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -145,6 +147,29 @@ const CELL_KIND_BG_HEX: Record<CellKind, string> = {
   wrong:   '#fff1f2',
   pending: '#ffffff',
   no_bet:  '',
+}
+
+// ── Zonas da classificação simulada ────────────────────────────────────────────
+
+type SimZone = 'premio' | 'corte2' | 'corte1' | 'out' | 'last'
+
+const SIM_ZONE_ROW: Record<SimZone, string> = {
+  premio: 'bg-green-50', corte2: 'bg-sky-50', corte1: 'bg-amber-50',
+  out: 'bg-white', last: 'bg-red-500',
+}
+const SIM_ZONE_TEXT: Record<SimZone, string> = {
+  premio: 'text-green-800 font-semibold', corte2: 'text-sky-700 font-medium',
+  corte1: 'text-amber-700', out: 'text-gray-400', last: 'text-white font-bold',
+}
+const SIM_ZONE_DOT: Record<SimZone, string> = {
+  premio: 'bg-green-300', corte2: 'bg-sky-300', corte1: 'bg-amber-300',
+  out: 'bg-gray-200', last: 'bg-red-400',
+}
+
+function calcSimCuts(n: number): { cut1: number; cut2: number } {
+  const cut1 = Math.min(Math.ceil((n * 0.5) / 10) * 10, n)
+  const cut2 = Math.min(Math.ceil((cut1 * 0.5) / 10) * 10, cut1)
+  return { cut1, cut2 }
 }
 
 function matchCellKind(
@@ -435,6 +460,93 @@ const SimScoreInput = memo(function SimScoreInput({
   )
 })
 
+// ── Classificação Simulada Resumida ────────────────────────────────────────────
+
+const SimCompactRanking = memo(function SimCompactRanking({
+  ranked, premioSpots, isUniqueLast, activeParticipantId,
+}: {
+  ranked: { id: string; apelido: string; pts: number; rank: number }[]
+  premioSpots: number
+  isUniqueLast: boolean
+  activeParticipantId: string
+}) {
+  const n = ranked.length
+  if (n === 0) return null
+  const { cut1, cut2 } = calcSimCuts(n)
+  const premioLine = ranked[Math.min(premioSpots, n) - 1]?.pts ?? Infinity
+  const cut2Line   = cut2 > premioSpots ? (ranked[cut2 - 1]?.pts ?? null) : null
+  const cut1Line   = cut1 > cut2        ? (ranked[cut1 - 1]?.pts ?? null) : null
+  const lastRank   = ranked[n - 1].rank
+
+  function zoneOf(r: { rank: number; pts: number }): SimZone {
+    if (isUniqueLast && r.rank === lastRank) return 'last'
+    if (r.pts >= premioLine) return 'premio'
+    if (cut2Line !== null && r.pts >= cut2Line) return 'corte2'
+    if (cut1Line !== null && r.pts >= cut1Line) return 'corte1'
+    return 'out'
+  }
+
+  const blockSize = Math.ceil(n / 7)
+  const blocks = [0, 1, 2, 3, 4, 5, 6]
+    .map(i => ranked.slice(i * blockSize, (i + 1) * blockSize))
+    .filter(b => b.length > 0)
+
+  const legendItems: { zone: SimZone; label: string }[] = [
+    { zone: 'premio', label: `Premiação (top ${premioSpots})` },
+    ...(cut2 > premioSpots ? [{ zone: 'corte2' as SimZone, label: `2º corte (top ${cut2})` }] : []),
+    ...(cut1 > cut2        ? [{ zone: 'corte1' as SimZone, label: `1º corte (top ${cut1})` }] : []),
+    ...(isUniqueLast ? [{ zone: 'last' as SimZone, label: 'Lanterna' }] : []),
+  ]
+
+  return (
+    <div className="mb-4 rounded-2xl border border-amber-200 bg-white shadow-sm">
+      <div className="border-b border-amber-100 px-4 py-2.5">
+        <p className="text-base font-black text-gray-800">Classificação Simulada Resumida</p>
+        <p className="text-xs text-gray-400 mt-0.5">Pontuação total: oficial + simulada</p>
+      </div>
+      <div className="overflow-x-auto">
+        <div className="grid grid-cols-7 divide-x divide-gray-100" style={{ minWidth: '1000px' }}>
+          {blocks.map((block, bi) => (
+            <div key={bi}>
+              <div className="grid grid-cols-[1.5rem_1fr_2rem] border-b border-gray-100 bg-gray-50 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-gray-400">
+                <span className="text-right pr-0.5">#</span>
+                <span className="pl-1">Participante</span>
+                <span className="text-right">PTS</span>
+              </div>
+              {block.map((r, ri) => {
+                const z = zoneOf(r)
+                const boundary = ri > 0 && zoneOf(block[ri - 1]) !== z
+                const isMe = r.id === activeParticipantId
+                return (
+                  <div
+                    key={r.id}
+                    className={`grid grid-cols-[1.5rem_1fr_2rem] px-2 py-[3px] text-[12px] ${SIM_ZONE_ROW[z]} ${boundary ? 'border-t border-gray-200' : ''} ${isMe ? 'ring-inset ring-1 ring-amber-400' : ''}`}
+                  >
+                    <span className={`text-right pr-0.5 tabular-nums ${SIM_ZONE_TEXT[z]}`}>{r.rank}</span>
+                    <span className={`pl-1 truncate ${SIM_ZONE_TEXT[z]}`}>
+                      {r.apelido}{z === 'last' && ' 🔦'}
+                      {isMe && <span className="ml-1 text-[10px] text-amber-600">◀</span>}
+                    </span>
+                    <span className={`text-right tabular-nums font-bold ${SIM_ZONE_TEXT[z]}`}>{r.pts}</span>
+                  </div>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-gray-100 bg-gray-50 px-4 py-2">
+        {legendItems.map(({ zone: z, label }) => (
+          <span key={z} className="flex items-center gap-1 text-[11px] text-gray-500">
+            <span className={`inline-block h-2.5 w-2.5 rounded-sm ${SIM_ZONE_DOT[z]}`} />
+            {label}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+})
+
 // ── Zebra helpers ──────────────────────────────────────────────────────────────
 
 type ZebraOutcome = 'apostada' | 'sem_aposta' | false
@@ -482,6 +594,7 @@ export function SimuladorClient({
   lockedMatchIds, bonusIsLocked = false,
   existingSimulations, userId,
   existingGroupSims, existingThirdSims, existingTournamentSim,
+  prizeSpots: _prizeSpots = 8, premioSpots = 10,
 }: Props) {
   const [matches, setMatches] = useState<MatchFull[]>(initialMatches)
   const [betMap,  setBetMap]  = useState<BetMap>(() => buildBetMap(initialBets))
@@ -1252,6 +1365,22 @@ export function SimuladorClient({
     return classificationSorted.findIndex(p => p.id === activeParticipantId) + 1
   }, [classificationSorted, activeParticipantId])
 
+  const simRanked = useMemo(() => {
+    const result = classificationSorted.map((p, i) => ({
+      id: p.id, apelido: p.apelido, pts: computedTotals[p.id] ?? 0, rank: i + 1,
+    }))
+    for (let i = 1; i < result.length; i++) {
+      if (result[i].pts === result[i - 1].pts) result[i].rank = result[i - 1].rank
+    }
+    return result
+  }, [classificationSorted, computedTotals])
+
+  const simIsUniqueLast = useMemo(() => {
+    if (simRanked.length === 0) return false
+    const lastRank = simRanked[simRanked.length - 1].rank
+    return simRanked.filter(r => r.rank === lastRank).length === 1
+  }, [simRanked])
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -1372,38 +1501,51 @@ export function SimuladorClient({
       {/* ── Aba Classificação ──────────────────────────────────────────────── */}
       {tab === 'classificacao' && (
         <div className="flex-1 overflow-auto p-4">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr style={{ background: '#1f2937' }}>
-                <th className="text-center px-2 py-2 text-[11px] font-semibold text-gray-300 w-8">#</th>
-                <th className="text-left px-2 py-2 text-[11px] font-semibold text-gray-300">Participante</th>
-                <th className="text-center px-2 py-2 text-[11px] font-semibold text-gray-300">PTS Oficial</th>
-                <th className="text-center px-2 py-2 text-[11px] font-semibold text-amber-300">+ Sim</th>
-                <th className="text-center px-2 py-2 text-[11px] font-semibold text-gray-200">= Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {classificationSorted.map((p, idx) => {
-                const ptsOfficial = participantTotals[p.id] ?? 0
-                const ptsTotal    = computedTotals[p.id] ?? 0
-                const ptsSim      = ptsTotal - ptsOfficial
-                const isMe        = p.id === activeParticipantId
-                return (
-                  <tr key={p.id} className={isMe ? 'bg-amber-50' : idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                    <td className="text-center px-2 py-2 text-[11px] text-gray-400">{idx + 1}</td>
-                    <td className={`text-left px-2 py-2 text-[11px] font-semibold ${isMe ? 'text-amber-800' : 'text-gray-800'}`}>{p.apelido}</td>
-                    <td className="text-center px-2 py-2 text-[11px] text-gray-600">{ptsOfficial > 0 ? ptsOfficial : '–'}</td>
-                    <td className={`text-center px-2 py-2 text-[11px] font-bold ${ptsSim > 0 ? 'text-amber-600' : 'text-gray-300'}`}>
-                      {ptsSim > 0 ? `+${ptsSim}` : ptsSim === 0 ? '–' : ptsSim}
-                    </td>
-                    <td className={`text-center px-2 py-2 text-[11px] font-bold ${ptsTotal > 0 ? 'text-gray-800' : 'text-gray-300'}`}>
-                      {ptsTotal > 0 ? ptsTotal : '–'}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+          <SimCompactRanking
+            ranked={simRanked}
+            premioSpots={premioSpots}
+            isUniqueLast={simIsUniqueLast}
+            activeParticipantId={activeParticipantId}
+          />
+
+          <div className="mb-3">
+            <p className="text-base font-black text-gray-800">Classificação Simulada</p>
+            <p className="text-xs text-gray-400">Detalhamento por parcela de pontos</p>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-x-auto mb-4">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr style={{ background: '#1f2937' }}>
+                  <th className="text-center px-2 py-2 text-[11px] font-semibold text-gray-300 w-8">#</th>
+                  <th className="text-left px-2 py-2 text-[11px] font-semibold text-gray-300">Participante</th>
+                  <th className="text-center px-2 py-2 text-[11px] font-semibold text-gray-300">PTS Oficial</th>
+                  <th className="text-center px-2 py-2 text-[11px] font-semibold text-amber-300">+ Sim</th>
+                  <th className="text-center px-2 py-2 text-[11px] font-semibold text-gray-200">= Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {classificationSorted.map((p, idx) => {
+                  const ptsOfficial = participantTotals[p.id] ?? 0
+                  const ptsTotal    = computedTotals[p.id] ?? 0
+                  const ptsSim      = ptsTotal - ptsOfficial
+                  const isMe        = p.id === activeParticipantId
+                  return (
+                    <tr key={p.id} className={isMe ? 'bg-amber-50' : idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                      <td className="text-center px-2 py-2 text-[11px] text-gray-400">{idx + 1}</td>
+                      <td className={`text-left px-2 py-2 text-[11px] font-semibold ${isMe ? 'text-amber-800' : 'text-gray-800'}`}>{p.apelido}</td>
+                      <td className="text-center px-2 py-2 text-[11px] text-gray-600">{ptsOfficial > 0 ? ptsOfficial : '–'}</td>
+                      <td className={`text-center px-2 py-2 text-[11px] font-bold ${ptsSim > 0 ? 'text-amber-600' : 'text-gray-300'}`}>
+                        {ptsSim > 0 ? `+${ptsSim}` : ptsSim === 0 ? '–' : ptsSim}
+                      </td>
+                      <td className={`text-center px-2 py-2 text-[11px] font-bold ${ptsTotal > 0 ? 'text-gray-800' : 'text-gray-300'}`}>
+                        {ptsTotal > 0 ? ptsTotal : '–'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

@@ -240,6 +240,22 @@ export default async function SimuladorPage() {
       (ptsG4Map[p.id]      ?? 0)
   }
 
+  // ── Prize spot settings ────────────────────────────────────────────────────
+  let prizeSpots = 8
+  let premioSpots = 10
+  try {
+    const prizeRes = await admin.from('tournament_settings')
+      .select('key, value')
+      .in('key', ['prize_spots', 'premio_spots'])
+    for (const r of (prizeRes.data ?? []) as { key: string; value: string }[]) {
+      const n = parseInt(r.value, 10)
+      if (!isNaN(n) && n > 0) {
+        if (r.key === 'prize_spots') prizeSpots = n
+        if (r.key === 'premio_spots') premioSpots = n
+      }
+    }
+  } catch { /* opcional */ }
+
   // ── Resolve knockout team names via bracket engine ────────────────────────
   const groupMatches = allMatches.filter((m: any) => m.phase === 'group')
   const scoreMap = new Map<string, BetSlim>()
@@ -304,6 +320,8 @@ export default async function SimuladorPage() {
         existingTournamentSim={tournamentSimRes.data ?? null}
         officialTopScorers={officialTopScorers}
         scorerMapping={scorerMapping}
+        prizeSpots={prizeSpots}
+        premioSpots={premioSpots}
       />
     </>
   )
