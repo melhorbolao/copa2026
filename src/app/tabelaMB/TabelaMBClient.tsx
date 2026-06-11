@@ -13,7 +13,7 @@ import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, build
 import type { KnockoutTeamOverride } from '@/lib/bracket/engine'
 import { useAdminView } from '@/contexts/AdminViewContext'
 import { Flag } from '@/components/ui/Flag'
-import type { RuleMap, TournamentResults } from '@/lib/scoring/engine'
+import type { RuleMap, TournamentResults, MatchResult } from '@/lib/scoring/engine'
 import type { MatchSlim, BetSlim } from '@/lib/bracket/engine'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -317,7 +317,7 @@ const ScoreInput = memo(function ScoreInput({
 }: {
   match: MatchFull
   canEdit: boolean
-  possibleZebras?: { H: boolean; D: boolean; A: boolean }
+  possibleZebras?: { H: ZebraOutcome; D: ZebraOutcome; A: ZebraOutcome }
   isActualZebra?: boolean
   isActualZebraBet?: boolean
   onSaved: (sh: number, sa: number) => void
@@ -375,9 +375,9 @@ const ScoreInput = memo(function ScoreInput({
     if (!pz || (!pz.H && !pz.D && !pz.A)) return <span className="text-gray-300 text-xs">–</span>
     return (
       <div className="inline-flex items-center gap-0.5">
-        <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[9px] ${pz.H ? 'bg-gray-900' : 'bg-gray-100 border border-gray-200'}`} />
-        <span className={`text-[9px] font-bold ${pz.D ? 'rounded bg-gray-900 text-white px-0.5' : 'text-gray-300'}`}>×</span>
-        <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[9px] ${pz.A ? 'bg-gray-900' : 'bg-gray-100 border border-gray-200'}`} />
+        <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[9px] ${pz.H === 'apostada' ? 'bg-gray-900' : pz.H === 'sem_aposta' ? 'bg-gray-500' : 'bg-gray-100 border border-gray-200'}`} />
+        <span className={`text-[9px] font-bold ${pz.D === 'apostada' ? 'rounded bg-gray-900 text-white px-0.5' : pz.D === 'sem_aposta' ? 'rounded bg-gray-500 text-white px-0.5' : 'text-gray-300'}`}>×</span>
+        <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[9px] ${pz.A === 'apostada' ? 'bg-gray-900' : pz.A === 'sem_aposta' ? 'bg-gray-500' : 'bg-gray-100 border border-gray-200'}`} />
       </div>
     )
   }
@@ -392,19 +392,23 @@ const ScoreInput = memo(function ScoreInput({
         onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0,2); setHome(v); homeRef.current = v; triggerSave(v, awayRef.current) }}
         placeholder="–"
         className={`w-7 rounded border text-center text-xs font-bold py-0.5 focus:outline-none ${
-          possibleZebras?.H
+          possibleZebras?.H === 'apostada'
             ? 'border-gray-700 bg-gray-900 text-white placeholder-gray-500 focus:border-gray-600'
-            : 'border-gray-200 bg-white focus:border-verde-400'
+            : possibleZebras?.H === 'sem_aposta'
+              ? 'border-gray-500 bg-gray-500 text-white placeholder-gray-300 focus:border-gray-400'
+              : 'border-gray-200 bg-white focus:border-verde-400'
         }`}
       />
-      <span className={`text-[9px] font-bold ${possibleZebras?.D ? 'rounded bg-gray-900 text-white px-0.5' : 'text-gray-300'}`}>×</span>
+      <span className={`text-[9px] font-bold ${possibleZebras?.D === 'apostada' ? 'rounded bg-gray-900 text-white px-0.5' : possibleZebras?.D === 'sem_aposta' ? 'rounded bg-gray-500 text-white px-0.5' : 'text-gray-300'}`}>×</span>
       <input type="text" inputMode="numeric" pattern="[0-9]*" value={away}
         onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0,2); setAway(v); awayRef.current = v; triggerSave(homeRef.current, v) }}
         placeholder="–"
         className={`w-7 rounded border text-center text-xs font-bold py-0.5 focus:outline-none ${
-          possibleZebras?.A
+          possibleZebras?.A === 'apostada'
             ? 'border-gray-700 bg-gray-900 text-white placeholder-gray-500 focus:border-gray-600'
-            : 'border-gray-200 bg-white focus:border-verde-400'
+            : possibleZebras?.A === 'sem_aposta'
+              ? 'border-gray-500 bg-gray-500 text-white placeholder-gray-300 focus:border-gray-400'
+              : 'border-gray-200 bg-white focus:border-verde-400'
         }`}
       />
       {pending && <span className="text-[9px] text-gray-400 ml-0.5">…</span>}
@@ -413,6 +417,9 @@ const ScoreInput = memo(function ScoreInput({
 })
 
 // ── Zebra helpers ──────────────────────────────────────────────────────────────
+
+// 'apostada' = zebra (≤threshold%) com ≥1 aposta; 'sem_aposta' = zebra mas 0 apostas; false = não é zebra
+type ZebraOutcome = 'apostada' | 'sem_aposta' | false
 
 function collectMatchBets(matchId: string, participants: Participant[], betMap: BetMap) {
   const bets: Array<{ score_home: number; score_away: number }> = []
@@ -423,15 +430,25 @@ function collectMatchBets(matchId: string, participants: Participant[], betMap: 
   return bets
 }
 
+function zebraOutcome(
+  betsList: Array<{ score_home: number; score_away: number }>,
+  result: MatchResult,
+  threshold: number,
+): ZebraOutcome {
+  if (!detectMatchZebra(betsList, result, threshold)) return false
+  const count = betsList.filter(b => getMatchResult(b.score_home, b.score_away) === result).length
+  return count > 0 ? 'apostada' : 'sem_aposta'
+}
+
 function detectPossibleZebras(
   matchId: string, participants: Participant[], betMap: BetMap, threshold: number,
-): { H: boolean; D: boolean; A: boolean } | undefined {
+): { H: ZebraOutcome; D: ZebraOutcome; A: ZebraOutcome } | undefined {
   const bets = collectMatchBets(matchId, participants, betMap)
   if (bets.length === 0) return undefined
   return {
-    H: detectMatchZebra(bets, 'H', threshold),
-    D: detectMatchZebra(bets, 'D', threshold),
-    A: detectMatchZebra(bets, 'A', threshold),
+    H: zebraOutcome(bets, 'H', threshold),
+    D: zebraOutcome(bets, 'D', threshold),
+    A: zebraOutcome(bets, 'A', threshold),
   }
 }
 
@@ -857,16 +874,16 @@ export function TabelaMBClient({
 
   const matchZebraMap = useMemo(() => {
     const threshold = rules['percentual_zebra'] ?? 15
-    const possible  = new Map<string, { H: boolean; D: boolean; A: boolean } | undefined>()
+    const possible  = new Map<string, { H: ZebraOutcome; D: ZebraOutcome; A: ZebraOutcome } | undefined>()
     const actual    = new Map<string, boolean>()
     const actualBet = new Map<string, boolean>()
     for (const m of matches) {
       const betsList  = collectMatchBets(m.id, participants, betMap)
       const hasResult = m.score_home !== null && m.score_away !== null
       possible.set(m.id, betsList.length > 0 ? {
-        H: detectMatchZebra(betsList, 'H', threshold),
-        D: detectMatchZebra(betsList, 'D', threshold),
-        A: detectMatchZebra(betsList, 'A', threshold),
+        H: zebraOutcome(betsList, 'H', threshold),
+        D: zebraOutcome(betsList, 'D', threshold),
+        A: zebraOutcome(betsList, 'A', threshold),
       } : undefined)
       const isZebra = hasResult && betsList.length > 0
         ? detectMatchZebra(betsList, getMatchResult(m.score_home!, m.score_away!), threshold)
@@ -1679,7 +1696,7 @@ export function TabelaMBClient({
                     const isFrozen = displayFrozenLeft !== null && idx === 0
                     const frozenBg = isFrozen ? (CELL_KIND_BG_HEX[kind] || bg) : undefined
                     const betOutcome = bet ? getMatchResult(bet.score_home, bet.score_away) : null
-                    const isPotentialZebra = betOutcome !== null && possibleZebras?.[betOutcome] === true
+                    const isPotentialZebra = betOutcome !== null && !!possibleZebras?.[betOutcome]
                     return (
                       <td key={p.id}
                         style={isFrozen ? { position: 'sticky', left: displayFrozenLeft!, zIndex: 20, background: frozenBg, borderLeft: '2px solid #d1d5db' } : undefined}
