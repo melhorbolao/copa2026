@@ -91,6 +91,9 @@ export function ComparadorClient(props: Props) {
     return buildDuelMatrix(matches, bA, bB, colPopMap, zebraThreshold, rulesMap, isAdmin)
   }, [pidA, pidB, matches, betsByParticipant, colPopMap, zebraThreshold, rulesMap])
 
+  const breakdown = useMemo(() =>
+    computeBreakdown(duelRows, rulesMap), [duelRows, rulesMap])
+
   // Diagnóstico: jogos com placar × palpites × pontos calculados × regras
   const debugInfo = useMemo(() => {
     if (!isAdmin || !pidA || !pidB) return null
@@ -126,9 +129,6 @@ export function ComparadorClient(props: Props) {
       scTotB: scoresByParticipant[pidB]?.ptsTotal ?? 'n/a',
     }
   }, [isAdmin, pidA, pidB, matches, betsByParticipant, duelRows, rulesMap, breakdown, scoresByParticipant])
-
-  const breakdown = useMemo(() =>
-    computeBreakdown(duelRows, rulesMap), [duelRows, rulesMap])
 
   const projection = useMemo(() =>
     computeProjection(duelRows, rulesMap), [duelRows, rulesMap])
