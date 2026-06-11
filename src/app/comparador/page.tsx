@@ -151,7 +151,8 @@ export default async function ComparadorPage() {
   // ── Build scoring rules map ───────────────────────────────────────────────
   const rulesMap: Record<string, number> = {}
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const r of rulesRaw as any[]) rulesMap[r.key] = r.points ?? 0
+  // Não converte null→0: o ?? 0 silenciaria os fallbacks em scoreMatchBet
+  for (const r of rulesRaw as any[]) { if (r.points !== null && r.points !== undefined) rulesMap[r.key] = r.points }
   const zebraThreshold = rulesMap['percentual_zebra'] ?? 15
 
   // ── Visibilidade em Modo Produção ─────────────────────────────────────────
