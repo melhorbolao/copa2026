@@ -19,6 +19,7 @@ interface Props {
   rules: Record<string, number>
   rankAfter: Record<string, number>
   hasAnyScore: boolean
+  activeParticipantId?: string | null
 }
 
 type BetGroup = {
@@ -38,7 +39,7 @@ function fmtPct(n: number) {
   return n.toFixed(1).replace('.', ',') + '%'
 }
 
-export function BetStats({ match, matchBets, participants, isZebra, rules, rankAfter, hasAnyScore }: Props) {
+export function BetStats({ match, matchBets, participants, isZebra, rules, rankAfter, hasAnyScore, activeParticipantId }: Props) {
   const hasResult      = match.score_home !== null && match.score_away !== null
   const zebraThreshold = rules['percentual_zebra'] ?? 15
 
@@ -96,6 +97,29 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
     const sum = groups.reduce((acc, g) => acc + (g.pts ?? 0) * g.count, 0)
     return sum / matchBets.length
   }, [groups, hasResult, matchBets.length])
+
+  const ownBet = useMemo(() => {
+    if (!activeParticipantId) return null
+    return matchBets.find(b => b.participant_id === activeParticipantId) ?? null
+  }, [matchBets, activeParticipantId])
+
+  const ownResult = useMemo(() => {
+    if (!ownBet) return null
+    return getMatchResult(ownBet.score_home, ownBet.score_away)
+  }, [ownBet])
+
+  const ownPts = useMemo(() => {
+    if (!ownBet || !hasResult) return null
+    return scoreMatchBet(
+      ownBet.score_home, ownBet.score_away,
+      match.score_home!, match.score_away!,
+      isZebra, match.is_brazil, rules,
+    )
+  }, [ownBet, hasResult, match.score_home, match.score_away, isZebra, match.is_brazil, rules])
+
+  const ownIsExact = hasResult && ownBet !== null &&
+    match.score_home === ownBet.score_home &&
+    match.score_away === ownBet.score_away
 
   if (matchBets.length === 0) {
     return (
@@ -208,6 +232,37 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
           <div className="text-[10px] text-gray-400">(média)</div>
         </div>
       )}
+
+      {/* Seu palpite */}
+      {ownBet && ownResult && (() => {
+        const scoreColor = ownIsExact
+          ? 'text-blue-600'
+          : ownPts === 0 && hasResult
+            ? 'text-gray-300'
+            : 'text-gray-800'
+        const scoreEl = (
+          <span className={`font-mono font-bold text-sm tabular-nums ${scoreColor}`}>
+            {ownBet.score_home}x{ownBet.score_away}
+          </span>
+        )
+        return (
+          <div className={`flex items-center px-3 py-1.5 border-t border-gray-100${ownIsExact ? ' bg-blue-50/60' : ' bg-gray-50/60'}`}>
+            <div className="flex-1">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Seu palpite</span>
+            </div>
+            <span className={`${H_W} flex justify-center`}>{ownResult === 'H' ? scoreEl : null}</span>
+            <span className={`${D_W} flex justify-center`}>{ownResult === 'D' ? scoreEl : null}</span>
+            <span className={`${A_W} flex justify-center`}>{ownResult === 'A' ? scoreEl : null}</span>
+            <div className="flex-1 flex justify-end">
+              {ownPts !== null && (
+                <span className={`text-sm font-bold tabular-nums ${ownPts > 0 ? 'text-blue-600' : 'text-gray-300'}`}>
+                  {ownPts > 0 ? `+${ownPts}` : '0'}
+                </span>
+              )}
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }

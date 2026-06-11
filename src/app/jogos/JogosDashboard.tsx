@@ -360,6 +360,7 @@ export function JogosDashboard({
           rules={rules}
           rankAfter={rankAfter}
           hasAnyScore={match.score_home !== null || Object.values(livePoints).some(pts => pts > 0)}
+          activeParticipantId={activeParticipantId}
         />
 
         <RankingPanel
