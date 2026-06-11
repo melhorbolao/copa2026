@@ -159,8 +159,13 @@ export function buildDuelMatrix(
     const aMin    = colA ? isMinority(pop, colA, zebraThreshold) : false
     const bMin    = colB ? isMinority(pop, colB, zebraThreshold) : false
 
-    const ptsA = betA?.points ?? 0
-    const ptsB = betB?.points ?? 0
+    // Compute fresh from match result — don't rely on bets.points being populated
+    const ptsA = (betA && played)
+      ? scoreMatchBet(betA.scoreHome, betA.scoreAway, m.scoreHome!, m.scoreAway!, m.isZebra, m.isBrazil, rules)
+      : 0
+    const ptsB = (betB && played)
+      ? scoreMatchBet(betB.scoreHome, betB.scoreAway, m.scoreHome!, m.scoreAway!, m.isZebra, m.isBrazil, rules)
+      : 0
 
     let status: DuelStatus
 
@@ -240,8 +245,8 @@ export function computeBreakdown(
     ptsMatchesA += r.ptsA
     ptsMatchesB += r.ptsB
 
-    const aExact = isExactFromPoints(r.betA?.points ?? null, r.match.isBrazil, rules)
-    const bExact = isExactFromPoints(r.betB?.points ?? null, r.match.isBrazil, rules)
+    const aExact = isExactFromPoints(r.ptsA > 0 ? r.ptsA : null, r.match.isBrazil, rules)
+    const bExact = isExactFromPoints(r.ptsB > 0 ? r.ptsB : null, r.match.isBrazil, rules)
 
     if (aExact) { exactPtsA += r.ptsA; exactCountA++ }
     if (bExact) { exactPtsB += r.ptsB; exactCountB++ }
