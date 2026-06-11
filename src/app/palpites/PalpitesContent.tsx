@@ -14,7 +14,6 @@ import { GroupBetRow } from './GroupBetRow'
 import { TournamentSection } from './TournamentSection'
 import { ThirdPlaceSection } from './ThirdPlaceSection'
 import { ThirdPlaceProvider } from './ThirdPlaceContext'
-import { AutoFillButton } from './AutoFillButton'
 import { BetSaveQueueProvider, useBetSaveQueue } from './BetSaveQueueContext'
 import type { CalcGroupStanding } from '@/lib/bracket/engine'
 import { formatBrasilia } from '@/utils/date'
@@ -408,10 +407,6 @@ function PalpitesTabPane({
                     {visibleGroupMatches.map(m => (
                       <MatchBetRow key={m.id} match={m} bet={betMap[m.id] ?? null} />
                     ))}
-
-                    {visibleGroupMatches.length > 0 && (
-                      <AutoFillButton enabled={allGroupsFilled} alreadyFilled={alreadyFilled} />
-                    )}
 
                     {showBonusBets && visibleGroupOrder.some(g => groupTeams[g]) && (
                       <SectionRow label="Classificação dos Grupos" deadline={tournamentDeadline} sub />

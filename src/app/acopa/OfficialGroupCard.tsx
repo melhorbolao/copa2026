@@ -3,7 +3,9 @@ import type { CalcGroupStanding } from '@/lib/bracket/engine'
 
 interface Props {
   standing: CalcGroupStanding
-  advancingGroups: Set<string>  // grupos cujo 3º avança
+  advancingGroups: Set<string>   // grupos cujo 3º avança
+  completeGroups: Set<string>    // grupos com todos os jogos registrados
+  allGroupsComplete: boolean     // todos os 72 jogos da fase de grupos registrados
 }
 
 const POS_COLORS = [
@@ -13,7 +15,7 @@ const POS_COLORS = [
   'bg-gray-200 text-gray-600',       // 4º
 ]
 
-export function OfficialGroupCard({ standing, advancingGroups }: Props) {
+export function OfficialGroupCard({ standing, advancingGroups, completeGroups, allGroupsComplete }: Props) {
   const thirdAdvances = advancingGroups.has(standing.group)
 
   return (
@@ -26,7 +28,7 @@ export function OfficialGroupCard({ standing, advancingGroups }: Props) {
         <span className="text-sm font-black uppercase tracking-widest text-white">
           Grupo {standing.group}
         </span>
-        {standing.tiedTeams.length > 0 && (
+        {standing.tiedTeams.length > 0 && completeGroups.has(standing.group) && (
           <span className="ml-auto rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-bold text-white/80">
             empate pendente
           </span>
@@ -51,8 +53,8 @@ export function OfficialGroupCard({ standing, advancingGroups }: Props) {
           {standing.teams.map((team, i) => {
             const isTied = standing.tiedTeams.includes(team.team)
             const posColor = POS_COLORS[i] ?? POS_COLORS[3]
-            // 3º com avanço = amber badge especial
-            const showAdvances = i === 2 && thirdAdvances
+            // 3º com avanço: só exibe após todos os 72 jogos registrados
+            const showAdvances = i === 2 && thirdAdvances && allGroupsComplete
 
             return (
               <tr

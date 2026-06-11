@@ -447,6 +447,8 @@ export function ACopaClient({ initialMatches, isAdmin, initialOfficialTopScorer,
                 key={standing.group}
                 standing={standing}
                 advancingGroups={advancingGroups}
+                completeGroups={completeGroups}
+                allGroupsComplete={allGroupsComplete}
               />
             ))}
           </div>
