@@ -5,7 +5,7 @@ import {
 } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { createClient } from '@/lib/supabase/client'
-import { scoreMatchBet, detectMatchZebra, detectGroupZebra, getMatchResult, scoreTournamentBet } from '@/lib/scoring/engine'
+import { scoreMatchBet, scoreGroupBet, detectMatchZebra, detectGroupZebra, getMatchResult, scoreTournamentBet } from '@/lib/scoring/engine'
 import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap, computeGroupCompletion } from '@/lib/bracket/engine'
 import type { KnockoutTeamOverride } from '@/lib/bracket/engine'
 import { Flag } from '@/components/ui/Flag'
@@ -199,15 +199,25 @@ function matchEventStats(matchId: string, sh: number | null, sa: number | null, 
   return { pontuaram, cravaram, media: parts.length > 0 ? total / parts.length : 0 }
 }
 
-function groupEventStats(g: string, of1: string, of2: string, parts: Participant[], groupBetMap: Map<string, { first_place: string; second_place: string; points: number | null }>): EventStats {
+function groupEventStats(
+  g: string, of1: string, of2: string,
+  parts: Participant[],
+  groupBetMap: Map<string, { first_place: string; second_place: string; points: number | null }>,
+  isZebra1: boolean,
+  rules: RuleMap,
+): EventStats {
   let pontuaram = 0, cravaram = 0, total = 0
   for (const p of parts) {
     const bet = groupBetMap.get(`${p.id}:${g}`)
+    if (!bet?.first_place) continue
     const kind = groupCellKind(bet, of1, of2)
-    const pts  = bet?.points ?? 0
-    if ((pts ?? 0) > 0) pontuaram++
+    // Usa pontos do DB se disponíveis (grupo oficial completo); senão computa live (simulado)
+    const pts = bet.points !== null
+      ? bet.points
+      : scoreGroupBet(bet.first_place, bet.second_place, of1, of2, isZebra1, rules)
+    if (pts > 0) pontuaram++
     if (kind === 'exact') cravaram++
-    total += pts ?? 0
+    total += pts
   }
   return { pontuaram, cravaram, media: parts.length > 0 ? total / parts.length : 0 }
 }
@@ -1030,9 +1040,21 @@ export function SimuladorClient({
 
   // Computed totals (inclui livePoints de simulação)
   const computedTotals = useMemo(() => {
-    const thirdPts   = rules['terceiro_classificado'] ?? 3
-    const grpExact   = rules['classificados_exato']   ?? 8
-    const grpParcial = rules['classificados_parcial'] ?? 4
+    const thirdPts  = rules['terceiro_classificado'] ?? 3
+    const threshold = rules['percentual_zebra'] ?? 15
+
+    // Zebra de primeiro lugar por grupo, baseado no resultado efetivo (oficial ou simulado)
+    const groupEffZebras = new Set<string>()
+    for (const g of GROUP_ORDER) {
+      const ef1 = effFirstMap.get(g) ?? ''
+      if (!ef1) continue
+      const allPicks = participants
+        .map(p => groupBetMap.get(`${p.id}:${g}`)?.first_place)
+        .filter((x): x is string => !!x)
+      if (allPicks.length > 0 && detectGroupZebra(allPicks.map(fp => ({ first_place: fp })), ef1, threshold))
+        groupEffZebras.add(g)
+    }
+
     const totals: Record<string, number> = {}
     for (const p of participants) {
       let sum = 0
@@ -1049,8 +1071,7 @@ export function SimuladorClient({
           const e1 = effFirstMap.get(g) ?? ''
           const e2 = effSecondMap.get(g) ?? ''
           if (e1) {
-            const kind = groupCellKind(gb, e1, e2)
-            sum += kind === 'exact' ? grpExact : kind === 'winner' ? grpParcial : 0
+            sum += scoreGroupBet(gb.first_place, gb.second_place, e1, e2, groupEffZebras.has(g), rules)
           }
         }
         const tb = thirdBetMap.get(`${p.id}:${g}`)
@@ -1097,11 +1118,17 @@ export function SimuladorClient({
   }, [matches, betMap, participants, simMap])
 
   const groupStatsMap = useMemo(() => {
+    const threshold = rules['percentual_zebra'] ?? 15
     const m = new Map<string, EventStats>()
-    for (const g of GROUP_ORDER)
-      m.set(g, groupEventStats(g, effFirstMap.get(g) ?? '', effSecondMap.get(g) ?? '', participants, groupBetMap))
+    for (const g of GROUP_ORDER) {
+      const ef1 = effFirstMap.get(g) ?? ''
+      const ef2 = effSecondMap.get(g) ?? ''
+      const allPicks = participants.map(p => groupBetMap.get(`${p.id}:${g}`)?.first_place).filter((x): x is string => !!x)
+      const isZebra1 = ef1.length > 0 && allPicks.length > 0 && detectGroupZebra(allPicks.map(fp => ({ first_place: fp })), ef1, threshold)
+      m.set(g, groupEventStats(g, ef1, ef2, participants, groupBetMap, isZebra1, rules))
+    }
     return m
-  }, [effFirstMap, effSecondMap, participants, groupBetMap])
+  }, [effFirstMap, effSecondMap, participants, groupBetMap, rules])
 
   const thirdStatsMap = useMemo(() => {
     const thirdPts = rules['terceiro_classificado'] ?? 3
