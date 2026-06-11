@@ -121,7 +121,11 @@ export default async function EstatisticasPage() {
     for (const s of (topScorersData ?? []) as any[]) {
       const code = s.team ? TEAM_CODES[s.team] : null
       if (s.player_name && code) {
-        scorerFlagMap[s.player_name.toLowerCase().trim()] = code
+        const rawKey = s.player_name.toLowerCase().trim()
+        scorerFlagMap[rawKey] = code
+        // Também indexa pelo nome normalizado (ex: "Doku" → "Jérémy Doku" via scorerMapping)
+        const normalized = scorerMapping[rawKey]
+        if (normalized) scorerFlagMap[normalized.toLowerCase().trim()] = code
       }
     }
   } catch { /* tabela ainda não criada */ }
@@ -139,7 +143,7 @@ export default async function EstatisticasPage() {
             tournamentBets={(tournamentBetsRes.data ?? []) as any[]}
             matchBets={(matchBetsRes as any[]).filter((b: any) =>
               b.score_home !== null && b.score_away !== null &&
-              (isAdmin || closedMatchIds.has(b.match_id))
+              closedMatchIds.has(b.match_id)
             )}
             zebraThreshold={zebraThreshold}
             scorerMapping={scorerMapping}
