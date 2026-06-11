@@ -9,7 +9,7 @@ import { scoreMatchBet, scoreGroupBet, detectMatchZebra, detectGroupZebra, getMa
 import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap, computeGroupCompletion } from '@/lib/bracket/engine'
 import type { KnockoutTeamOverride } from '@/lib/bracket/engine'
 import { Flag } from '@/components/ui/Flag'
-import type { RuleMap, TournamentResults } from '@/lib/scoring/engine'
+import type { RuleMap, TournamentResults, MatchResult } from '@/lib/scoring/engine'
 import type { MatchSlim, BetSlim } from '@/lib/bracket/engine'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -321,12 +321,13 @@ function fmtMatchDate(dt: string) {
 // ── SimScoreInput ──────────────────────────────────────────────────────────────
 
 const SimScoreInput = memo(function SimScoreInput({
-  match, canEdit, possibleZebras, isActualZebra, simScore, onSaved,
+  match, canEdit, possibleZebras, isActualZebra, isActualZebraBet, simScore, onSaved,
 }: {
   match: MatchFull
   canEdit: boolean
-  possibleZebras?: { H: boolean; D: boolean; A: boolean }
+  possibleZebras?: { H: ZebraOutcome; D: ZebraOutcome; A: ZebraOutcome }
   isActualZebra?: boolean
+  isActualZebraBet?: boolean
   simScore?: { score_home: number; score_away: number }
   onSaved: (sh: number | null, sa: number | null) => void
 }) {
@@ -359,13 +360,15 @@ const SimScoreInput = memo(function SimScoreInput({
   // Placar oficial: read-only
   if (match.score_home !== null && match.score_away !== null) {
     const result = getMatchResult(match.score_home, match.score_away)
+    const zebraScoreCls = isActualZebraBet ? 'bg-gray-900 text-white' : 'bg-gray-500 text-white'
+    const zebraDrawCls  = isActualZebraBet ? 'rounded bg-gray-900 text-white px-0.5' : 'rounded bg-gray-500 text-white px-0.5'
     return (
       <div className="inline-flex items-center gap-0.5">
-        <span className={`inline-flex items-center justify-center min-w-[18px] rounded px-0.5 text-xs font-bold tabular-nums ${isActualZebra && result === 'H' ? 'bg-gray-900 text-white' : 'text-gray-700'}`}>
+        <span className={`inline-flex items-center justify-center min-w-[18px] rounded px-0.5 text-xs font-bold tabular-nums ${isActualZebra && result === 'H' ? zebraScoreCls : 'text-gray-700'}`}>
           {match.score_home}
         </span>
-        <span className={`text-[9px] font-bold ${isActualZebra && result === 'D' ? 'rounded bg-gray-900 text-white px-0.5' : 'text-gray-300'}`}>×</span>
-        <span className={`inline-flex items-center justify-center min-w-[18px] rounded px-0.5 text-xs font-bold tabular-nums ${isActualZebra && result === 'A' ? 'bg-gray-900 text-white' : 'text-gray-700'}`}>
+        <span className={`text-[9px] font-bold ${isActualZebra && result === 'D' ? zebraDrawCls : 'text-gray-300'}`}>×</span>
+        <span className={`inline-flex items-center justify-center min-w-[18px] rounded px-0.5 text-xs font-bold tabular-nums ${isActualZebra && result === 'A' ? zebraScoreCls : 'text-gray-700'}`}>
           {match.score_away}
         </span>
       </div>
@@ -377,9 +380,9 @@ const SimScoreInput = memo(function SimScoreInput({
     if (!pz || (!pz.H && !pz.D && !pz.A)) return <span className="text-gray-300 text-xs">–</span>
     return (
       <div className="inline-flex items-center gap-0.5">
-        <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[9px] ${pz.H ? 'bg-gray-900' : 'bg-gray-100 border border-gray-200'}`} />
-        <span className={`text-[9px] font-bold ${pz.D ? 'rounded bg-gray-900 text-white px-0.5' : 'text-gray-300'}`}>×</span>
-        <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[9px] ${pz.A ? 'bg-gray-900' : 'bg-gray-100 border border-gray-200'}`} />
+        <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[9px] ${pz.H === 'apostada' ? 'bg-gray-900' : pz.H === 'sem_aposta' ? 'bg-gray-500' : 'bg-gray-100 border border-gray-200'}`} />
+        <span className={`text-[9px] font-bold ${pz.D === 'apostada' ? 'rounded bg-gray-900 text-white px-0.5' : pz.D === 'sem_aposta' ? 'rounded bg-gray-500 text-white px-0.5' : 'text-gray-300'}`}>×</span>
+        <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[9px] ${pz.A === 'apostada' ? 'bg-gray-900' : pz.A === 'sem_aposta' ? 'bg-gray-500' : 'bg-gray-100 border border-gray-200'}`} />
       </div>
     )
   }
@@ -394,21 +397,27 @@ const SimScoreInput = memo(function SimScoreInput({
         onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0,2); setHome(v); homeRef.current = v; triggerSave(v, awayRef.current) }}
         placeholder="–"
         className={`w-7 rounded border text-center text-xs font-bold py-0.5 focus:outline-none ${
-          possibleZebras?.H || (isActualZebra && currentResult === 'H')
+          possibleZebras?.H === 'apostada' || (isActualZebra && isActualZebraBet && currentResult === 'H')
             ? 'border-gray-700 bg-gray-900 text-white placeholder-gray-500 focus:border-gray-600'
-            : 'border-amber-200 bg-amber-50 focus:border-amber-400'
+            : possibleZebras?.H === 'sem_aposta' || (isActualZebra && !isActualZebraBet && currentResult === 'H')
+              ? 'border-gray-500 bg-gray-500 text-white placeholder-gray-300 focus:border-gray-400'
+              : 'border-amber-200 bg-amber-50 focus:border-amber-400'
         }`}
       />
       <span className={`text-[9px] font-bold ${
-        possibleZebras?.D || (isActualZebra && currentResult === 'D') ? 'rounded bg-gray-900 text-white px-0.5' : 'text-gray-300'
+        possibleZebras?.D === 'apostada' || (isActualZebra && isActualZebraBet && currentResult === 'D') ? 'rounded bg-gray-900 text-white px-0.5'
+        : possibleZebras?.D === 'sem_aposta' || (isActualZebra && !isActualZebraBet && currentResult === 'D') ? 'rounded bg-gray-500 text-white px-0.5'
+        : 'text-gray-300'
       }`}>×</span>
       <input type="text" inputMode="numeric" pattern="[0-9]*" value={away}
         onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0,2); setAway(v); awayRef.current = v; triggerSave(homeRef.current, v) }}
         placeholder="–"
         className={`w-7 rounded border text-center text-xs font-bold py-0.5 focus:outline-none ${
-          possibleZebras?.A || (isActualZebra && currentResult === 'A')
+          possibleZebras?.A === 'apostada' || (isActualZebra && isActualZebraBet && currentResult === 'A')
             ? 'border-gray-700 bg-gray-900 text-white placeholder-gray-500 focus:border-gray-600'
-            : 'border-amber-200 bg-amber-50 focus:border-amber-400'
+            : possibleZebras?.A === 'sem_aposta' || (isActualZebra && !isActualZebraBet && currentResult === 'A')
+              ? 'border-gray-500 bg-gray-500 text-white placeholder-gray-300 focus:border-gray-400'
+              : 'border-amber-200 bg-amber-50 focus:border-amber-400'
         }`}
       />
       {hasSim && (
@@ -427,6 +436,18 @@ const SimScoreInput = memo(function SimScoreInput({
 })
 
 // ── Zebra helpers ──────────────────────────────────────────────────────────────
+
+type ZebraOutcome = 'apostada' | 'sem_aposta' | false
+
+function zebraOutcome(
+  betsList: Array<{ score_home: number; score_away: number }>,
+  result: MatchResult,
+  threshold: number,
+): ZebraOutcome {
+  if (!detectMatchZebra(betsList, result, threshold)) return false
+  const count = betsList.filter(b => getMatchResult(b.score_home, b.score_away) === result).length
+  return count > 0 ? 'apostada' : 'sem_aposta'
+}
 
 function collectMatchBets(matchId: string, participants: Participant[], betMap: BetMap) {
   const bets: Array<{ score_home: number; score_away: number }> = []
@@ -1166,23 +1187,32 @@ export function SimuladorClient({
 
   const matchZebraMap = useMemo(() => {
     const threshold = rules['percentual_zebra'] ?? 15
-    const possible = new Map<string, { H: boolean; D: boolean; A: boolean } | undefined>()
-    const actual   = new Map<string, boolean>()
+    const possible  = new Map<string, { H: ZebraOutcome; D: ZebraOutcome; A: ZebraOutcome } | undefined>()
+    const actual    = new Map<string, boolean>()
+    const actualBet = new Map<string, boolean>()
     for (const m of matches) {
       const effH = m.score_home ?? simMap.get(m.id)?.score_home ?? null
       const effA = m.score_away ?? simMap.get(m.id)?.score_away ?? null
       const betsList  = collectMatchBets(m.id, participants, betMap)
       const hasResult = effH !== null && effA !== null
       possible.set(m.id, betsList.length > 0 ? {
-        H: detectMatchZebra(betsList, 'H', threshold),
-        D: detectMatchZebra(betsList, 'D', threshold),
-        A: detectMatchZebra(betsList, 'A', threshold),
+        H: zebraOutcome(betsList, 'H', threshold),
+        D: zebraOutcome(betsList, 'D', threshold),
+        A: zebraOutcome(betsList, 'A', threshold),
       } : undefined)
-      actual.set(m.id, hasResult && betsList.length > 0
+      const isZebra = hasResult && betsList.length > 0
         ? detectMatchZebra(betsList, getMatchResult(effH!, effA!), threshold)
-        : false)
+        : false
+      actual.set(m.id, isZebra)
+      if (isZebra && hasResult) {
+        const res = getMatchResult(effH!, effA!)
+        const countOnResult = betsList.filter(b => getMatchResult(b.score_home, b.score_away) === res).length
+        actualBet.set(m.id, countOnResult > 0)
+      } else {
+        actualBet.set(m.id, false)
+      }
     }
-    return { possible, actual }
+    return { possible, actual, actualBet }
   }, [matches, betMap, participants, rules, simMap])
 
   const vItems    = rowVirtualizer.getVirtualItems()
@@ -1942,8 +1972,9 @@ export function SimuladorClient({
                 const { date: mDate, time: mTime } = fmtMatchDate(match.match_datetime)
                 const effH           = match.score_home ?? simMap.get(match.id)?.score_home ?? null
                 const effA           = match.score_away ?? simMap.get(match.id)?.score_away ?? null
-                const possibleZebras = matchZebraMap.possible.get(match.id)
+                const possibleZebras  = matchZebraMap.possible.get(match.id)
                 const isActualZebra  = matchZebraMap.actual.get(match.id) ?? false
+                const isActualZebraBet = matchZebraMap.actualBet.get(match.id) ?? false
                 const zebraImgW = isMobile ? 18 : 24
                 return (
                   <tr key={match.id} style={{ height: ROW_H }}>
@@ -2000,6 +2031,7 @@ export function SimuladorClient({
                         canEdit={canEdit(match)}
                         possibleZebras={possibleZebras}
                         isActualZebra={isActualZebra}
+                        isActualZebraBet={isActualZebraBet}
                         simScore={simMap.get(match.id)}
                         onSaved={(sh, sa) => {
                           if (sh === null) {
@@ -2051,7 +2083,7 @@ export function SimuladorClient({
                       const isFrozen = displayFrozenLeft !== null && idx === 0
                       const frozenBg = isFrozen ? (CELL_KIND_BG_HEX[kind] || bg) : undefined
                       const betOutcome = bet ? getMatchResult(bet.score_home, bet.score_away) : null
-                      const isPotentialZebra = betOutcome !== null && possibleZebras?.[betOutcome] === true
+                      const isPotentialZebra = betOutcome !== null && !!possibleZebras?.[betOutcome]
                       return (
                         <td key={p.id}
                           style={isFrozen ? { position: 'sticky', left: displayFrozenLeft!, zIndex: 20, background: frozenBg, borderLeft: '2px solid #d1d5db' } : undefined}
@@ -2086,10 +2118,12 @@ export function SimuladorClient({
 
       {/* Legend (só na aba Tabela) */}
       {tab === 'tabela' && (
-        <div className="flex items-center gap-3 border-t border-gray-100 bg-white px-3 py-1.5 text-[10px] text-gray-400 shrink-0">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-gray-100 bg-white px-3 py-1.5 text-[10px] text-gray-400 shrink-0">
           <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-emerald-100" />Cravada</span>
           <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-sky-100" />Vencedor/Parcial</span>
           <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-rose-50 border border-rose-200" />Errou</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-gray-900" />Zebra apostada (≤15%)</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-gray-500" />Zebra sem aposta</span>
         </div>
       )}
     </div>
