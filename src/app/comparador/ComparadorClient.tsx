@@ -91,6 +91,26 @@ export function ComparadorClient(props: Props) {
     return buildDuelMatrix(matches, bA, bB, colPopMap, zebraThreshold, rulesMap, isAdmin)
   }, [pidA, pidB, matches, betsByParticipant, colPopMap, zebraThreshold, rulesMap])
 
+  // Diagnóstico: jogos com placar × palpites disponíveis
+  const debugInfo = useMemo(() => {
+    if (!isAdmin || !pidA || !pidB) return null
+    const bA = betsByParticipant[pidA] ?? {}
+    const bB = betsByParticipant[pidB] ?? {}
+    const played = matches.filter(m => m.scoreHome !== null && m.scoreAway !== null)
+    return {
+      totalMatches: matches.length,
+      playedMatches: played.length,
+      betsA: Object.keys(bA).length,
+      betsB: Object.keys(bB).length,
+      playedDetail: played.slice(0, 5).map(m => ({
+        n: m.matchNumber,
+        score: `${m.scoreHome}-${m.scoreAway}`,
+        betA: bA[m.id] ? `${bA[m.id].scoreHome}-${bA[m.id].scoreAway}` : 'null',
+        betB: bB[m.id] ? `${bB[m.id].scoreHome}-${bB[m.id].scoreAway}` : 'null',
+      })),
+    }
+  }, [isAdmin, pidA, pidB, matches, betsByParticipant])
+
   const breakdown = useMemo(() =>
     computeBreakdown(duelRows, rulesMap), [duelRows, rulesMap])
 
@@ -166,6 +186,20 @@ export function ComparadorClient(props: Props) {
           color="red"
         />
       </div>
+
+      {/* ── Debug panel (admin only) ─────────────────────────────────────── */}
+      {debugInfo && (
+        <details className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+          <summary className="cursor-pointer font-bold">🔧 Debug (admin)</summary>
+          <div className="mt-2 space-y-1 font-mono">
+            <div>Partidas carregadas: {debugInfo.totalMatches} | Com placar: {debugInfo.playedMatches}</div>
+            <div>Palpites A: {debugInfo.betsA} | Palpites B: {debugInfo.betsB}</div>
+            {debugInfo.playedDetail.map(d => (
+              <div key={d.n}>Jogo #{d.n} [{d.score}] — A: {d.betA} | B: {d.betB}</div>
+            ))}
+          </div>
+        </details>
+      )}
 
       {!hasData && (
         <div className="rounded-2xl border border-dashed border-gray-300 bg-white py-20 text-center">
