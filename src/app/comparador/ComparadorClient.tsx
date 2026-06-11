@@ -118,8 +118,14 @@ export function ComparadorClient(props: Props) {
         }
       }),
       rules: ruleKeys.map(k => `${k}=${rulesMap[k] ?? 'undef'}`).join(' | '),
+      bdA: breakdown.ptsMatchesA,
+      bdB: breakdown.ptsMatchesB,
+      scA: scoresByParticipant[pidA]?.ptsMatches ?? 'n/a',
+      scTotA: scoresByParticipant[pidA]?.ptsTotal ?? 'n/a',
+      scB: scoresByParticipant[pidB]?.ptsMatches ?? 'n/a',
+      scTotB: scoresByParticipant[pidB]?.ptsTotal ?? 'n/a',
     }
-  }, [isAdmin, pidA, pidB, matches, betsByParticipant, duelRows, rulesMap])
+  }, [isAdmin, pidA, pidB, matches, betsByParticipant, duelRows, rulesMap, breakdown, scoresByParticipant])
 
   const breakdown = useMemo(() =>
     computeBreakdown(duelRows, rulesMap), [duelRows, rulesMap])
@@ -207,6 +213,9 @@ export function ComparadorClient(props: Props) {
             {debugInfo.playedDetail.map(d => (
               <div key={d.n}>Jogo #{d.n} [{d.score}] — A: {d.betA} ({d.ptsA}pts) | B: {d.betB} ({d.ptsB}pts)</div>
             ))}
+            <div>breakdown.ptsMatchesA={debugInfo.bdA} | breakdown.ptsMatchesB={debugInfo.bdB}</div>
+            <div>scoresByParticipant A ptsMatches={debugInfo.scA} ptsTotal={debugInfo.scTotA}</div>
+            <div>scoresByParticipant B ptsMatches={debugInfo.scB} ptsTotal={debugInfo.scTotB}</div>
             <div className="mt-1 break-all">{debugInfo.rules}</div>
           </div>
         </details>
