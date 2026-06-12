@@ -274,22 +274,18 @@ function CompactRanking({
                 const boundary = ri > 0 && zoneOf(block[ri - 1]) !== z
                 const isActive = r.id === activeParticipantId
                 const isPanela = panelaSet.has(r.id)
-                let rowBgCls = ZONE_ROW[z]
-                if (z !== 'last') {
-                  if (highlightMode === 'panela') {
-                    if (isActive) rowBgCls = 'bg-verde-100'
-                    else if (isPanela) rowBgCls = 'bg-indigo-50'
-                  } else if (highlightMode === 'me' && isActive) {
-                    rowBgCls = 'bg-verde-100'
-                  }
-                }
-                const nameFontCls = z !== 'last' && highlightMode !== 'none' && isActive ? 'font-semibold' : ''
+                const shouldHighlight = z !== 'last' && (
+                  (highlightMode === 'me'     && isActive) ||
+                  (highlightMode === 'panela' && (isActive || isPanela))
+                )
+                const highlightRing = shouldHighlight ? 'ring-1 ring-inset ring-red-500' : ''
+                const textCls = shouldHighlight ? 'text-red-600 font-semibold' : ZONE_TEXT[z]
                 return (
                   <div
                     key={r.id}
-                    className={`${colsGrid} px-2 py-[3px] text-[12px] ${rowBgCls} ${boundary ? 'border-t border-gray-200' : ''} ${sdBorder(r.id)}`}
+                    className={`${colsGrid} px-2 py-[3px] text-[12px] ${ZONE_ROW[z]} ${boundary ? 'border-t border-gray-200' : ''} ${sdBorder(r.id)} ${highlightRing}`}
                   >
-                    <span className={`text-right pr-0.5 tabular-nums ${ZONE_TEXT[z]}`}>{r.rank}</span>
+                    <span className={`text-right pr-0.5 tabular-nums ${textCls}`}>{r.rank}</span>
 
                     {sdActive && (
                       <span className="flex items-center justify-center">
@@ -301,16 +297,15 @@ function CompactRanking({
                       </span>
                     )}
 
-                    <span className={`pl-1 line-clamp-2 break-words ${ZONE_TEXT[z]} ${nameFontCls}`} title={r.apelido}>
+                    <span className={`pl-1 line-clamp-2 break-words ${textCls}`} title={r.apelido}>
                       {r.apelido}{z === 'last' && ' 🔦'}
-                      {z !== 'last' && highlightMode !== 'none' && isActive && <span className="ml-0.5 text-[10px] text-verde-600">◀</span>}
                       {sdActive && highlights.maxUpId   === r.id && <span className="ml-0.5 text-[8px]" title="Maior subida do período">🚀</span>}
                       {sdActive && highlights.maxDownId === r.id && <span className="ml-0.5 text-[8px]" title="Maior queda do período">📉</span>}
                       {sdActive && highlights.maxPtsId  === r.id && <span className="ml-0.5 text-[8px]" title="Maior pontuação do período">🔥</span>}
                       {sdActive && highlights.minPtsId  === r.id && <span className="ml-0.5 text-[8px]" title="Menor pontuação do período">🥶</span>}
                     </span>
 
-                    <span className={`text-right tabular-nums font-bold ${ZONE_TEXT[z]}`}>{r.pts}</span>
+                    <span className={`text-right tabular-nums font-bold ${textCls}`}>{r.pts}</span>
 
                     {sdActive && (
                       <span className="flex items-center justify-end">
