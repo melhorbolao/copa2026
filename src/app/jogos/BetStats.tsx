@@ -211,9 +211,9 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
               <span className={`${D_W} flex justify-center`}>{g.result === 'D' ? scoreEl : null}</span>
               <span className={`${A_W} flex justify-center`}>{g.result === 'A' ? scoreEl : null}</span>
 
-              {/* Right spacer — on desktop justify-start to sit close to the score columns */}
-              <div className="flex-1 flex justify-end sm:justify-start sm:pl-3 items-center gap-1.5">
-                <span className={metaClass}>{g.count}({g.pct.toFixed(0)}%)</span>
+              {/* Right spacer */}
+              <div className="flex-1 flex justify-end items-center gap-1.5">
+                <span className={metaClass}>{g.count} ({g.pct.toFixed(0)}%)</span>
                 <span className={ptsClass}>
                   {g.pts !== null ? (g.pts > 0 ? `+${g.pts}` : '0') : ''}
                 </span>
@@ -253,7 +253,7 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
             <span className={`${H_W} flex justify-center`}>{ownResult === 'H' ? scoreEl : null}</span>
             <span className={`${D_W} flex justify-center`}>{ownResult === 'D' ? scoreEl : null}</span>
             <span className={`${A_W} flex justify-center`}>{ownResult === 'A' ? scoreEl : null}</span>
-            <div className="flex-1 flex justify-end sm:justify-start sm:pl-3">
+            <div className="flex-1 flex justify-end">
               {ownPts !== null && (
                 <span className={`text-sm sm:text-xl font-bold tabular-nums ${ownPts > 0 ? 'text-blue-600' : 'text-gray-300'}`}>
                   {ownPts > 0 ? `+${ownPts}` : '0'}
