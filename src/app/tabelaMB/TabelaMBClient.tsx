@@ -487,6 +487,15 @@ export function TabelaMBClient({
   const [showWatchSelector, setShowWatchSelector] = useState(false)
   const [watchQuery, setWatchQuery] = useState('')
 
+  useEffect(() => {
+    const key = `sim_watch_${activeParticipantId}`
+    const handler = (e: StorageEvent) => {
+      if (e.key === key) setWatchParticipantId(e.newValue || null)
+    }
+    window.addEventListener('storage', handler)
+    return () => window.removeEventListener('storage', handler)
+  }, [activeParticipantId])
+
   // Admin: gestão de artilheiros oficiais
   const [localScorers, setLocalScorers] = useState<string[]>(officialTopScorers)
   const [scorerInput,    setScorerInput]    = useState('')
@@ -949,8 +958,10 @@ export function TabelaMBClient({
 
   const saveWatchPart = useCallback((id: string | null) => {
     setWatchParticipantId(id)
-    if (id) localStorage.setItem(`sim_watch_${activeParticipantId}`, id)
-    else localStorage.removeItem(`sim_watch_${activeParticipantId}`)
+    const key = `sim_watch_${activeParticipantId}`
+    if (id) localStorage.setItem(key, id)
+    else localStorage.removeItem(key)
+    window.dispatchEvent(new StorageEvent('storage', { key, newValue: id ?? null }))
   }, [activeParticipantId])
 
   const vItems    = rowVirtualizer.getVirtualItems()

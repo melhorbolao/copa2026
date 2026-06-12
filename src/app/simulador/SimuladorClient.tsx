@@ -608,6 +608,15 @@ export function SimuladorClient({
   })
   const [showWatchSelector,   setShowWatchSelector]   = useState(false)
   const [watchQuery,           setWatchQuery]           = useState('')
+
+  useEffect(() => {
+    const key = `sim_watch_${userId}`
+    const handler = (e: StorageEvent) => {
+      if (e.key === key) setWatchParticipantId(e.newValue || null)
+    }
+    window.addEventListener('storage', handler)
+    return () => window.removeEventListener('storage', handler)
+  }, [userId])
   const [showGabaritarDe,     setShowGabaritarDe]     = useState(false)
   const [gabaritarDeQuery,    setGabaritarDeQuery]    = useState('')
   const [gabaritarDeSelected, setGabaritarDeSelected] = useState<string | null>(null)
@@ -654,8 +663,10 @@ export function SimuladorClient({
   const watchPart = watchParticipantId ? participants.find(p => p.id === watchParticipantId) : null
   const saveWatchPart = useCallback((id: string | null) => {
     setWatchParticipantId(id)
-    if (id) localStorage.setItem(`sim_watch_${userId}`, id)
-    else localStorage.removeItem(`sim_watch_${userId}`)
+    const key = `sim_watch_${userId}`
+    if (id) localStorage.setItem(key, id)
+    else localStorage.removeItem(key)
+    window.dispatchEvent(new StorageEvent('storage', { key, newValue: id ?? null }))
   }, [userId])
 
   // Conjunto de match IDs com prazo aberto (palpites ocultos)
