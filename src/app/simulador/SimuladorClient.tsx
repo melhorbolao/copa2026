@@ -615,6 +615,8 @@ export function SimuladorClient({
   const [gabaritarDeQuery,    setGabaritarDeQuery]    = useState('')
   const [gabaritarDeSelected, setGabaritarDeSelected] = useState<string | null>(null)
   const [isGabaritandoDe,     setIsGabaritandoDe]     = useState(false)
+  const [showLimparDialog,    setShowLimparDialog]    = useState(false)
+  const [limparOpts, setLimparOpts] = useState({ jogos: true, grupos12: true, grupos3: true, g4: true, artilheiro: true })
 
   // simMap: simulações pessoais do usuário — match_id → {score_home, score_away}
   const [simMap, setSimMap] = useState<Map<string, { score_home: number; score_away: number }>>(() => {
@@ -1170,39 +1172,60 @@ export function SimuladorClient({
 
   // ── Limpar: remove simulações de partidas sem resultado oficial ───────────
 
-  const handleLimpar = useCallback(async () => {
+  const handleLimpar = useCallback(async (opts: { jogos: boolean; grupos12: boolean; grupos3: boolean; g4: boolean; artilheiro: boolean }) => {
     setIsLimpando(true)
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sb = supabase.current as any
-      const matchIds: string[] = []
-      for (const m of matches) {
-        if (m.score_home !== null) continue
-        if (simMap.has(m.id)) matchIds.push(m.id)
-      }
-      if (matchIds.length) {
-        setSimMap(prev => {
-          const next = new Map(prev)
-          for (const mid of matchIds) next.delete(mid)
-          return next
-        })
-        for (const mid of matchIds) resetLivePointsForMatch(mid)
-        await sb.from('user_simulations').delete().eq('user_id', userId)
+      if (opts.jogos) {
+        const matchIds: string[] = []
+        for (const m of matches) {
+          if (m.score_home !== null) continue
+          if (simMap.has(m.id)) matchIds.push(m.id)
+        }
+        if (matchIds.length) {
+          setSimMap(prev => {
+            const next = new Map(prev)
+            for (const mid of matchIds) next.delete(mid)
+            return next
+          })
+          for (const mid of matchIds) resetLivePointsForMatch(mid)
+          await sb.from('user_simulations').delete().eq('user_id', userId)
+        }
       }
       if (!bonusIsLocked) {
-        setSimGroupMap(new Map())
-        setSimThirdMap(new Map())
-        setSimTournament({ champion: '', runner_up: '', semi1: '', semi2: '', top_scorer: '' })
-        await Promise.all([
-          sb.from('user_group_simulations').delete().eq('user_id', userId),
-          sb.from('user_third_simulations').delete().eq('user_id', userId),
-          sb.from('user_tournament_simulations').delete().eq('user_id', userId),
-        ])
+        if (opts.grupos12) {
+          setSimGroupMap(new Map())
+          await sb.from('user_group_simulations').delete().eq('user_id', userId)
+        }
+        if (opts.grupos3) {
+          setSimThirdMap(new Map())
+          await sb.from('user_third_simulations').delete().eq('user_id', userId)
+        }
+        if (opts.g4 || opts.artilheiro) {
+          const newTournament = {
+            champion:   opts.g4         ? '' : simTournament.champion,
+            runner_up:  opts.g4         ? '' : simTournament.runner_up,
+            semi1:      opts.g4         ? '' : simTournament.semi1,
+            semi2:      opts.g4         ? '' : simTournament.semi2,
+            top_scorer: opts.artilheiro ? '' : simTournament.top_scorer,
+          }
+          setSimTournament(newTournament)
+          const hasAny = Object.values(newTournament).some(v => !!v)
+          if (!hasAny) {
+            await sb.from('user_tournament_simulations').delete().eq('user_id', userId)
+          } else {
+            await sb.from('user_tournament_simulations').upsert(
+              { user_id: userId, ...newTournament },
+              { onConflict: 'user_id' },
+            )
+          }
+        }
       }
     } finally {
       setIsLimpando(false)
     }
-  }, [matches, simMap, userId, resetLivePointsForMatch, bonusIsLocked])
+  }, [matches, simMap, userId, resetLivePointsForMatch, bonusIsLocked, simTournament])
 
   const teamFlagMap = useMemo(() => {
     const m = new Map<string, string>()
@@ -1459,7 +1482,7 @@ export function SimuladorClient({
                 ) : null}
                 {isGabaritandoDe ? 'Salvando…' : 'Gabaritar de…'}
               </button>
-              <button onClick={handleLimpar} disabled={isGabaritando || isGabaritandoDe || isLimpando}
+              <button onClick={() => { setLimparOpts({ jogos: true, grupos12: true, grupos3: true, g4: true, artilheiro: true }); setShowLimparDialog(true) }} disabled={isGabaritando || isGabaritandoDe || isLimpando}
                 className="inline-flex items-center gap-1 rounded px-2.5 py-0.5 text-[11px] font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-60 disabled:cursor-not-allowed transition">
                 {isLimpando ? (
                   <svg className="animate-spin w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none">
@@ -2447,6 +2470,50 @@ export function SimuladorClient({
                     {p.apelido}
                   </button>
                 ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Limpar simulação */}
+      {showLimparDialog && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4" onClick={() => setShowLimparDialog(false)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-xs" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 pt-4 pb-2">
+              <span className="font-semibold text-gray-800">O que deseja limpar?</span>
+              <button onClick={() => setShowLimparDialog(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+            </div>
+            <p className="px-4 pb-2 text-[11px] text-gray-400">Desmarque o que não quiser apagar.</p>
+            <div className="px-4 pb-3 flex flex-col gap-2">
+              {([
+                { key: 'jogos',    label: 'Jogos' },
+                { key: 'grupos12', label: 'Classificados 1º e 2º' },
+                { key: 'grupos3',  label: 'Classificados 3º' },
+                { key: 'g4',       label: 'G4' },
+                { key: 'artilheiro', label: 'Artilheiro' },
+              ] as const).map(({ key, label }) => (
+                <label key={key} className="flex items-center gap-3 cursor-pointer select-none rounded-lg px-2 py-1.5 hover:bg-gray-50 transition">
+                  <input
+                    type="checkbox"
+                    checked={limparOpts[key]}
+                    onChange={e => setLimparOpts(prev => ({ ...prev, [key]: e.target.checked }))}
+                    className="w-4 h-4 accent-gray-700 rounded cursor-pointer"
+                  />
+                  <span className="text-[13px] text-gray-700">{label}</span>
+                </label>
+              ))}
+            </div>
+            <div className="px-4 py-3 border-t border-gray-100 flex justify-end gap-2">
+              <button onClick={() => setShowLimparDialog(false)}
+                className="px-4 py-1.5 text-[12px] rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 font-medium transition">
+                Cancelar
+              </button>
+              <button
+                disabled={!Object.values(limparOpts).some(Boolean)}
+                onClick={async () => { setShowLimparDialog(false); await handleLimpar(limparOpts) }}
+                className="px-4 py-1.5 text-[12px] rounded-lg bg-gray-700 text-white hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition">
+                Limpar
+              </button>
             </div>
           </div>
         </div>
