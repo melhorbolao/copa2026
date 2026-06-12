@@ -1,9 +1,8 @@
 'use client'
 
 import {
-  useState, useEffect, useRef, useCallback, useTransition, memo, useMemo,
+  useState, useEffect, useRef, useCallback, useTransition, memo, useMemo, useSyncExternalStore,
 } from 'react'
-import { usePathname } from 'next/navigation'
 import { toast } from 'react-hot-toast'
 import { downloadExcel } from '@/utils/downloadExcel'
 import { useVirtualizer } from '@tanstack/react-virtual'
@@ -476,28 +475,22 @@ export function TabelaMBClient({
   teamAbbrs, officialTopScorers, scorerMapping, productionMode = false,
   lockedMatchIds, bonusIsLocked = false,
 }: Props) {
-  const pathname = usePathname()
   const [matches, setMatches] = useState<MatchFull[]>(initialMatches)
   const [betMap,  setBetMap]  = useState<BetMap>(() => buildBetMap(initialBets))
   const [phase,   setPhase]   = useState('group')
   const [now,     setNow]     = useState(Date.now())
   const [isMobile, setIsMobile] = useState(false)
-  const [watchParticipantId, setWatchParticipantId] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null
-    return localStorage.getItem(`sim_watch_${activeParticipantId}`) || null
-  })
+  const watchKey = `sim_watch_${activeParticipantId}`
+  const watchParticipantId = useSyncExternalStore(
+    useCallback((cb: () => void) => {
+      window.addEventListener('storage', cb)
+      return () => window.removeEventListener('storage', cb)
+    }, []),
+    useCallback(() => localStorage.getItem(watchKey) ?? null, [watchKey]),
+    () => null,
+  )
   const [showWatchSelector, setShowWatchSelector] = useState(false)
   const [watchQuery, setWatchQuery] = useState('')
-
-  useEffect(() => {
-    const key = `sim_watch_${activeParticipantId}`
-    setWatchParticipantId(localStorage.getItem(key) || null)
-    const handler = (e: StorageEvent) => {
-      if (e.key === key) setWatchParticipantId(e.newValue || null)
-    }
-    window.addEventListener('storage', handler)
-    return () => window.removeEventListener('storage', handler)
-  }, [pathname, activeParticipantId])
 
   // Admin: gestão de artilheiros oficiais
   const [localScorers, setLocalScorers] = useState<string[]>(officialTopScorers)
@@ -960,12 +953,10 @@ export function TabelaMBClient({
   }, [scorerInput, localScorers, handleScorerSave])
 
   const saveWatchPart = useCallback((id: string | null) => {
-    setWatchParticipantId(id)
-    const key = `sim_watch_${activeParticipantId}`
-    if (id) localStorage.setItem(key, id)
-    else localStorage.removeItem(key)
-    window.dispatchEvent(new StorageEvent('storage', { key, newValue: id ?? null }))
-  }, [activeParticipantId])
+    if (id) localStorage.setItem(watchKey, id)
+    else localStorage.removeItem(watchKey)
+    window.dispatchEvent(new StorageEvent('storage', { key: watchKey, newValue: id ?? null }))
+  }, [watchKey])
 
   const vItems    = rowVirtualizer.getVirtualItems()
   const totalSize = rowVirtualizer.getTotalSize()

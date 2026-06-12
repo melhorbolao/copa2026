@@ -1,9 +1,8 @@
 'use client'
 
 import {
-  useState, useEffect, useRef, useCallback, useTransition, memo, useMemo,
+  useState, useEffect, useRef, useCallback, useTransition, memo, useMemo, useSyncExternalStore,
 } from 'react'
-import { usePathname } from 'next/navigation'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { createClient } from '@/lib/supabase/client'
 import { scoreMatchBet, scoreGroupBet, detectMatchZebra, detectGroupZebra, getMatchResult, scoreTournamentBet } from '@/lib/scoring/engine'
@@ -596,7 +595,6 @@ export function SimuladorClient({
   existingGroupSims, existingThirdSims, existingTournamentSim,
   prizeSpots: _prizeSpots = 8, premioSpots = 10,
 }: Props) {
-  const pathname = usePathname()
   const [matches, setMatches] = useState<MatchFull[]>(initialMatches)
   const [betMap,  setBetMap]  = useState<BetMap>(() => buildBetMap(initialBets))
   const [phase,   setPhase]   = useState('all')
@@ -604,22 +602,17 @@ export function SimuladorClient({
   const [tab, setTab] = useState<'tabela' | 'classificacao'>('tabela')
   const [isGabaritando, setIsGabaritando] = useState(false)
   const [isLimpando,    setIsLimpando]    = useState(false)
-  const [watchParticipantId, setWatchParticipantId] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null
-    return localStorage.getItem(`sim_watch_${activeParticipantId}`) || null
-  })
+  const watchKey = `sim_watch_${activeParticipantId}`
+  const watchParticipantId = useSyncExternalStore(
+    useCallback((cb: () => void) => {
+      window.addEventListener('storage', cb)
+      return () => window.removeEventListener('storage', cb)
+    }, []),
+    useCallback(() => localStorage.getItem(watchKey) ?? null, [watchKey]),
+    () => null,
+  )
   const [showWatchSelector,   setShowWatchSelector]   = useState(false)
   const [watchQuery,           setWatchQuery]           = useState('')
-
-  useEffect(() => {
-    const key = `sim_watch_${activeParticipantId}`
-    setWatchParticipantId(localStorage.getItem(key) || null)
-    const handler = (e: StorageEvent) => {
-      if (e.key === key) setWatchParticipantId(e.newValue || null)
-    }
-    window.addEventListener('storage', handler)
-    return () => window.removeEventListener('storage', handler)
-  }, [pathname, activeParticipantId])
   const [showGabaritarDe,     setShowGabaritarDe]     = useState(false)
   const [gabaritarDeQuery,    setGabaritarDeQuery]    = useState('')
   const [gabaritarDeSelected, setGabaritarDeSelected] = useState<string | null>(null)
@@ -665,12 +658,10 @@ export function SimuladorClient({
 
   const watchPart = watchParticipantId ? participants.find(p => p.id === watchParticipantId) : null
   const saveWatchPart = useCallback((id: string | null) => {
-    setWatchParticipantId(id)
-    const key = `sim_watch_${activeParticipantId}`
-    if (id) localStorage.setItem(key, id)
-    else localStorage.removeItem(key)
-    window.dispatchEvent(new StorageEvent('storage', { key, newValue: id ?? null }))
-  }, [activeParticipantId])
+    if (id) localStorage.setItem(watchKey, id)
+    else localStorage.removeItem(watchKey)
+    window.dispatchEvent(new StorageEvent('storage', { key: watchKey, newValue: id ?? null }))
+  }, [watchKey])
 
   // Conjunto de match IDs com prazo aberto (palpites ocultos)
   const lockedSet = useMemo(() => new Set(lockedMatchIds ?? []), [lockedMatchIds])
