@@ -837,24 +837,23 @@ export function TabelaMBClient({
   const isActiveLeader = !!activeParticipantId && activeParticipantId === leaderId
 
   const watchPart = watchParticipantId ? (participants.find(p => p.id === watchParticipantId) ?? null) : null
-  const showWatchCol = !!watchPart && watchPart.id !== activeParticipantId && watchPart.id !== effectiveLeaderId
 
-  const baseScrollable = otherParts.filter(p =>
+  // Sentinel: watch column is always visible; sentinel holds the slot even when no participant is selected
+  const WATCH_ID = '__watch__'
+  const watchSentinel: Participant = { id: WATCH_ID, apelido: watchPart?.apelido ?? '' }
+
+  const scrollable = otherParts.filter(p =>
     p.id !== effectiveLeaderId &&
-    (!showWatchCol || p.id !== watchParticipantId)
+    p.id !== watchParticipantId
   )
   const displayParts: Participant[] = isActiveLeader
-    ? (showWatchCol ? [watchPart!, ...baseScrollable] : baseScrollable)
-    : (activePart
-        ? (showWatchCol ? [activePart, watchPart!, ...baseScrollable] : [activePart, ...baseScrollable])
-        : baseScrollable)
+    ? [watchSentinel, ...scrollable]
+    : (activePart ? [activePart, watchSentinel, ...scrollable] : [watchSentinel, ...scrollable])
 
   const displayFrozenLeft = isActiveLeader ? null : frozenPartLeft
-  const watchFrozenLeft = showWatchCol
-    ? (isMobile
-        ? frozenTotal + (isActiveLeader ? 0 : PART_COL_W)
-        : frozenTotal + 3 * STAT_COL_W + (isActiveLeader ? 1 : 2) * PART_COL_W)
-    : null
+  const watchFrozenLeft = isMobile
+    ? frozenTotal + (isActiveLeader ? 0 : PART_COL_W)
+    : frozenTotal + 3 * STAT_COL_W + (isActiveLeader ? 1 : 2) * PART_COL_W
 
   // Unique scorer names bet by participants (standardized), for the admin dropdown
   const betScorerOptions = useMemo(() => {
@@ -984,16 +983,6 @@ export function TabelaMBClient({
         <span className="ml-auto text-[10px] text-gray-400">
           {filteredMatches.length} jogos · {participants.length} part.
         </span>
-        <button
-          onClick={() => { setShowWatchSelector(true); setWatchQuery('') }}
-          title={watchPart ? `Acompanhando: ${watchPart.apelido}` : 'Acompanhar participante'}
-          className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition flex items-center gap-1 ${
-            watchPart ? 'bg-violet-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
-        >
-          <span>👁</span>
-          {watchPart && <span className="max-w-[60px] truncate">{watchPart.apelido}</span>}
-        </button>
         {/* Botão de exportação Excel — apenas desktop */}
         <button
           className="hidden sm:inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition"
@@ -1198,29 +1187,54 @@ export function TabelaMBClient({
               </th>
               {displayParts.map((p, idx) => {
                 const isMe = p.id === activeParticipantId
-                const isWatchPart = showWatchCol && p.id === watchParticipantId
-                const isActiveFrozen = displayFrozenLeft !== null && idx === 0
-                const isWatchFrozen  = watchFrozenLeft !== null && isWatchPart
+                const isWatch = p.id === WATCH_ID
+                const isActiveFrozen = displayFrozenLeft !== null && idx === 0 && !isWatch
+                const isWatchFrozen  = isWatch
                 const isFrozen = isActiveFrozen || isWatchFrozen
-                const frozenLeft = isActiveFrozen ? displayFrozenLeft! : (isWatchFrozen ? watchFrozenLeft! : 0)
-                const total = computedTotals[p.id] ?? 0
+                const frozenLeft = isActiveFrozen ? displayFrozenLeft! : watchFrozenLeft
+                const displayId = isWatch ? (watchPart?.id ?? null) : p.id
+                const total = displayId ? (computedTotals[displayId] ?? 0) : 0
+                if (isWatch) {
+                  return (
+                    <th key={p.id}
+                      title={watchPart ? `Acompanhando: ${watchPart.apelido} — clique para alterar` : 'Clique para acompanhar'}
+                      style={{
+                        position: 'sticky', top: 0,
+                        left: frozenLeft, borderLeft: '2px solid #7c3aed',
+                        zIndex: 50, background: '#2e1065',
+                        borderRight: '1px solid #374151', cursor: 'pointer',
+                      }}
+                      className="text-center px-0.5 text-violet-200"
+                      onClick={() => { setShowWatchSelector(true); setWatchQuery('') }}
+                    >
+                      <div className="flex items-center justify-center gap-0.5">
+                        <span className="text-[9px] leading-none">👁</span>
+                        <span className="line-clamp-2 break-words font-semibold text-[9px]" style={{ maxWidth: PART_COL_W - 14 }}>
+                          {watchPart?.apelido ?? 'Acomp.'}
+                        </span>
+                      </div>
+                      <span className="block text-[11px] font-semibold text-violet-300">
+                        {total > 0 ? total : '–'}
+                      </span>
+                    </th>
+                  )
+                }
                 return (
                   <th key={p.id} title={p.apelido}
                     style={{
                       position: 'sticky', top: 0,
-                      ...(isFrozen ? { left: frozenLeft, borderLeft: isWatchFrozen ? '2px solid #7c3aed' : '2px solid #6b7280' } : {}),
+                      ...(isFrozen ? { left: frozenLeft, borderLeft: '2px solid #6b7280' } : {}),
                       zIndex: isFrozen ? 50 : 40,
-                      background: isMe ? '#14532d' : isWatchPart ? '#2e1065' : '#1f2937',
+                      background: isMe ? '#14532d' : '#1f2937',
                       borderRight: '1px solid #374151',
                     }}
-                    className={`text-center px-0.5 ${isMe ? 'text-verde-200' : isWatchPart ? 'text-violet-200' : 'text-gray-300'}`}
+                    className={`text-center px-0.5 ${isMe ? 'text-verde-200' : 'text-gray-300'}`}
                   >
                     <div className="flex items-center justify-center gap-0.5">
                       {p.id === effectiveLeaderId && <span className="text-[9px] leading-none">🥇</span>}
-                      {isWatchPart && <span className="text-[9px] leading-none">👁</span>}
-                      <span className="line-clamp-2 break-words font-semibold" style={{ maxWidth: PART_COL_W - (p.id === effectiveLeaderId ? 16 : isWatchPart ? 14 : 4) }}>{p.apelido}</span>
+                      <span className="line-clamp-2 break-words font-semibold" style={{ maxWidth: PART_COL_W - (p.id === effectiveLeaderId ? 16 : 4) }}>{p.apelido}</span>
                     </div>
-                    <span className={`block text-[11px] font-semibold ${isMe ? 'text-verde-300' : isWatchPart ? 'text-violet-300' : 'text-gray-500'}`}>
+                    <span className={`block text-[11px] font-semibold ${isMe ? 'text-verde-300' : 'text-gray-500'}`}>
                       {total > 0 ? total : '–'}
                     </span>
                   </th>
@@ -1336,17 +1350,25 @@ export function TabelaMBClient({
                       </>)
                     })()}
                     {displayParts.map((p, idx) => {
-                      const bet  = groupBetMap.get(`${p.id}:${g}`)
-                      const kind = groupCellKind(bet, of1, of2)
+                      const isWatch = p.id === WATCH_ID
+                      const dataId = isWatch ? watchPart?.id ?? null : p.id
                       const isMe = p.id === activeParticipantId
-                      const isActiveFrozen = displayFrozenLeft !== null && idx === 0
-                      const isWatchFrozen  = watchFrozenLeft !== null && showWatchCol && p.id === watchParticipantId
-                      const isFrozen = isActiveFrozen || isWatchFrozen
-                      const frozenLeft = isActiveFrozen ? displayFrozenLeft! : watchFrozenLeft!
+                      const isActiveFrozen = displayFrozenLeft !== null && idx === 0 && !isWatch
+                      const isFrozen = isActiveFrozen || isWatch
+                      const frozenLeft = isActiveFrozen ? displayFrozenLeft! : watchFrozenLeft
+                      if (isWatch && !dataId) return (
+                        <td key={p.id}
+                          style={{ position: 'sticky', left: frozenLeft, zIndex: 20, background: '#eff6ff', borderLeft: '2px solid #7c3aed' }}
+                          className="border-r border-violet-100 text-center">
+                          <span className="text-gray-200">—</span>
+                        </td>
+                      )
+                      const bet  = groupBetMap.get(`${dataId!}:${g}`)
+                      const kind = groupCellKind(bet, of1, of2)
                       const frozenBg = isFrozen ? (CELL_KIND_BG_HEX[kind] || '#eff6ff') : undefined
                       return (
                         <td key={p.id}
-                          style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: frozenBg, borderLeft: isWatchFrozen ? '2px solid #7c3aed' : '2px solid #bfdbfe' } : undefined}
+                          style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: frozenBg, borderLeft: isWatch ? '2px solid #7c3aed' : '2px solid #bfdbfe' } : undefined}
                           className={`border-r border-blue-50 text-center ${!isFrozen ? CELL_BG[kind] : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                           {bet?.first_place ? (
                             <div className="flex flex-col items-center leading-none gap-px">
@@ -1435,17 +1457,25 @@ export function TabelaMBClient({
                       </>)
                     })()}
                     {displayParts.map((p, idx) => {
-                      const bet  = thirdBetMap.get(`${p.id}:${g}`)
-                      const kind = thirdCellKind(bet?.team, ot)
+                      const isWatch = p.id === WATCH_ID
+                      const dataId = isWatch ? watchPart?.id ?? null : p.id
                       const isMe = p.id === activeParticipantId
-                      const isActiveFrozen = displayFrozenLeft !== null && idx === 0
-                      const isWatchFrozen  = watchFrozenLeft !== null && showWatchCol && p.id === watchParticipantId
-                      const isFrozen = isActiveFrozen || isWatchFrozen
-                      const frozenLeft = isActiveFrozen ? displayFrozenLeft! : watchFrozenLeft!
+                      const isActiveFrozen = displayFrozenLeft !== null && idx === 0 && !isWatch
+                      const isFrozen = isActiveFrozen || isWatch
+                      const frozenLeft = isActiveFrozen ? displayFrozenLeft! : watchFrozenLeft
+                      if (isWatch && !dataId) return (
+                        <td key={p.id}
+                          style={{ position: 'sticky', left: frozenLeft, zIndex: 20, background: '#faf5ff', borderLeft: '2px solid #7c3aed' }}
+                          className="border-r border-violet-100 text-center">
+                          <span className="text-gray-200">—</span>
+                        </td>
+                      )
+                      const bet  = thirdBetMap.get(`${dataId!}:${g}`)
+                      const kind = thirdCellKind(bet?.team, ot)
                       const frozenBg = isFrozen ? (CELL_KIND_BG_HEX[kind] || '#faf5ff') : undefined
                       return (
                         <td key={p.id}
-                          style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: frozenBg, borderLeft: isWatchFrozen ? '2px solid #7c3aed' : '2px solid #e9d5ff' } : undefined}
+                          style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: frozenBg, borderLeft: isWatch ? '2px solid #7c3aed' : '2px solid #e9d5ff' } : undefined}
                           className={`border-r border-violet-50 text-center ${!isFrozen ? CELL_BG[kind] : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                           {bet?.team ? (
                             <div className="flex flex-col items-center leading-none gap-px">
@@ -1521,12 +1551,20 @@ export function TabelaMBClient({
                     </td>
                     {/* Participant cells */}
                     {displayParts.map((p, idx) => {
-                      const bet = tournamentBetMap.get(p.id)
+                      const isWatch = p.id === WATCH_ID
+                      const dataId = isWatch ? watchPart?.id ?? null : p.id
                       const isMe = p.id === activeParticipantId
-                      const isActiveFrozen = displayFrozenLeft !== null && idx === 0
-                      const isWatchFrozen  = watchFrozenLeft !== null && showWatchCol && p.id === watchParticipantId
-                      const isFrozen = isActiveFrozen || isWatchFrozen
-                      const frozenLeft = isActiveFrozen ? displayFrozenLeft! : watchFrozenLeft!
+                      const isActiveFrozen = displayFrozenLeft !== null && idx === 0 && !isWatch
+                      const isFrozen = isActiveFrozen || isWatch
+                      const frozenLeft = isActiveFrozen ? displayFrozenLeft! : watchFrozenLeft
+                      if (isWatch && !dataId) return (
+                        <td key={p.id}
+                          style={{ position: 'sticky', left: frozenLeft, zIndex: 20, background: '#fffbeb', borderLeft: '2px solid #7c3aed' }}
+                          className="border-r border-violet-100 text-center">
+                          <span className="text-gray-200">—</span>
+                        </td>
+                      )
+                      const bet = tournamentBetMap.get(dataId!)
                       const betVal = bet?.[field] ?? ''
                       const pts = betVal ? scoreG4FieldBet(field, betVal, knockoutResults, rules, isZebraChampion) : null
                       const isExact = !!betVal && !!official && betVal === official
@@ -1536,7 +1574,7 @@ export function TabelaMBClient({
                       const frozenBg = isExact ? '#d1fae5' : isPartial ? '#e0f2fe' : isWrong ? '#fff1f2' : '#fffbeb'
                       return (
                         <td key={p.id}
-                          style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: frozenBg, borderLeft: isWatchFrozen ? '2px solid #7c3aed' : '2px solid #fde68a' } : { background: cellBg }}
+                          style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: frozenBg, borderLeft: isWatch ? '2px solid #7c3aed' : '2px solid #fde68a' } : { background: cellBg }}
                           className={`border-r border-amber-50 text-center ${isExact ? 'bg-emerald-100' : isPartial ? 'bg-sky-100' : isWrong ? 'bg-rose-50' : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                           {betVal ? (
                             <div className="flex flex-col items-center leading-none gap-px">
@@ -1599,15 +1637,23 @@ export function TabelaMBClient({
                       </>)
                     })()}
                     {displayParts.map((p, idx) => {
-                      const bet  = tournamentBetMap.get(p.id)
+                      const isWatch = p.id === WATCH_ID
+                      const dataId = isWatch ? watchPart?.id ?? null : p.id
                       const isMe = p.id === activeParticipantId
-                      const isActiveFrozen = displayFrozenLeft !== null && idx === 0
-                      const isWatchFrozen  = watchFrozenLeft !== null && showWatchCol && p.id === watchParticipantId
-                      const isFrozen = isActiveFrozen || isWatchFrozen
-                      const frozenLeft = isActiveFrozen ? displayFrozenLeft! : watchFrozenLeft!
+                      const isActiveFrozen = displayFrozenLeft !== null && idx === 0 && !isWatch
+                      const isFrozen = isActiveFrozen || isWatch
+                      const frozenLeft = isActiveFrozen ? displayFrozenLeft! : watchFrozenLeft
+                      if (isWatch && !dataId) return (
+                        <td key={p.id}
+                          style={{ position: 'sticky', left: frozenLeft, zIndex: 20, background: '#fffbeb', borderLeft: '2px solid #7c3aed' }}
+                          className="border-r border-violet-100 text-center">
+                          <span className="text-gray-200">—</span>
+                        </td>
+                      )
+                      const bet  = tournamentBetMap.get(dataId!)
                       if (!bet?.top_scorer) return (
                         <td key={p.id}
-                          style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: '#fffbeb', borderLeft: isWatchFrozen ? '2px solid #7c3aed' : '2px solid #fde68a' } : undefined}
+                          style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: '#fffbeb', borderLeft: isWatch ? '2px solid #7c3aed' : '2px solid #fde68a' } : undefined}
                           className={`border-r border-amber-50 text-center ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                           <span className="text-gray-200">—</span>
                         </td>
@@ -1618,7 +1664,7 @@ export function TabelaMBClient({
                       const pts       = localScorers.length > 0 ? (isCorrect ? artilhPts : 0) : null
                       return (
                         <td key={p.id}
-                          style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: isCorrect ? '#d1fae5' : pts !== null ? '#fff1f2' : '#fffbeb', borderLeft: isWatchFrozen ? '2px solid #7c3aed' : '2px solid #fde68a' } : undefined}
+                          style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: isCorrect ? '#d1fae5' : pts !== null ? '#fff1f2' : '#fffbeb', borderLeft: isWatch ? '2px solid #7c3aed' : '2px solid #fde68a' } : undefined}
                           className={`border-r border-amber-50 text-center ${isCorrect ? 'bg-emerald-100' : pts !== null ? 'bg-rose-50' : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                           <div className="flex flex-col items-center leading-none gap-px">
                             <span className="text-[9px] text-gray-700 truncate font-medium" style={{ maxWidth: PART_COL_W - 4 }}>
@@ -1744,21 +1790,29 @@ export function TabelaMBClient({
                     </>)
                   })()}
                   {displayParts.map((p, idx) => {
-                    const key  = `${p.id}:${match.id}`
+                    const isWatch = p.id === WATCH_ID
+                    const dataId = isWatch ? watchPart?.id ?? null : p.id
+                    const isMe = p.id === activeParticipantId
+                    const isActiveFrozen = displayFrozenLeft !== null && idx === 0 && !isWatch
+                    const isFrozen = isActiveFrozen || isWatch
+                    const frozenLeft = isActiveFrozen ? displayFrozenLeft! : watchFrozenLeft
+                    if (isWatch && !dataId) return (
+                      <td key={p.id}
+                        style={{ position: 'sticky', left: frozenLeft, zIndex: 20, background: bg, borderLeft: '2px solid #7c3aed' }}
+                        className="border-r border-violet-100 text-center">
+                        <span className="text-gray-200">—</span>
+                      </td>
+                    )
+                    const key  = `${dataId!}:${match.id}`
                     const bet  = betMap.get(key)
                     const kind = matchCellKind(bet, match.score_home, match.score_away)
-                    const pts  = getMatchPts(p.id, match.id)
-                    const isMe = p.id === activeParticipantId
-                    const isActiveFrozen = displayFrozenLeft !== null && idx === 0
-                    const isWatchFrozen  = watchFrozenLeft !== null && showWatchCol && p.id === watchParticipantId
-                    const isFrozen = isActiveFrozen || isWatchFrozen
-                    const frozenLeft = isActiveFrozen ? displayFrozenLeft! : watchFrozenLeft!
+                    const pts  = getMatchPts(dataId!, match.id)
                     const frozenBg = isFrozen ? (CELL_KIND_BG_HEX[kind] || bg) : undefined
                     const betOutcome = bet ? getMatchResult(bet.score_home, bet.score_away) : null
                     const isPotentialZebra = betOutcome !== null && !!possibleZebras?.[betOutcome]
                     return (
                       <td key={p.id}
-                        style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: frozenBg, borderLeft: isWatchFrozen ? '2px solid #7c3aed' : '2px solid #d1d5db' } : undefined}
+                        style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: frozenBg, borderLeft: isWatch ? '2px solid #7c3aed' : '2px solid #d1d5db' } : undefined}
                         className={`border-r border-gray-100 text-center ${!isFrozen ? CELL_BG[kind] : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                         {bet ? (
                           <div className="flex flex-col items-center leading-none gap-px">
@@ -1771,7 +1825,7 @@ export function TabelaMBClient({
                               </span>
                             )}
                           </div>
-                        ) : lockedSet.has(match.id) && p.id !== activeParticipantId
+                        ) : lockedSet.has(match.id) && dataId !== activeParticipantId
                           ? <span className="text-gray-300 text-[10px]" title="Prazo em aberto">🔒</span>
                           : <span className="text-gray-200">—</span>
                         }
