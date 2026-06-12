@@ -8,16 +8,6 @@ import { useThirdPlace } from './ThirdPlaceContext'
 
 interface Team { team: string; flag: string }
 
-const CONFLICT_TITLE = 'Informativo: o palpite de classificado(s) está divergente da classificação decorrente dos palpites dos jogos. A regra do Melhor Bolão permite essa divergência.'
-
-function ConflictDot() {
-  return (
-    <span
-      title={CONFLICT_TITLE}
-      className="ml-1 inline-flex h-3.5 w-3.5 shrink-0 cursor-help items-center justify-center rounded-full border border-amber-400 bg-amber-50 text-[9px] font-bold text-amber-600"
-    >i</span>
-  )
-}
 
 interface Props {
   groupName: string
@@ -227,11 +217,9 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
                 <>
                   <span className="inline-flex items-center text-xs font-semibold text-gray-700">
                     🥇 {existingBet.first_place}
-                    {((!!calcFirst && existingBet.first_place !== calcFirst) || (!!manualFirst && existingBet.first_place !== manualFirst)) && <ConflictDot />}
                   </span>
                   <span className="inline-flex items-center text-xs font-semibold text-gray-700">
                     🥈 {existingBet.second_place}
-                    {((!!calcSecond && existingBet.second_place !== calcSecond) || (!!manualSecond && existingBet.second_place !== manualSecond)) && <ConflictDot />}
                   </span>
                   <GroupPointsBadge points={existingBet.points} />
                 </>
@@ -263,7 +251,6 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
                     </option>
                   ))}
                 </select>
-                {firstConflict && <ConflictDot />}
                 {first && (
                   <button
                     type="button"
@@ -296,7 +283,6 @@ export function GroupBetRow({ groupName, teams, deadline, existingBet, calculate
                     </option>
                   ))}
                 </select>
-                {secondConflict && <ConflictDot />}
                 {second && (
                   <button
                     type="button"

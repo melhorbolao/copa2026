@@ -11,16 +11,6 @@ const MAX = 8
 interface Team  { team: string; flag: string }
 interface Bet   { group_name: string; team: string; points?: number | null }
 
-const CONFLICT_TITLE = 'Alerta informativo: o palpite de classificado(s) está divergente da classificação decorrente dos palpites dos jogos. A regra do Melhor Bolão permite essa "incoerência".'
-
-function ConflictDot() {
-  return (
-    <span
-      title={CONFLICT_TITLE}
-      className="ml-1 inline-flex h-4 w-4 shrink-0 cursor-help items-center justify-center rounded-full bg-red-500 text-[10px] font-black text-white"
-    >!</span>
-  )
-}
 
 interface Props {
   groupTeams: Record<string, { teams: Team[]; deadline: string }>
@@ -145,9 +135,6 @@ export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBet
                   <div className="text-xs text-gray-400">Gr. {b.group_name}</div>
                   <div className="mt-0.5 flex items-center gap-1 font-bold text-gray-900 text-sm">
                     {b.team}
-                    {b.team && calculatedThirds?.[b.group_name] &&
-                      b.team !== calculatedThirds[b.group_name].third &&
-                      !calculatedThirds[b.group_name].tiedTeams.includes(b.team) && <ConflictDot />}
                   </div>
                   <ThirdPointsBadge
                     dbPoints={b.points}
@@ -247,14 +234,6 @@ export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBet
                         ))}
                       </select>
                     </div>
-                    {teamValue && calculatedThirds?.[g] &&
-                      teamValue !== calculatedThirds[g].third &&
-                      !calculatedThirds[g].tiedTeams.includes(teamValue) && (
-                      <div className="mt-0.5 flex items-center gap-1">
-                        <ConflictDot />
-                        <span className="text-[10px] text-red-500">divergente</span>
-                      </div>
-                    )}
                     {savedBet && (
                       <ThirdPointsBadge
                         dbPoints={savedBet.points}

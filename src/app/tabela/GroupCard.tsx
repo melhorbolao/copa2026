@@ -24,16 +24,6 @@ interface Props {
   onBetUpdate?:      (groupBet: { first_place: string; second_place: string } | null, thirdBet: { team: string } | null) => void
 }
 
-const CONFLICT_TITLE = 'Alerta informativo: o palpite de classificado(s) está divergente da classificação decorrente dos palpites dos jogos. A regra do Melhor Bolão permite essa "incoerência".'
-
-function ConflictDot() {
-  return (
-    <span
-      title={CONFLICT_TITLE}
-      className="ml-1 inline-flex h-4 w-4 shrink-0 cursor-help items-center justify-center rounded-full bg-red-500 text-[10px] font-black text-white"
-    >!</span>
-  )
-}
 
 const POS_COLORS = [
   'bg-verde-600 text-white',
@@ -348,11 +338,6 @@ export function GroupCard({
                     <span className={`font-medium ${i < 2 ? 'text-gray-900' : 'text-gray-600'}`}>
                       {team.team}
                     </span>
-                    {!hasDraft && allMatchesBet && (
-                      (i === 0 && localFormalBet && localFormalBet.first_place !== team.team) ||
-                      (i === 1 && localFormalBet && localFormalBet.second_place !== team.team) ||
-                      (i === 2 && localThirdPlaceBet && localThirdPlaceBet.team !== team.team)
-                    ) && <ConflictDot />}
                   </div>
                 </td>
                 <td className="px-2 py-2 text-center">
@@ -380,12 +365,6 @@ export function GroupCard({
         <LegendItem color="bg-verde-600"   label="Classificado (1º)" />
         <LegendItem color="bg-azul-escuro" label="Classificado (2º)" />
         {thirdAdv && <LegendItem color="bg-amber-400" label="Melhor 3º" />}
-        {hasConflict && (
-          <div className="mt-1 flex w-full items-start gap-1.5 border-t border-gray-100 pt-1.5">
-            <span className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-500 text-[10px] font-black text-white">!</span>
-            <span className="text-[10px] leading-snug text-gray-500">{CONFLICT_TITLE}</span>
-          </div>
-        )}
       </div>
     </div>
 
