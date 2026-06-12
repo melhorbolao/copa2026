@@ -7,9 +7,9 @@ import type { MatchFull, BetRaw, Participant } from './JogosDashboard'
 const MEDAL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' }
 
 // Mobile: slightly wider than score boxes. Desktop (sm:): expanded for better readability
-const H_W = 'w-10 sm:w-14'  // 40px → 56px
-const D_W = 'w-11 sm:w-16'  // 44px → 64px
-const A_W = 'w-10 sm:w-14'  // 40px → 56px
+const H_W = 'w-10 sm:w-20'  // 40px → 80px
+const D_W = 'w-11 sm:w-24'  // 44px → 96px
+const A_W = 'w-10 sm:w-20'  // 40px → 80px
 
 interface Props {
   match: MatchFull
@@ -163,7 +163,7 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
           const w    = r === 'H' ? H_W : r === 'D' ? D_W : A_W
           const isZebraCol = matchBets.length > 0 && pct <= zebraThreshold
           return (
-            <span key={r} className={`${w} text-center text-[10px] sm:text-xs font-bold tabular-nums flex flex-col items-center leading-none gap-0.5 ${isZebraCol ? 'text-amber-500' : 'text-gray-400'}`}>
+            <span key={r} className={`${w} text-center text-[10px] sm:text-sm font-bold tabular-nums flex flex-col items-center leading-none gap-0.5 ${isZebraCol ? 'text-amber-500' : 'text-gray-400'}`}>
               {isZebraCol && <span title="Possível zebra">🦓</span>}
               {fmtPct(pct)}
             </span>
@@ -182,11 +182,11 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
               : (g.pts === 0 && hasResult)
                 ? 'text-gray-300'
                 : 'text-gray-700'
-          const scoreClass = `font-mono font-bold text-sm sm:text-base tabular-nums ${baseColor}${g.isImpossible ? ' line-through' : ''}`
-          const metaClass = `text-xs sm:text-sm tabular-nums whitespace-nowrap ${
+          const scoreClass = `font-mono font-bold text-sm sm:text-xl tabular-nums ${baseColor}${g.isImpossible ? ' line-through' : ''}`
+          const metaClass = `text-xs sm:text-base tabular-nums whitespace-nowrap ${
             g.isExact ? 'text-blue-500 font-semibold' : (g.pts === 0 && hasResult) ? 'text-gray-300' : 'text-gray-500'
           }`
-          const ptsClass = `text-sm sm:text-base font-bold tabular-nums ${
+          const ptsClass = `text-sm sm:text-xl font-bold tabular-nums ${
             g.isExact ? 'text-blue-600' : (g.pts === 0 && hasResult) ? 'text-gray-300' : 'text-gray-400'
           }`
 
@@ -211,8 +211,8 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
               <span className={`${D_W} flex justify-center`}>{g.result === 'D' ? scoreEl : null}</span>
               <span className={`${A_W} flex justify-center`}>{g.result === 'A' ? scoreEl : null}</span>
 
-              {/* Right spacer — mirrors header right flex-1 section; count+pts sit inside */}
-              <div className="flex-1 flex justify-end items-center gap-1.5">
+              {/* Right spacer — on desktop justify-start to sit close to the score columns */}
+              <div className="flex-1 flex justify-end sm:justify-start sm:pl-3 items-center gap-1.5">
                 <span className={metaClass}>{g.count}({g.pct.toFixed(0)}%)</span>
                 <span className={ptsClass}>
                   {g.pts !== null ? (g.pts > 0 ? `+${g.pts}` : '0') : ''}
@@ -241,7 +241,7 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
             ? 'text-gray-300'
             : 'text-gray-800'
         const scoreEl = (
-          <span className={`font-mono font-bold text-sm sm:text-base tabular-nums ${scoreColor}`}>
+          <span className={`font-mono font-bold text-sm sm:text-xl tabular-nums ${scoreColor}`}>
             {ownBet.score_home}x{ownBet.score_away}
           </span>
         )
@@ -253,9 +253,9 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
             <span className={`${H_W} flex justify-center`}>{ownResult === 'H' ? scoreEl : null}</span>
             <span className={`${D_W} flex justify-center`}>{ownResult === 'D' ? scoreEl : null}</span>
             <span className={`${A_W} flex justify-center`}>{ownResult === 'A' ? scoreEl : null}</span>
-            <div className="flex-1 flex justify-end">
+            <div className="flex-1 flex justify-end sm:justify-start sm:pl-3">
               {ownPts !== null && (
-                <span className={`text-sm sm:text-base font-bold tabular-nums ${ownPts > 0 ? 'text-blue-600' : 'text-gray-300'}`}>
+                <span className={`text-sm sm:text-xl font-bold tabular-nums ${ownPts > 0 ? 'text-blue-600' : 'text-gray-300'}`}>
                   {ownPts > 0 ? `+${ownPts}` : '0'}
                 </span>
               )}
