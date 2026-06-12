@@ -131,7 +131,7 @@ export function RankingPanel({
                 title="Desativar secador"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/secador.png" alt="secador" width={72} height={72}
+                <img src="/secador.png" alt="secador" width={100} height={100}
                   className="object-contain animate-pulse"
                   style={{ transform: 'scaleX(-1)' }}
                 />
