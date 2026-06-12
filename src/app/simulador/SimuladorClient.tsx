@@ -606,20 +606,20 @@ export function SimuladorClient({
   const [isLimpando,    setIsLimpando]    = useState(false)
   const [watchParticipantId, setWatchParticipantId] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null
-    return localStorage.getItem(`sim_watch_${userId}`) || null
+    return localStorage.getItem(`sim_watch_${activeParticipantId}`) || null
   })
   const [showWatchSelector,   setShowWatchSelector]   = useState(false)
   const [watchQuery,           setWatchQuery]           = useState('')
 
   useEffect(() => {
-    const key = `sim_watch_${userId}`
+    const key = `sim_watch_${activeParticipantId}`
     setWatchParticipantId(localStorage.getItem(key) || null)
     const handler = (e: StorageEvent) => {
       if (e.key === key) setWatchParticipantId(e.newValue || null)
     }
     window.addEventListener('storage', handler)
     return () => window.removeEventListener('storage', handler)
-  }, [pathname, userId])
+  }, [pathname, activeParticipantId])
   const [showGabaritarDe,     setShowGabaritarDe]     = useState(false)
   const [gabaritarDeQuery,    setGabaritarDeQuery]    = useState('')
   const [gabaritarDeSelected, setGabaritarDeSelected] = useState<string | null>(null)
@@ -666,11 +666,11 @@ export function SimuladorClient({
   const watchPart = watchParticipantId ? participants.find(p => p.id === watchParticipantId) : null
   const saveWatchPart = useCallback((id: string | null) => {
     setWatchParticipantId(id)
-    const key = `sim_watch_${userId}`
+    const key = `sim_watch_${activeParticipantId}`
     if (id) localStorage.setItem(key, id)
     else localStorage.removeItem(key)
     window.dispatchEvent(new StorageEvent('storage', { key, newValue: id ?? null }))
-  }, [userId])
+  }, [activeParticipantId])
 
   // Conjunto de match IDs com prazo aberto (palpites ocultos)
   const lockedSet = useMemo(() => new Set(lockedMatchIds ?? []), [lockedMatchIds])
