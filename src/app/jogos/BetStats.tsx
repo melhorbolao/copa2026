@@ -212,7 +212,7 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
 
               {/* Mobile: ambos à direita num flex-1. Desktop: largura fixa por coluna */}
               <div className="flex-1 flex justify-end items-center gap-1.5 sm:flex-none sm:gap-0">
-                <span className={`${metaClass} sm:w-28 sm:text-right`}>{g.count} ({g.pct.toFixed(0)}%)</span>
+                <span className={`${metaClass} sm:w-28 sm:text-right`}>{g.count}{'   '}({g.pct.toFixed(0)}%)</span>
                 <span className={`${ptsClass} sm:w-20 sm:text-right`}>
                   {g.pts !== null ? (g.pts > 0 ? `+${g.pts}` : '0') : ''}
                 </span>
