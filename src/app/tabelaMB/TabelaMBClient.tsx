@@ -480,6 +480,12 @@ export function TabelaMBClient({
   const [phase,   setPhase]   = useState('group')
   const [now,     setNow]     = useState(Date.now())
   const [isMobile, setIsMobile] = useState(false)
+  const [watchParticipantId, setWatchParticipantId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
+    return localStorage.getItem(`sim_watch_${activeParticipantId}`) || null
+  })
+  const [showWatchSelector, setShowWatchSelector] = useState(false)
+  const [watchQuery, setWatchQuery] = useState('')
 
   // Admin: gestão de artilheiros oficiais
   const [localScorers, setLocalScorers] = useState<string[]>(officialTopScorers)
@@ -781,7 +787,6 @@ export function TabelaMBClient({
   // On desktop, the active participant's column is frozen right after Oficial
   const activePart   = participants.find(p => p.id === activeParticipantId)
   const otherParts   = participants.filter(p => p.id !== activeParticipantId)
-  const orderedParts = activePart ? [activePart, ...otherParts] : participants
   const frozenPartLeft = activePart
     ? (isMobile ? frozenTotal : frozenTotal + 3 * STAT_COL_W + PART_COL_W)
     : null
@@ -829,9 +834,27 @@ export function TabelaMBClient({
   const effectiveLeaderId = hasAnyResult ? leaderId : ''
 
   // If the logged-in user is leading, their column is already the frozen Líder column — don't show twice
-  const isActiveLeader    = !!activeParticipantId && activeParticipantId === leaderId
-  const displayParts      = isActiveLeader ? otherParts : orderedParts
+  const isActiveLeader = !!activeParticipantId && activeParticipantId === leaderId
+
+  const watchPart = watchParticipantId ? (participants.find(p => p.id === watchParticipantId) ?? null) : null
+  const showWatchCol = !!watchPart && watchPart.id !== activeParticipantId && watchPart.id !== effectiveLeaderId
+
+  const baseScrollable = otherParts.filter(p =>
+    p.id !== effectiveLeaderId &&
+    (!showWatchCol || p.id !== watchParticipantId)
+  )
+  const displayParts: Participant[] = isActiveLeader
+    ? (showWatchCol ? [watchPart!, ...baseScrollable] : baseScrollable)
+    : (activePart
+        ? (showWatchCol ? [activePart, watchPart!, ...baseScrollable] : [activePart, ...baseScrollable])
+        : baseScrollable)
+
   const displayFrozenLeft = isActiveLeader ? null : frozenPartLeft
+  const watchFrozenLeft = showWatchCol
+    ? (isMobile
+        ? frozenTotal + (isActiveLeader ? 0 : PART_COL_W)
+        : frozenTotal + 3 * STAT_COL_W + (isActiveLeader ? 1 : 2) * PART_COL_W)
+    : null
 
   // Unique scorer names bet by participants (standardized), for the admin dropdown
   const betScorerOptions = useMemo(() => {
@@ -925,6 +948,12 @@ export function TabelaMBClient({
     setScorerSelectVal('')
   }, [scorerInput, localScorers, handleScorerSave])
 
+  const saveWatchPart = useCallback((id: string | null) => {
+    setWatchParticipantId(id)
+    if (id) localStorage.setItem(`sim_watch_${activeParticipantId}`, id)
+    else localStorage.removeItem(`sim_watch_${activeParticipantId}`)
+  }, [activeParticipantId])
+
   const vItems    = rowVirtualizer.getVirtualItems()
   const totalSize = rowVirtualizer.getTotalSize()
   const padTop    = vItems.length > 0 ? vItems[0].start : 0
@@ -955,6 +984,16 @@ export function TabelaMBClient({
         <span className="ml-auto text-[10px] text-gray-400">
           {filteredMatches.length} jogos · {participants.length} part.
         </span>
+        <button
+          onClick={() => { setShowWatchSelector(true); setWatchQuery('') }}
+          title={watchPart ? `Acompanhando: ${watchPart.apelido}` : 'Acompanhar participante'}
+          className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition flex items-center gap-1 ${
+            watchPart ? 'bg-violet-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          <span>👁</span>
+          {watchPart && <span className="max-w-[60px] truncate">{watchPart.apelido}</span>}
+        </button>
         {/* Botão de exportação Excel — apenas desktop */}
         <button
           className="hidden sm:inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition"
@@ -1159,24 +1198,29 @@ export function TabelaMBClient({
               </th>
               {displayParts.map((p, idx) => {
                 const isMe = p.id === activeParticipantId
-                const isFrozen = displayFrozenLeft !== null && idx === 0
+                const isWatchPart = showWatchCol && p.id === watchParticipantId
+                const isActiveFrozen = displayFrozenLeft !== null && idx === 0
+                const isWatchFrozen  = watchFrozenLeft !== null && isWatchPart
+                const isFrozen = isActiveFrozen || isWatchFrozen
+                const frozenLeft = isActiveFrozen ? displayFrozenLeft! : (isWatchFrozen ? watchFrozenLeft! : 0)
                 const total = computedTotals[p.id] ?? 0
                 return (
                   <th key={p.id} title={p.apelido}
                     style={{
                       position: 'sticky', top: 0,
-                      ...(isFrozen ? { left: displayFrozenLeft!, borderLeft: '2px solid #6b7280' } : {}),
+                      ...(isFrozen ? { left: frozenLeft, borderLeft: isWatchFrozen ? '2px solid #7c3aed' : '2px solid #6b7280' } : {}),
                       zIndex: isFrozen ? 50 : 40,
-                      background: isMe ? '#14532d' : '#1f2937',
+                      background: isMe ? '#14532d' : isWatchPart ? '#2e1065' : '#1f2937',
                       borderRight: '1px solid #374151',
                     }}
-                    className={`text-center px-0.5 ${isMe ? 'text-verde-200' : 'text-gray-300'}`}
+                    className={`text-center px-0.5 ${isMe ? 'text-verde-200' : isWatchPart ? 'text-violet-200' : 'text-gray-300'}`}
                   >
                     <div className="flex items-center justify-center gap-0.5">
                       {p.id === effectiveLeaderId && <span className="text-[9px] leading-none">🥇</span>}
-                      <span className="line-clamp-2 break-words font-semibold" style={{ maxWidth: PART_COL_W - (p.id === effectiveLeaderId ? 16 : 4) }}>{p.apelido}</span>
+                      {isWatchPart && <span className="text-[9px] leading-none">👁</span>}
+                      <span className="line-clamp-2 break-words font-semibold" style={{ maxWidth: PART_COL_W - (p.id === effectiveLeaderId ? 16 : isWatchPart ? 14 : 4) }}>{p.apelido}</span>
                     </div>
-                    <span className={`block text-[11px] font-semibold ${isMe ? 'text-verde-300' : 'text-gray-500'}`}>
+                    <span className={`block text-[11px] font-semibold ${isMe ? 'text-verde-300' : isWatchPart ? 'text-violet-300' : 'text-gray-500'}`}>
                       {total > 0 ? total : '–'}
                     </span>
                   </th>
@@ -1295,11 +1339,14 @@ export function TabelaMBClient({
                       const bet  = groupBetMap.get(`${p.id}:${g}`)
                       const kind = groupCellKind(bet, of1, of2)
                       const isMe = p.id === activeParticipantId
-                      const isFrozen = displayFrozenLeft !== null && idx === 0
+                      const isActiveFrozen = displayFrozenLeft !== null && idx === 0
+                      const isWatchFrozen  = watchFrozenLeft !== null && showWatchCol && p.id === watchParticipantId
+                      const isFrozen = isActiveFrozen || isWatchFrozen
+                      const frozenLeft = isActiveFrozen ? displayFrozenLeft! : watchFrozenLeft!
                       const frozenBg = isFrozen ? (CELL_KIND_BG_HEX[kind] || '#eff6ff') : undefined
                       return (
                         <td key={p.id}
-                          style={isFrozen ? { position: 'sticky', left: displayFrozenLeft!, zIndex: 20, background: frozenBg, borderLeft: '2px solid #bfdbfe' } : undefined}
+                          style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: frozenBg, borderLeft: isWatchFrozen ? '2px solid #7c3aed' : '2px solid #bfdbfe' } : undefined}
                           className={`border-r border-blue-50 text-center ${!isFrozen ? CELL_BG[kind] : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                           {bet?.first_place ? (
                             <div className="flex flex-col items-center leading-none gap-px">
@@ -1391,11 +1438,14 @@ export function TabelaMBClient({
                       const bet  = thirdBetMap.get(`${p.id}:${g}`)
                       const kind = thirdCellKind(bet?.team, ot)
                       const isMe = p.id === activeParticipantId
-                      const isFrozen = displayFrozenLeft !== null && idx === 0
+                      const isActiveFrozen = displayFrozenLeft !== null && idx === 0
+                      const isWatchFrozen  = watchFrozenLeft !== null && showWatchCol && p.id === watchParticipantId
+                      const isFrozen = isActiveFrozen || isWatchFrozen
+                      const frozenLeft = isActiveFrozen ? displayFrozenLeft! : watchFrozenLeft!
                       const frozenBg = isFrozen ? (CELL_KIND_BG_HEX[kind] || '#faf5ff') : undefined
                       return (
                         <td key={p.id}
-                          style={isFrozen ? { position: 'sticky', left: displayFrozenLeft!, zIndex: 20, background: frozenBg, borderLeft: '2px solid #e9d5ff' } : undefined}
+                          style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: frozenBg, borderLeft: isWatchFrozen ? '2px solid #7c3aed' : '2px solid #e9d5ff' } : undefined}
                           className={`border-r border-violet-50 text-center ${!isFrozen ? CELL_BG[kind] : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                           {bet?.team ? (
                             <div className="flex flex-col items-center leading-none gap-px">
@@ -1473,7 +1523,10 @@ export function TabelaMBClient({
                     {displayParts.map((p, idx) => {
                       const bet = tournamentBetMap.get(p.id)
                       const isMe = p.id === activeParticipantId
-                      const isFrozen = displayFrozenLeft !== null && idx === 0
+                      const isActiveFrozen = displayFrozenLeft !== null && idx === 0
+                      const isWatchFrozen  = watchFrozenLeft !== null && showWatchCol && p.id === watchParticipantId
+                      const isFrozen = isActiveFrozen || isWatchFrozen
+                      const frozenLeft = isActiveFrozen ? displayFrozenLeft! : watchFrozenLeft!
                       const betVal = bet?.[field] ?? ''
                       const pts = betVal ? scoreG4FieldBet(field, betVal, knockoutResults, rules, isZebraChampion) : null
                       const isExact = !!betVal && !!official && betVal === official
@@ -1483,7 +1536,7 @@ export function TabelaMBClient({
                       const frozenBg = isExact ? '#d1fae5' : isPartial ? '#e0f2fe' : isWrong ? '#fff1f2' : '#fffbeb'
                       return (
                         <td key={p.id}
-                          style={isFrozen ? { position: 'sticky', left: displayFrozenLeft!, zIndex: 20, background: frozenBg, borderLeft: '2px solid #fde68a' } : { background: cellBg }}
+                          style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: frozenBg, borderLeft: isWatchFrozen ? '2px solid #7c3aed' : '2px solid #fde68a' } : { background: cellBg }}
                           className={`border-r border-amber-50 text-center ${isExact ? 'bg-emerald-100' : isPartial ? 'bg-sky-100' : isWrong ? 'bg-rose-50' : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                           {betVal ? (
                             <div className="flex flex-col items-center leading-none gap-px">
@@ -1548,10 +1601,13 @@ export function TabelaMBClient({
                     {displayParts.map((p, idx) => {
                       const bet  = tournamentBetMap.get(p.id)
                       const isMe = p.id === activeParticipantId
-                      const isFrozen = displayFrozenLeft !== null && idx === 0
+                      const isActiveFrozen = displayFrozenLeft !== null && idx === 0
+                      const isWatchFrozen  = watchFrozenLeft !== null && showWatchCol && p.id === watchParticipantId
+                      const isFrozen = isActiveFrozen || isWatchFrozen
+                      const frozenLeft = isActiveFrozen ? displayFrozenLeft! : watchFrozenLeft!
                       if (!bet?.top_scorer) return (
                         <td key={p.id}
-                          style={isFrozen ? { position: 'sticky', left: displayFrozenLeft!, zIndex: 20, background: '#fffbeb', borderLeft: '2px solid #fde68a' } : undefined}
+                          style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: '#fffbeb', borderLeft: isWatchFrozen ? '2px solid #7c3aed' : '2px solid #fde68a' } : undefined}
                           className={`border-r border-amber-50 text-center ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                           <span className="text-gray-200">—</span>
                         </td>
@@ -1562,7 +1618,7 @@ export function TabelaMBClient({
                       const pts       = localScorers.length > 0 ? (isCorrect ? artilhPts : 0) : null
                       return (
                         <td key={p.id}
-                          style={isFrozen ? { position: 'sticky', left: displayFrozenLeft!, zIndex: 20, background: isCorrect ? '#d1fae5' : pts !== null ? '#fff1f2' : '#fffbeb', borderLeft: '2px solid #fde68a' } : undefined}
+                          style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: isCorrect ? '#d1fae5' : pts !== null ? '#fff1f2' : '#fffbeb', borderLeft: isWatchFrozen ? '2px solid #7c3aed' : '2px solid #fde68a' } : undefined}
                           className={`border-r border-amber-50 text-center ${isCorrect ? 'bg-emerald-100' : pts !== null ? 'bg-rose-50' : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                           <div className="flex flex-col items-center leading-none gap-px">
                             <span className="text-[9px] text-gray-700 truncate font-medium" style={{ maxWidth: PART_COL_W - 4 }}>
@@ -1693,13 +1749,16 @@ export function TabelaMBClient({
                     const kind = matchCellKind(bet, match.score_home, match.score_away)
                     const pts  = getMatchPts(p.id, match.id)
                     const isMe = p.id === activeParticipantId
-                    const isFrozen = displayFrozenLeft !== null && idx === 0
+                    const isActiveFrozen = displayFrozenLeft !== null && idx === 0
+                    const isWatchFrozen  = watchFrozenLeft !== null && showWatchCol && p.id === watchParticipantId
+                    const isFrozen = isActiveFrozen || isWatchFrozen
+                    const frozenLeft = isActiveFrozen ? displayFrozenLeft! : watchFrozenLeft!
                     const frozenBg = isFrozen ? (CELL_KIND_BG_HEX[kind] || bg) : undefined
                     const betOutcome = bet ? getMatchResult(bet.score_home, bet.score_away) : null
                     const isPotentialZebra = betOutcome !== null && !!possibleZebras?.[betOutcome]
                     return (
                       <td key={p.id}
-                        style={isFrozen ? { position: 'sticky', left: displayFrozenLeft!, zIndex: 20, background: frozenBg, borderLeft: '2px solid #d1d5db' } : undefined}
+                        style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: frozenBg, borderLeft: isWatchFrozen ? '2px solid #7c3aed' : '2px solid #d1d5db' } : undefined}
                         className={`border-r border-gray-100 text-center ${!isFrozen ? CELL_BG[kind] : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                         {bet ? (
                           <div className="flex flex-col items-center leading-none gap-px">
@@ -1727,6 +1786,53 @@ export function TabelaMBClient({
           </tbody>
         </table>
       </div>
+
+      {/* Watch selector modal */}
+      {showWatchSelector && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-xs rounded-xl bg-white shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+              <span className="font-semibold text-gray-700 text-sm">Acompanhar participante</span>
+              <button onClick={() => setShowWatchSelector(false)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
+            </div>
+            <div className="px-3 py-2 border-b border-gray-100">
+              <input
+                type="text"
+                placeholder="Buscar…"
+                value={watchQuery}
+                onChange={e => setWatchQuery(e.target.value)}
+                autoFocus
+                className="w-full rounded border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:border-violet-400"
+              />
+            </div>
+            <div className="overflow-y-auto">
+              {watchPart && (
+                <button
+                  onClick={() => { saveWatchPart(null); setShowWatchSelector(false) }}
+                  className="w-full px-4 py-2 text-left text-sm text-red-500 hover:bg-red-50 border-b border-gray-100"
+                >
+                  Remover acompanhamento
+                </button>
+              )}
+              {participants
+                .filter(p => p.id !== activeParticipantId && p.apelido.toLowerCase().includes(watchQuery.toLowerCase()))
+                .map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => { saveWatchPart(p.id); setShowWatchSelector(false) }}
+                    className={`w-full px-4 py-2 text-left text-sm hover:bg-violet-50 ${
+                      p.id === watchParticipantId ? 'bg-violet-100 text-violet-700 font-semibold' : 'text-gray-700'
+                    }`}
+                  >
+                    {p.apelido}
+                    {p.id === watchParticipantId && <span className="ml-1 text-violet-500">✓</span>}
+                  </button>
+                ))
+              }
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Legend */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-gray-100 bg-white px-3 py-1.5 text-[10px] text-gray-400 shrink-0">
