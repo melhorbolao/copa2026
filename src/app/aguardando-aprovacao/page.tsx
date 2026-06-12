@@ -13,7 +13,7 @@ export default async function AguardandoAprovacaoPage() {
     .eq('id', user.id)
     .single()
 
-  if (profile?.approved) redirect('/palpites')
+  if (profile?.approved) redirect('/jogos')
 
   return (
     <main
