@@ -886,7 +886,6 @@ export function SimuladorClient({
 
   const activePart   = participants.find(p => p.id === activeParticipantId)
   const otherParts   = participants.filter(p => p.id !== activeParticipantId)
-  const orderedParts = activePart ? [activePart, ...otherParts] : participants
   const frozenPartLeft = !isMobile && activePart ? frozenTotal + 3 * STAT_COL_W + PART_COL_W : null
 
   // Official group standings (computed from official match scores only)
@@ -1277,17 +1276,21 @@ export function SimuladorClient({
   const effectiveLeaderId = hasAnyResult ? leaderId : ''
 
   const isActiveLeader = !!activeParticipantId && activeParticipantId === leaderId
-  const showWatchCol    = !!watchPart && watchParticipantId !== activeParticipantId
-  const frozenWatchLeft = frozenPartLeft !== null && showWatchCol && !isActiveLeader
-    ? frozenPartLeft + PART_COL_W : null
+
+  // Sentinel: watch column is always visible regardless of whether a participant is selected
+  const WATCH_ID = '__watch__'
+  const watchSentinel: Participant = { id: WATCH_ID, apelido: watchPart?.apelido ?? '' }
+
+  const scrollable = otherParts.filter(p => p.id !== watchParticipantId)
   const displayParts: Participant[] = isActiveLeader
-    ? (showWatchCol ? [watchPart!, ...otherParts.filter(p => p.id !== watchParticipantId)] : otherParts)
-    : (showWatchCol && activePart
-        ? [activePart, watchPart!, ...otherParts.filter(p => p.id !== watchParticipantId)]
-        : orderedParts)
+    ? [watchSentinel, ...scrollable]
+    : (activePart ? [activePart, watchSentinel, ...scrollable] : [watchSentinel, ...scrollable])
+
   const displayFrozenLeft = isActiveLeader
-    ? (showWatchCol && !isMobile ? frozenTotal + 3 * STAT_COL_W + PART_COL_W : null)
+    ? (!isMobile ? frozenTotal + 3 * STAT_COL_W + PART_COL_W : null)
     : frozenPartLeft
+  const frozenWatchLeft = !isActiveLeader && frozenPartLeft !== null
+    ? frozenPartLeft + PART_COL_W : null
 
   // ── Pre-computed stats Maps — usa effective scores (oficial ?? sim) ──────────
 
@@ -1467,14 +1470,6 @@ export function SimuladorClient({
               </button>
             </>
           )}
-          <button onClick={() => { setWatchQuery(''); setShowWatchSelector(true) }}
-            title={watchPart ? `Acompanhando: ${watchPart.apelido}` : 'Selecionar participante para acompanhar'}
-            className={`inline-flex items-center gap-1 rounded px-2.5 py-0.5 text-[11px] font-semibold transition ${
-              watchPart ? 'bg-violet-700 text-white hover:bg-violet-800' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-            }`}>
-            <span>👁</span>
-            {watchPart ? <span className="max-w-[80px] truncate">{watchPart.apelido}</span> : <span>Acompanhar</span>}
-          </button>
         </div>
       </div>
 
@@ -1647,29 +1642,54 @@ export function SimuladorClient({
                 </th>
                 {displayParts.map((p, idx) => {
                   const isMe = p.id === activeParticipantId
+                  const isWatch = p.id === WATCH_ID
                   const isActiveFrozen = displayFrozenLeft !== null && idx === 0
-                  const isWatchFrozen  = frozenWatchLeft !== null && idx === 1
+                  const isWatchFrozen  = isWatch && !isActiveFrozen && frozenWatchLeft !== null
                   const isFrozen = isActiveFrozen || isWatchFrozen
-                  const frozenLeft = isActiveFrozen ? displayFrozenLeft! : frozenWatchLeft!
-                  const isWatch = showWatchCol && p.id === watchParticipantId
-                  const total = computedTotals[p.id] ?? 0
+                  const frozenLeft = isWatchFrozen ? frozenWatchLeft! : displayFrozenLeft!
+                  const displayId = isWatch ? (watchPart?.id ?? null) : p.id
+                  const total = displayId ? (computedTotals[displayId] ?? 0) : 0
+                  if (isWatch) {
+                    return (
+                      <th key={p.id}
+                        title={watchPart ? `Acompanhando: ${watchPart.apelido} — clique para alterar` : 'Clique para acompanhar'}
+                        style={{
+                          position: 'sticky', top: 0,
+                          left: isFrozen ? frozenLeft : undefined, borderLeft: isFrozen ? '2px solid #7c3aed' : undefined,
+                          zIndex: 50, background: '#2e1065',
+                          borderRight: '1px solid #374151', cursor: 'pointer',
+                        }}
+                        className="text-center px-0.5 text-violet-200"
+                        onClick={() => { setWatchQuery(''); setShowWatchSelector(true) }}
+                      >
+                        <div className="flex items-center justify-center gap-0.5">
+                          <span className="text-[9px] leading-none">👁</span>
+                          <span className="line-clamp-2 break-words font-semibold text-[9px]" style={{ maxWidth: PART_COL_W - 14 }}>
+                            {watchPart?.apelido ?? 'Acomp.'}
+                          </span>
+                        </div>
+                        <span className="block text-[11px] font-semibold text-violet-400">
+                          {total > 0 ? total : '–'}
+                        </span>
+                      </th>
+                    )
+                  }
                   return (
                     <th key={p.id} title={p.apelido}
                       style={{
                         position: 'sticky', top: 0,
-                        ...(isFrozen ? { left: frozenLeft, borderLeft: `2px solid ${isWatch ? '#8b5cf6' : '#6b7280'}` } : {}),
+                        ...(isFrozen ? { left: frozenLeft, borderLeft: '2px solid #6b7280' } : {}),
                         zIndex: isFrozen ? 50 : 40,
-                        background: isMe ? '#14532d' : isWatch ? '#2e1065' : '#1f2937',
+                        background: isMe ? '#14532d' : '#1f2937',
                         borderRight: '1px solid #374151',
                       }}
-                      className={`text-center px-0.5 ${isMe ? 'text-verde-200' : isWatch ? 'text-violet-300' : 'text-gray-300'}`}
+                      className={`text-center px-0.5 ${isMe ? 'text-verde-200' : 'text-gray-300'}`}
                     >
                       <div className="flex items-center justify-center gap-0.5">
                         {p.id === effectiveLeaderId && <span className="text-[9px] leading-none">🥇</span>}
-                        {isWatch && <span className="text-[9px] leading-none">👁</span>}
-                        <span className="line-clamp-2 break-words font-semibold" style={{ maxWidth: PART_COL_W - (p.id === effectiveLeaderId || isWatch ? 16 : 4) }}>{p.apelido}</span>
+                        <span className="line-clamp-2 break-words font-semibold" style={{ maxWidth: PART_COL_W - (p.id === effectiveLeaderId ? 16 : 4) }}>{p.apelido}</span>
                       </div>
-                      <span className={`block text-[11px] font-semibold ${isMe ? 'text-verde-300' : isWatch ? 'text-violet-400' : 'text-gray-500'}`}>
+                      <span className={`block text-[11px] font-semibold ${isMe ? 'text-verde-300' : 'text-gray-500'}`}>
                         {total > 0 ? total : '–'}
                       </span>
                     </th>
@@ -1812,18 +1832,26 @@ export function SimuladorClient({
                         </>)
                       })()}
                       {displayParts.map((p, idx) => {
-                        const bet  = groupBetMap.get(`${p.id}:${g}`)
-                        const kind = groupCellKind(bet, ef1, ef2)
+                        const isWatch = p.id === WATCH_ID
+                        const dataId = isWatch ? watchPart?.id ?? null : p.id
                         const isMe = p.id === activeParticipantId
                         const isActiveFrozen = displayFrozenLeft !== null && idx === 0
-                        const isWatchFrozen  = frozenWatchLeft !== null && idx === 1
+                        const isWatchFrozen  = isWatch && !isActiveFrozen && frozenWatchLeft !== null
                         const isFrozen = isActiveFrozen || isWatchFrozen
-                        const frozenLeft = isActiveFrozen ? displayFrozenLeft! : frozenWatchLeft!
-                        const isWatch = showWatchCol && p.id === watchParticipantId
+                        const frozenLeft = isWatchFrozen ? frozenWatchLeft! : displayFrozenLeft!
+                        if (isWatch && !dataId) return (
+                          <td key={p.id}
+                            style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: '#eff6ff', borderLeft: '2px solid #7c3aed' } : undefined}
+                            className="border-r border-violet-100 text-center">
+                            <span className="text-gray-200">—</span>
+                          </td>
+                        )
+                        const bet  = groupBetMap.get(`${dataId!}:${g}`)
+                        const kind = groupCellKind(bet, ef1, ef2)
                         const frozenBg = isFrozen ? (CELL_KIND_BG_HEX[kind] || '#eff6ff') : undefined
                         return (
                           <td key={p.id}
-                            style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: frozenBg, borderLeft: `2px solid ${isWatch ? '#a78bfa' : '#bfdbfe'}` } : undefined}
+                            style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: frozenBg, borderLeft: isWatch ? '2px solid #7c3aed' : '2px solid #bfdbfe' } : undefined}
                             className={`border-r border-blue-50 text-center ${!isFrozen ? CELL_BG[kind] : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                             {bet?.first_place ? (() => {
                               const isZebra1 = groupIsZebraMap.get(g) ?? false
@@ -1930,18 +1958,26 @@ export function SimuladorClient({
                         </>)
                       })()}
                       {displayParts.map((p, idx) => {
-                        const bet  = thirdBetMap.get(`${p.id}:${g}`)
-                        const kind = thirdCellKind(bet?.team, et)
+                        const isWatch = p.id === WATCH_ID
+                        const dataId = isWatch ? watchPart?.id ?? null : p.id
                         const isMe = p.id === activeParticipantId
                         const isActiveFrozen = displayFrozenLeft !== null && idx === 0
-                        const isWatchFrozen  = frozenWatchLeft !== null && idx === 1
+                        const isWatchFrozen  = isWatch && !isActiveFrozen && frozenWatchLeft !== null
                         const isFrozen = isActiveFrozen || isWatchFrozen
-                        const frozenLeft = isActiveFrozen ? displayFrozenLeft! : frozenWatchLeft!
-                        const isWatch = showWatchCol && p.id === watchParticipantId
+                        const frozenLeft = isWatchFrozen ? frozenWatchLeft! : displayFrozenLeft!
+                        if (isWatch && !dataId) return (
+                          <td key={p.id}
+                            style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: '#faf5ff', borderLeft: '2px solid #7c3aed' } : undefined}
+                            className="border-r border-violet-100 text-center">
+                            <span className="text-gray-200">—</span>
+                          </td>
+                        )
+                        const bet  = thirdBetMap.get(`${dataId!}:${g}`)
+                        const kind = thirdCellKind(bet?.team, et)
                         const frozenBg = isFrozen ? (CELL_KIND_BG_HEX[kind] || '#faf5ff') : undefined
                         return (
                           <td key={p.id}
-                            style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: frozenBg, borderLeft: `2px solid ${isWatch ? '#a78bfa' : '#e9d5ff'}` } : undefined}
+                            style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: frozenBg, borderLeft: isWatch ? '2px solid #7c3aed' : '2px solid #e9d5ff' } : undefined}
                             className={`border-r border-violet-50 text-center ${!isFrozen ? CELL_BG[kind] : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                             {bet?.team ? (
                               <div className="flex flex-col items-center leading-none gap-px">
@@ -1954,7 +1990,7 @@ export function SimuladorClient({
                                   </span>
                                 )}
                               </div>
-                            ) : bonusIsLocked && p.id !== activeParticipantId
+                            ) : bonusIsLocked && dataId !== activeParticipantId
                               ? <span className="text-gray-300 text-[10px]" title="Prazo em aberto">🔒</span>
                               : <span className="text-gray-200">—</span>
                             }
@@ -2035,13 +2071,21 @@ export function SimuladorClient({
                       </td>
                       {/* Participant cells */}
                       {displayParts.map((p, idx) => {
-                        const bet = tournamentBetMap.get(p.id)
+                        const isWatch = p.id === WATCH_ID
+                        const dataId = isWatch ? watchPart?.id ?? null : p.id
                         const isMe = p.id === activeParticipantId
                         const isActiveFrozen = displayFrozenLeft !== null && idx === 0
-                        const isWatchFrozen  = frozenWatchLeft !== null && idx === 1
+                        const isWatchFrozen  = isWatch && !isActiveFrozen && frozenWatchLeft !== null
                         const isFrozen = isActiveFrozen || isWatchFrozen
-                        const frozenLeft = isActiveFrozen ? displayFrozenLeft! : frozenWatchLeft!
-                        const isWatch = showWatchCol && p.id === watchParticipantId
+                        const frozenLeft = isWatchFrozen ? frozenWatchLeft! : displayFrozenLeft!
+                        if (isWatch && !dataId) return (
+                          <td key={p.id}
+                            style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: '#fffbeb', borderLeft: '2px solid #7c3aed' } : { background: '#fffbeb' }}
+                            className="border-r border-amber-50 text-center">
+                            <span className="text-gray-200">—</span>
+                          </td>
+                        )
+                        const bet = tournamentBetMap.get(dataId!)
                         const betVal = bet?.[field] ?? ''
                         const pts = betVal ? scoreG4FieldBet(field, betVal, effectiveKnockoutResults, rules, isZebraChampion) : null
                         const isExact = !!betVal && !!official && betVal === official
@@ -2051,7 +2095,7 @@ export function SimuladorClient({
                         const frozenBg = isExact ? '#d1fae5' : isPartial ? '#e0f2fe' : isWrong ? '#fff1f2' : '#fffbeb'
                         return (
                           <td key={p.id}
-                            style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: frozenBg, borderLeft: `2px solid ${isWatch ? '#a78bfa' : '#fde68a'}` } : { background: cellBg }}
+                            style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: frozenBg, borderLeft: isWatch ? '2px solid #7c3aed' : '2px solid #fde68a' } : { background: cellBg }}
                             className={`border-r border-amber-50 text-center ${isExact ? 'bg-emerald-100' : isPartial ? 'bg-sky-100' : isWrong ? 'bg-rose-50' : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                             {betVal ? (
                               <div className="flex flex-col items-center leading-none gap-px">
@@ -2138,16 +2182,24 @@ export function SimuladorClient({
                         </>)
                       })()}
                       {displayParts.map((p, idx) => {
-                        const bet  = tournamentBetMap.get(p.id)
+                        const isWatch = p.id === WATCH_ID
+                        const dataId = isWatch ? watchPart?.id ?? null : p.id
                         const isMe = p.id === activeParticipantId
                         const isActiveFrozen = displayFrozenLeft !== null && idx === 0
-                        const isWatchFrozen  = frozenWatchLeft !== null && idx === 1
+                        const isWatchFrozen  = isWatch && !isActiveFrozen && frozenWatchLeft !== null
                         const isFrozen = isActiveFrozen || isWatchFrozen
-                        const frozenLeft = isActiveFrozen ? displayFrozenLeft! : frozenWatchLeft!
-                        const isWatch = showWatchCol && p.id === watchParticipantId
+                        const frozenLeft = isWatchFrozen ? frozenWatchLeft! : displayFrozenLeft!
+                        if (isWatch && !dataId) return (
+                          <td key={p.id}
+                            style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: '#fffbeb', borderLeft: '2px solid #7c3aed' } : undefined}
+                            className="border-r border-amber-50 text-center">
+                            <span className="text-gray-200">—</span>
+                          </td>
+                        )
+                        const bet  = tournamentBetMap.get(dataId!)
                         if (!bet?.top_scorer) return (
                           <td key={p.id}
-                            style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: '#fffbeb', borderLeft: `2px solid ${isWatch ? '#a78bfa' : '#fde68a'}` } : undefined}
+                            style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: '#fffbeb', borderLeft: isWatch ? '2px solid #7c3aed' : '2px solid #fde68a' } : undefined}
                             className={`border-r border-amber-50 text-center ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                             <span className="text-gray-200">—</span>
                           </td>
@@ -2158,7 +2210,7 @@ export function SimuladorClient({
                         const pts       = effectiveScorers.length > 0 ? (isCorrect ? artilhPts : 0) : null
                         return (
                           <td key={p.id}
-                            style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: isCorrect ? '#d1fae5' : pts !== null ? '#fff1f2' : '#fffbeb', borderLeft: `2px solid ${isWatch ? '#a78bfa' : '#fde68a'}` } : undefined}
+                            style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: isCorrect ? '#d1fae5' : pts !== null ? '#fff1f2' : '#fffbeb', borderLeft: isWatch ? '2px solid #7c3aed' : '2px solid #fde68a' } : undefined}
                             className={`border-r border-amber-50 text-center ${isCorrect ? 'bg-emerald-100' : pts !== null ? 'bg-rose-50' : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                             <div className="flex flex-col items-center leading-none gap-px">
                               <span className="text-[9px] text-gray-700 truncate font-medium" style={{ maxWidth: PART_COL_W - 4 }}>
@@ -2292,22 +2344,30 @@ export function SimuladorClient({
                       </>)
                     })()}
                     {displayParts.map((p, idx) => {
-                      const key  = `${p.id}:${match.id}`
-                      const bet  = betMap.get(key)
-                      const kind = matchCellKind(bet, effH, effA)
-                      const pts  = getMatchPts(p.id, match.id)
+                      const isWatch = p.id === WATCH_ID
+                      const dataId = isWatch ? watchPart?.id ?? null : p.id
                       const isMe = p.id === activeParticipantId
                       const isActiveFrozen = displayFrozenLeft !== null && idx === 0
-                      const isWatchFrozen  = frozenWatchLeft !== null && idx === 1
+                      const isWatchFrozen  = isWatch && !isActiveFrozen && frozenWatchLeft !== null
                       const isFrozen = isActiveFrozen || isWatchFrozen
-                      const frozenLeft = isActiveFrozen ? displayFrozenLeft! : frozenWatchLeft!
-                      const isWatch = showWatchCol && p.id === watchParticipantId
+                      const frozenLeft = isWatchFrozen ? frozenWatchLeft! : displayFrozenLeft!
+                      if (isWatch && !dataId) return (
+                        <td key={p.id}
+                          style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: bg, borderLeft: '2px solid #7c3aed' } : undefined}
+                          className="border-r border-violet-100 text-center">
+                          <span className="text-gray-200">—</span>
+                        </td>
+                      )
+                      const key  = `${dataId!}:${match.id}`
+                      const bet  = betMap.get(key)
+                      const kind = matchCellKind(bet, effH, effA)
+                      const pts  = getMatchPts(dataId!, match.id)
                       const frozenBg = isFrozen ? (CELL_KIND_BG_HEX[kind] || bg) : undefined
                       const betOutcome = bet ? getMatchResult(bet.score_home, bet.score_away) : null
                       const isPotentialZebra = betOutcome !== null && !!possibleZebras?.[betOutcome]
                       return (
                         <td key={p.id}
-                          style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: frozenBg, borderLeft: `2px solid ${isWatch ? '#a78bfa' : '#d1d5db'}` } : undefined}
+                          style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: frozenBg, borderLeft: isWatch ? '2px solid #7c3aed' : '2px solid #d1d5db' } : undefined}
                           className={`border-r border-gray-100 text-center ${!isFrozen ? CELL_BG[kind] : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                           {bet ? (
                             <div className="flex flex-col items-center leading-none gap-px">
@@ -2320,7 +2380,7 @@ export function SimuladorClient({
                                 </span>
                               )}
                             </div>
-                          ) : lockedSet.has(match.id) && p.id !== activeParticipantId
+                          ) : lockedSet.has(match.id) && dataId !== activeParticipantId
                             ? <span className="text-gray-300 text-[10px]" title="Prazo em aberto">🔒</span>
                             : <span className="text-gray-200">—</span>
                           }
