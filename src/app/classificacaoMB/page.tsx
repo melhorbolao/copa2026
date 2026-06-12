@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { redirect } from 'next/navigation'
 import { createClient, createAuthAdminClient } from '@/lib/supabase/server'
 import { getActiveParticipantId } from '@/lib/participant'
-import { requirePageAccess } from '@/lib/page-visibility'
+import { requirePageAccess, getPageVisibility, isPageVisible } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { ClassificacaoMBClient } from './ClassificacaoMBClient'
 import { getMatchResult, detectMatchZebra, scoreTournamentBet, scoreMatchBet } from '@/lib/scoring/engine'
@@ -40,7 +40,11 @@ export default async function ClassificacaoMBPage() {
   const { data: profile } = await supabase
     .from('users').select('is_admin, role').eq('id', user.id).single()
   const isAdmin = profile?.is_admin ?? false
-  await requirePageAccess('classificacaoMB', profile?.role ?? 'user')
+  const role = profile?.role ?? 'user'
+  await requirePageAccess('classificacaoMB', role)
+
+  const visibilityRows = await getPageVisibility()
+  const minhaPanelaEnabled = isPageVisible(visibilityRows, 'minhaPanela', role)
 
   const activeParticipantId = await getActiveParticipantId(supabase, user.id).catch(() => null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -486,6 +490,7 @@ export default async function ClassificacaoMBPage() {
         sobeDesceVisible={sobeDesceVisible}
         isAdmin={isAdmin}
         lastDataDate={lastDataDate}
+        minhaPanelaEnabled={minhaPanelaEnabled}
       />
     </>
   )

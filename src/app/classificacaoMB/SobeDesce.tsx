@@ -18,6 +18,8 @@ import { createClient } from '@/lib/supabase/client'
 
 export type SobeDesceMode = 'hidden' | 'last_day' | 'current_round' | 'custom'
 
+export type HighlightMode = 'me' | 'panela' | 'none'
+
 export interface SnapshotEntry {
   participant_id: string
   rank:           number
@@ -262,6 +264,9 @@ interface SobeDesceSelectorProps {
   lastResultDate:        string | null
   currentPhaseStartDate: string | null
   lastDataDate:          string | null
+  highlightMode?:        HighlightMode
+  onHighlightChange?:    (m: HighlightMode) => void
+  showPanelaOption?:     boolean
 }
 
 export function SobeDesceSelector({
@@ -270,6 +275,7 @@ export function SobeDesceSelector({
   customTo, setCustomTo,
   loading, refDateLabel, refToDateLabel, hasData,
   lastResultDate, currentPhaseStartDate, lastDataDate,
+  highlightMode, onHighlightChange, showPanelaOption,
 }: SobeDesceSelectorProps) {
   const options: { value: SobeDesceMode; label: string; title: string; disabled?: boolean }[] = [
     {
@@ -324,6 +330,32 @@ export function SobeDesceSelector({
             </button>
           ))}
         </div>
+
+        {/* Separador + Botões de destaque */}
+        {highlightMode !== undefined && onHighlightChange && (
+          <>
+            <span className="mx-1 h-4 w-px shrink-0 bg-gray-200" />
+            <div className="flex flex-wrap gap-1">
+              {([
+                { value: 'me'   as HighlightMode, label: 'Destacar meu nome' },
+                ...(showPanelaOption ? [{ value: 'panela' as HighlightMode, label: 'Destacar minha panela' }] : []),
+                { value: 'none' as HighlightMode, label: 'Sem destaques' },
+              ]).map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => onHighlightChange(opt.value)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                    highlightMode === opt.value
+                      ? 'bg-azul-escuro text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
 
         {/* Status */}
         {loading && (

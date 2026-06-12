@@ -10,6 +10,7 @@ import {
   DeltaPtsCell,
   type DeltaEntry,
   type SobeDesceHighlights,
+  type HighlightMode,
 } from './SobeDesce'
 
 interface ParticipantRow {
@@ -57,6 +58,8 @@ interface Props {
   isAdmin: boolean
   /** Última data com dados em participant_points_by_day — limita seletor de período */
   lastDataDate: string | null
+  /** Se a página Minha Panela está habilitada para o usuário atual */
+  minhaPanelaEnabled: boolean
 }
 
 type RankedRow = ParticipantRow & { rank: number; diffLider: number; diffPremio: number | null; diffCorte: number | null }
@@ -174,6 +177,7 @@ const ZONE_STATUS: Record<Zone, string> = {
 function CompactRanking({
   ranked, premioSpots, isUniqueLast, renderedAt, matchesRegistered, groupsDefined,
   deltaMap, highlights, sdActive,
+  highlightMode, activeParticipantId, panelaSet,
 }: {
   ranked: RankedRow[]
   premioSpots: number
@@ -184,6 +188,9 @@ function CompactRanking({
   deltaMap: Map<string, DeltaEntry> | null
   highlights: SobeDesceHighlights
   sdActive: boolean
+  highlightMode: HighlightMode
+  activeParticipantId: string
+  panelaSet: Set<string>
 }) {
   const n = ranked.length
   if (n === 0) return null
@@ -265,10 +272,22 @@ function CompactRanking({
               {block.map((r, ri) => {
                 const z = zoneOf(r)
                 const boundary = ri > 0 && zoneOf(block[ri - 1]) !== z
+                const isActive = r.id === activeParticipantId
+                const isPanela = panelaSet.has(r.id)
+                let rowBgCls = ZONE_ROW[z]
+                if (z !== 'last') {
+                  if (highlightMode === 'panela') {
+                    if (isActive) rowBgCls = 'bg-verde-100'
+                    else if (isPanela) rowBgCls = 'bg-indigo-50'
+                  } else if (highlightMode === 'me' && isActive) {
+                    rowBgCls = 'bg-verde-100'
+                  }
+                }
+                const nameFontCls = z !== 'last' && highlightMode !== 'none' && isActive ? 'font-semibold' : ''
                 return (
                   <div
                     key={r.id}
-                    className={`${colsGrid} px-2 py-[3px] text-[12px] ${ZONE_ROW[z]} ${boundary ? 'border-t border-gray-200' : ''} ${sdBorder(r.id)}`}
+                    className={`${colsGrid} px-2 py-[3px] text-[12px] ${rowBgCls} ${boundary ? 'border-t border-gray-200' : ''} ${sdBorder(r.id)}`}
                   >
                     <span className={`text-right pr-0.5 tabular-nums ${ZONE_TEXT[z]}`}>{r.rank}</span>
 
@@ -282,8 +301,9 @@ function CompactRanking({
                       </span>
                     )}
 
-                    <span className={`pl-1 line-clamp-2 break-words ${ZONE_TEXT[z]}`} title={r.apelido}>
+                    <span className={`pl-1 line-clamp-2 break-words ${ZONE_TEXT[z]} ${nameFontCls}`} title={r.apelido}>
                       {r.apelido}{z === 'last' && ' 🔦'}
+                      {z !== 'last' && highlightMode !== 'none' && isActive && <span className="ml-0.5 text-[10px] text-verde-600">◀</span>}
                       {sdActive && highlights.maxUpId   === r.id && <span className="ml-0.5 text-[8px]" title="Maior subida do período">🚀</span>}
                       {sdActive && highlights.maxDownId === r.id && <span className="ml-0.5 text-[8px]" title="Maior queda do período">📉</span>}
                       {sdActive && highlights.maxPtsId  === r.id && <span className="ml-0.5 text-[8px]" title="Maior pontuação do período">🔥</span>}
@@ -338,21 +358,20 @@ function CompactRanking({
   )
 }
 
-type HighlightMode = 'me' | 'panela' | 'none'
-
 export function ClassificacaoMBClient({
   rows, lastMatch, nextMatch,
   eliminatedTeams, eliminatedStdScorers,
   scorerMapping, teamAbbrs, prizeSpots, premioSpots,
   activeParticipantId, panelaMemberIds, colVisibility, renderedAt, matchesRegistered, groupsDefined,
   lastResultDate, currentPhaseStartDate,
-  sobeDesceVisible, isAdmin, lastDataDate,
+  sobeDesceVisible, isAdmin, lastDataDate, minhaPanelaEnabled,
 }: Props) {
   const router = useRouter()
   const elTeams    = useMemo(() => new Set(eliminatedTeams),   [eliminatedTeams])
   const elStd      = useMemo(() => new Set(eliminatedStdScorers), [eliminatedStdScorers])
   const panelaSet  = useMemo(() => new Set(panelaMemberIds),   [panelaMemberIds])
   const [highlightMode, setHighlightMode] = useState<HighlightMode>('me')
+  const showPanelaOption = minhaPanelaEnabled && panelaMemberIds.length > 0
 
   useEffect(() => {
     const supabase = createClient()
@@ -493,8 +512,8 @@ export function ClassificacaoMBClient({
         </div>
       )}
 
-      {/* Sobe e Desce — seletor de modo (oculto para usuários quando admin desabilitou) */}
-      {sdAllowed && (
+      {/* Barra de controles: Sobe e Desce + Destaques (acima da tabela compacta) */}
+      {sdAllowed ? (
         <SobeDesceSelector
           mode={sdMode}
           setMode={setSdMode}
@@ -509,7 +528,32 @@ export function ClassificacaoMBClient({
           lastResultDate={lastResultDate}
           currentPhaseStartDate={currentPhaseStartDate}
           lastDataDate={lastDataDate}
+          highlightMode={highlightMode}
+          onHighlightChange={setHighlightMode}
+          showPanelaOption={showPanelaOption}
         />
+      ) : (
+        <div className="mb-3 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+          <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
+            {([
+              { value: 'me'   as HighlightMode, label: 'Destacar meu nome' },
+              ...(showPanelaOption ? [{ value: 'panela' as HighlightMode, label: 'Destacar minha panela' }] : []),
+              { value: 'none' as HighlightMode, label: 'Sem destaques' },
+            ]).map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setHighlightMode(opt.value)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                  highlightMode === opt.value
+                    ? 'bg-azul-escuro text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Classificação Melhor Bolão — tabela compacta com Sobe e Desce */}
@@ -523,6 +567,9 @@ export function ClassificacaoMBClient({
         deltaMap={deltaMap}
         highlights={highlights}
         sdActive={sdActive}
+        highlightMode={highlightMode}
+        activeParticipantId={activeParticipantId}
+        panelaSet={panelaSet}
       />
 
       <div className="mb-3">
@@ -530,25 +577,6 @@ export function ClassificacaoMBClient({
           <h1 className="text-2xl font-black text-gray-900">Classificação Detalhada</h1>
           <span className="text-[10px] text-gray-400">{formatRenderedAt(renderedAt)}</span>
           <span className="text-[10px] text-gray-400">· {matchesRegistered} jogos registrados e {groupsDefined}/12 grupos definidos</span>
-        </div>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {([
-            { value: 'me',     label: 'Destacar meu nome' },
-            ...(panelaMemberIds.length > 0 ? [{ value: 'panela' as HighlightMode, label: 'Destacar minha panela' }] : []),
-            { value: 'none',   label: 'Sem destaques' },
-          ] as { value: HighlightMode; label: string }[]).map(opt => (
-            <button
-              key={opt.value}
-              onClick={() => setHighlightMode(opt.value)}
-              className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                highlightMode === opt.value
-                  ? 'border-azul-escuro bg-azul-escuro text-white'
-                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-400'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
         </div>
       </div>
 
