@@ -39,7 +39,7 @@ export function RankingPanel({
   const [sortDir, setSortDir] = useState<SortDir>('asc')
 
   const hasResult = match.score_home !== null && match.score_away !== null
-  const afterDeadline = Date.now() > new Date(match.betting_deadline).getTime()
+  const afterDeadline = Date.now() > new Date(match.match_datetime).getTime() + EDIT_WINDOW_MS
 
   const cravando = matchBets.filter(b =>
     hasResult && b.score_home === match.score_home && b.score_away === match.score_away
