@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useTransition } from 'react'
 import {
-  createTribo, deleteTribo, saveTribeMembers, getTribeMemberIds,
+  createTribo, renameTribo, deleteTribo, saveTribeMembers, getTribeMemberIds,
   type Tribe, type Participant,
 } from './actions'
 
@@ -23,6 +23,10 @@ export function TribosClient({ initialTribes, participants }: Props) {
   const [rightSearch, setRightSearch] = useState('')
   const [leftSel, setLeftSel]       = useState<Set<string>>(new Set())
   const [rightSel, setRightSel]     = useState<Set<string>>(new Set())
+
+  // Edição inline de nome
+  const [editingId, setEditingId]   = useState<string | null>(null)
+  const [editName, setEditName]     = useState('')
 
   const [isPending, startTransition] = useTransition()
   const [feedback, setFeedback]     = useState<{ ok: boolean; msg: string } | null>(null)
@@ -46,6 +50,29 @@ export function TribosClient({ initialTribes, participants }: Props) {
       setTribes(newTribes)
       setNewName('')
       showMsg(true, 'Tribo criada com sucesso.')
+    })
+  }
+
+  // ── Renomear Tribo ─────────────────────────────────────────────────────────
+  function startEdit(t: Tribe) {
+    setEditingId(t.id)
+    setEditName(t.name)
+  }
+  function cancelEdit() {
+    setEditingId(null)
+    setEditName('')
+  }
+  function handleRename(id: string) {
+    if (!editName.trim()) return
+    startTransition(async () => {
+      const res = await renameTribo(id, editName)
+      if (res.error) { showMsg(false, res.error); return }
+      setTribes(prev =>
+        prev.map(t => t.id === id ? { ...t, name: editName.trim() } : t)
+            .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+      )
+      cancelEdit()
+      showMsg(true, 'Nome atualizado.')
     })
   }
 
@@ -154,15 +181,53 @@ export function TribosClient({ initialTribes, participants }: Props) {
         {tribes.length > 0 && (
           <ul className="mt-4 space-y-1.5">
             {tribes.map(t => (
-              <li key={t.id} className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
-                <span className="text-sm font-medium text-gray-800">{t.name}</span>
-                <button
-                  onClick={() => handleDelete(t.id)}
-                  disabled={isPending}
-                  className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40 transition"
-                >
-                  Excluir
-                </button>
+              <li key={t.id} className="flex items-center gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+                {editingId === t.id ? (
+                  <>
+                    <input
+                      autoFocus
+                      type="text"
+                      value={editName}
+                      onChange={e => setEditName(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') handleRename(t.id)
+                        if (e.key === 'Escape') cancelEdit()
+                      }}
+                      className="flex-1 rounded border border-verde-400 px-2 py-1 text-sm focus:outline-none"
+                    />
+                    <button
+                      onClick={() => handleRename(t.id)}
+                      disabled={isPending || !editName.trim()}
+                      className="text-xs font-medium text-verde-600 hover:text-verde-700 disabled:opacity-40 transition"
+                    >
+                      Salvar
+                    </button>
+                    <button
+                      onClick={cancelEdit}
+                      className="text-xs text-gray-400 hover:text-gray-600 transition"
+                    >
+                      Cancelar
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex-1 text-sm font-medium text-gray-800">{t.name}</span>
+                    <button
+                      onClick={() => startEdit(t)}
+                      disabled={isPending}
+                      className="text-xs text-gray-400 hover:text-gray-700 disabled:opacity-40 transition"
+                    >
+                      Renomear
+                    </button>
+                    <button
+                      onClick={() => handleDelete(t.id)}
+                      disabled={isPending}
+                      className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40 transition"
+                    >
+                      Excluir
+                    </button>
+                  </>
+                )}
               </li>
             ))}
           </ul>

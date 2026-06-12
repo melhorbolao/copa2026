@@ -65,6 +65,18 @@ export async function createTribo(name: string): Promise<{ error?: string }> {
   return {}
 }
 
+export async function renameTribo(id: string, name: string): Promise<{ error?: string }> {
+  try { await requireTribosAdmin() } catch { return { error: 'Acesso negado' } }
+  const trimmed = name.trim()
+  if (!trimmed) return { error: 'Nome obrigatório' }
+  const admin = createAuthAdminClient()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (admin as any).from('tribes').update({ name: trimmed }).eq('id', id)
+  if (error) return { error: error.message }
+  revalidatePath('/admin/tribos')
+  return {}
+}
+
 export async function deleteTribo(id: string): Promise<{ error?: string }> {
   try { await requireTribosAdmin() } catch { return { error: 'Acesso negado' } }
   const admin = createAuthAdminClient()
