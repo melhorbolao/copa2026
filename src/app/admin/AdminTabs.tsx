@@ -17,6 +17,7 @@ const ALL_TABS = [
   { href: '/admin/classificacao', label: 'Classificação',       key: 'classificacao' },
   { href: '/admin/gestao',        label: 'Gestão',              key: 'gestao'        },
   { href: '/admin/telemetria',    label: 'Telemetria',          key: 'telemetria'    },
+  { href: '/admin/tribos',        label: 'Tribos',              key: 'tribos'        },
   { href: '/admin/acessos',       label: 'Controle de Acessos', key: 'acessos'       },
 ]
 

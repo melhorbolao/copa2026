@@ -81,6 +81,16 @@ export default async function ClassificacaoMBPage() {
 
   const [visibilitySettings] = await Promise.all([getVisibilitySettings()])
 
+  // Tribos para destaque (admin/master only — lista simples de id+nome)
+  let tribes: { id: string; name: string }[] = []
+  if (isAdmin) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: tribesData } = await (admin as any).from('tribes').select('id, name').order('name')
+      tribes = (tribesData ?? []) as { id: string; name: string }[]
+    } catch { /* tabela ainda não criada */ }
+  }
+
   // ── Fetch #1: dados base ───────────────────────────────────────────────────
   const [participantsRes, matchesRes, betsRes, groupBetsRes, tournamentBetsRes, scoresRes, rulesRes] = await Promise.all([
     supabase.from('participants').select('id, apelido').order('apelido'),
@@ -492,6 +502,7 @@ export default async function ClassificacaoMBPage() {
         isAdmin={isAdmin}
         lastDataDate={lastDataDate}
         minhaPanelaEnabled={minhaPanelaEnabled}
+        tribes={tribes}
       />
     </>
   )

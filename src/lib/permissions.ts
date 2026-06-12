@@ -26,6 +26,12 @@ export const PERMISSION_GROUPS = [
     description: 'Participantes — visualização e exportação de palpites',
     pages: ['participantes'],
   },
+  {
+    key: 'tribos',
+    label: 'Gestão de Tribos',
+    description: 'Criação e gerenciamento de grupos de participantes para destaque na classificação',
+    pages: ['tribos'],
+  },
 ] as const
 
 export type PermissionGroupKey = (typeof PERMISSION_GROUPS)[number]['key']
@@ -43,6 +49,7 @@ const PAGE_TO_GROUP: Record<string, PermissionGroupKey> = {
   classificacao: 'configuracoes',
   gestao:        'artilharia',
   telemetria:    'telemetria',
+  tribos:        'tribos',
 }
 
 /**
