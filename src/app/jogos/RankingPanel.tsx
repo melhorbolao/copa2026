@@ -111,7 +111,7 @@ export function RankingPanel({
       {cravando.length > 0 && (
         <div className="bg-emerald-50 border-b border-emerald-100 px-4 py-3">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wide">✓ {afterDeadline ? 'Cravaram' : 'Cravando agora'}</span>
+            <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wide">✓ {afterDeadline ? 'Cravaram' : 'Cravando agora'} ({cravando.length})</span>
             {!afterDeadline && !secador && secadorAllowed && (
               <button
                 onClick={() => setSecador(true)}
