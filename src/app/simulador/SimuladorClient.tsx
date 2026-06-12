@@ -382,25 +382,24 @@ const SimScoreInput = memo(function SimScoreInput({
 
   const hasSim = simScore !== undefined
 
-  // Placar oficial: read-only
-  if (match.score_home !== null && match.score_away !== null) {
-    const result = getMatchResult(match.score_home, match.score_away)
-    const zebraScoreCls = isActualZebraBet ? 'bg-gray-900 text-white' : 'bg-gray-500 text-white'
-    const zebraDrawCls  = isActualZebraBet ? 'rounded bg-gray-900 text-white px-0.5' : 'rounded bg-gray-500 text-white px-0.5'
-    return (
-      <div className="inline-flex items-center gap-0.5">
-        <span className={`inline-flex items-center justify-center min-w-[18px] rounded px-0.5 text-xs font-bold tabular-nums ${isActualZebra && result === 'H' ? zebraScoreCls : 'text-gray-700'}`}>
-          {match.score_home}
-        </span>
-        <span className={`text-[9px] font-bold ${isActualZebra && result === 'D' ? zebraDrawCls : 'text-gray-300'}`}>×</span>
-        <span className={`inline-flex items-center justify-center min-w-[18px] rounded px-0.5 text-xs font-bold tabular-nums ${isActualZebra && result === 'A' ? zebraScoreCls : 'text-gray-700'}`}>
-          {match.score_away}
-        </span>
-      </div>
-    )
-  }
-
   if (!canEdit) {
+    // Placar oficial: read-only (jogo já encerrado ou fora da janela de 4h)
+    if (match.score_home !== null && match.score_away !== null) {
+      const result = getMatchResult(match.score_home, match.score_away)
+      const zebraScoreCls = isActualZebraBet ? 'bg-gray-900 text-white' : 'bg-gray-500 text-white'
+      const zebraDrawCls  = isActualZebraBet ? 'rounded bg-gray-900 text-white px-0.5' : 'rounded bg-gray-500 text-white px-0.5'
+      return (
+        <div className="inline-flex items-center gap-0.5">
+          <span className={`inline-flex items-center justify-center min-w-[18px] rounded px-0.5 text-xs font-bold tabular-nums ${isActualZebra && result === 'H' ? zebraScoreCls : 'text-gray-700'}`}>
+            {match.score_home}
+          </span>
+          <span className={`text-[9px] font-bold ${isActualZebra && result === 'D' ? zebraDrawCls : 'text-gray-300'}`}>×</span>
+          <span className={`inline-flex items-center justify-center min-w-[18px] rounded px-0.5 text-xs font-bold tabular-nums ${isActualZebra && result === 'A' ? zebraScoreCls : 'text-gray-700'}`}>
+            {match.score_away}
+          </span>
+        </div>
+      )
+    }
     const pz = possibleZebras
     if (!pz || (!pz.H && !pz.D && !pz.A)) return <span className="text-gray-300 text-xs">–</span>
     return (
@@ -826,6 +825,10 @@ export function SimuladorClient({
   // ── canEdit ────────────────────────────────────────────────────────────────
 
   const canEdit = useCallback((match: MatchFull) => {
+    const now = Date.now()
+    const matchStart = new Date(match.match_datetime).getTime()
+    // Dentro da janela de 4h após o início: sempre editável (mesmo com placar oficial)
+    if (now >= matchStart && now < matchStart + 4 * 3600_000) return true
     if (match.score_home !== null) return false
     if (lockedSet.has(match.id)) return false
     return true
