@@ -46,11 +46,19 @@ export function RankingPanel({
   const cravandoPids = new Set(cravando.map(b => b.participant_id))
 
   const topGainer = participants
-    .filter(p => (matchPoints[p.id] ?? 0) > 0)
+    .filter(p => cravandoPids.has(p.id) && (matchPoints[p.id] ?? 0) > 0)
     .sort((a, b) => (matchPoints[b.id] ?? 0) - (matchPoints[a.id] ?? 0))[0]
 
   const participantMap = new Map(participants.map(p => [p.id, p]))
   const betMap = new Map(matchBets.map(b => [b.participant_id, b]))
+
+  const sortByName = (a: string, b: string) => {
+    const pa = participantMap.get(a)?.apelido ?? ''
+    const pb = participantMap.get(b)?.apelido ?? ''
+    return pa.localeCompare(pb, 'pt-BR')
+  }
+
+  const cravandoSorted = [...cravando].sort((a, b) => sortByName(a.participant_id, b.participant_id))
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -131,7 +139,7 @@ export function RankingPanel({
             )}
 
             <div className="flex flex-wrap gap-1.5">
-              {cravando.map(b => {
+              {cravandoSorted.map(b => {
                 const p = participantMap.get(b.participant_id)
                 if (!p) return null
                 const before = rankBefore[p.id] ?? 0
@@ -162,7 +170,7 @@ export function RankingPanel({
               <div>
                 <p className="text-[10px] text-blue-500 font-semibold mb-0.5">⚽ {abbr(match.team_home)} marcar</p>
                 <div className="flex flex-wrap gap-1">
-                  {quase.home.map(pid => {
+                  {[...quase.home].sort(sortByName).map(pid => {
                     const p = participantMap.get(pid)
                     return p ? <span key={pid} className="text-[10px] bg-blue-50 text-blue-700 rounded-full px-1.5 py-0.5 font-medium">{p.apelido}</span> : null
                   })}
@@ -173,7 +181,7 @@ export function RankingPanel({
               <div>
                 <p className="text-[10px] text-orange-500 font-semibold mb-0.5">⚽ {abbr(match.team_away)} marcar</p>
                 <div className="flex flex-wrap gap-1">
-                  {quase.away.map(pid => {
+                  {[...quase.away].sort(sortByName).map(pid => {
                     const p = participantMap.get(pid)
                     return p ? <span key={pid} className="text-[10px] bg-orange-50 text-orange-700 rounded-full px-1.5 py-0.5 font-medium">{p.apelido}</span> : null
                   })}
