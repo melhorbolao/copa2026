@@ -660,7 +660,7 @@ export function ClassificacaoMBClient({
           onTribeSelect={selectTribe}
         />
       ) : (
-        <div className="mb-3 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="mb-3 rounded-xl border border-gray-200 bg-white shadow-sm">
           <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
             {([
               { value: 'me'   as HighlightMode, label: 'Destacar meu nome' },

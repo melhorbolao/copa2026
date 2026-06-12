@@ -312,7 +312,7 @@ export function SobeDesceSelector({
     : refDateLabel ? `desde ${refDateLabel}` : ''
 
   return (
-    <div className="mb-3 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+    <div className="mb-3 rounded-xl border border-gray-200 bg-white shadow-sm">
       <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
         {/* Label */}
         <span className="shrink-0 text-xs font-bold text-gray-600">📈 Sobe e Desce:</span>
