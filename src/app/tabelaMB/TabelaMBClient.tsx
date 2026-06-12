@@ -3,6 +3,7 @@
 import {
   useState, useEffect, useRef, useCallback, useTransition, memo, useMemo, useSyncExternalStore,
 } from 'react'
+import { getWatchStore } from '@/lib/watchStore'
 import { toast } from 'react-hot-toast'
 import { downloadExcel } from '@/utils/downloadExcel'
 import { useVirtualizer } from '@tanstack/react-virtual'
@@ -480,14 +481,11 @@ export function TabelaMBClient({
   const [phase,   setPhase]   = useState('group')
   const [now,     setNow]     = useState(Date.now())
   const [isMobile, setIsMobile] = useState(false)
-  const watchKey = `sim_watch_${activeParticipantId}`
+  const watchStore = getWatchStore(`sim_watch_${activeParticipantId}`)
   const watchParticipantId = useSyncExternalStore(
-    useCallback((cb: () => void) => {
-      window.addEventListener('storage', cb)
-      return () => window.removeEventListener('storage', cb)
-    }, []),
-    useCallback(() => localStorage.getItem(watchKey) ?? null, [watchKey]),
-    () => null,
+    watchStore.subscribe,
+    watchStore.getSnapshot,
+    watchStore.getServerSnapshot,
   )
   const [showWatchSelector, setShowWatchSelector] = useState(false)
   const [watchQuery, setWatchQuery] = useState('')
@@ -953,10 +951,8 @@ export function TabelaMBClient({
   }, [scorerInput, localScorers, handleScorerSave])
 
   const saveWatchPart = useCallback((id: string | null) => {
-    if (id) localStorage.setItem(watchKey, id)
-    else localStorage.removeItem(watchKey)
-    window.dispatchEvent(new StorageEvent('storage', { key: watchKey, newValue: id ?? null }))
-  }, [watchKey])
+    watchStore.set(id)
+  }, [watchStore])
 
   const vItems    = rowVirtualizer.getVirtualItems()
   const totalSize = rowVirtualizer.getTotalSize()
