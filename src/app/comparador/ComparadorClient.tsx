@@ -94,42 +94,6 @@ export function ComparadorClient(props: Props) {
   const breakdown = useMemo(() =>
     computeBreakdown(duelRows, rulesMap), [duelRows, rulesMap])
 
-  // Diagnóstico: jogos com placar × palpites × pontos calculados × regras
-  const debugInfo = useMemo(() => {
-    if (!isAdmin || !pidA || !pidB) return null
-    const bA = betsByParticipant[pidA] ?? {}
-    const bB = betsByParticipant[pidB] ?? {}
-    const played = matches.filter(m => m.scoreHome !== null && m.scoreAway !== null)
-    const playedRows = duelRows.filter(r => r.match.scoreHome !== null)
-    const ruleKeys = ['placar_exato','vencedor_gols_vencedor','vencedor_diferenca_gols',
-                      'vencedor_gols_perdedor','somente_vencedor','empate_gols_errados',
-                      'bonus_zebra_jogo','multiplicador_brasil','percentual_zebra']
-    return {
-      totalMatches: matches.length,
-      playedMatches: played.length,
-      betsA: Object.keys(bA).length,
-      betsB: Object.keys(bB).length,
-      playedDetail: played.slice(0, 5).map(m => {
-        const row = playedRows.find(r => r.match.id === m.id)
-        return {
-          n: m.matchNumber,
-          score: `${m.scoreHome}-${m.scoreAway}`,
-          betA: bA[m.id] ? `${bA[m.id].scoreHome}-${bA[m.id].scoreAway}` : 'null',
-          betB: bB[m.id] ? `${bB[m.id].scoreHome}-${bB[m.id].scoreAway}` : 'null',
-          ptsA: row?.ptsA ?? '?',
-          ptsB: row?.ptsB ?? '?',
-        }
-      }),
-      rules: ruleKeys.map(k => `${k}=${rulesMap[k] ?? 'undef'}`).join(' | '),
-      bdA: breakdown.ptsMatchesA,
-      bdB: breakdown.ptsMatchesB,
-      scA: scoresByParticipant[pidA]?.ptsMatches ?? 'n/a',
-      scTotA: scoresByParticipant[pidA]?.ptsTotal ?? 'n/a',
-      scB: scoresByParticipant[pidB]?.ptsMatches ?? 'n/a',
-      scTotB: scoresByParticipant[pidB]?.ptsTotal ?? 'n/a',
-    }
-  }, [isAdmin, pidA, pidB, matches, betsByParticipant, duelRows, rulesMap, breakdown, scoresByParticipant])
-
   const projection = useMemo(() =>
     computeProjection(duelRows, rulesMap), [duelRows, rulesMap])
 
@@ -219,24 +183,6 @@ export function ComparadorClient(props: Props) {
           color="red"
         />
       </div>
-
-      {/* ── Debug panel (admin only) ─────────────────────────────────────── */}
-      {debugInfo && (
-        <details className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
-          <summary className="cursor-pointer font-bold">🔧 Debug (admin)</summary>
-          <div className="mt-2 space-y-1 font-mono">
-            <div>Partidas carregadas: {debugInfo.totalMatches} | Com placar: {debugInfo.playedMatches}</div>
-            <div>Palpites A: {debugInfo.betsA} | Palpites B: {debugInfo.betsB}</div>
-            {debugInfo.playedDetail.map(d => (
-              <div key={d.n}>Jogo #{d.n} [{d.score}] — A: {d.betA} ({d.ptsA}pts) | B: {d.betB} ({d.ptsB}pts)</div>
-            ))}
-            <div>breakdown.ptsMatchesA={debugInfo.bdA} | breakdown.ptsMatchesB={debugInfo.bdB}</div>
-            <div>scoresByParticipant A ptsMatches={debugInfo.scA} ptsTotal={debugInfo.scTotA}</div>
-            <div>scoresByParticipant B ptsMatches={debugInfo.scB} ptsTotal={debugInfo.scTotB}</div>
-            <div className="mt-1 break-all">{debugInfo.rules}</div>
-          </div>
-        </details>
-      )}
 
       {!hasData && (
         <div className="rounded-2xl border border-dashed border-gray-300 bg-white py-20 text-center">
