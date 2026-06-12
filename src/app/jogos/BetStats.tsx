@@ -210,10 +210,10 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
               <span className={`${D_W} flex justify-center`}>{g.result === 'D' ? scoreEl : null}</span>
               <span className={`${A_W} flex justify-center`}>{g.result === 'A' ? scoreEl : null}</span>
 
-              {/* Right spacer — on desktop: count/pct left-of-spacer, pts far right */}
-              <div className="flex-1 flex justify-end sm:justify-between sm:pl-3 items-center gap-1.5 sm:gap-0">
-                <span className={metaClass}>{g.count} ({g.pct.toFixed(0)}%)</span>
-                <span className={ptsClass}>
+              {/* Mobile: ambos à direita num flex-1. Desktop: largura fixa por coluna */}
+              <div className="flex-1 flex justify-end items-center gap-1.5 sm:flex-none sm:gap-0">
+                <span className={`${metaClass} sm:w-28 sm:text-right`}>{g.count} ({g.pct.toFixed(0)}%)</span>
+                <span className={`${ptsClass} sm:w-20 sm:text-right`}>
                   {g.pts !== null ? (g.pts > 0 ? `+${g.pts}` : '0') : ''}
                 </span>
               </div>
@@ -252,9 +252,9 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
             <span className={`${H_W} flex justify-center`}>{ownResult === 'H' ? scoreEl : null}</span>
             <span className={`${D_W} flex justify-center`}>{ownResult === 'D' ? scoreEl : null}</span>
             <span className={`${A_W} flex justify-center`}>{ownResult === 'A' ? scoreEl : null}</span>
-            <div className="flex-1 flex justify-end">
+            <div className="flex-1 flex justify-end items-center sm:flex-none">
               {ownPts !== null && (
-                <span className={`text-sm sm:text-xl font-bold tabular-nums ${ownPts > 0 ? 'text-blue-600' : 'text-gray-300'}`}>
+                <span className={`text-sm sm:text-xl sm:w-20 sm:text-right font-bold tabular-nums ${ownPts > 0 ? 'text-blue-600' : 'text-gray-300'}`}>
                   {ownPts > 0 ? `+${ownPts}` : '0'}
                 </span>
               )}
