@@ -211,8 +211,8 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
               <span className={`${D_W} flex justify-center`}>{g.result === 'D' ? scoreEl : null}</span>
               <span className={`${A_W} flex justify-center`}>{g.result === 'A' ? scoreEl : null}</span>
 
-              {/* Right spacer */}
-              <div className="flex-1 flex justify-end items-center gap-1.5">
+              {/* Right spacer — on desktop: count/pct left-of-spacer, pts far right */}
+              <div className="flex-1 flex justify-end sm:justify-between sm:pl-3 items-center gap-1.5 sm:gap-0">
                 <span className={metaClass}>{g.count} ({g.pct.toFixed(0)}%)</span>
                 <span className={ptsClass}>
                   {g.pts !== null ? (g.pts > 0 ? `+${g.pts}` : '0') : ''}
@@ -247,7 +247,7 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
         )
         return (
           <div className={`flex items-center px-3 py-1.5 border-t border-gray-100${ownIsExact ? ' bg-blue-50/60' : ' bg-gray-50/60'}`}>
-            <div className="flex-1">
+            <div className="flex-1 text-right">
               <span className="text-[10px] sm:text-sm font-bold text-gray-400 uppercase tracking-wide">Meu palpite</span>
             </div>
             <span className={`${H_W} flex justify-center`}>{ownResult === 'H' ? scoreEl : null}</span>
