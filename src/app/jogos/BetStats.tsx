@@ -6,10 +6,10 @@ import type { MatchFull, BetRaw, Participant } from './JogosDashboard'
 
 const MEDAL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' }
 
-// Slightly wider than the score boxes (w-8/w-9) so percentage labels fit without overlap
-const H_W = 'w-10'  // 40px
-const D_W = 'w-11'  // 44px
-const A_W = 'w-10'  // 40px
+// Mobile: slightly wider than score boxes. Desktop (sm:): expanded for better readability
+const H_W = 'w-10 sm:w-14'  // 40px → 56px
+const D_W = 'w-11 sm:w-16'  // 44px → 64px
+const A_W = 'w-10 sm:w-14'  // 40px → 56px
 
 interface Props {
   match: MatchFull
@@ -163,7 +163,7 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
           const w    = r === 'H' ? H_W : r === 'D' ? D_W : A_W
           const isZebraCol = matchBets.length > 0 && pct <= zebraThreshold
           return (
-            <span key={r} className={`${w} text-center text-[10px] font-bold tabular-nums flex flex-col items-center leading-none gap-0.5 ${isZebraCol ? 'text-amber-500' : 'text-gray-400'}`}>
+            <span key={r} className={`${w} text-center text-[10px] sm:text-xs font-bold tabular-nums flex flex-col items-center leading-none gap-0.5 ${isZebraCol ? 'text-amber-500' : 'text-gray-400'}`}>
               {isZebraCol && <span title="Possível zebra">🦓</span>}
               {fmtPct(pct)}
             </span>
@@ -182,11 +182,11 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
               : (g.pts === 0 && hasResult)
                 ? 'text-gray-300'
                 : 'text-gray-700'
-          const scoreClass = `font-mono font-bold text-sm tabular-nums ${baseColor}${g.isImpossible ? ' line-through' : ''}`
-          const metaClass = `text-xs tabular-nums whitespace-nowrap ${
+          const scoreClass = `font-mono font-bold text-sm sm:text-base tabular-nums ${baseColor}${g.isImpossible ? ' line-through' : ''}`
+          const metaClass = `text-xs sm:text-sm tabular-nums whitespace-nowrap ${
             g.isExact ? 'text-blue-500 font-semibold' : (g.pts === 0 && hasResult) ? 'text-gray-300' : 'text-gray-500'
           }`
-          const ptsClass = `text-sm font-bold tabular-nums ${
+          const ptsClass = `text-sm sm:text-base font-bold tabular-nums ${
             g.isExact ? 'text-blue-600' : (g.pts === 0 && hasResult) ? 'text-gray-300' : 'text-gray-400'
           }`
 
@@ -241,7 +241,7 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
             ? 'text-gray-300'
             : 'text-gray-800'
         const scoreEl = (
-          <span className={`font-mono font-bold text-sm tabular-nums ${scoreColor}`}>
+          <span className={`font-mono font-bold text-sm sm:text-base tabular-nums ${scoreColor}`}>
             {ownBet.score_home}x{ownBet.score_away}
           </span>
         )
@@ -255,7 +255,7 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
             <span className={`${A_W} flex justify-center`}>{ownResult === 'A' ? scoreEl : null}</span>
             <div className="flex-1 flex justify-end">
               {ownPts !== null && (
-                <span className={`text-sm font-bold tabular-nums ${ownPts > 0 ? 'text-blue-600' : 'text-gray-300'}`}>
+                <span className={`text-sm sm:text-base font-bold tabular-nums ${ownPts > 0 ? 'text-blue-600' : 'text-gray-300'}`}>
                   {ownPts > 0 ? `+${ownPts}` : '0'}
                 </span>
               )}
