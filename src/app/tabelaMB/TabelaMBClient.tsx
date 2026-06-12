@@ -3,6 +3,7 @@
 import {
   useState, useEffect, useRef, useCallback, useTransition, memo, useMemo,
 } from 'react'
+import { usePathname } from 'next/navigation'
 import { toast } from 'react-hot-toast'
 import { downloadExcel } from '@/utils/downloadExcel'
 import { useVirtualizer } from '@tanstack/react-virtual'
@@ -475,6 +476,7 @@ export function TabelaMBClient({
   teamAbbrs, officialTopScorers, scorerMapping, productionMode = false,
   lockedMatchIds, bonusIsLocked = false,
 }: Props) {
+  const pathname = usePathname()
   const [matches, setMatches] = useState<MatchFull[]>(initialMatches)
   const [betMap,  setBetMap]  = useState<BetMap>(() => buildBetMap(initialBets))
   const [phase,   setPhase]   = useState('group')
@@ -489,12 +491,13 @@ export function TabelaMBClient({
 
   useEffect(() => {
     const key = `sim_watch_${activeParticipantId}`
+    setWatchParticipantId(localStorage.getItem(key) || null)
     const handler = (e: StorageEvent) => {
       if (e.key === key) setWatchParticipantId(e.newValue || null)
     }
     window.addEventListener('storage', handler)
     return () => window.removeEventListener('storage', handler)
-  }, [activeParticipantId])
+  }, [pathname, activeParticipantId])
 
   // Admin: gestão de artilheiros oficiais
   const [localScorers, setLocalScorers] = useState<string[]>(officialTopScorers)

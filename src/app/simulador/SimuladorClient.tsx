@@ -3,6 +3,7 @@
 import {
   useState, useEffect, useRef, useCallback, useTransition, memo, useMemo,
 } from 'react'
+import { usePathname } from 'next/navigation'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { createClient } from '@/lib/supabase/client'
 import { scoreMatchBet, scoreGroupBet, detectMatchZebra, detectGroupZebra, getMatchResult, scoreTournamentBet } from '@/lib/scoring/engine'
@@ -595,6 +596,7 @@ export function SimuladorClient({
   existingGroupSims, existingThirdSims, existingTournamentSim,
   prizeSpots: _prizeSpots = 8, premioSpots = 10,
 }: Props) {
+  const pathname = usePathname()
   const [matches, setMatches] = useState<MatchFull[]>(initialMatches)
   const [betMap,  setBetMap]  = useState<BetMap>(() => buildBetMap(initialBets))
   const [phase,   setPhase]   = useState('all')
@@ -611,12 +613,13 @@ export function SimuladorClient({
 
   useEffect(() => {
     const key = `sim_watch_${userId}`
+    setWatchParticipantId(localStorage.getItem(key) || null)
     const handler = (e: StorageEvent) => {
       if (e.key === key) setWatchParticipantId(e.newValue || null)
     }
     window.addEventListener('storage', handler)
     return () => window.removeEventListener('storage', handler)
-  }, [userId])
+  }, [pathname, userId])
   const [showGabaritarDe,     setShowGabaritarDe]     = useState(false)
   const [gabaritarDeQuery,    setGabaritarDeQuery]    = useState('')
   const [gabaritarDeSelected, setGabaritarDeSelected] = useState<string | null>(null)
