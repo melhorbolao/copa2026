@@ -106,14 +106,15 @@ export default async function ClassificacaoMBPage() {
   let artillaryPointsActive = false
   let lastDataDate: string | null = null
   const colVisibility: Record<string, boolean> = {
-    premio:       false,
-    last_match:   true,
-    next_match:   true,
-    delta_premio: true,
-    delta_corte:  true,
-    pts_jg:       true,
-    pts_cl:       true,
-    pts_g4:       true,
+    premio:        false,
+    last_match:    true,
+    next_match:    true,
+    delta_premio:  true,
+    delta_corte1:  true,
+    delta_corte2:  true,
+    pts_jg:        true,
+    pts_cl:        true,
+    pts_g4:        true,
   }
 
   try {
@@ -131,7 +132,7 @@ export default async function ClassificacaoMBPage() {
   try {
     const COL_KEYS = [
       'classif_col_premio', 'classif_col_last_match', 'classif_col_next_match',
-      'classif_col_delta_premio', 'classif_col_delta_corte',
+      'classif_col_delta_premio', 'classif_col_delta_corte1', 'classif_col_delta_corte2',
       'classif_col_pts_jg', 'classif_col_pts_cl', 'classif_col_pts_g4',
     ]
     const [scorerRes, scorerSetting, settingsRes, premioSpotsRes, colSettingsRes, sobeDesceRow, dailyRunRow, artillaryRow] = await Promise.all([

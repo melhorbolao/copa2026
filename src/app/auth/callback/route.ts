@@ -8,7 +8,7 @@ export async function GET(request: Request) {
   const code       = requestUrl.searchParams.get('code')
   const token_hash = requestUrl.searchParams.get('token_hash')
   const type       = requestUrl.searchParams.get('type') as EmailOtpType | null
-  const next       = requestUrl.searchParams.get('next') ?? '/palpites'
+  const next       = requestUrl.searchParams.get('next') ?? '/jogos'
   const error      = requestUrl.searchParams.get('error')
 
   if (error) {

@@ -62,7 +62,7 @@ interface Props {
   minhaPanelaEnabled: boolean
 }
 
-type RankedRow = ParticipantRow & { rank: number; diffLider: number; diffPremio: number | null; diffCorte: number | null }
+type RankedRow = ParticipantRow & { rank: number; diffLider: number; diffPremio: number | null; diffCorte1: number | null; diffCorte2: number | null }
 
 const Num = memo(function Num({ v, green }: { v: number; green?: boolean }) {
   return (
@@ -297,7 +297,7 @@ function CompactRanking({
                       </span>
                     )}
 
-                    <span className={`pl-1 line-clamp-2 break-words ${textCls}`} title={r.apelido}>
+                    <span className={`pl-1 truncate ${textCls}`} title={r.apelido}>
                       {r.apelido}{z === 'last' && ' 🔦'}
                       {sdActive && highlights.maxUpId   === r.id && <span className="ml-0.5 text-[8px]" title="Maior subida do período">🚀</span>}
                       {sdActive && highlights.maxDownId === r.id && <span className="ml-0.5 text-[8px]" title="Maior queda do período">📉</span>}
@@ -367,6 +367,17 @@ export function ClassificacaoMBClient({
   const panelaSet  = useMemo(() => new Set(panelaMemberIds),   [panelaMemberIds])
   const [highlightMode, setHighlightMode] = useState<HighlightMode>('me')
   const showPanelaOption = minhaPanelaEnabled && panelaMemberIds.length > 0
+  const [sortKey, setSortKey] = useState<string | null>(null)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  const handleSort = (key: string, defaultDir: 'asc' | 'desc' = 'desc') => {
+    if (sortKey === key) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir(defaultDir)
+    }
+  }
 
   useEffect(() => {
     const supabase = createClient()
@@ -384,14 +395,15 @@ export function ClassificacaoMBClient({
     return () => { void supabase.removeChannel(channel) }
   }, [router])
 
-  const showPremio      = colVisibility['premio']       ?? false
-  const showLastMatch   = colVisibility['last_match']   ?? true
-  const showNextMatch   = colVisibility['next_match']   ?? true
-  const showDeltaPremio = colVisibility['delta_premio'] ?? true
-  const showDeltaCorte  = colVisibility['delta_corte']  ?? true
-  const showPtsJg       = colVisibility['pts_jg']       ?? true
-  const showPtsCl       = colVisibility['pts_cl']       ?? true
-  const showPtsG4       = colVisibility['pts_g4']       ?? true
+  const showPremio      = colVisibility['premio']        ?? false
+  const showLastMatch   = colVisibility['last_match']    ?? true
+  const showNextMatch   = colVisibility['next_match']    ?? true
+  const showDeltaPremio = colVisibility['delta_premio']  ?? true
+  const showDeltaCorte1 = colVisibility['delta_corte1']  ?? true
+  const showDeltaCorte2 = colVisibility['delta_corte2']  ?? true
+  const showPtsJg       = colVisibility['pts_jg']        ?? true
+  const showPtsCl       = colVisibility['pts_cl']        ?? true
+  const showPtsG4       = colVisibility['pts_g4']        ?? true
 
   const { ranked, cutPts, premioCutPts, lastRank, isUniqueLast, premioLine, cut2Line, cut1Line } = useMemo((): {
     ranked: RankedRow[]; cutPts: number | null; premioCutPts: number | null
@@ -413,22 +425,43 @@ export function ClassificacaoMBClient({
       withRank.push({ ...sorted[i], rank })
     }
 
+    const { cut1, cut2 } = calcCuts(n)
+    const cut1Pts = n > 0 && cut1 > 0 ? (sorted[Math.min(cut1, n) - 1]?.pts ?? null) : null
+    const cut2Pts = n > 0 && cut2 > 0 ? (sorted[Math.min(cut2, n) - 1]?.pts ?? null) : null
+
     const out: RankedRow[] = withRank.map(r => ({
       ...r,
       diffLider: r.pts - leaderPts,
       diffPremio: premioCut !== null ? r.pts - premioCut : null,
-      diffCorte: cut !== null ? r.pts - cut : null,
+      diffCorte1: cut1Pts !== null ? r.pts - cut1Pts : null,
+      diffCorte2: cut2Pts !== null ? r.pts - cut2Pts : null,
     }))
 
     const lastRankVal    = n > 0 ? withRank[n - 1].rank : 0
     const isUniqueLastVal = n > 0 && out.filter(r => r.rank === lastRankVal).length === 1
-    const { cut1, cut2 } = calcCuts(n)
     const premioLineVal = n > 0 ? (sorted[Math.min(premioSpots, n) - 1]?.pts ?? Infinity) : Infinity
     const cut2LineVal   = cut2 > premioSpots ? (sorted[cut2 - 1]?.pts ?? null) : null
     const cut1LineVal   = cut1 > cut2        ? (sorted[cut1 - 1]?.pts ?? null) : null
 
     return { ranked: out, cutPts: cut, premioCutPts: premioCut, lastRank: lastRankVal, isUniqueLast: isUniqueLastVal, premioLine: premioLineVal, cut2Line: cut2LineVal, cut1Line: cut1LineVal }
   }, [rows, prizeSpots, premioSpots])
+
+  const sortedRanked = useMemo(() => {
+    if (!sortKey) return ranked
+    return [...ranked].sort((a, b) => {
+      const av = (a as unknown as Record<string, unknown>)[sortKey]
+      const bv = (b as unknown as Record<string, unknown>)[sortKey]
+      if (av === null && bv === null) return 0
+      if (av === null) return 1
+      if (bv === null) return -1
+      if (typeof av === 'string') {
+        return sortDir === 'asc'
+          ? (av as string).localeCompare(bv as string, 'pt-BR')
+          : (bv as string).localeCompare(av as string, 'pt-BR')
+      }
+      return sortDir === 'asc' ? (av as number) - (bv as number) : (bv as number) - (av as number)
+    })
+  }, [ranked, sortKey, sortDir])
 
   // ── Sobe e Desce ───────────────────────────────────────────────────────────
   const rankedRowsForSD = useMemo(
@@ -471,6 +504,20 @@ export function ClassificacaoMBClient({
       {label}
     </th>
   )
+
+  const sth = (label: string, sortK: string, title?: string, cls = '', defaultDir: 'asc' | 'desc' = 'desc', align = 'text-center') => {
+    const active = sortKey === sortK
+    return (
+      <th
+        className={`px-1.5 py-2 ${align} whitespace-nowrap cursor-pointer select-none hover:bg-gray-100 transition-colors ${cls}`}
+        title={title ?? label}
+        onClick={() => handleSort(sortK, defaultDir)}
+      >
+        {label}
+        <span className="ml-0.5 text-[8px] text-gray-300">{active ? (sortDir === 'desc' ? '▼' : '▲') : '⇅'}</span>
+      </th>
+    )
+  }
 
   return (
     <div className="mx-auto max-w-full px-2 py-4 pb-32 sm:px-4 sm:py-6">
@@ -586,9 +633,9 @@ export function ClassificacaoMBClient({
                 )}
 
                 {/* Identidade */}
-                <th className="px-1.5 py-2 text-left w-8">#</th>
-                <th className="px-1.5 py-2 text-left w-[150px]">Participante</th>
-                <th className="px-1.5 py-2 text-right w-10" title="Pontuação total">Pts</th>
+                {sth('#', 'rank', 'Colocação', 'w-8', 'asc', 'text-left')}
+                {sth('Participante', 'apelido', 'Nome do participante', 'w-[150px]', 'asc', 'text-left')}
+                {sth('Pts', 'pts', 'Pontuação total', 'w-10', 'desc', 'text-right')}
 
                 {/* Último / Próximo jogo */}
                 {showLastMatch && (
@@ -609,20 +656,21 @@ export function ClassificacaoMBClient({
                 )}
 
                 {/* Estatísticas de jogos */}
-                {th('Cravou', 'Jogos Cravados (placar exato)', 'table-cell w-12')}
-                {th('Pontuou', 'Jogos Pontuados', 'table-cell w-14')}
-                {th('🦓 Apost.', '🦓 Apostada — número de apostas em resultados minoritários (possíveis zebras)', 'table-cell w-16')}
-                {th('🦓 Pont.', '🦓 Pontuada — zebras reais em que acertou o resultado', 'table-cell w-14')}
+                {sth('Cravou', 'cravados', 'Jogos Cravados (placar exato)', 'table-cell w-12')}
+                {sth('Pontuou', 'pontuados', 'Jogos Pontuados', 'table-cell w-14')}
+                {sth('🦓 Apost.', 'zebraApostada', '🦓 Apostada — número de apostas em resultados minoritários (possíveis zebras)', 'table-cell w-16')}
+                {sth('🦓 Pont.', 'zebraPontuada', '🦓 Pontuada — zebras reais em que acertou o resultado', 'table-cell w-14')}
 
                 {/* Diferenças */}
-                {th('∆ Líder', 'Diferença pro Líder', 'hidden md:table-cell w-14')}
-                {showDeltaPremio && th('∆ Prêmio', `Diferença pro ${premioSpots}º colocado (1º premiado)`, 'hidden md:table-cell w-16')}
-                {showDeltaCorte  && th('∆ Corte',  'Diferença pro Corte', 'w-14')}
+                {sth('∆ Líder', 'diffLider', 'Diferença pro Líder', 'hidden md:table-cell w-14')}
+                {showDeltaPremio && sth('∆ Prêmio', 'diffPremio', `Diferença pro ${premioSpots}º colocado (1º premiado)`, 'hidden md:table-cell w-16')}
+                {showDeltaCorte1 && sth('∆ Corte 1', 'diffCorte1', 'Diferença para o 1º corte (≈ posição 110)', 'w-16')}
+                {showDeltaCorte2 && sth('∆ Corte 2', 'diffCorte2', 'Diferença para o 2º corte (≈ posição 55)', 'w-16')}
 
                 {/* Breakdown de pontos */}
-                {showPtsJg && th('Pts Jg', 'Pontos com Jogos', 'hidden md:table-cell w-12')}
-                {showPtsCl && th('Pts Cl', 'Pontos com Classificação de Grupos + 3os Lugares', 'hidden md:table-cell w-12')}
-                {showPtsG4 && th('Pts G4 + Art', 'Pontos com G4 + Artilheiro', 'hidden md:table-cell w-16')}
+                {showPtsJg && sth('Pts Jg', 'ptsMatches', 'Pontos com Jogos', 'hidden md:table-cell w-12')}
+                {showPtsCl && sth('Pts Cl', 'ptsClassif', 'Pontos com Classificação de Grupos + 3os Lugares', 'hidden md:table-cell w-12')}
+                {showPtsG4 && sth('Pts G4 + Art', 'ptsG4', 'Pontos com G4 + Artilheiro', 'hidden md:table-cell w-16')}
 
                 {/* G4 picks */}
                 {th('1º', 'Aposta: Campeão', 'w-11')}
@@ -640,7 +688,7 @@ export function ClassificacaoMBClient({
                   </td>
                 </tr>
               )}
-              {ranked.map(row => {
+              {sortedRanked.map(row => {
                 const isActive  = row.id === activeParticipantId
                 const isPanela  = panelaSet.has(row.id)
                 const z         = zoneOf(row)
@@ -683,7 +731,7 @@ export function ClassificacaoMBClient({
 
                     <td className={`px-1.5 py-1 w-[150px] ${z === 'last' ? 'text-white' : 'text-gray-900'}`}
                         title={row.apelido}>
-                      <div className="line-clamp-2 break-words">
+                      <div className="truncate">
                         {row.apelido}
                         {z === 'last' && <span className="ml-1 text-[11px]">🔦</span>}
                         {isActive && highlighted && <span className={`ml-1 text-[10px] ${z === 'last' ? 'text-white' : 'text-verde-600'}`}>◀</span>}
@@ -728,9 +776,14 @@ export function ClassificacaoMBClient({
                         <Diff v={row.diffPremio} />
                       </td>
                     )}
-                    {showDeltaCorte && (
+                    {showDeltaCorte1 && (
                       <td className="px-1.5 py-1 text-right">
-                        <Diff v={row.diffCorte} />
+                        <Diff v={row.diffCorte1} />
+                      </td>
+                    )}
+                    {showDeltaCorte2 && (
+                      <td className="px-1.5 py-1 text-right">
+                        <Diff v={row.diffCorte2} />
                       </td>
                     )}
 

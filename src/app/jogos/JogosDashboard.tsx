@@ -31,7 +31,7 @@ function defaultMatchIdx(matches: MatchFull[]): number {
   // find in-progress (started, within 2h)
   const inProgress = matches.findIndex(m => {
     const t = new Date(m.match_datetime).getTime()
-    return now >= t && now <= t + 2 * 3600_000
+    return now >= t && now <= t + 4 * 3600_000
   })
   if (inProgress >= 0) return inProgress
   // next upcoming
