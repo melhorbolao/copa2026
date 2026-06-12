@@ -145,7 +145,7 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
 
       {/* Title */}
       <div className="px-4 pt-3 pb-1 text-center">
-        <h2 className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Distribuição de Palpites</h2>
+        <h2 className="text-[11px] sm:text-base font-bold text-gray-500 uppercase tracking-wide">Distribuição de Palpites</h2>
       </div>
 
       {/*
@@ -168,7 +168,8 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
             </span>
           )
         })}
-        <div className="flex-1" />
+        {/* Deve ter a mesma largura do container direito das linhas (sm:w-28 + sm:w-20) */}
+        <div className="flex-1 sm:flex-none sm:w-48" />
       </div>
 
       {/* Bet rows */}
