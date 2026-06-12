@@ -260,18 +260,24 @@ export function JogosDashboard({
   const rankBefore = useMemo(() => {
     const sorted = [...participants].sort((a, b) => (ptsWithoutMatch[b.id] ?? 0) - (ptsWithoutMatch[a.id] ?? 0))
     const out: Record<string, number> = {}
-    sorted.forEach((p, i) => { out[p.id] = i + 1 })
+    sorted.forEach((p, i) => {
+      out[p.id] = i > 0 && (ptsWithoutMatch[p.id] ?? 0) === (ptsWithoutMatch[sorted[i - 1].id] ?? 0)
+        ? out[sorted[i - 1].id]
+        : i + 1
+    })
     return out
   }, [participants, ptsWithoutMatch])
 
   // Ranking after (stored without match + new match points)
   const rankAfter = useMemo(() => {
-    const sorted = [...participants].sort((a, b) =>
-      ((ptsWithoutMatch[b.id] ?? 0) + (matchPoints[b.id] ?? 0)) -
-      ((ptsWithoutMatch[a.id] ?? 0) + (matchPoints[a.id] ?? 0))
-    )
+    const ptsAfter = (p: { id: string }) => (ptsWithoutMatch[p.id] ?? 0) + (matchPoints[p.id] ?? 0)
+    const sorted = [...participants].sort((a, b) => ptsAfter(b) - ptsAfter(a))
     const out: Record<string, number> = {}
-    sorted.forEach((p, i) => { out[p.id] = i + 1 })
+    sorted.forEach((p, i) => {
+      out[p.id] = i > 0 && ptsAfter(p) === ptsAfter(sorted[i - 1])
+        ? out[sorted[i - 1].id]
+        : i + 1
+    })
     return out
   }, [participants, ptsWithoutMatch, matchPoints])
 
