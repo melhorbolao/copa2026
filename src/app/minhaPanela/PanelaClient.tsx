@@ -262,7 +262,7 @@ function ClassificacaoPanela({
   )
 }
 
-// ── Sub-aba 2: Raio-X dos jogos ───────────────────────────────────────────────
+// ── Aba 2: Realizados / Aba 3: Próximos ──────────────────────────────────────
 
 function PalpiteCell({ bet }: { bet?: BetInfo }) {
   if (!bet) return <span className="text-gray-300 text-xs">—</span>
@@ -320,7 +320,10 @@ function RecentMatchCard({
                     }
                   </td>
                   <td className={`px-3 py-2 text-center font-bold tabular-nums ${isExact ? 'text-[#002776]' : 'text-gray-600'}`}>
-                    {bet ? (bet.points ?? '?') : <span className="text-gray-300">—</span>}
+                    {bet
+                      ? (bet.points != null ? bet.points : <span className="text-gray-400 text-xs">–</span>)
+                      : <span className="text-gray-300">—</span>
+                    }
                   </td>
                 </tr>
               )
@@ -399,63 +402,66 @@ function UpcomingMatchCard({
   )
 }
 
-function RaioXPanela({
-  panelaRanked, recentMatches, upcomingMatches, betsByParticipant,
+function RealizadosTab({
+  panelaRanked, recentMatches, betsByParticipant,
 }: {
   panelaRanked:      RankedParticipant[]
   recentMatches:     (MatchInfo & { scoreHome: number; scoreAway: number })[]
+  betsByParticipant: Record<string, Record<string, BetInfo>>
+}) {
+  if (recentMatches.length === 0) {
+    return (
+      <div className="rounded-2xl border border-dashed border-gray-300 bg-white py-12 text-center">
+        <p className="text-3xl mb-2">⏳</p>
+        <p className="font-bold text-gray-700">Nenhum jogo realizado ainda</p>
+        <p className="mt-1 text-sm text-gray-400">
+          As pontuações aparecem aqui após os jogos serem registrados.
+        </p>
+      </div>
+    )
+  }
+  return (
+    <div className="space-y-3">
+      {[...recentMatches].reverse().map(m => (
+        <RecentMatchCard
+          key={m.id}
+          match={m}
+          panelaRanked={panelaRanked}
+          betsByParticipant={betsByParticipant}
+        />
+      ))}
+    </div>
+  )
+}
+
+function ProximosTab({
+  panelaRanked, upcomingMatches, betsByParticipant,
+}: {
+  panelaRanked:      RankedParticipant[]
   upcomingMatches:   MatchInfo[]
   betsByParticipant: Record<string, Record<string, BetInfo>>
 }) {
+  if (upcomingMatches.length === 0) {
+    return (
+      <div className="rounded-2xl border border-dashed border-gray-300 bg-white py-12 text-center">
+        <p className="text-3xl mb-2">🔒</p>
+        <p className="font-bold text-gray-700">Nenhum palpite revelado ainda</p>
+        <p className="mt-1 text-sm text-gray-400">
+          Os palpites dos próximos jogos aparecem aqui após o prazo encerrar.
+        </p>
+      </div>
+    )
+  }
   return (
-    <div className="space-y-5">
-      {/* ── Últimos jogos realizados ──────────────────────────────── */}
-      {recentMatches.length > 0 && (
-        <section>
-          <h2 className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-2.5 px-0.5">
-            Últimos jogos realizados
-          </h2>
-          <div className="space-y-3">
-            {[...recentMatches].reverse().map(m => (
-              <RecentMatchCard
-                key={m.id}
-                match={m}
-                panelaRanked={panelaRanked}
-                betsByParticipant={betsByParticipant}
-              />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* ── Próximos jogos (prazo encerrado) ─────────────────────── */}
-      {upcomingMatches.length > 0 && (
-        <section>
-          <h2 className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-2.5 px-0.5">
-            Próximos jogos — palpites revelados
-          </h2>
-          <div className="space-y-3">
-            {upcomingMatches.map(m => (
-              <UpcomingMatchCard
-                key={m.id}
-                match={m}
-                panelaRanked={panelaRanked}
-                betsByParticipant={betsByParticipant}
-              />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {recentMatches.length === 0 && upcomingMatches.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-gray-300 bg-white py-12 text-center">
-          <p className="text-3xl mb-2">⏳</p>
-          <p className="font-bold text-gray-700">Nenhum jogo disponível ainda</p>
-          <p className="mt-1 text-sm text-gray-400">
-            Os palpites aparecem aqui após o prazo de apostas encerrar.
-          </p>
-        </div>
-      )}
+    <div className="space-y-3">
+      {upcomingMatches.map(m => (
+        <UpcomingMatchCard
+          key={m.id}
+          match={m}
+          panelaRanked={panelaRanked}
+          betsByParticipant={betsByParticipant}
+        />
+      ))}
     </div>
   )
 }
@@ -467,7 +473,7 @@ export function PanelaClient({
   allRanked, snapshotByPid, recentMatches, upcomingMatches, betsByParticipant,
 }: Props) {
   const [panelaIds,  setPanelaIds]  = useState<string[]>(initialPanelaIds)
-  const [activeTab,  setActiveTab]  = useState<'ranking' | 'raiox'>('ranking')
+  const [activeTab,  setActiveTab]  = useState<'ranking' | 'realizados' | 'proximos'>('ranking')
   const [saving,     setSaving]     = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -569,8 +575,9 @@ export function PanelaClient({
           <div className="flex border-b border-gray-200 mt-6 mb-4">
             {(
               [
-                ['ranking', '🏆 Classificação'],
-                ['raiox',   '🔬 Raio-X'],
+                ['ranking',    '🏆 Classificação'],
+                ['realizados', '✅ Realizados'],
+                ['proximos',   '⏳ Próximos'],
               ] as const
             ).map(([key, label]) => (
               <button
@@ -595,10 +602,16 @@ export function PanelaClient({
               hasTrend={hasTrend}
             />
           )}
-          {activeTab === 'raiox' && (
-            <RaioXPanela
+          {activeTab === 'realizados' && (
+            <RealizadosTab
               panelaRanked={panelaRanked}
               recentMatches={recentMatches}
+              betsByParticipant={betsByParticipant}
+            />
+          )}
+          {activeTab === 'proximos' && (
+            <ProximosTab
+              panelaRanked={panelaRanked}
               upcomingMatches={upcomingMatches}
               betsByParticipant={betsByParticipant}
             />
