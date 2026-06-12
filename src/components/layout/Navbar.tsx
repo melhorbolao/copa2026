@@ -52,7 +52,7 @@ export async function Navbar() {
         </div>
 
         {/* Direita: seletor + logout/login */}
-        <div className="flex flex-1 items-center justify-end gap-2">
+        <div className="relative flex flex-1 items-center justify-end gap-2">
           {participants.length > 1 && (
             <ParticipantSelector participants={participants} />
           )}
