@@ -603,6 +603,16 @@ export function SimuladorClient({
   const [tab, setTab] = useState<'tabela' | 'classificacao'>('tabela')
   const [isGabaritando, setIsGabaritando] = useState(false)
   const [isLimpando,    setIsLimpando]    = useState(false)
+  const [watchParticipantId, setWatchParticipantId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
+    return localStorage.getItem(`sim_watch_${userId}`) || null
+  })
+  const [showWatchSelector,   setShowWatchSelector]   = useState(false)
+  const [watchQuery,           setWatchQuery]           = useState('')
+  const [showGabaritarDe,     setShowGabaritarDe]     = useState(false)
+  const [gabaritarDeQuery,    setGabaritarDeQuery]    = useState('')
+  const [gabaritarDeSelected, setGabaritarDeSelected] = useState<string | null>(null)
+  const [isGabaritandoDe,     setIsGabaritandoDe]     = useState(false)
 
   // simMap: simulações pessoais do usuário — match_id → {score_home, score_away}
   const [simMap, setSimMap] = useState<Map<string, { score_home: number; score_away: number }>>(() => {
@@ -641,6 +651,13 @@ export function SimuladorClient({
 
   const containerRef = useRef<HTMLDivElement>(null)
   const supabase = useRef(createClient())
+
+  const watchPart = watchParticipantId ? participants.find(p => p.id === watchParticipantId) : null
+  const saveWatchPart = useCallback((id: string | null) => {
+    setWatchParticipantId(id)
+    if (id) localStorage.setItem(`sim_watch_${userId}`, id)
+    else localStorage.removeItem(`sim_watch_${userId}`)
+  }, [userId])
 
   // Conjunto de match IDs com prazo aberto (palpites ocultos)
   const lockedSet = useMemo(() => new Set(lockedMatchIds ?? []), [lockedMatchIds])
@@ -1050,100 +1067,103 @@ export function SimuladorClient({
     }
   }, [userId, simTournament])
 
-  // ── Gabaritar: preenche simMap com bets do usuário ────────────────────────
+  // ── Gabaritar: preenche simMap com bets de um participante fonte ──────────
 
-  const handleGabaritar = useCallback(async () => {
-    setIsGabaritando(true)
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const sb = supabase.current as any
+  const runGabaritar = useCallback(async (sourceId: string) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase.current as any
 
-      // ── Partidas: batch único ─────────────────────────────────────────────
-      const entries: Array<{ matchId: string; sh: number; sa: number; isBrazil: boolean }> = []
-      for (const m of matches) {
-        if (m.score_home !== null) continue
-        if (lockedSet.has(m.id)) continue
-        const bet = betMap.get(`${activeParticipantId}:${m.id}`)
-        if (!bet) continue
-        entries.push({ matchId: m.id, sh: bet.score_home, sa: bet.score_away, isBrazil: m.is_brazil })
-      }
-      if (entries.length) {
-        setSimMap(prev => {
-          const next = new Map(prev)
-          for (const e of entries) next.set(e.matchId, { score_home: e.sh, score_away: e.sa })
-          return next
-        })
-        for (const e of entries) recomputeForMatch(e.matchId, e.sh, e.sa, e.isBrazil)
-        await sb.from('user_simulations').upsert(
-          entries.map(e => ({ user_id: userId, match_id: e.matchId, score_home: e.sh, score_away: e.sa, updated_at: new Date().toISOString() })),
-          { onConflict: 'user_id,match_id' },
-        )
-      }
-
-      if (bonusIsLocked) return
-
-      // ── Grupos: batch único ───────────────────────────────────────────────
-      const groupEntries: Array<{ g: string; f: string; s: string }> = []
-      for (const g of GROUP_ORDER) {
-        if (offFirstMap.get(g)) continue
-        const gb = groupBetMap.get(`${activeParticipantId}:${g}`)
-        if (!gb?.first_place) continue
-        groupEntries.push({ g, f: gb.first_place, s: gb.second_place ?? '' })
-      }
-      if (groupEntries.length) {
-        setSimGroupMap(prev => {
-          const next = new Map(prev)
-          for (const { g, f, s } of groupEntries) next.set(g, { first: f, second: s })
-          return next
-        })
-        await sb.from('user_group_simulations').upsert(
-          groupEntries.map(({ g, f, s }) => ({ user_id: userId, group_name: g, first_place: f || null, second_place: s || null })),
-          { onConflict: 'user_id,group_name' },
-        )
-      }
-
-      // ── Terceiros: batch único ────────────────────────────────────────────
-      const thirdEntries: Array<{ g: string; team: string }> = []
-      for (const g of GROUP_ORDER) {
-        if (offThirdMap.get(g)) continue
-        const tb = thirdBetMap.get(`${activeParticipantId}:${g}`)
-        if (!tb?.team) continue
-        thirdEntries.push({ g, team: tb.team })
-      }
-      if (thirdEntries.length) {
-        setSimThirdMap(prev => {
-          const next = new Map(prev)
-          for (const { g, team } of thirdEntries) next.set(g, { team })
-          return next
-        })
-        await sb.from('user_third_simulations').upsert(
-          thirdEntries.map(({ g, team }) => ({ user_id: userId, group_name: g, team })),
-          { onConflict: 'user_id,group_name' },
-        )
-      }
-
-      // ── Torneio G4+artilheiro ─────────────────────────────────────────────
-      const userTBet = tournamentBetMap.get(activeParticipantId)
-      if (userTBet) {
-        const cur = simTournament
-        const eff = effectiveKnockoutResults
-        const update = {
-          champion:   eff.champion    !== null ? cur.champion   : (userTBet.champion   ?? ''),
-          runner_up:  eff.runnerUp    !== null ? cur.runner_up  : (userTBet.runner_up  ?? ''),
-          semi1:      eff.third       !== null ? cur.semi1      : (userTBet.semi1      ?? ''),
-          semi2:      eff.fourth      !== null ? cur.semi2      : (userTBet.semi2      ?? ''),
-          top_scorer: eff.officialScorers.length > 0 ? cur.top_scorer : (userTBet.top_scorer ? (scorerMapping[userTBet.top_scorer.toLowerCase().trim()] ?? userTBet.top_scorer) : ''),
-        }
-        setSimTournament(update)
-        await persistTournamentSim(update)
-      }
-    } finally {
-      setIsGabaritando(false)
+    const entries: Array<{ matchId: string; sh: number; sa: number; isBrazil: boolean }> = []
+    for (const m of matches) {
+      if (m.score_home !== null) continue
+      if (lockedSet.has(m.id)) continue
+      const bet = betMap.get(`${sourceId}:${m.id}`)
+      if (!bet) continue
+      entries.push({ matchId: m.id, sh: bet.score_home, sa: bet.score_away, isBrazil: m.is_brazil })
     }
-  }, [matches, lockedSet, betMap, activeParticipantId, recomputeForMatch, userId,
+    if (entries.length) {
+      setSimMap(prev => {
+        const next = new Map(prev)
+        for (const e of entries) next.set(e.matchId, { score_home: e.sh, score_away: e.sa })
+        return next
+      })
+      for (const e of entries) recomputeForMatch(e.matchId, e.sh, e.sa, e.isBrazil)
+      await sb.from('user_simulations').upsert(
+        entries.map(e => ({ user_id: userId, match_id: e.matchId, score_home: e.sh, score_away: e.sa, updated_at: new Date().toISOString() })),
+        { onConflict: 'user_id,match_id' },
+      )
+    }
+
+    if (bonusIsLocked) return
+
+    const groupEntries: Array<{ g: string; f: string; s: string }> = []
+    for (const g of GROUP_ORDER) {
+      if (offFirstMap.get(g)) continue
+      const gb = groupBetMap.get(`${sourceId}:${g}`)
+      if (!gb?.first_place) continue
+      groupEntries.push({ g, f: gb.first_place, s: gb.second_place ?? '' })
+    }
+    if (groupEntries.length) {
+      setSimGroupMap(prev => {
+        const next = new Map(prev)
+        for (const { g, f, s } of groupEntries) next.set(g, { first: f, second: s })
+        return next
+      })
+      await sb.from('user_group_simulations').upsert(
+        groupEntries.map(({ g, f, s }) => ({ user_id: userId, group_name: g, first_place: f || null, second_place: s || null })),
+        { onConflict: 'user_id,group_name' },
+      )
+    }
+
+    const thirdEntries: Array<{ g: string; team: string }> = []
+    for (const g of GROUP_ORDER) {
+      if (offThirdMap.get(g)) continue
+      const tb = thirdBetMap.get(`${sourceId}:${g}`)
+      if (!tb?.team) continue
+      thirdEntries.push({ g, team: tb.team })
+    }
+    if (thirdEntries.length) {
+      setSimThirdMap(prev => {
+        const next = new Map(prev)
+        for (const { g, team } of thirdEntries) next.set(g, { team })
+        return next
+      })
+      await sb.from('user_third_simulations').upsert(
+        thirdEntries.map(({ g, team }) => ({ user_id: userId, group_name: g, team })),
+        { onConflict: 'user_id,group_name' },
+      )
+    }
+
+    const srcTBet = tournamentBetMap.get(sourceId)
+    if (srcTBet) {
+      const cur = simTournament
+      const eff = effectiveKnockoutResults
+      const update = {
+        champion:   eff.champion    !== null ? cur.champion   : (srcTBet.champion   ?? ''),
+        runner_up:  eff.runnerUp    !== null ? cur.runner_up  : (srcTBet.runner_up  ?? ''),
+        semi1:      eff.third       !== null ? cur.semi1      : (srcTBet.semi1      ?? ''),
+        semi2:      eff.fourth      !== null ? cur.semi2      : (srcTBet.semi2      ?? ''),
+        top_scorer: eff.officialScorers.length > 0 ? cur.top_scorer : (srcTBet.top_scorer ? (scorerMapping[srcTBet.top_scorer.toLowerCase().trim()] ?? srcTBet.top_scorer) : ''),
+      }
+      setSimTournament(update)
+      await persistTournamentSim(update)
+    }
+  }, [matches, lockedSet, betMap, recomputeForMatch, userId,
       bonusIsLocked, groupBetMap, thirdBetMap, tournamentBetMap,
       offFirstMap, offThirdMap, simTournament, effectiveKnockoutResults, scorerMapping,
       persistTournamentSim])
+
+  const handleGabaritar = useCallback(async () => {
+    setIsGabaritando(true)
+    try { await runGabaritar(activeParticipantId) }
+    finally { setIsGabaritando(false) }
+  }, [runGabaritar, activeParticipantId])
+
+  const handleGabaritarDe = useCallback(async (sourceId: string) => {
+    setIsGabaritandoDe(true)
+    try { await runGabaritar(sourceId) }
+    finally { setIsGabaritandoDe(false) }
+  }, [runGabaritar])
 
   // ── Limpar: remove simulações de partidas sem resultado oficial ───────────
 
@@ -1253,9 +1273,18 @@ export function SimuladorClient({
   [matches, computedTotals])
   const effectiveLeaderId = hasAnyResult ? leaderId : ''
 
-  const isActiveLeader    = !!activeParticipantId && activeParticipantId === leaderId
-  const displayParts      = isActiveLeader ? otherParts : orderedParts
-  const displayFrozenLeft = isActiveLeader ? null : frozenPartLeft
+  const isActiveLeader = !!activeParticipantId && activeParticipantId === leaderId
+  const showWatchCol    = !!watchPart && watchParticipantId !== activeParticipantId
+  const frozenWatchLeft = frozenPartLeft !== null && showWatchCol && !isActiveLeader
+    ? frozenPartLeft + PART_COL_W : null
+  const displayParts: Participant[] = isActiveLeader
+    ? (showWatchCol ? [watchPart!, ...otherParts.filter(p => p.id !== watchParticipantId)] : otherParts)
+    : (showWatchCol && activePart
+        ? [activePart, watchPart!, ...otherParts.filter(p => p.id !== watchParticipantId)]
+        : orderedParts)
+  const displayFrozenLeft = isActiveLeader
+    ? (showWatchCol && !isMobile ? frozenTotal + 3 * STAT_COL_W + PART_COL_W : null)
+    : frozenPartLeft
 
   // ── Pre-computed stats Maps — usa effective scores (oficial ?? sim) ──────────
 
@@ -1386,7 +1415,7 @@ export function SimuladorClient({
   return (
     <div className="flex flex-col" style={{ height: 'calc(100dvh - 56px)' }}>
 
-      {/* Linha 1: tabs + botões Gabaritar/Limpar */}
+      {/* Linha 1: tabs + botões */}
       <div className="flex flex-wrap items-center gap-1.5 border-b border-gray-200 bg-white px-3 py-2 shrink-0">
         <button onClick={() => setTab('tabela')}
           className={`rounded-full px-3 py-0.5 text-[11px] font-semibold transition ${
@@ -1398,30 +1427,52 @@ export function SimuladorClient({
             tab === 'classificacao' ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
           }`}
         >Classificação Simulada</button>
-        {tab === 'tabela' && (
-          <div className="ml-auto flex items-center gap-1.5">
-            <button onClick={handleGabaritar} disabled={isGabaritando || isLimpando}
-              className="inline-flex items-center gap-1 rounded px-2.5 py-0.5 text-[11px] font-semibold bg-amber-100 text-amber-800 hover:bg-amber-200 disabled:opacity-60 disabled:cursor-not-allowed transition">
-              {isGabaritando ? (
-                <svg className="animate-spin w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
-                </svg>
-              ) : null}
-              {isGabaritando ? 'Salvando…' : 'Gabaritar'}
-            </button>
-            <button onClick={handleLimpar} disabled={isGabaritando || isLimpando}
-              className="inline-flex items-center gap-1 rounded px-2.5 py-0.5 text-[11px] font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-60 disabled:cursor-not-allowed transition">
-              {isLimpando ? (
-                <svg className="animate-spin w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
-                </svg>
-              ) : null}
-              {isLimpando ? 'Limpando…' : 'Limpar'}
-            </button>
-          </div>
-        )}
+
+        <div className="ml-auto flex items-center gap-1.5">
+          {tab === 'tabela' && (
+            <>
+              <button onClick={handleGabaritar} disabled={isGabaritando || isGabaritandoDe || isLimpando}
+                className="inline-flex items-center gap-1 rounded px-2.5 py-0.5 text-[11px] font-semibold bg-amber-100 text-amber-800 hover:bg-amber-200 disabled:opacity-60 disabled:cursor-not-allowed transition">
+                {isGabaritando ? (
+                  <svg className="animate-spin w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
+                  </svg>
+                ) : null}
+                {isGabaritando ? 'Salvando…' : 'Gabaritar'}
+              </button>
+              <button onClick={() => { setGabaritarDeSelected(watchParticipantId); setGabaritarDeQuery(''); setShowGabaritarDe(true) }}
+                disabled={isGabaritando || isGabaritandoDe || isLimpando}
+                className="inline-flex items-center gap-1 rounded px-2.5 py-0.5 text-[11px] font-semibold bg-violet-100 text-violet-800 hover:bg-violet-200 disabled:opacity-60 disabled:cursor-not-allowed transition">
+                {isGabaritandoDe ? (
+                  <svg className="animate-spin w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
+                  </svg>
+                ) : null}
+                {isGabaritandoDe ? 'Salvando…' : 'Gabaritar de…'}
+              </button>
+              <button onClick={handleLimpar} disabled={isGabaritando || isGabaritandoDe || isLimpando}
+                className="inline-flex items-center gap-1 rounded px-2.5 py-0.5 text-[11px] font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-60 disabled:cursor-not-allowed transition">
+                {isLimpando ? (
+                  <svg className="animate-spin w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
+                  </svg>
+                ) : null}
+                {isLimpando ? 'Limpando…' : 'Limpar'}
+              </button>
+            </>
+          )}
+          <button onClick={() => { setWatchQuery(''); setShowWatchSelector(true) }}
+            title={watchPart ? `Acompanhando: ${watchPart.apelido}` : 'Selecionar participante para acompanhar'}
+            className={`inline-flex items-center gap-1 rounded px-2.5 py-0.5 text-[11px] font-semibold transition ${
+              watchPart ? 'bg-violet-700 text-white hover:bg-violet-800' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+            }`}>
+            <span>👁</span>
+            {watchPart ? <span className="max-w-[80px] truncate">{watchPart.apelido}</span> : <span>Acompanhar</span>}
+          </button>
+        </div>
       </div>
 
       {/* Linha 2: filtro de fase (só na aba Tabela) */}
@@ -1593,24 +1644,29 @@ export function SimuladorClient({
                 </th>
                 {displayParts.map((p, idx) => {
                   const isMe = p.id === activeParticipantId
-                  const isFrozen = displayFrozenLeft !== null && idx === 0
+                  const isActiveFrozen = displayFrozenLeft !== null && idx === 0
+                  const isWatchFrozen  = frozenWatchLeft !== null && idx === 1
+                  const isFrozen = isActiveFrozen || isWatchFrozen
+                  const frozenLeft = isActiveFrozen ? displayFrozenLeft! : frozenWatchLeft!
+                  const isWatch = showWatchCol && p.id === watchParticipantId
                   const total = computedTotals[p.id] ?? 0
                   return (
                     <th key={p.id} title={p.apelido}
                       style={{
                         position: 'sticky', top: 0,
-                        ...(isFrozen ? { left: displayFrozenLeft!, borderLeft: '2px solid #6b7280' } : {}),
+                        ...(isFrozen ? { left: frozenLeft, borderLeft: `2px solid ${isWatch ? '#8b5cf6' : '#6b7280'}` } : {}),
                         zIndex: isFrozen ? 50 : 40,
-                        background: isMe ? '#14532d' : '#1f2937',
+                        background: isMe ? '#14532d' : isWatch ? '#2e1065' : '#1f2937',
                         borderRight: '1px solid #374151',
                       }}
-                      className={`text-center px-0.5 ${isMe ? 'text-verde-200' : 'text-gray-300'}`}
+                      className={`text-center px-0.5 ${isMe ? 'text-verde-200' : isWatch ? 'text-violet-300' : 'text-gray-300'}`}
                     >
                       <div className="flex items-center justify-center gap-0.5">
                         {p.id === effectiveLeaderId && <span className="text-[9px] leading-none">🥇</span>}
-                        <span className="line-clamp-2 break-words font-semibold" style={{ maxWidth: PART_COL_W - (p.id === effectiveLeaderId ? 16 : 4) }}>{p.apelido}</span>
+                        {isWatch && <span className="text-[9px] leading-none">👁</span>}
+                        <span className="line-clamp-2 break-words font-semibold" style={{ maxWidth: PART_COL_W - (p.id === effectiveLeaderId || isWatch ? 16 : 4) }}>{p.apelido}</span>
                       </div>
-                      <span className={`block text-[11px] font-semibold ${isMe ? 'text-verde-300' : 'text-gray-500'}`}>
+                      <span className={`block text-[11px] font-semibold ${isMe ? 'text-verde-300' : isWatch ? 'text-violet-400' : 'text-gray-500'}`}>
                         {total > 0 ? total : '–'}
                       </span>
                     </th>
@@ -1756,11 +1812,15 @@ export function SimuladorClient({
                         const bet  = groupBetMap.get(`${p.id}:${g}`)
                         const kind = groupCellKind(bet, ef1, ef2)
                         const isMe = p.id === activeParticipantId
-                        const isFrozen = displayFrozenLeft !== null && idx === 0
+                        const isActiveFrozen = displayFrozenLeft !== null && idx === 0
+                        const isWatchFrozen  = frozenWatchLeft !== null && idx === 1
+                        const isFrozen = isActiveFrozen || isWatchFrozen
+                        const frozenLeft = isActiveFrozen ? displayFrozenLeft! : frozenWatchLeft!
+                        const isWatch = showWatchCol && p.id === watchParticipantId
                         const frozenBg = isFrozen ? (CELL_KIND_BG_HEX[kind] || '#eff6ff') : undefined
                         return (
                           <td key={p.id}
-                            style={isFrozen ? { position: 'sticky', left: displayFrozenLeft!, zIndex: 20, background: frozenBg, borderLeft: '2px solid #bfdbfe' } : undefined}
+                            style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: frozenBg, borderLeft: `2px solid ${isWatch ? '#a78bfa' : '#bfdbfe'}` } : undefined}
                             className={`border-r border-blue-50 text-center ${!isFrozen ? CELL_BG[kind] : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                             {bet?.first_place ? (() => {
                               const isZebra1 = groupIsZebraMap.get(g) ?? false
@@ -1870,11 +1930,15 @@ export function SimuladorClient({
                         const bet  = thirdBetMap.get(`${p.id}:${g}`)
                         const kind = thirdCellKind(bet?.team, et)
                         const isMe = p.id === activeParticipantId
-                        const isFrozen = displayFrozenLeft !== null && idx === 0
+                        const isActiveFrozen = displayFrozenLeft !== null && idx === 0
+                        const isWatchFrozen  = frozenWatchLeft !== null && idx === 1
+                        const isFrozen = isActiveFrozen || isWatchFrozen
+                        const frozenLeft = isActiveFrozen ? displayFrozenLeft! : frozenWatchLeft!
+                        const isWatch = showWatchCol && p.id === watchParticipantId
                         const frozenBg = isFrozen ? (CELL_KIND_BG_HEX[kind] || '#faf5ff') : undefined
                         return (
                           <td key={p.id}
-                            style={isFrozen ? { position: 'sticky', left: displayFrozenLeft!, zIndex: 20, background: frozenBg, borderLeft: '2px solid #e9d5ff' } : undefined}
+                            style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: frozenBg, borderLeft: `2px solid ${isWatch ? '#a78bfa' : '#e9d5ff'}` } : undefined}
                             className={`border-r border-violet-50 text-center ${!isFrozen ? CELL_BG[kind] : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                             {bet?.team ? (
                               <div className="flex flex-col items-center leading-none gap-px">
@@ -1970,7 +2034,11 @@ export function SimuladorClient({
                       {displayParts.map((p, idx) => {
                         const bet = tournamentBetMap.get(p.id)
                         const isMe = p.id === activeParticipantId
-                        const isFrozen = displayFrozenLeft !== null && idx === 0
+                        const isActiveFrozen = displayFrozenLeft !== null && idx === 0
+                        const isWatchFrozen  = frozenWatchLeft !== null && idx === 1
+                        const isFrozen = isActiveFrozen || isWatchFrozen
+                        const frozenLeft = isActiveFrozen ? displayFrozenLeft! : frozenWatchLeft!
+                        const isWatch = showWatchCol && p.id === watchParticipantId
                         const betVal = bet?.[field] ?? ''
                         const pts = betVal ? scoreG4FieldBet(field, betVal, effectiveKnockoutResults, rules, isZebraChampion) : null
                         const isExact = !!betVal && !!official && betVal === official
@@ -1980,7 +2048,7 @@ export function SimuladorClient({
                         const frozenBg = isExact ? '#d1fae5' : isPartial ? '#e0f2fe' : isWrong ? '#fff1f2' : '#fffbeb'
                         return (
                           <td key={p.id}
-                            style={isFrozen ? { position: 'sticky', left: displayFrozenLeft!, zIndex: 20, background: frozenBg, borderLeft: '2px solid #fde68a' } : { background: cellBg }}
+                            style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: frozenBg, borderLeft: `2px solid ${isWatch ? '#a78bfa' : '#fde68a'}` } : { background: cellBg }}
                             className={`border-r border-amber-50 text-center ${isExact ? 'bg-emerald-100' : isPartial ? 'bg-sky-100' : isWrong ? 'bg-rose-50' : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                             {betVal ? (
                               <div className="flex flex-col items-center leading-none gap-px">
@@ -2069,10 +2137,14 @@ export function SimuladorClient({
                       {displayParts.map((p, idx) => {
                         const bet  = tournamentBetMap.get(p.id)
                         const isMe = p.id === activeParticipantId
-                        const isFrozen = displayFrozenLeft !== null && idx === 0
+                        const isActiveFrozen = displayFrozenLeft !== null && idx === 0
+                        const isWatchFrozen  = frozenWatchLeft !== null && idx === 1
+                        const isFrozen = isActiveFrozen || isWatchFrozen
+                        const frozenLeft = isActiveFrozen ? displayFrozenLeft! : frozenWatchLeft!
+                        const isWatch = showWatchCol && p.id === watchParticipantId
                         if (!bet?.top_scorer) return (
                           <td key={p.id}
-                            style={isFrozen ? { position: 'sticky', left: displayFrozenLeft!, zIndex: 20, background: '#fffbeb', borderLeft: '2px solid #fde68a' } : undefined}
+                            style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: '#fffbeb', borderLeft: `2px solid ${isWatch ? '#a78bfa' : '#fde68a'}` } : undefined}
                             className={`border-r border-amber-50 text-center ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                             <span className="text-gray-200">—</span>
                           </td>
@@ -2083,7 +2155,7 @@ export function SimuladorClient({
                         const pts       = effectiveScorers.length > 0 ? (isCorrect ? artilhPts : 0) : null
                         return (
                           <td key={p.id}
-                            style={isFrozen ? { position: 'sticky', left: displayFrozenLeft!, zIndex: 20, background: isCorrect ? '#d1fae5' : pts !== null ? '#fff1f2' : '#fffbeb', borderLeft: '2px solid #fde68a' } : undefined}
+                            style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: isCorrect ? '#d1fae5' : pts !== null ? '#fff1f2' : '#fffbeb', borderLeft: `2px solid ${isWatch ? '#a78bfa' : '#fde68a'}` } : undefined}
                             className={`border-r border-amber-50 text-center ${isCorrect ? 'bg-emerald-100' : pts !== null ? 'bg-rose-50' : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                             <div className="flex flex-col items-center leading-none gap-px">
                               <span className="text-[9px] text-gray-700 truncate font-medium" style={{ maxWidth: PART_COL_W - 4 }}>
@@ -2222,13 +2294,17 @@ export function SimuladorClient({
                       const kind = matchCellKind(bet, effH, effA)
                       const pts  = getMatchPts(p.id, match.id)
                       const isMe = p.id === activeParticipantId
-                      const isFrozen = displayFrozenLeft !== null && idx === 0
+                      const isActiveFrozen = displayFrozenLeft !== null && idx === 0
+                      const isWatchFrozen  = frozenWatchLeft !== null && idx === 1
+                      const isFrozen = isActiveFrozen || isWatchFrozen
+                      const frozenLeft = isActiveFrozen ? displayFrozenLeft! : frozenWatchLeft!
+                      const isWatch = showWatchCol && p.id === watchParticipantId
                       const frozenBg = isFrozen ? (CELL_KIND_BG_HEX[kind] || bg) : undefined
                       const betOutcome = bet ? getMatchResult(bet.score_home, bet.score_away) : null
                       const isPotentialZebra = betOutcome !== null && !!possibleZebras?.[betOutcome]
                       return (
                         <td key={p.id}
-                          style={isFrozen ? { position: 'sticky', left: displayFrozenLeft!, zIndex: 20, background: frozenBg, borderLeft: '2px solid #d1d5db' } : undefined}
+                          style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: frozenBg, borderLeft: `2px solid ${isWatch ? '#a78bfa' : '#d1d5db'}` } : undefined}
                           className={`border-r border-gray-100 text-center ${!isFrozen ? CELL_BG[kind] : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                           {bet ? (
                             <div className="flex flex-col items-center leading-none gap-px">
@@ -2266,6 +2342,102 @@ export function SimuladorClient({
           <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-rose-50 border border-rose-200" />Errou</span>
           <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-gray-900" />Zebra apostada (≤15%)</span>
           <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-gray-500" />Zebra sem aposta</span>
+        </div>
+      )}
+
+      {/* Modal: Selecionar participante para acompanhar */}
+      {showWatchSelector && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4" onClick={() => setShowWatchSelector(false)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm flex flex-col" style={{ maxHeight: '70vh' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 pt-4 pb-2">
+              <span className="font-semibold text-gray-800">Acompanhar participante</span>
+              <button onClick={() => setShowWatchSelector(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+            </div>
+            <div className="px-4 pb-2">
+              <input
+                autoFocus
+                type="text"
+                placeholder="Buscar por nome…"
+                value={watchQuery}
+                onChange={e => setWatchQuery(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-violet-500"
+              />
+            </div>
+            <div className="overflow-y-auto flex-1 px-4 pb-2">
+              {watchParticipantId && (
+                <button
+                  onClick={() => { saveWatchPart(null); setShowWatchSelector(false) }}
+                  className="w-full text-left px-3 py-2 mb-1 rounded-lg text-[12px] text-rose-600 hover:bg-rose-50 font-medium transition">
+                  Remover acompanhamento
+                </button>
+              )}
+              {participants
+                .filter(p => p.id !== activeParticipantId && p.apelido.toLowerCase().includes(watchQuery.toLowerCase()))
+                .map(p => (
+                  <button key={p.id}
+                    onClick={() => { saveWatchPart(p.id); setShowWatchSelector(false) }}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-[13px] transition flex items-center gap-2 ${
+                      p.id === watchParticipantId ? 'bg-violet-100 text-violet-800 font-semibold' : 'hover:bg-gray-100 text-gray-700'
+                    }`}>
+                    {p.id === watchParticipantId && <span className="text-[11px]">👁</span>}
+                    {p.apelido}
+                  </button>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Gabaritar de… */}
+      {showGabaritarDe && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4" onClick={() => setShowGabaritarDe(false)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm flex flex-col" style={{ maxHeight: '70vh' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 pt-4 pb-2">
+              <span className="font-semibold text-gray-800">Gabaritar de…</span>
+              <button onClick={() => setShowGabaritarDe(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+            </div>
+            <div className="px-4 pb-2">
+              <input
+                autoFocus
+                type="text"
+                placeholder="Buscar por nome…"
+                value={gabaritarDeQuery}
+                onChange={e => setGabaritarDeQuery(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-violet-500"
+              />
+            </div>
+            <div className="overflow-y-auto flex-1 px-4">
+              {participants
+                .filter(p => p.id !== activeParticipantId && p.apelido.toLowerCase().includes(gabaritarDeQuery.toLowerCase()))
+                .map(p => (
+                  <button key={p.id}
+                    onClick={() => setGabaritarDeSelected(p.id)}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-[13px] transition flex items-center gap-2 ${
+                      p.id === gabaritarDeSelected ? 'bg-violet-100 text-violet-800 font-semibold' : 'hover:bg-gray-100 text-gray-700'
+                    }`}>
+                    {p.id === gabaritarDeSelected && <span className="text-[11px]">✓</span>}
+                    {p.apelido}
+                    {p.id === watchParticipantId && <span className="text-[10px] text-violet-500 ml-auto">👁</span>}
+                  </button>
+                ))}
+            </div>
+            <div className="px-4 py-3 border-t border-gray-100 flex justify-end gap-2">
+              <button onClick={() => setShowGabaritarDe(false)}
+                className="px-4 py-1.5 text-[12px] rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 font-medium transition">
+                Cancelar
+              </button>
+              <button
+                disabled={!gabaritarDeSelected}
+                onClick={async () => {
+                  if (!gabaritarDeSelected) return
+                  setShowGabaritarDe(false)
+                  await handleGabaritarDe(gabaritarDeSelected)
+                }}
+                className="px-4 py-1.5 text-[12px] rounded-lg bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition">
+                Gabaritar
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
