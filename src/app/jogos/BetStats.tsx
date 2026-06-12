@@ -163,8 +163,7 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
           const w    = r === 'H' ? H_W : r === 'D' ? D_W : A_W
           const isZebraCol = matchBets.length > 0 && pct <= zebraThreshold
           return (
-            <span key={r} className={`${w} text-center text-[10px] sm:text-base font-bold tabular-nums flex flex-col items-center leading-none gap-0.5 ${isZebraCol ? 'text-amber-500' : 'text-gray-400'}`}>
-              {isZebraCol && <span title="Possível zebra">🦓</span>}
+            <span key={r} className={`${w} text-center text-[10px] sm:text-base font-bold tabular-nums flex items-center justify-center leading-none rounded py-1 ${isZebraCol ? 'bg-black text-white' : 'text-gray-400'}`}>
               {fmtPct(pct)}
             </span>
           )
