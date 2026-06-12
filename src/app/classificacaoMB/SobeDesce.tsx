@@ -18,7 +18,7 @@ import { createClient } from '@/lib/supabase/client'
 
 export type SobeDesceMode = 'hidden' | 'last_day' | 'current_round' | 'custom'
 
-export type HighlightMode = 'me' | 'panela' | 'none'
+export type HighlightMode = 'me' | 'panela' | 'tribo' | 'none'
 
 export interface SnapshotEntry {
   participant_id: string
@@ -267,6 +267,9 @@ interface SobeDesceSelectorProps {
   highlightMode?:        HighlightMode
   onHighlightChange?:    (m: HighlightMode) => void
   showPanelaOption?:     boolean
+  tribes?:               { id: string; name: string }[]
+  activeTribeId?:        string | null
+  onTribeSelect?:        (id: string | null) => void
 }
 
 export function SobeDesceSelector({
@@ -276,7 +279,9 @@ export function SobeDesceSelector({
   loading, refDateLabel, refToDateLabel, hasData,
   lastResultDate, currentPhaseStartDate, lastDataDate,
   highlightMode, onHighlightChange, showPanelaOption,
+  tribes, activeTribeId, onTribeSelect,
 }: SobeDesceSelectorProps) {
+  const [tribeOpen, setTribeOpen] = useState(false)
   const options: { value: SobeDesceMode; label: string; title: string; disabled?: boolean }[] = [
     {
       value: 'hidden',
@@ -337,13 +342,12 @@ export function SobeDesceSelector({
             <span className="mx-1 h-4 w-px shrink-0 bg-gray-200" />
             <div className="flex flex-wrap gap-1">
               {([
-                { value: 'me'   as HighlightMode, label: 'Destacar meu nome' },
+                { value: 'me'    as HighlightMode, label: 'Destacar meu nome' },
                 ...(showPanelaOption ? [{ value: 'panela' as HighlightMode, label: 'Destacar minha panela' }] : []),
-                { value: 'none' as HighlightMode, label: 'Sem destaques' },
               ]).map(opt => (
                 <button
                   key={opt.value}
-                  onClick={() => onHighlightChange(opt.value)}
+                  onClick={() => { onHighlightChange(opt.value); onTribeSelect?.(null) }}
                   className={`rounded-full px-3 py-1 text-xs font-medium transition ${
                     highlightMode === opt.value
                       ? 'bg-azul-escuro text-white'
@@ -353,6 +357,57 @@ export function SobeDesceSelector({
                   {opt.label}
                 </button>
               ))}
+
+              {/* Botão Destacar Tribo — só aparece se houver tribos */}
+              {tribes && tribes.length > 0 && onTribeSelect && (
+                <div className="relative">
+                  <button
+                    onClick={() => setTribeOpen(o => !o)}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                      highlightMode === 'tribo'
+                        ? 'bg-azul-escuro text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {highlightMode === 'tribo' && activeTribeId
+                      ? (tribes.find(t => t.id === activeTribeId)?.name ?? 'Tribo')
+                      : 'Destacar Tribo'} ▾
+                  </button>
+                  {tribeOpen && (
+                    <div className="absolute left-0 top-full z-30 mt-1 w-48 rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+                      {tribes.map(t => (
+                        <button
+                          key={t.id}
+                          onClick={() => { onTribeSelect(t.id); onHighlightChange('tribo'); setTribeOpen(false) }}
+                          className={`flex w-full items-center px-3 py-2 text-left text-sm hover:bg-gray-50 transition ${
+                            activeTribeId === t.id ? 'font-semibold text-azul-escuro' : 'text-gray-700'
+                          }`}
+                        >
+                          {t.name}
+                        </button>
+                      ))}
+                      <div className="my-1 border-t border-gray-100" />
+                      <button
+                        onClick={() => { onTribeSelect(null); onHighlightChange('none'); setTribeOpen(false) }}
+                        className="flex w-full items-center px-3 py-2 text-left text-sm text-gray-400 hover:bg-gray-50 transition"
+                      >
+                        Limpar destaque
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <button
+                onClick={() => { onHighlightChange('none'); onTribeSelect?.(null) }}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                  highlightMode === 'none'
+                    ? 'bg-azul-escuro text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Sem destaques
+              </button>
             </div>
           </>
         )}

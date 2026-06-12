@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useMemo, useEffect, useState, useRef } from 'react'
+import { memo, useMemo, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -65,6 +65,53 @@ interface Props {
 }
 
 type RankedRow = ParticipantRow & { rank: number; diffLider: number; diffPremio: number | null; diffCorte1: number | null; diffCorte2: number | null }
+
+function TribeInlineButton({ tribes, activeTribeId, highlightMode, onSelect, onClear }: {
+  tribes: { id: string; name: string }[]
+  activeTribeId: string | null
+  highlightMode: HighlightMode
+  onSelect: (id: string) => void
+  onClear: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const activeName = tribes.find(t => t.id === activeTribeId)?.name
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+          highlightMode === 'tribo'
+            ? 'bg-azul-escuro text-white'
+            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+        }`}
+      >
+        {highlightMode === 'tribo' && activeName ? activeName : 'Destacar Tribo'} ▾
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-30 mt-1 w-48 rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+          {tribes.map(t => (
+            <button
+              key={t.id}
+              onClick={() => { onSelect(t.id); setOpen(false) }}
+              className={`flex w-full items-center px-3 py-2 text-left text-sm hover:bg-gray-50 transition ${
+                activeTribeId === t.id ? 'font-semibold text-azul-escuro' : 'text-gray-700'
+              }`}
+            >
+              {t.name}
+            </button>
+          ))}
+          <div className="my-1 border-t border-gray-100" />
+          <button
+            onClick={() => { onClear(); setOpen(false) }}
+            className="flex w-full items-center px-3 py-2 text-left text-sm text-gray-400 hover:bg-gray-50 transition"
+          >
+            Limpar destaque
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
 
 const Num = memo(function Num({ v, green }: { v: number; green?: boolean }) {
   return (
@@ -179,7 +226,7 @@ const ZONE_STATUS: Record<Zone, string> = {
 function CompactRanking({
   ranked, premioSpots, isUniqueLast, renderedAt, matchesRegistered, groupsDefined,
   deltaMap, highlights, sdActive,
-  highlightMode, activeParticipantId, panelaSet,
+  highlightMode, activeParticipantId, panelaSet, tribeMemberSet,
 }: {
   ranked: RankedRow[]
   premioSpots: number
@@ -193,6 +240,7 @@ function CompactRanking({
   highlightMode: HighlightMode
   activeParticipantId: string
   panelaSet: Set<string>
+  tribeMemberSet: Set<string>
 }) {
   const n = ranked.length
   if (n === 0) return null
@@ -278,7 +326,8 @@ function CompactRanking({
                 const isPanela = panelaSet.has(r.id)
                 const shouldHighlight = z !== 'last' && (
                   (highlightMode === 'me'     && isActive) ||
-                  (highlightMode === 'panela' && (isActive || isPanela))
+                  (highlightMode === 'panela' && (isActive || isPanela)) ||
+                  (highlightMode === 'tribo'  && tribeMemberSet.has(r.id))
                 )
                 const highlightRing = shouldHighlight ? 'ring-1 ring-inset ring-red-500' : ''
                 const textCls = shouldHighlight ? 'text-red-600 font-semibold' : ZONE_TEXT[z]
@@ -374,24 +423,16 @@ export function ClassificacaoMBClient({
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
   // ── Destaque de Tribo (admin/master only) ──────────────────────────────────
-  const [tribeDropOpen, setTribeDropOpen]     = useState(false)
-  const [activeTribeId, setActiveTribeId]     = useState<string | null>(null)
-  const [activeTribeName, setActiveTribeName] = useState<string | null>(null)
-  const [tribeMemberSet, setTribeMemberSet]   = useState<Set<string>>(new Set())
-  const [tribeLoading, setTribeLoading]       = useState(false)
-  const tribeDropRef = useRef<HTMLDivElement>(null)
+  const [activeTribeId, setActiveTribeId]   = useState<string | null>(null)
+  const [tribeMemberSet, setTribeMemberSet] = useState<Set<string>>(new Set())
 
-  async function selectTribe(id: string | null, name: string | null) {
-    setTribeDropOpen(false)
+  async function selectTribe(id: string | null) {
     if (!id) {
       setActiveTribeId(null)
-      setActiveTribeName(null)
       setTribeMemberSet(new Set())
       return
     }
-    setTribeLoading(true)
     setActiveTribeId(id)
-    setActiveTribeName(name)
     try {
       const supabase = createClient()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -401,18 +442,15 @@ export function ClassificacaoMBClient({
         .eq('tribe_id', id)
       setTribeMemberSet(new Set(((data ?? []) as { participant_id: string }[]).map(r => r.participant_id)))
     } catch { setTribeMemberSet(new Set()) }
-    setTribeLoading(false)
   }
 
-  // Fecha dropdown ao clicar fora
-  useEffect(() => {
-    function onOutside(e: MouseEvent) {
-      if (tribeDropRef.current && !tribeDropRef.current.contains(e.target as Node))
-        setTribeDropOpen(false)
+  function handleHighlightChange(mode: HighlightMode) {
+    setHighlightMode(mode)
+    if (mode !== 'tribo') {
+      setActiveTribeId(null)
+      setTribeMemberSet(new Set())
     }
-    document.addEventListener('mousedown', onOutside)
-    return () => document.removeEventListener('mousedown', onOutside)
-  }, [])
+  }
 
   const handleSort = (key: string, defaultDir: 'asc' | 'desc' = 'desc') => {
     if (sortKey === key) {
@@ -615,8 +653,11 @@ export function ClassificacaoMBClient({
           currentPhaseStartDate={currentPhaseStartDate}
           lastDataDate={lastDataDate}
           highlightMode={highlightMode}
-          onHighlightChange={setHighlightMode}
+          onHighlightChange={handleHighlightChange}
           showPanelaOption={showPanelaOption}
+          tribes={isAdmin && tribes.length > 0 ? tribes : []}
+          activeTribeId={activeTribeId}
+          onTribeSelect={selectTribe}
         />
       ) : (
         <div className="mb-3 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -624,11 +665,10 @@ export function ClassificacaoMBClient({
             {([
               { value: 'me'   as HighlightMode, label: 'Destacar meu nome' },
               ...(showPanelaOption ? [{ value: 'panela' as HighlightMode, label: 'Destacar minha panela' }] : []),
-              { value: 'none' as HighlightMode, label: 'Sem destaques' },
             ]).map(opt => (
               <button
                 key={opt.value}
-                onClick={() => setHighlightMode(opt.value)}
+                onClick={() => handleHighlightChange(opt.value)}
                 className={`rounded-full px-3 py-1 text-xs font-medium transition ${
                   highlightMode === opt.value
                     ? 'bg-azul-escuro text-white'
@@ -638,6 +678,25 @@ export function ClassificacaoMBClient({
                 {opt.label}
               </button>
             ))}
+            {isAdmin && tribes.length > 0 && (
+              <TribeInlineButton
+                tribes={tribes}
+                activeTribeId={activeTribeId}
+                highlightMode={highlightMode}
+                onSelect={id => { selectTribe(id); setHighlightMode('tribo') }}
+                onClear={() => handleHighlightChange('none')}
+              />
+            )}
+            <button
+              onClick={() => handleHighlightChange('none')}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                highlightMode === 'none'
+                  ? 'bg-azul-escuro text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              Sem destaques
+            </button>
           </div>
         </div>
       )}
@@ -656,59 +715,14 @@ export function ClassificacaoMBClient({
         highlightMode={highlightMode}
         activeParticipantId={activeParticipantId}
         panelaSet={panelaSet}
+        tribeMemberSet={tribeMemberSet}
       />
 
       <div className="mb-3">
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-baseline gap-3">
           <h1 className="text-2xl font-black text-gray-900">Classificação Detalhada</h1>
           <span className="text-[10px] text-gray-400">{formatRenderedAt(renderedAt)}</span>
           <span className="text-[10px] text-gray-400">· {matchesRegistered} jogos registrados e {groupsDefined}/12 grupos definidos</span>
-
-          {/* Botão Destacar Tribo — somente admin/master */}
-          {isAdmin && tribes.length > 0 && (
-            <div ref={tribeDropRef} className="relative ml-auto">
-              <button
-                onClick={() => setTribeDropOpen(o => !o)}
-                className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
-                  activeTribeId
-                    ? 'border-[#002D80] bg-[#002D80] text-[#FFD700]'
-                    : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                }`}
-              >
-                {tribeLoading ? (
-                  <span className="animate-pulse">…</span>
-                ) : (
-                  <>
-                    <span>⚑</span>
-                    <span>{activeTribeName ?? 'Destacar Tribo'}</span>
-                    <span className="opacity-60">▾</span>
-                  </>
-                )}
-              </button>
-              {tribeDropOpen && (
-                <div className="absolute right-0 top-full z-30 mt-1 w-52 rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
-                  {tribes.map(t => (
-                    <button
-                      key={t.id}
-                      onClick={() => selectTribe(t.id, t.name)}
-                      className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 transition ${
-                        activeTribeId === t.id ? 'font-semibold text-[#002D80]' : 'text-gray-700'
-                      }`}
-                    >
-                      <span>⚑</span> {t.name}
-                    </button>
-                  ))}
-                  <div className="my-1 border-t border-gray-100" />
-                  <button
-                    onClick={() => selectTribe(null, null)}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-400 hover:bg-gray-50 transition"
-                  >
-                    <span>✕</span> Limpar Destaque
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
 
@@ -779,23 +793,13 @@ export function ClassificacaoMBClient({
                 </tr>
               )}
               {sortedRanked.map(row => {
-                const isActive   = row.id === activeParticipantId
-                const isPanela   = panelaSet.has(row.id)
-                const isTribeMember = activeTribeId ? tribeMemberSet.has(row.id) : false
-                const z          = zoneOf(row)
-                const boundary   = tiedAtBoundary && row.pts === cutPts
+                const isActive  = row.id === activeParticipantId
+                const isPanela  = panelaSet.has(row.id)
+                const z         = zoneOf(row)
+                const boundary  = tiedAtBoundary && row.pts === cutPts
 
                 let rowBg: string
-                let tribeClasses = ''
-                if (activeTribeId) {
-                  if (isTribeMember) {
-                    rowBg = '!bg-[#002D80]'
-                    tribeClasses = '[&_*]:!text-[#FFD700] [&_td]:!text-[#FFD700]'
-                  } else {
-                    rowBg = ZONE_ROW[z]
-                    tribeClasses = 'opacity-30'
-                  }
-                } else if (z === 'last') {
+                if (z === 'last') {
                   rowBg = ZONE_ROW.last
                 } else if (highlightMode === 'panela') {
                   if (isActive)      rowBg = 'bg-verde-100'
@@ -807,12 +811,12 @@ export function ClassificacaoMBClient({
                   rowBg = ZONE_ROW[z]
                 }
                 const highlighted = highlightMode !== 'none'
-                const fontCls = z === 'last' ? 'font-bold' : (isActive && highlighted && !activeTribeId ? 'font-semibold' : '')
+                const fontCls = z === 'last' ? 'font-bold' : (isActive && highlighted ? 'font-semibold' : '')
 
                 return (
                   <tr
                     key={row.id}
-                    className={`border-b border-gray-100 last:border-0 ${rowBg} ${fontCls} ${tribeClasses} ${!activeTribeId && z === 'last' ? '[&_*]:!text-white' : ''}`}
+                    className={`border-b border-gray-100 last:border-0 ${rowBg} ${fontCls} ${z === 'last' ? '[&_*]:!text-white' : ''}`}
                   >
                     {showPremio && (
                       <td className="px-1.5 py-1 text-center text-gray-400 tabular-nums">
