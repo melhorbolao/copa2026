@@ -218,7 +218,7 @@ function CompactRanking({
   const colsGrid  = sdActive
     ? 'grid grid-cols-[1.4rem_1.6rem_1fr_2.2rem_2.5rem]'
     : 'grid grid-cols-[1.5rem_1fr_2rem]'
-  const minW = sdActive ? 1200 : 1000
+  const minW = sdActive ? 1450 : 1200
 
   const blockSize = Math.ceil(n / 7)
   const blocks = [0, 1, 2, 3, 4, 5, 6]
@@ -282,7 +282,7 @@ function CompactRanking({
                       </span>
                     )}
 
-                    <span className={`pl-1 truncate ${ZONE_TEXT[z]}`}>
+                    <span className={`pl-1 line-clamp-2 break-words ${ZONE_TEXT[z]}`} title={r.apelido}>
                       {r.apelido}{z === 'last' && ' 🔦'}
                       {sdActive && highlights.maxUpId   === r.id && <span className="ml-0.5 text-[8px]" title="Maior subida do período">🚀</span>}
                       {sdActive && highlights.maxDownId === r.id && <span className="ml-0.5 text-[8px]" title="Maior queda do período">📉</span>}
@@ -564,7 +564,7 @@ export function ClassificacaoMBClient({
 
                 {/* Identidade */}
                 <th className="px-1.5 py-2 text-left w-8">#</th>
-                <th className="px-1.5 py-2 text-left w-[110px]">Participante</th>
+                <th className="px-1.5 py-2 text-left w-[150px]">Participante</th>
                 <th className="px-1.5 py-2 text-right w-10" title="Pontuação total">Pts</th>
 
                 {/* Último / Próximo jogo */}
@@ -658,10 +658,13 @@ export function ClassificacaoMBClient({
                       {boundary && <span className={`ml-0.5 ${z === 'last' ? 'text-white' : 'text-amber-500'}`} title="Empate no corte">⚠</span>}
                     </td>
 
-                    <td className={`px-1.5 py-1 max-w-[110px] truncate ${z === 'last' ? 'text-white' : 'text-gray-900'}`}>
-                      {row.apelido}
-                      {z === 'last' && <span className="ml-1 text-[11px]">🔦</span>}
-                      {isActive && highlighted && <span className={`ml-1 text-[10px] ${z === 'last' ? 'text-white' : 'text-verde-600'}`}>◀</span>}
+                    <td className={`px-1.5 py-1 w-[150px] ${z === 'last' ? 'text-white' : 'text-gray-900'}`}
+                        title={row.apelido}>
+                      <div className="line-clamp-2 break-words">
+                        {row.apelido}
+                        {z === 'last' && <span className="ml-1 text-[11px]">🔦</span>}
+                        {isActive && highlighted && <span className={`ml-1 text-[10px] ${z === 'last' ? 'text-white' : 'text-verde-600'}`}>◀</span>}
+                      </div>
                     </td>
                     <td className={`px-1.5 py-1 text-right font-mono font-bold tabular-nums ${z === 'last' ? 'text-white' : 'text-gray-900'}`}>
                       {row.pts}

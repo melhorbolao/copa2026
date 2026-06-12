@@ -116,7 +116,7 @@ const COL_DATE_DESKTOP  = 48
 const COL_TEAMS_DESKTOP = 148
 const COL_TEAMS_MOBILE  = 60
 const COL_SCORE_W       = 96
-const PART_COL_W        = 64
+const PART_COL_W        = 80
 const STAT_COL_W        = 52  // 4 colunas de estatísticas × 52px = 208px
 
 // ── Row types ──────────────────────────────────────────────────────────────────
@@ -783,7 +783,7 @@ export function TabelaMBClient({
   const otherParts   = participants.filter(p => p.id !== activeParticipantId)
   const orderedParts = activePart ? [activePart, ...otherParts] : participants
   const frozenPartLeft = activePart
-    ? (isMobile ? frozenTotal : frozenTotal + 4 * STAT_COL_W)
+    ? (isMobile ? frozenTotal : frozenTotal + 3 * STAT_COL_W + PART_COL_W)
     : null
 
   // Compute totals client-side so match livePoints + group + third bets are all included.
@@ -929,7 +929,7 @@ export function TabelaMBClient({
   const totalSize = rowVirtualizer.getTotalSize()
   const padTop    = vItems.length > 0 ? vItems[0].start : 0
   const padBot    = vItems.length > 0 ? totalSize - vItems[vItems.length - 1].end : 0
-  const tableW    = frozenTotal + 4 * STAT_COL_W + displayParts.length * PART_COL_W
+  const tableW    = frozenTotal + 3 * STAT_COL_W + (displayParts.length + 1) * PART_COL_W
 
   const getMatchPts = (pid: string, mid: string) => {
     const e = betMap.get(`${pid}:${mid}`)
@@ -1125,7 +1125,7 @@ export function TabelaMBClient({
             <col style={{ width: STAT_COL_W }} />
             <col style={{ width: STAT_COL_W }} />
             <col style={{ width: STAT_COL_W }} />
-            <col style={{ width: STAT_COL_W }} />
+            <col style={{ width: PART_COL_W }} />
             {displayParts.map(p => <col key={p.id} style={{ width: PART_COL_W }} />)}
           </colgroup>
 
@@ -1149,7 +1149,7 @@ export function TabelaMBClient({
                 className="text-center px-0.5">
                 <div className="flex items-center justify-center gap-0.5">
                   <span className="text-[9px] leading-none">🥇</span>
-                  <span className="truncate font-semibold text-[9px] text-gray-300" style={{ maxWidth: STAT_COL_W - 18 }}>
+                  <span className="line-clamp-2 break-words font-semibold text-[9px] text-gray-300" style={{ maxWidth: PART_COL_W - 18 }}>
                     {participants.find(p => p.id === effectiveLeaderId)?.apelido ?? 'Líder'}
                   </span>
                 </div>
@@ -1174,7 +1174,7 @@ export function TabelaMBClient({
                   >
                     <div className="flex items-center justify-center gap-0.5">
                       {p.id === effectiveLeaderId && <span className="text-[9px] leading-none">🥇</span>}
-                      <span className="truncate font-semibold" style={{ maxWidth: PART_COL_W - (p.id === effectiveLeaderId ? 16 : 4) }}>{p.apelido}</span>
+                      <span className="line-clamp-2 break-words font-semibold" style={{ maxWidth: PART_COL_W - (p.id === effectiveLeaderId ? 16 : 4) }}>{p.apelido}</span>
                     </div>
                     <span className={`block text-[11px] font-semibold ${isMe ? 'text-verde-300' : 'text-gray-500'}`}>
                       {total > 0 ? total : '–'}
