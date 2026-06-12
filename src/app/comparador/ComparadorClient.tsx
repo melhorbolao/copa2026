@@ -168,9 +168,26 @@ export function ComparadorClient(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pidA, pidB, thirdBetsByParticipant])
 
+  // Pontos de jogos: usa breakdown (calculado ao vivo) para não depender de participant_scores
+  // estar atualizado. Grupos/terceiros/torneio ainda vêm do banco pois o comparador não os computa.
+  const effectiveScoreA: Score = {
+    ptsMatches:    breakdown.ptsMatchesA,
+    ptsGroups:     scoreA?.ptsGroups     ?? 0,
+    ptsThirds:     scoreA?.ptsThirds     ?? 0,
+    ptsTournament: scoreA?.ptsTournament ?? 0,
+    ptsTotal:      breakdown.ptsMatchesA + (scoreA?.ptsGroups ?? 0) + (scoreA?.ptsThirds ?? 0) + (scoreA?.ptsTournament ?? 0),
+  }
+  const effectiveScoreB: Score = {
+    ptsMatches:    breakdown.ptsMatchesB,
+    ptsGroups:     scoreB?.ptsGroups     ?? 0,
+    ptsThirds:     scoreB?.ptsThirds     ?? 0,
+    ptsTournament: scoreB?.ptsTournament ?? 0,
+    ptsTotal:      breakdown.ptsMatchesB + (scoreB?.ptsGroups ?? 0) + (scoreB?.ptsThirds ?? 0) + (scoreB?.ptsTournament ?? 0),
+  }
+
   // Total across all categories
-  const totalA = scoreA?.ptsTotal ?? 0
-  const totalB = scoreB?.ptsTotal ?? 0
+  const totalA = effectiveScoreA.ptsTotal
+  const totalB = effectiveScoreB.ptsTotal
   const delta  = totalA - totalB
   const hasData = !!pidA && !!pidB
 
@@ -240,7 +257,7 @@ export function ComparadorClient(props: Props) {
               {/* Participant A */}
               <ScorePanel
                 name={nameA}
-                score={scoreA}
+                score={effectiveScoreA}
                 color="blue"
                 isLeading={delta > 0}
               />
@@ -266,20 +283,20 @@ export function ComparadorClient(props: Props) {
               {/* Participant B */}
               <ScorePanel
                 name={nameB}
-                score={scoreB}
+                score={effectiveScoreB}
                 color="red"
                 isLeading={delta < 0}
               />
             </div>
 
             {/* Score breakdown bar */}
-            {(scoreA || scoreB) && (
+            {hasData && (
               <div className="border-t border-gray-100 px-4 py-3">
                 <ScoreBreakdownRow
                   labelA={nameA.split(' ')[0]}
                   labelB={nameB.split(' ')[0]}
-                  scoreA={scoreA}
-                  scoreB={scoreB}
+                  scoreA={effectiveScoreA}
+                  scoreB={effectiveScoreB}
                 />
               </div>
             )}
