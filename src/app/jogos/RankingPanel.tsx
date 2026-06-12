@@ -122,8 +122,8 @@ export function RankingPanel({
             )}
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Secador to the left of chips, pointing right at the participants */}
+          <div className="flex items-start gap-2">
+            {/* Secador to the left of chips, pointing right at the first participant */}
             {secador && secadorAllowed && (
               <button
                 onClick={() => setSecador(false)}
@@ -131,7 +131,7 @@ export function RankingPanel({
                 title="Desativar secador"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/secador.png" alt="secador" width={52} height={52}
+                <img src="/secador.png" alt="secador" width={72} height={72}
                   className="object-contain animate-pulse"
                   style={{ transform: 'scaleX(-1)' }}
                 />
