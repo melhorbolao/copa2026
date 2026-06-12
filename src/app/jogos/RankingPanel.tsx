@@ -145,7 +145,8 @@ export function RankingPanel({
                 const before = rankBefore[p.id] ?? 0
                 const after  = rankAfter[p.id]  ?? 0
                 const delta  = before - after
-                const isSecado = secador && topGainer && p.id !== topGainer.id
+                const topGainerPts = topGainer ? (matchPoints[topGainer.id] ?? 0) : 0
+                const isSecado = secador && topGainer && (matchPoints[p.id] ?? 0) < topGainerPts
                 return (
                   <div key={p.id} className={`flex items-center gap-1 rounded-full px-2.5 py-1 shadow-sm border text-xs transition ${isSecado ? 'bg-orange-50 border-orange-300' : 'bg-white border-emerald-200'}`}>
                     <span className={`font-semibold ${isSecado ? 'text-orange-500 line-through' : 'text-gray-800'}`}>{p.apelido}</span>
