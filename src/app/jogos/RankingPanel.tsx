@@ -39,6 +39,7 @@ export function RankingPanel({
   const [sortDir, setSortDir] = useState<SortDir>('asc')
 
   const hasResult = match.score_home !== null && match.score_away !== null
+  const afterDeadline = Date.now() > new Date(match.betting_deadline).getTime()
 
   const cravando = matchBets.filter(b =>
     hasResult && b.score_home === match.score_home && b.score_away === match.score_away
@@ -110,8 +111,8 @@ export function RankingPanel({
       {cravando.length > 0 && (
         <div className="bg-emerald-50 border-b border-emerald-100 px-4 py-3">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wide">✓ Cravando agora</span>
-            {!secador && secadorAllowed && (
+            <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wide">✓ {afterDeadline ? 'Cravaram' : 'Cravando agora'}</span>
+            {!afterDeadline && !secador && secadorAllowed && (
               <button
                 onClick={() => setSecador(true)}
                 className="px-3 py-1 rounded-full text-[10px] font-bold text-gray-400 border border-gray-200 hover:border-gray-400 hover:text-gray-600 transition"
@@ -124,7 +125,7 @@ export function RankingPanel({
 
           <div className="flex items-start gap-2">
             {/* Secador to the left of chips, pointing right at the first participant */}
-            {secador && secadorAllowed && (
+            {!afterDeadline && secador && secadorAllowed && (
               <button
                 onClick={() => setSecador(false)}
                 className="shrink-0 active:scale-95 transition"
@@ -163,7 +164,7 @@ export function RankingPanel({
       )}
 
       {/* Crava se… */}
-      {(quase.home.length > 0 || quase.away.length > 0) && (
+      {!afterDeadline && (quase.home.length > 0 || quase.away.length > 0) && (
         <div className="border-b border-gray-100 px-4 py-2.5">
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1.5">Crava se…</p>
           <div className="grid grid-cols-2 gap-2">
