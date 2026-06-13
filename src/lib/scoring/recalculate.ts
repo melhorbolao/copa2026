@@ -63,7 +63,7 @@ async function _updateMatchBetPoints(matchId: string, admin: AdminClient, rules:
 
   // Inclui todos os campos NOT NULL para o upsert funcionar corretamente
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (admin as any).from('bets').upsert(
+  const { error: upsertErr } = await (admin as any).from('bets').upsert(
     bets.map(bet => ({
       id:             bet.id,
       match_id:       matchId,
@@ -78,6 +78,7 @@ async function _updateMatchBetPoints(matchId: string, admin: AdminClient, rules:
     })),
     { onConflict: 'id' },
   )
+  if (upsertErr) throw new Error(`bets upsert (match ${matchId}): ${upsertErr.message}`)
 
   return [...new Set(bets.map(b => b.participant_id))]
 }
