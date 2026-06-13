@@ -122,11 +122,11 @@ export default async function ComparadorPage({
     admin.rpc('fn_bet_distribution_by_match'),
     getVisibilitySettings(),
     admin.from('top_scorer_mapping').select('raw_name, standardized_name'),
-    // Snapshots apenas do par selecionado: elimina a paginação do loop anterior
-    admin.from('daily_rankings_snapshot')
-      .select('snapshot_date, participant_id, pts_total')
+    // Pontos diários por participante — mesma fonte do Sobe-Desce (participant_points_by_day)
+    admin.from('participant_points_by_day')
+      .select('event_date, participant_id, pts_matches, pts_groups, pts_thirds, pts_tournament')
       .in('participant_id', filter)
-      .order('snapshot_date', { ascending: true }),
+      .order('event_date', { ascending: true }),
   ])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -143,7 +143,31 @@ export default async function ComparadorPage({
   const scores:       any[] = scoresRes.data ?? []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const betDist:      any[] = betDistRes.data ?? []
-  const snapshots: Snapshot[] = (snapshotsRes.data ?? []) as Snapshot[]
+  // Computa totais cumulativos por participante por data (mesmo modelo do Sobe-Desce)
+  const rawDailyPoints = (snapshotsRes.data ?? []) as {
+    event_date: string
+    participant_id: string
+    pts_matches: number
+    pts_groups: number
+    pts_thirds: number
+    pts_tournament: number
+  }[]
+  const allEventDates = [...new Set(rawDailyPoints.map(r => r.event_date))].sort()
+  const dayPtsMap: Record<string, Record<string, number>> = {}
+  for (const r of rawDailyPoints) {
+    ;(dayPtsMap[r.event_date] ??= {})[r.participant_id] =
+      (r.pts_matches ?? 0) + (r.pts_groups ?? 0) + (r.pts_thirds ?? 0) + (r.pts_tournament ?? 0)
+  }
+  const snapshots: Snapshot[] = []
+  const cumulative: Record<string, number> = {}
+  for (const pid of filter) cumulative[pid] = 0
+  for (const date of allEventDates) {
+    const dayData = dayPtsMap[date] ?? {}
+    for (const pid of filter) cumulative[pid] += dayData[pid] ?? 0
+    for (const pid of filter) {
+      snapshots.push({ snapshot_date: date, participant_id: pid, pts_total: cumulative[pid] })
+    }
+  }
 
   // Mapeamento artilheiros
   const scorerMapping: Record<string, string> = {}
