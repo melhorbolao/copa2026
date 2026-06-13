@@ -4,17 +4,21 @@ import { useEffect, useRef } from 'react'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
-const THROTTLE_MS = 60_000
+const PER_PATH_THROTTLE_MS = 60_000
+const GLOBAL_THROTTLE_MS = 10_000
 
 export function PageTracker() {
   const pathname = usePathname()
-  const lastTracked = useRef<Record<string, number>>({})
+  const lastTrackedByPath = useRef<Record<string, number>>({})
+  const lastTrackedAny = useRef<number>(0)
 
   useEffect(() => {
     const track = async () => {
       const now = Date.now()
-      if (now - (lastTracked.current[pathname] ?? 0) < THROTTLE_MS) return
-      lastTracked.current[pathname] = now
+      if (now - lastTrackedAny.current < GLOBAL_THROTTLE_MS) return
+      if (now - (lastTrackedByPath.current[pathname] ?? 0) < PER_PATH_THROTTLE_MS) return
+      lastTrackedByPath.current[pathname] = now
+      lastTrackedAny.current = now
 
       const supabase = createClient()
       // getSession lê do cookie local (zero I/O de rede); getUser fazia HTTP ao servidor de auth
