@@ -265,10 +265,10 @@ function CompactRanking({
   // Destaque via borda esquerda colorida (prioridade: subida > queda > max pts > min pts)
   function sdBorder(rowId: string): string {
     if (!sdActive) return ''
-    if (highlights.maxUpId   === rowId) return 'border-l-2 border-verde-500'
-    if (highlights.maxDownId === rowId) return 'border-l-2 border-red-500'
-    if (highlights.maxPtsId  === rowId) return 'border-l-2 border-amber-400'
-    if (highlights.minPtsId  === rowId) return 'border-l-2 border-slate-300'
+    if (highlights.maxUpIds.has(rowId))   return 'border-l-2 border-verde-500'
+    if (highlights.maxDownIds.has(rowId)) return 'border-l-2 border-red-500'
+    if (highlights.maxPtsIds.has(rowId))  return 'border-l-2 border-amber-400'
+    if (highlights.minPtsIds.has(rowId))  return 'border-l-2 border-slate-300'
     return 'border-l-2 border-transparent'
   }
 
@@ -342,18 +342,18 @@ function CompactRanking({
                       <span className="flex items-center justify-center">
                         <EvoCell
                           delta={deltaMap?.get(r.id)}
-                          isMaxUp={highlights.maxUpId === r.id}
-                          isMaxDown={highlights.maxDownId === r.id}
+                          isMaxUp={highlights.maxUpIds.has(r.id)}
+                          isMaxDown={highlights.maxDownIds.has(r.id)}
                         />
                       </span>
                     )}
 
                     <span className={`pl-1 truncate ${textCls}`} title={r.apelido}>
                       {r.apelido}{z === 'last' && ' 🔦'}
-                      {sdActive && highlights.maxUpId   === r.id && <span className="ml-0.5 text-[8px]" title="Maior subida do período">🚀</span>}
-                      {sdActive && highlights.maxDownId === r.id && <span className="ml-0.5 text-[8px]" title="Maior queda do período">📉</span>}
-                      {sdActive && highlights.maxPtsId  === r.id && <span className="ml-0.5 text-[8px]" title="Maior pontuação do período">🔥</span>}
-                      {sdActive && highlights.minPtsId  === r.id && <span className="ml-0.5 text-[8px]" title="Menor pontuação do período">🥶</span>}
+                      {sdActive && highlights.maxUpIds.has(r.id)   && <span className="ml-0.5 text-[8px]" title="Maior subida do período">🚀</span>}
+                      {sdActive && highlights.maxDownIds.has(r.id) && <span className="ml-0.5 text-[8px]" title="Maior queda do período">📉</span>}
+                      {sdActive && highlights.maxPtsIds.has(r.id)  && <span className="ml-0.5 text-[8px]" title="Maior pontuação do período">🔥</span>}
+                      {sdActive && highlights.minPtsIds.has(r.id)  && <span className="ml-0.5 text-[8px]" title="Menor pontuação do período">🥶</span>}
                     </span>
 
                     <span className={`text-right tabular-nums font-bold ${textCls}`}>{r.pts}</span>
@@ -362,8 +362,8 @@ function CompactRanking({
                       <span className="flex items-center justify-end">
                         <DeltaPtsCell
                           delta={deltaMap?.get(r.id)}
-                          isMaxPts={highlights.maxPtsId === r.id}
-                          isMinPts={highlights.minPtsId === r.id}
+                          isMaxPts={highlights.maxPtsIds.has(r.id)}
+                          isMinPts={highlights.minPtsIds.has(r.id)}
                         />
                       </span>
                     )}

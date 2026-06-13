@@ -35,10 +35,10 @@ export interface DeltaEntry {
 }
 
 export interface SobeDesceHighlights {
-  maxPtsId:  string | null   // maior pontuação no período
-  minPtsId:  string | null   // menor pontuação (pode ser negativo)
-  maxUpId:   string | null   // maior subida
-  maxDownId: string | null   // maior queda
+  maxPtsIds:  Set<string>   // maior pontuação no período (todos os empatados)
+  minPtsIds:  Set<string>   // menor pontuação (todos os empatados)
+  maxUpIds:   Set<string>   // maior subida (todos os empatados)
+  maxDownIds: Set<string>   // maior queda (todos os empatados)
 }
 
 export interface UseSobeDesceReturn {
@@ -214,27 +214,35 @@ export function useSobeDesce({
 
   // Destaques
   const highlights = useMemo((): SobeDesceHighlights => {
-    const none: SobeDesceHighlights = { maxPtsId: null, minPtsId: null, maxUpId: null, maxDownId: null }
-    if (!deltaMap || deltaMap.size === 0) return none
+    const empty = (): SobeDesceHighlights => ({
+      maxPtsIds: new Set(), minPtsIds: new Set(),
+      maxUpIds:  new Set(), maxDownIds: new Set(),
+    })
+    if (!deltaMap || deltaMap.size === 0) return empty()
 
     let maxPts = -Infinity, minPts = Infinity
     let maxUp  = -Infinity, maxDown = Infinity
-    let maxPtsId: string|null = null, minPtsId: string|null = null
-    let maxUpId:  string|null = null, maxDownId: string|null = null
+
+    for (const d of deltaMap.values()) {
+      if (d.deltaPts  > maxPts)  maxPts  = d.deltaPts
+      if (d.deltaPts  < minPts)  minPts  = d.deltaPts
+      if (d.deltaRank > maxUp)   maxUp   = d.deltaRank
+      if (d.deltaRank < maxDown) maxDown = d.deltaRank
+    }
+
+    const maxPtsIds  = new Set<string>()
+    const minPtsIds  = new Set<string>()
+    const maxUpIds   = new Set<string>()
+    const maxDownIds = new Set<string>()
 
     for (const [id, d] of deltaMap.entries()) {
-      if (d.deltaPts  > maxPts)  { maxPts  = d.deltaPts;   maxPtsId  = id }
-      if (d.deltaPts  < minPts)  { minPts  = d.deltaPts;   minPtsId  = id }
-      if (d.deltaRank > maxUp)   { maxUp   = d.deltaRank;  maxUpId   = id }
-      if (d.deltaRank < maxDown) { maxDown = d.deltaRank;  maxDownId = id }
+      if (maxPts  > 0 && d.deltaPts  === maxPts)  maxPtsIds.add(id)
+      if (minPts  < 0 && d.deltaPts  === minPts)  minPtsIds.add(id)
+      if (maxUp   > 0 && d.deltaRank === maxUp)   maxUpIds.add(id)
+      if (maxDown < 0 && d.deltaRank === maxDown) maxDownIds.add(id)
     }
 
-    return {
-      maxPtsId:  maxPts  > 0 ? maxPtsId  : null,
-      minPtsId:  minPts  < 0 ? minPtsId  : null,
-      maxUpId:   maxUp   > 0 ? maxUpId   : null,
-      maxDownId: maxDown < 0 ? maxDownId : null,
-    }
+    return { maxPtsIds, minPtsIds, maxUpIds, maxDownIds }
   }, [deltaMap])
 
   return {
