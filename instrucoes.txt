@@ -1,71 +1,19 @@
-ESPECIFICAÇÃO TÉCNICA: PERFIL MASTER E CONTROLE GRANULAR DE PERMISSÕES PARA ADMINS
+INSTRUÇÃO TÉCNICA: IMPLEMENTAÇÃO DE THROTTLING / DEBOUNCE NA TELEMETRIA DE ACESSOS
 
-Objetivo: Implementar um terceiro nível de privilégio no sistema (Master), acima do papel de Admin. O usuário com e-mail 'gmousinho@gmail.com' será o Master vitalício, possuindo controle total e irrestrito sobre o sistema, além da capacidade exclusiva de delegar acessos parciais para usuários com a função Admin.
+Dando continuidade ao plano de otimização após o upgrade para o Supabase Pro, nosso foco agora é mitigar o Write Bloat (excesso de gravação em disco) causado pela tabela 'page_views'.
 
----
+Siga este roteiro analítico e apresente as alterações antes de commitar:
 
-1. ARQUITETURA E MODELAGEM DE DADOS (SUPABASE)
+1. AUDITORIA DO DISPARO DE TELEMETRIA:
+- Localize o arquivo ou hook onde os inserts na tabela 'page_views' são acionados (geralmente no layout principal, em um componente de Router/Navigation Guard, ou em um useEffect que monitora o 'pathname').
 
-Para suportar o novo nível de acesso e o controle por página para Admins, atualize a estrutura de usuários do banco de dados:
+2. IMPLEMENTAÇÃO DO THROTTLE (CLIENT-SIDE):
+- Crie um mecanismo de controle de tempo (timestamp) na memória do cliente.
+- Regra: O sistema só deve realizar um novo insert na tabela 'page_views' se o intervalo entre o acesso atual e o último acesso registrado para a mesma rota ('path') for MAIOR que 10 segundos.
+- Se o usuário ficar alternando freneticamente entre sub-abas no mesmo componente em um curto espaço de tempo, esses eventos devem ser ignorados (deve registrar apenas o primeiro acesso).
 
-A) Alteração do Tipo de Role (Roles Enum/Text):
-- Modifique a coluna de papel do usuário (ex: 'role' na tabela 'profiles') para aceitar três valores: 'user', 'admin', 'master'.
-- Regra Nativa de Proteção (Trigger): Garanta que apenas o e-mail 'gmousinho@gmail.com' possa receber ou manter a flag 'master'. Se houver qualquer tentativa externa de alteração via API, o banco de dados deve rejeitar automaticamente.
-
-B) Nova Tabela de Permissões de Páginas ('admin_permissions'):
-Esta tabela mapeará quais páginas específicas cada Admin tem autorização para visualizar e gerenciar.
-- Campos:
-  * 'id' (uuid, primary key)
-  * 'user_id' (uuid, references profiles, unique) - O ID do usuário Admin.
-  * 'allowed_pages' (jsonb ou array de texto, ex: `['/admin/gestao', '/admin/telemetria', '/admin/artilharia']`) - Lista de caminhos ou chaves de páginas liberadas.
-  * 'updated_at' (timestamp com timezone)
-
----
-
-2. INTERFACE DE GESTÃO DO MASTER (EXCLUSIVA PARA GMOUSINHO@GMAIL.COM)
-
-Crie uma sub-aba restrita chamada "Controle de Acessos" dentro do menu de Gestão. Esta página só será renderizada e acessível se o usuário logado for o Master.
-
-Recursos da Interface:
-- Listagem de Admins: Exibe uma lista com todos os usuários que possuem a role 'admin'.
-- Matriz de Permissões (Checkbox/Toggle Grid): Ao lado de cada Admin, exiba opções de liga/desliga para cada rota/página administrativa do sistema, tais como:
-  [ ] Configurações Globais e Prazos
-  [ ] Monitoramento de Acessos (Telemetria)
-  [ ] Ativação de Pontos de Artilharia
-  [ ] Auditoria e Exportação de Palpites
-- Salvamento Rápido: Um botão para atualizar o array 'allowed_pages' do Admin selecionado diretamente no Supabase.
-
----
-
-3. SEGURANÇA E PROTEÇÃO DE ROTAS (MIDDLEWARE & FRONTEND)
-
-A validação de quem pode ver o quê deve ocorrer de forma impermeável no Next.js (Middleware) e nos componentes de rota.
-
-A) Regra de Ouro do Master:
-- Se `user.role === 'master'`, o sistema ignora qualquer verificação secundária e concede acesso imediato a 100% das páginas, APIs, tabelas e botões de ação do sistema.
-
-B) Regra de Validação do Admin:
-- Se `user.role === 'admin'`, o Middleware ou o Router Guard deve interceptar a navegação para rotas administrativas (ex: `/admin/*`) e verificar se a rota de destino está incluída na lista `allowed_pages` daquele usuário.
-- Se não estiver autorizado, redirecione imediatamente para uma página de erro neutra (403 - Não Autorizado) ou de volta para a Classificação Geral.
-
-C) Renderização Condicional do Menu Vertical (Sidebar):
-- No componente de montagem do Sidebar, os links das páginas de administração só devem ser exibidos se o usuário for 'master' OU se ele for 'admin' e tiver o caminho explicitamente liberado na sua lista de permissões.
-
----
-
-4. DICA TÉCNICA E DE PERFORMANCE (MITIGAÇÃO DE DISK I/O)
-
-Como o projeto precisa operar de forma extremamente otimizada para evitar consumo excessivo de leitura no banco de dados (Disk IO Budget), evite consultar a tabela 'admin_permissions' a cada clique de navegação do usuário.
-
-Estratégia de Cache de Permissões:
-- Ao realizar o login do usuário, inclua as permissões de páginas diretamente nos metadados da sessão do Supabase ou utilize um Custom JWT Claim (via Supabase Auth Hook) para incorporar o array `allowed_pages` dentro do próprio token de autenticação.
-- Dessa forma, o frontend consegue ler as permissões decodificando o token localmente na memória do navegador de forma instantânea, reduzindo a zero o número de consultas de leitura adicionais ao PostgreSQL durante a navegação interna do Admin.
-
----
-
-5. PLANO DE AUDITORIA DE SEGURANÇA (VERIFICAÇÃO INDEPENDENTE)
-
-Antes de homologar o código, instrua o Claude a realizar uma simulação com três perfis distintos para garantir o isolamento:
-- Teste 1 (Usuário Comum): Tenta acessar a URL direta da telemetria de acessos. O sistema deve retornar erro ou redirecionamento imediato no nível do Middleware.
-- Teste 2 (Admin Parcial): Um usuário configurado como Admin que possui acesso liberado apenas para a página "Artilharia". Se ele tentar acessar a exportação de auditoria na aba de Gestão, a UI deve bloquear e a API correspondente no Supabase (RLS) deve rejeitar a requisição.
-- Teste 3 (Master): O e-mail master deve navegar livremente por todas as telas e realizar edições sem qualquer barreira lógica ou sistêmica.
+3. VERIFICAÇÃO INDEPENDENTE OBRIGATÓRIA:
+Antes de aplicar as mudanças no código, apresente aqui no terminal:
+A) O trecho de código atual que dispara o insert de 'page_views' sem barreiras de tempo.
+B) A lógica proposta com o uso de useRef/localStorage ou controle de estado para segurar o throttle de 10 segundos.
+C) Uma justificativa de redução de escrita baseada em comportamento (ex: "Se um usuário navega por 5 páginas em 8 segundos, o número de inserções cairá de 5 para 1 ou 2").

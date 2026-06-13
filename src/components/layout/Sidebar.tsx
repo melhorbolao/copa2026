@@ -28,14 +28,14 @@ export async function Sidebar() {
   }
 
   return (
-    <aside className="fixed left-0 top-0 hidden h-screen w-56 flex-col bg-azul-dark sm:flex">
+    <aside className="fixed left-0 top-0 hidden h-screen w-48 flex-col bg-azul-dark sm:flex">
       {/* Logo */}
       <div className="border-b border-white/10 px-4 py-5">
         <Link href="/" className="block">
           <img
             src="/logo_azul_amarelo_ret.png"
             alt="Melhor Bolão"
-            className="mx-auto block h-auto w-4/5"
+            className="mx-auto block h-auto w-3/5"
           />
         </Link>
       </div>

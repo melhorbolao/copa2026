@@ -6,11 +6,31 @@ import { getActiveParticipantId } from '@/lib/participant'
 import { requirePageAccess, getPageVisibility, isPageVisible } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { ClassificacaoMBClient } from './ClassificacaoMBClient'
-import { getMatchResult, detectMatchZebra } from '@/lib/scoring/engine'
+import { getMatchResult, detectMatchZebra, scoreTournamentBet, scoreMatchBet } from '@/lib/scoring/engine'
+import type { TournamentResults } from '@/lib/scoring/engine'
 import { getVisibilitySettings, isBonusVisible, isMatchBetsVisible } from '@/lib/production-mode'
 import { recalculateDailyPoints } from '@/lib/scoring/daily-points'
 
 export const metadata = {}
+
+function knockoutWinner(m: {
+  team_home: string; team_away: string
+  score_home: number | null; score_away: number | null
+  penalty_winner: string | null
+}): string | null {
+  if (m.score_home == null || m.score_away == null) return null
+  if (m.score_home > m.score_away) return m.team_home
+  if (m.score_away > m.score_home) return m.team_away
+  if (m.penalty_winner === 'H') return m.team_home
+  if (m.penalty_winner === 'A') return m.team_away
+  return null
+}
+
+function knockoutLoser(m: Parameters<typeof knockoutWinner>[0]): string | null {
+  const w = knockoutWinner(m)
+  if (!w) return null
+  return w === m.team_home ? m.team_away : m.team_home
+}
 
 export default async function ClassificacaoMBPage() {
   const supabase = await createClient()
@@ -44,16 +64,13 @@ export default async function ClassificacaoMBPage() {
 
   // PostgREST aplica max-rows=1000 mesmo com service_role.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async function fetchAll(table: string, select: string, matchIds?: string[]): Promise<any[]> {
+  async function fetchAll(table: string, select: string): Promise<any[]> {
     const PAGE = 1000
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rows: any[] = []
     let from = 0
     for (;;) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let q = (admin as any).from(table).select(select).range(from, from + PAGE - 1)
-      if (matchIds) q = q.in('match_id', matchIds)
-      const { data, error } = await q
+      const { data, error } = await admin.from(table).select(select).range(from, from + PAGE - 1)
       if (error || !data || data.length === 0) break
       rows.push(...data)
       if (data.length < PAGE) break
@@ -74,15 +91,16 @@ export default async function ClassificacaoMBPage() {
     } catch { /* tabela ainda não criada */ }
   }
 
-  // ── Fetch #1: dados base via Materialized View ────────────────────────────
-  // mv_general_ranking (~100 linhas) substitui: participants + bets (completo)
-  // + group_bets + participant_scores — redução de ~7.500 para ~100 linhas.
-  const [rankingRes, matchesRes, tournamentBetsRes, rulesRes] = await Promise.all([
-    admin.from('mv_general_ranking').select('*').order('posicao'),
+  // ── Fetch #1: dados base ───────────────────────────────────────────────────
+  const [participantsRes, matchesRes, betsRes, groupBetsRes, tournamentBetsRes, scoresRes, rulesRes] = await Promise.all([
+    supabase.from('participants').select('id, apelido').order('apelido'),
     supabase.from('matches')
       .select('id, match_number, match_datetime, betting_deadline, team_home, team_away, score_home, score_away, phase, round, group_name, penalty_winner, is_brazil')
       .order('match_datetime', { ascending: true }),
+    fetchAll('bets', 'participant_id, match_id, score_home, score_away, points'),
+    fetchAll('group_bets', 'participant_id, points'),
     admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer'),
+    admin.from('participant_scores').select('participant_id, pts_thirds'),
     supabase.from('scoring_rules').select('key, points'),
   ])
 
@@ -166,7 +184,6 @@ export default async function ClassificacaoMBPage() {
         .maybeSingle()
       lastDataDate = lastDataRow?.data?.event_date ?? null
     } catch { /* tabela ainda não criada */ }
-
     if (scorerRes.data) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const row of scorerRes.data as any[]) {
@@ -215,13 +232,7 @@ export default async function ClassificacaoMBPage() {
   } catch { /* tabelas opcionais */ }
 
   // ── Processar dados base ───────────────────────────────────────────────────
-  type MvRow = {
-    participant_id: string; apelido: string
-    pts_matches: number; pts_groups: number; pts_thirds: number
-    pts_tournament: number; pts_total: number
-    cravadas: number; pontuados: number; jogos_finalizados: number; posicao: number
-  }
-  const ranking = (rankingRes.data ?? []) as MvRow[]
+  const participants = (participantsRes.data ?? []) as { id: string; apelido: string }[]
   const matches = (matchesRes.data ?? []) as {
     id: string; match_number: number; match_datetime: string; betting_deadline: string
     team_home: string; team_away: string
@@ -229,10 +240,16 @@ export default async function ClassificacaoMBPage() {
     phase: string; round: number | null; group_name: string | null; penalty_winner: string | null
     is_brazil: boolean
   }[]
-  const allTBets = (tournamentBetsRes.data ?? []) as {
+  const allBets = betsRes as {
+    participant_id: string; match_id: string
+    score_home: number; score_away: number; points: number | null
+  }[]
+  const allGroupBets = groupBetsRes as { participant_id: string; points: number | null }[]
+  const allTBets     = (tournamentBetsRes.data ?? []) as {
     participant_id: string; champion: string; runner_up: string
     semi1: string; semi2: string; top_scorer: string
   }[]
+  const scoresData = (scoresRes.data ?? []) as { participant_id: string; pts_thirds: number | null }[]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rules: Record<string, number> = Object.fromEntries((rulesRes.data ?? []).map((r: any) => [r.key, r.points]))
   const zebraThreshold = rules['percentual_zebra'] ?? 15
@@ -242,24 +259,63 @@ export default async function ClassificacaoMBPage() {
   const bonusDeadline = matches.find(m => m.phase === 'group' && m.round === 1)?.betting_deadline ?? null
   const bonusVis = isBonusVisible(bonusDeadline, now, visibilitySettings, isAdmin)
 
+  // ── Resultados do torneio (G4) ─────────────────────────────────────────────
   const completedMatches = matches.filter(m => m.score_home !== null)
   const pendingMatches   = matches.filter(m => m.score_home === null)
 
+  const qfDone  = completedMatches.filter(m => m.phase === 'quarterfinal')
+  const sfDone  = completedMatches.filter(m => m.phase === 'semifinal')
+  const finDone = completedMatches.filter(m => m.phase === 'final')
+  const tpDone  = completedMatches.filter(m => m.phase === 'third_place')
+
+  const semifinalists = qfDone.map(knockoutWinner).filter(Boolean) as string[]
+  const finalists     = sfDone.map(knockoutWinner).filter(Boolean) as string[]
+  const champion      = finDone.length > 0 ? knockoutWinner(finDone[0]) : null
+  const runnerUp      = finDone.length > 0 ? knockoutLoser(finDone[0])  : null
+  const third         = tpDone.length > 0  ? knockoutWinner(tpDone[0])  : null
+  const fourth        = tpDone.length > 0  ? knockoutLoser(tpDone[0])   : null
+
+  const tournamentResults: TournamentResults = {
+    semifinalists, finalists,
+    champion: champion ?? null, runnerUp: runnerUp ?? null,
+    third: third ?? null, fourth: fourth ?? null,
+    officialScorers,
+  }
+
+  // Zebra do campeão
+  const chamBetsWithPick = allTBets.filter(b => b.champion && b.champion === champion)
+  const chamBetsTotal    = allTBets.filter(b => b.champion).length
+  const isZebraChampion  = chamBetsTotal > 0 && champion !== null
+    && (chamBetsWithPick.length / chamBetsTotal) * 100 <= zebraThreshold
+
+  // Pontos G4 + artilheiro por participante (calculados ao vivo)
+  const ptsG4Map: Record<string, number> = {}
+  for (const tb of allTBets) {
+    ptsG4Map[tb.participant_id] = scoreTournamentBet(
+      {
+        champion:   tb.champion   ?? '',
+        runner_up:  tb.runner_up  ?? '',
+        semi1:      tb.semi1      ?? '',
+        semi2:      tb.semi2      ?? '',
+        top_scorer: artillaryPointsActive ? (tb.top_scorer ?? '') : '',
+      },
+      tournamentResults,
+      rules,
+      isZebraChampion,
+      scorerMapping,
+    )
+  }
+
+  // ── Últimos/próximos jogos ─────────────────────────────────────────────────
   const lastMatch = completedMatches.length > 0 ? completedMatches[completedMatches.length - 1] : null
   const nextMatch = pendingMatches.length > 0   ? pendingMatches[0] : null
 
-  // ── Fetch #3: apostas alvejadas (zebras + palpite do último/próximo jogo) ──
-  // Filtra a tabela bets apenas para jogos encerrados + próximo jogo,
-  // eliminando apostas de jogos futuros ainda não encerrados.
-  const targetMatchIds = [
-    ...completedMatches.map(m => m.id),
-    ...(nextMatch ? [nextMatch.id] : []),
-  ]
-  const allBets = targetMatchIds.length > 0
-    ? await fetchAll('bets', 'participant_id, match_id, score_home, score_away, points', targetMatchIds)
-    : []
+  // ── Estatísticas por participante ──────────────────────────────────────────
+  const ptsThirdsMap: Record<string, number> = Object.fromEntries(
+    scoresData.map(s => [s.participant_id, s.pts_thirds ?? 0])
+  )
 
-  // ── Distribuição de resultados por jogo (para detectar apostas em possível zebra) ──
+  // Distribuição de resultados por jogo (para detectar apostas em possível zebra)
   const matchResultDist: Record<string, { H: number; D: number; A: number; total: number }> = {}
   for (const bet of allBets) {
     const d = matchResultDist[bet.match_id] ?? { H: 0, D: 0, A: 0, total: 0 }
@@ -268,7 +324,7 @@ export default async function ClassificacaoMBPage() {
     matchResultDist[bet.match_id] = d
   }
 
-  // Resultado oficial por jogo
+  // Mapa de resultado oficial por jogo
   const matchResultMap: Record<string, { score_home: number; score_away: number }> = {}
   for (const m of completedMatches)
     matchResultMap[m.id] = { score_home: m.score_home!, score_away: m.score_away! }
@@ -276,11 +332,20 @@ export default async function ClassificacaoMBPage() {
   // Zebra real por jogo
   const isZebraMatch: Record<string, boolean> = {}
   for (const m of completedMatches) {
-    const actual      = getMatchResult(m.score_home!, m.score_away!)
+    const actual = getMatchResult(m.score_home!, m.score_away!)
+    isZebraMatch[m.id] = detectMatchZebra(
+      (matchResultDist[m.id] ? Object.values(matchResultDist[m.id]).slice(0, 3) : []) as never,
+      actual,
+      zebraThreshold,
+    )
+    // Re-check usando a lista real de bets
     const betsForMatch = allBets.filter(b => b.match_id === m.id)
     isZebraMatch[m.id] = detectMatchZebra(betsForMatch, actual, zebraThreshold)
   }
 
+  const ptsMatchesMap: Record<string, number> = {}
+  const cravadosMap:   Record<string, number> = {}
+  const pontuadosMap:  Record<string, number> = {}
   const zebraApostMap: Record<string, number> = {}
   const zebraPontMap:  Record<string, number> = {}
   const lastMatchBets: Record<string, { score_home: number; score_away: number }> = {}
@@ -290,11 +355,25 @@ export default async function ClassificacaoMBPage() {
 
   for (const bet of allBets) {
     const pid = bet.participant_id
+    const official = matchResultMap[bet.match_id]
 
-    // 🦓 pontuada: acertou zebra real em jogo encerrado
-    if (isZebraMatch[bet.match_id]) {
-      const official = matchResultMap[bet.match_id]
-      if (official) {
+    if (official) {
+      const match = matches.find(m => m.id === bet.match_id)
+      const pts = scoreMatchBet(
+        bet.score_home, bet.score_away,
+        official.score_home, official.score_away,
+        isZebraMatch[bet.match_id] ?? false,
+        match?.is_brazil ?? false,
+        rules,
+      )
+      // Pontos e estatísticas de jogos encerrados
+      ptsMatchesMap[pid] = (ptsMatchesMap[pid] ?? 0) + pts
+      if (pts > 0) pontuadosMap[pid] = (pontuadosMap[pid] ?? 0) + 1
+      if (bet.score_home === official.score_home && bet.score_away === official.score_away)
+        cravadosMap[pid] = (cravadosMap[pid] ?? 0) + 1
+
+      // 🦓 pontuada: acertou zebra real
+      if (isZebraMatch[bet.match_id]) {
         const betRes = getMatchResult(bet.score_home, bet.score_away)
         const actRes = getMatchResult(official.score_home, official.score_away)
         if (betRes === actRes) zebraPontMap[pid] = (zebraPontMap[pid] ?? 0) + 1
@@ -315,30 +394,41 @@ export default async function ClassificacaoMBPage() {
       const vis = isMatchBetsVisible(lastMatch.phase, lastMatch.round, lastMatch.betting_deadline, now, visibilitySettings, isAdmin)
       if (vis || pid === activeParticipantId) lastMatchBets[pid] = bet
     }
+    // nextMatchBet: só mostra se rodada liberada ou próprio palpite
     if (nextMatch && bet.match_id === nextMatch.id) {
       const vis = isMatchBetsVisible(nextMatch.phase, nextMatch.round, nextMatch.betting_deadline, now, visibilitySettings, isAdmin)
       if (vis || pid === activeParticipantId) nextMatchBets[pid] = bet
     }
   }
 
+  const ptsGroupsMap: Record<string, number> = {}
+  for (const bet of allGroupBets)
+    ptsGroupsMap[bet.participant_id] = (ptsGroupsMap[bet.participant_id] ?? 0) + (bet.points ?? 0)
+
   // ── Montar linhas ──────────────────────────────────────────────────────────
   const tBetMap: Record<string, typeof allTBets[0]> = Object.fromEntries(allTBets.map(b => [b.participant_id, b]))
 
-  const rows = ranking.map(mv => ({
-    id:            mv.participant_id,
-    apelido:       mv.apelido,
-    pts:           mv.pts_total,
-    ptsMatches:    mv.pts_matches,
-    ptsClassif:    mv.pts_groups + mv.pts_thirds,
-    ptsG4:         mv.pts_tournament,
-    cravados:      mv.cravadas,
-    pontuados:     mv.pontuados,
-    zebraApostada: zebraApostMap[mv.participant_id] ?? 0,
-    zebraPontuada: zebraPontMap[mv.participant_id]  ?? 0,
-    tournamentBet: (bonusVis || mv.participant_id === activeParticipantId) ? (tBetMap[mv.participant_id] ?? null) : null,
-    lastMatchBet:  lastMatchBets[mv.participant_id] ?? null,
-    nextMatchBet:  nextMatchBets[mv.participant_id] ?? null,
-  }))
+  const rows = participants.map(p => {
+    const ptsMatches = ptsMatchesMap[p.id] ?? 0
+    const ptsGroups  = ptsGroupsMap[p.id]  ?? 0
+    const ptsThirds  = ptsThirdsMap[p.id]  ?? 0
+    const ptsG4      = ptsG4Map[p.id]      ?? 0
+    return {
+      id: p.id,
+      apelido: p.apelido,
+      pts:        ptsMatches + ptsGroups + ptsThirds + ptsG4,
+      ptsMatches,
+      ptsClassif: ptsGroups + ptsThirds,
+      ptsG4,
+      cravados:       cravadosMap[p.id]    ?? 0,
+      pontuados:      pontuadosMap[p.id]   ?? 0,
+      zebraApostada:  zebraApostMap[p.id]  ?? 0,
+      zebraPontuada:  zebraPontMap[p.id]   ?? 0,
+      tournamentBet:  (bonusVis || p.id === activeParticipantId) ? (tBetMap[p.id] ?? null) : null,
+      lastMatchBet:   lastMatchBets[p.id]  ?? null,
+      nextMatchBet:   nextMatchBets[p.id]  ?? null,
+    }
+  })
 
   const matchesRegistered = completedMatches.length
 
@@ -376,9 +466,6 @@ export default async function ClassificacaoMBPage() {
   const currentPhaseStartDate = currentPhaseMatches.length > 0
     ? toBRDate(currentPhaseMatches[0].match_datetime) // já ordenado por match_datetime asc
     : null
-
-  // suppress unused-variable warning for officialScorers (kept for future use)
-  void officialScorers
 
   return (
     <>

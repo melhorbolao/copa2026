@@ -46,7 +46,7 @@ export default function RootLayout({
         <AdminViewProvider>
           <PageTracker />
           <Sidebar />
-          <div className="sm:pl-56">
+          <div className="sm:pl-48">
             <div className="hidden sm:block sticky top-0 z-40">
               <AlertBannerWrapper />
             </div>
