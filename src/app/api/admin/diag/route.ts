@@ -19,26 +19,37 @@ export async function GET() {
     { count: betsWithPts },
     { count: betsNullPts },
     { count: ppdRows },
-    { data: ppdDates },
     { data: scoredMatches },
   ] = await Promise.all([
     admin.from('bets').select('*', { count: 'exact', head: true }),
     admin.from('bets').select('*', { count: 'exact', head: true }).gt('points', 0),
     admin.from('bets').select('*', { count: 'exact', head: true }).is('points', null),
     admin.from('participant_points_by_day').select('*', { count: 'exact', head: true }),
-    admin.from('participant_points_by_day').select('event_date').order('event_date').limit(10),
-    admin.from('matches').select('id, score_home, score_away, match_datetime').not('score_home', 'is', null),
+    admin.from('matches').select('id, score_home, score_away, match_datetime').not('score_home', 'is', null).order('match_datetime'),
   ])
+
+  // Datas distintas em participant_points_by_day
+  const { data: ppdDistinct } = await admin
+    .from('participant_points_by_day')
+    .select('event_date')
+    .order('event_date')
+    .limit(1000)
+  const distinctDates = [...new Set((ppdDistinct ?? []).map((r: any) => r.event_date as string))]
+
+  // Converter datetimes para BR (UTC-3)
+  const toBR = (iso: string) =>
+    new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date(iso))
 
   return NextResponse.json({
     betsTotal,
     betsWithPts,
     betsNullPts,
     ppdRows,
-    ppdDates: ppdDates?.map((r: any) => r.event_date),
-    scoredMatchDates: scoredMatches?.map((m: any) => ({
+    ppdDistinctDates: distinctDates,
+    scoredMatches: scoredMatches?.map((m: any) => ({
       id: m.id.slice(0, 8),
-      datetime: m.match_datetime?.slice(0, 10),
+      utcDate:  m.match_datetime?.slice(0, 10),
+      brDate:   toBR(m.match_datetime),
     })),
   })
 }
