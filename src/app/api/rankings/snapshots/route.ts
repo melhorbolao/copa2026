@@ -22,7 +22,10 @@ export async function GET(req: NextRequest) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any).rpc('fn_get_ranking_snapshot', { p_date: date })
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    console.error('[snapshots] rpc error', date, error)
+    return NextResponse.json({ error: error.message, date }, { status: 500 })
+  }
 
   // Injeta snapshot_date para compatibilidade com SnapshotEntry no cliente
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

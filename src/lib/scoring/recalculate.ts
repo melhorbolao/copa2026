@@ -61,10 +61,15 @@ async function _updateMatchBetPoints(matchId: string, admin: AdminClient, rules:
     threshold,
   )
 
+  // Inclui todos os campos NOT NULL para o upsert funcionar corretamente
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (admin as any).from('bets').upsert(
     bets.map(bet => ({
-      id: bet.id,
+      id:             bet.id,
+      match_id:       matchId,
+      participant_id: bet.participant_id,
+      score_home:     bet.score_home,
+      score_away:     bet.score_away,
       points: scoreMatchBet(
         bet.score_home, bet.score_away,
         match.score_home!, match.score_away!,
@@ -122,7 +127,11 @@ async function _updateGroupBetPoints(groupName: string, admin: AdminClient, rule
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (admin as any).from('group_bets').upsert(
     groupBets.map(bet => ({
-      id: bet.id,
+      id:             bet.id,
+      participant_id: bet.participant_id,
+      group_name:     groupName,
+      first_place:    bet.first_place,
+      second_place:   bet.second_place,
       points: scoreGroupBet(
         bet.first_place, bet.second_place,
         actual1st, actual2nd,
@@ -173,7 +182,13 @@ async function _updateThirdBetPoints(admin: AdminClient, rules: RuleMap): Promis
     (thirdBets as any[]).map((bet: any) => {
       const actual = thirds.find(t => t.group === bet.group_name)
       const pts    = (actual?.advances && actual.team === bet.team) ? thirdPts : 0
-      return { id: bet.id, points: pts }
+      return {
+        id:             bet.id,
+        participant_id: bet.participant_id,
+        group_name:     bet.group_name,
+        team:           bet.team,
+        points: pts,
+      }
     }),
     { onConflict: 'id' },
   )
@@ -261,7 +276,13 @@ async function _updateTournamentBetPoints(admin: AdminClient, rules: RuleMap): P
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (admin as any).from('tournament_bets').upsert(
     tournamentBets.map(bet => ({
-      id: bet.id,
+      id:             bet.id,
+      participant_id: bet.participant_id,
+      champion:       bet.champion,
+      runner_up:      bet.runner_up,
+      semi1:          bet.semi1,
+      semi2:          bet.semi2,
+      top_scorer:     bet.top_scorer,
       points: scoreTournamentBet(
         { champion: bet.champion, runner_up: bet.runner_up, semi1: bet.semi1, semi2: bet.semi2, top_scorer: bet.top_scorer },
         results, rules, isZebraChampion, scorerMapping,

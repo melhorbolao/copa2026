@@ -80,7 +80,9 @@ async function fetchSnapshotAtDate(date: string): Promise<SnapshotEntry[]> {
     })
     if (!res.ok) return []
     return await res.json()
-  } catch { return [] }
+  } catch {
+    return []
+  }
 }
 
 // ── Hook principal ─────────────────────────────────────────────────────────────
