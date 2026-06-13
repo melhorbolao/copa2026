@@ -14,6 +14,7 @@ interface Props {
   userId: string
   g4Deadline: string
   hasTournamentBet: boolean
+  readOnly?: boolean
 }
 
 type Picks = {
@@ -150,7 +151,7 @@ function buildFlagMap(r32Slots: R32Slot[]): Map<string, string> {
 
 // ── Componente principal ──────────────────────────────────────────────────────
 
-export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: Props) {
+export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet, readOnly }: Props) {
   // v3: bump após #47. Invalida picks salvos quando o R32 vinha preenchido
   // indevidamente (fallback alfabético) — esses picks descendentes ficavam
   // presos no localStorage mesmo depois do R32 ficar vazio. Limpeza imediata
@@ -175,9 +176,9 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
   }, [storageKey, legacyKey, r32Slots])
 
   useEffect(() => {
-    if (!mounted) return
+    if (!mounted || readOnly) return
     localStorage.setItem(storageKey, JSON.stringify(picks))
-  }, [picks, storageKey, mounted])
+  }, [picks, storageKey, mounted, readOnly])
 
   const flagMap = buildFlagMap(r32Slots)
   const getTeam = (name: string | null) =>
@@ -291,6 +292,7 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
                 onPick={t => pick('r32', i, t)}
                 labelA={slot.labelA}
                 labelB={slot.labelB}
+                readOnly={readOnly}
               />
             </div>
           ))}
@@ -304,6 +306,7 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
               teamB={getTeam(picks.r32[i * 2 + 1])}
               winner={picks.r16[i]}
               onPick={t => pick('r16', i, t)}
+              readOnly={readOnly}
             />
           ))}
 
@@ -316,6 +319,7 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
               teamB={getTeam(picks.r16[i * 2 + 1])}
               winner={picks.qf[i]}
               onPick={t => pick('qf', i, t)}
+              readOnly={readOnly}
             />
           ))}
 
@@ -328,6 +332,7 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
               teamB={getTeam(picks.qf[i * 2 + 1])}
               winner={picks.sf[i]}
               onPick={t => pick('sf', i, t)}
+              readOnly={readOnly}
             />
           ))}
 
@@ -340,6 +345,7 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
               teamB={getTeam(thirdB)}
               winner={picks.third}
               onPick={t => pick('third', 0, t)}
+              readOnly={readOnly}
             />
           </div>
 
@@ -363,6 +369,7 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
               teamB={getTeam(picks.sf[1])}
               winner={picks.final}
               onPick={t => pick('final', 0, t)}
+              readOnly={readOnly}
             />
           </div>
 
@@ -370,20 +377,26 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
       </div>
 
       {/* Rodapé */}
-      <div className="mt-3 flex items-center justify-between gap-4 flex-wrap">
-        <p className="text-xs text-gray-400">
-          Clique em uma seleção para avançá-la à próxima fase.
+      {!readOnly ? (
+        <div className="mt-3 flex items-center justify-between gap-4 flex-wrap">
+          <p className="text-xs text-gray-400">
+            Clique em uma seleção para avançá-la à próxima fase.
+          </p>
+          <button
+            onClick={() => setPicks(emptyPicks())}
+            className="text-xs text-gray-400 underline hover:text-gray-600"
+          >
+            Limpar chaveamento
+          </button>
+        </div>
+      ) : (
+        <p className="mt-3 text-xs text-gray-400">
+          Chaveamento baseado nos seus palpites de classificação.
         </p>
-        <button
-          onClick={() => setPicks(emptyPicks())}
-          className="text-xs text-gray-400 underline hover:text-gray-600"
-        >
-          Limpar chaveamento
-        </button>
-      </div>
+      )}
 
       {/* Botão G4 */}
-      {g4Open && (
+      {!readOnly && g4Open && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-azul-escuro/20 bg-blue-50 px-4 py-3">
           <div>
             <p className="text-sm font-semibold text-azul-escuro">
@@ -407,7 +420,7 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
       )}
 
       {/* Confirmação G4 */}
-      {showG4Confirm && (
+      {!readOnly && showG4Confirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
             <h3 className="text-base font-bold text-gray-900">Sobrescrever palpites do G4?</h3>
@@ -440,7 +453,7 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet }: 
 // ── Sub-componentes ───────────────────────────────────────────────────────────
 
 function MatchCard({
-  teamA, teamB, winner, onPick, label, style, labelA, labelB,
+  teamA, teamB, winner, onPick, label, style, labelA, labelB, readOnly,
 }: {
   teamA: BracketTeam | null
   teamB: BracketTeam | null
@@ -450,8 +463,9 @@ function MatchCard({
   labelA?: string
   labelB?: string
   style: React.CSSProperties
+  readOnly?: boolean
 }) {
-  const canPick = !!(teamA && teamB)
+  const canPick = !readOnly && !!(teamA && teamB)
   return (
     <div
       style={{ ...style, width: MATCH_W }}

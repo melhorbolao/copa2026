@@ -30,7 +30,7 @@ export function ParticipantSelector({ participants }: { participants: Participan
       value={active?.id ?? ''}
       onChange={handleChange}
       disabled={pending}
-      className="rounded border border-white/30 bg-white/10 px-2 py-1 text-xs font-medium text-white focus:outline-none focus:ring-1 focus:ring-white/50 disabled:opacity-50 cursor-pointer"
+      className="max-w-[80px] rounded border border-white/30 bg-white/10 px-2 py-1 text-xs font-medium text-white focus:outline-none focus:ring-1 focus:ring-white/50 disabled:opacity-50 cursor-pointer"
       title="Trocar participante ativo"
     >
       {participants.map(p => (

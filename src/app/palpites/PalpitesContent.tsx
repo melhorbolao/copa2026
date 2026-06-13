@@ -208,7 +208,7 @@ function TabelaTabPane({
 
       {view === 'mata-mata' && (
         <div className="mb-4 mt-4 text-sm text-gray-500">
-          Monte seu chaveamento do mata-mata e marque os vencedores de cada confronto.
+          Chaveamento do mata-mata baseado nos seus palpites de classificação dos grupos.
         </div>
       )}
 
