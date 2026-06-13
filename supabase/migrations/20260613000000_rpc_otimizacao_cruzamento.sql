@@ -110,6 +110,7 @@ RETURNS TABLE (
 )
 LANGUAGE sql
 STABLE
+SECURITY DEFINER
 AS $$
   SELECT
     participant_id,

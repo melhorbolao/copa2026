@@ -5,21 +5,17 @@ import { useState } from 'react'
 export function RecalcButton() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
   const [errMsg, setErrMsg] = useState('')
-  const [diagInfo, setDiagInfo] = useState<string | null>(null)
 
   const handleClick = async () => {
     if (status === 'loading') return
     setStatus('loading')
     setErrMsg('')
-    setDiagInfo(null)
     try {
       const res = await fetch('/api/scoring/recalculate', { method: 'POST' })
       const body = await res.json().catch(() => null)
       if (res.ok) {
-        const d = body?.diag
-        if (d) setDiagInfo(`betsWithPts=${d.betsWithPts} | ppdRows=${d.ppdRows} | datas=${JSON.stringify(d.ppdDates)}`)
         setStatus('ok')
-        setTimeout(() => window.location.reload(), 4000)
+        setTimeout(() => window.location.reload(), 1500)
       } else {
         setErrMsg(body?.error ?? `HTTP ${res.status}`)
         setStatus('error')
@@ -42,9 +38,8 @@ export function RecalcButton() {
         >
           {status === 'loading' ? '⏳ Recalculando…' : '⚙️ Recalcular pontuações'}
         </button>
-        {status === 'ok' && <span className="text-xs font-medium text-green-600">✓ Recalculado — recarregando em 4s…</span>}
+        {status === 'ok' && <span className="text-xs font-medium text-green-600">✓ Recalculado — recarregando…</span>}
       </div>
-      {diagInfo && <span className="text-xs font-mono text-gray-600">{diagInfo}</span>}
       {status === 'error' && (
         <span className="text-xs font-medium text-red-500">
           Erro: {errMsg || 'falha desconhecida'}
