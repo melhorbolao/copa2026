@@ -7,7 +7,7 @@
 export const maxDuration = 60  // extend Vercel function timeout to 60 s
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAuthAdminClient } from '@/lib/supabase/server'
 import { recalculateAfterMatchScore, recalculateAll } from '@/lib/scoring/recalculate'
 
 export async function POST(req: NextRequest) {
@@ -37,5 +37,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }
 
-  return NextResponse.json({ ok: true, recalculated: matchId ?? 'all' })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAuthAdminClient() as any
+  const { count: betsWithPts } = await admin.from('bets').select('*', { count: 'exact', head: true }).gt('points', 0)
+  const { count: ppdRows }     = await admin.from('participant_points_by_day').select('*', { count: 'exact', head: true })
+  const { data: ppdSample }    = await admin.from('participant_points_by_day').select('event_date').order('event_date').limit(5)
+
+  return NextResponse.json({ ok: true, recalculated: matchId ?? 'all', diag: { betsWithPts, ppdRows, ppdDates: ppdSample?.map((r: any) => r.event_date) } })
 }
