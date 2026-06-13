@@ -199,17 +199,16 @@ export function useSobeDesce({
       }
     } else {
       // Comparação do snapshot FROM com o ranking atual
+      // Participantes sem snapshot (0 pts histórico) entram com deltaPts = pts atual e deltaRank = 0
       for (const row of rankedRows) {
         const ref = byPidFrom.get(row.id)
-        if (ref) {
-          map.set(row.id, {
-            deltaRank: ref.rank   - row.rank,
-            deltaPts:  row.pts    - ref.pts_total,
-          })
-        }
+        map.set(row.id, {
+          deltaRank: ref ? ref.rank - row.rank : 0,
+          deltaPts:  ref ? row.pts - ref.pts_total : row.pts,
+        })
       }
     }
-    return map.size > 0 ? map : null
+    return map.size > 0 ? map : null  // null só se não houver snapshot algum
   }, [snapshots, snapshotsTo, rankedRows, mode])
 
   // Destaques
@@ -237,7 +236,7 @@ export function useSobeDesce({
 
     for (const [id, d] of deltaMap.entries()) {
       if (maxPts  > 0 && d.deltaPts  === maxPts)  maxPtsIds.add(id)
-      if (minPts  < 0 && d.deltaPts  === minPts)  minPtsIds.add(id)
+      if (minPts  <= 0 && d.deltaPts  === minPts)  minPtsIds.add(id)
       if (maxUp   > 0 && d.deltaRank === maxUp)   maxUpIds.add(id)
       if (maxDown < 0 && d.deltaRank === maxDown) maxDownIds.add(id)
     }
