@@ -118,7 +118,7 @@ export function useSobeDesce({
       case 'last_day':
         return lastResultDate        ? subtractDays(lastResultDate,        1) : null
       case 'current_round':
-        return currentPhaseStartDate ? subtractDays(currentPhaseStartDate, 1) : null
+        return currentPhaseStartDate ?? null
       case 'custom':
         return customFrom || null
       default:
