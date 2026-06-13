@@ -373,16 +373,22 @@ export async function recalculateAfterMatchScore(matchId: string): Promise<void>
 
   if (!match || match.score_home === null || match.score_away === null) return
 
-  await recalculateMatchBets(matchId)
+  const rules  = await loadRules(admin)
+  const allIds = new Set<string>()
+
+  ;(await _updateMatchBetPoints(matchId, admin, rules)).forEach(id => allIds.add(id))
 
   if (match.phase === 'group' && match.group_name) {
-    await recalculateGroupBets(match.group_name)
-    await recalculateThirdBets()
+    ;(await _updateGroupBetPoints(match.group_name, admin, rules)).forEach(id => allIds.add(id))
+    ;(await _updateThirdBetPoints(admin, rules)).forEach(id => allIds.add(id))
   }
 
   if (KNOCKOUT_SCORING_PHASES.has(match.phase)) {
-    await recalculateTournamentBets()
+    ;(await _updateTournamentBetPoints(admin, rules)).forEach(id => allIds.add(id))
   }
+
+  // Único upsert em lote → único disparo do trigger → único REFRESH da MV
+  await refreshParticipantTotals([...allIds])
 }
 
 // ── Full recalculation (admin reset) ─────────────────────────────────────────
