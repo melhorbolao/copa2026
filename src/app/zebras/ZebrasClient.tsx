@@ -21,9 +21,27 @@ interface Props {
 
 // ── Utilitários ──────────────────────────────────────────────────────────────
 
-function pct(count: number, total: number): number {
-  if (total === 0) return 0
-  return Math.round((count / total) * 100)
+function pct(count: number, total: number): string {
+  if (total === 0) return '0.0'
+  return ((count / total) * 100).toFixed(1)
+}
+
+// Distribui 3 contagens em percentuais com 1 decimal que somam exatamente 100,0%.
+// Usa o método do maior resto para evitar que arredondamentos independentes
+// produzam somas de 99,9% ou 100,1%.
+function splitPct(
+  counts: [number, number, number],
+  total: number,
+): [string, string, string] {
+  if (total === 0) return ['0.0', '0.0', '0.0']
+  const rawTenths = counts.map(c => (c / total) * 1000)
+  const floors = rawTenths.map(v => Math.floor(v))
+  const remainder = 1000 - floors.reduce((a, b) => a + b, 0)
+  const order = [0, 1, 2].sort(
+    (a, b) => (rawTenths[b] - floors[b]) - (rawTenths[a] - floors[a]),
+  )
+  for (let i = 0; i < remainder; i++) floors[order[i]]++
+  return floors.map(v => (v / 10).toFixed(1)) as [string, string, string]
 }
 
 function avatarColor(name: string): string {
@@ -182,15 +200,15 @@ function MitosTab({
 
 function DistributionBar({ match }: { match: ZebraMatch }) {
   const { teamHome, teamAway, totalBets, homeCount, drawCount, awayCount, actualResult } = match
+  const [hPct, dPct, aPct] = splitPct([homeCount, drawCount, awayCount], totalBets)
   const cols = [
-    { key: 'H' as const, label: teamHome,  flagCode: match.flagHome, count: homeCount },
-    { key: 'D' as const, label: 'Empate',  flagCode: '',              count: drawCount },
-    { key: 'A' as const, label: teamAway,  flagCode: match.flagAway, count: awayCount },
+    { key: 'H' as const, label: teamHome, flagCode: match.flagHome, count: homeCount, pStr: hPct },
+    { key: 'D' as const, label: 'Empate', flagCode: '',              count: drawCount, pStr: dPct },
+    { key: 'A' as const, label: teamAway, flagCode: match.flagAway, count: awayCount, pStr: aPct },
   ]
   return (
     <div className="flex gap-1 text-xs">
       {cols.map(col => {
-        const p = pct(col.count, totalBets)
         const isWinner = col.key === actualResult
         return (
           <div
@@ -206,7 +224,7 @@ function DistributionBar({ match }: { match: ZebraMatch }) {
               </span>
               {isWinner && <Image src="/zebra.png" alt="Zebra" width={14} height={14} className="shrink-0" />}
             </div>
-            <span className={`text-sm font-bold ${isWinner ? 'text-ouro' : 'text-gray-400'}`}>{p}%</span>
+            <span className={`text-sm font-bold ${isWinner ? 'text-ouro' : 'text-gray-400'}`}>{col.pStr}%</span>
             <span className="text-[9px] text-gray-400">{col.count} apostas</span>
           </div>
         )
@@ -301,10 +319,14 @@ function AlmanaqueTab({ zebraMatches }: { zebraMatches: ZebraMatch[] }) {
 // ── Aba 3: Possíveis Zebras (Radar) ──────────────────────────────────────────
 
 function UpsetDistBar({ upset }: { upset: PotentialUpset }) {
+  const [hPct, dPct, aPct] = splitPct(
+    [upset.homeCount, upset.drawCount, upset.awayCount],
+    upset.totalBets,
+  )
   const cols = [
-    { key: 'H' as const, label: upset.teamHome, flag: upset.flagHome, p: upset.homePct },
-    { key: 'D' as const, label: 'Empate',        flag: '',              p: upset.drawPct },
-    { key: 'A' as const, label: upset.teamAway,  flag: upset.flagAway,  p: upset.awayPct },
+    { key: 'H' as const, label: upset.teamHome, flag: upset.flagHome, pStr: hPct },
+    { key: 'D' as const, label: 'Empate',        flag: '',              pStr: dPct },
+    { key: 'A' as const, label: upset.teamAway,  flag: upset.flagAway,  pStr: aPct },
   ]
   return (
     <div className="space-y-1.5">
@@ -331,7 +353,7 @@ function UpsetDistBar({ upset }: { upset: PotentialUpset }) {
                 )}
               </div>
               <span className={`text-sm font-bold ${isZebra ? 'text-ouro' : 'text-gray-400'}`}>
-                {col.p}%
+                {col.pStr}%
               </span>
             </div>
           )
@@ -342,7 +364,7 @@ function UpsetDistBar({ upset }: { upset: PotentialUpset }) {
         {cols.map((col, i) => (
           <div
             key={col.key}
-            style={{ width: `${col.p}%` }}
+            style={{ width: `${col.pStr}%` }}
             className={`transition-all duration-700 ${
               upset.zebraColumns.includes(col.key)
                 ? 'bg-ouro'
@@ -356,8 +378,8 @@ function UpsetDistBar({ upset }: { upset: PotentialUpset }) {
 }
 
 function PotentialUpsetCard({ upset }: { upset: PotentialUpset }) {
-  const pctOf = (c: 'H' | 'D' | 'A') => c === 'H' ? upset.homePct : c === 'A' ? upset.awayPct : upset.drawPct
-  const hasZeroBet = upset.zebraColumns.every(c => pctOf(c) === 0)
+  const countOf = (c: 'H' | 'D' | 'A') => c === 'H' ? upset.homeCount : c === 'A' ? upset.awayCount : upset.drawCount
+  const hasZeroBet = upset.zebraColumns.every(c => countOf(c) === 0)
 
   return (
     <div className={`overflow-hidden rounded-xl border shadow-sm ${
@@ -397,7 +419,7 @@ function PotentialG4Card({ z }: { z: PotentialG4Zebra }) {
         <p className="text-[10px] text-gray-400">qualquer posição G4</p>
       </div>
       <div className="text-right shrink-0">
-        <p className="text-sm font-black text-ouro">{z.pct}%</p>
+        <p className="text-sm font-black text-ouro">{z.pct.toFixed(1)}%</p>
         <p className="text-[10px] text-gray-400">{z.count}/{z.total}</p>
       </div>
       <Image src="/zebra.png" alt="" width={16} height={16} className="shrink-0 animate-pulse" />
@@ -414,7 +436,7 @@ function PotentialGroupCard({ z }: { z: PotentialGroupZebra }) {
         <p className="text-[10px] text-gray-400">1º do Grupo {z.groupName}</p>
       </div>
       <div className="text-right shrink-0">
-        <p className="text-sm font-black text-ouro">{z.pct}%</p>
+        <p className="text-sm font-black text-ouro">{z.pct.toFixed(1)}%</p>
         <p className="text-[10px] text-gray-400">{z.count}/{z.total}</p>
       </div>
       <Image src="/zebra.png" alt="" width={16} height={16} className="shrink-0 animate-pulse" />

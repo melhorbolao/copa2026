@@ -201,14 +201,16 @@ export default async function ZebrasPage() {
     flag_home: string; flag_away: string; match_datetime: string
     phase: string; group_name: string | null; round: number | null; city: string | null
     home_pct: number; draw_pct: number; away_pct: number
+    home_count: number; draw_count: number; away_count: number; total_bets: number
   }
 
   const potentialUpsetsFromMv: PotentialUpset[] = []
   for (const row of (radarMv ?? []) as RadarRow[]) {
+    const total = row.total_bets ?? 0
     const zebraColumns: ('H' | 'D' | 'A')[] = []
-    if (row.home_pct <= ZEBRA_THRESHOLD) zebraColumns.push('H')
-    if (row.draw_pct <= ZEBRA_THRESHOLD) zebraColumns.push('D')
-    if (row.away_pct <= ZEBRA_THRESHOLD) zebraColumns.push('A')
+    if (total === 0 || row.home_count / total * 100 <= ZEBRA_THRESHOLD) zebraColumns.push('H')
+    if (total === 0 || row.draw_count / total * 100 <= ZEBRA_THRESHOLD) zebraColumns.push('D')
+    if (total === 0 || row.away_count / total * 100 <= ZEBRA_THRESHOLD) zebraColumns.push('A')
     if (zebraColumns.length === 0) continue
     potentialUpsetsFromMv.push({
       id: row.match_id,
@@ -224,6 +226,10 @@ export default async function ZebrasPage() {
       homePct: row.home_pct,
       drawPct: row.draw_pct,
       awayPct: row.away_pct,
+      homeCount: row.home_count ?? 0,
+      drawCount: row.draw_count ?? 0,
+      awayCount: row.away_count ?? 0,
+      totalBets: total,
       zebraColumns,
     })
   }
@@ -283,9 +289,9 @@ export default async function ZebrasPage() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const awayCount = matchBets.filter((b: any) => (b.score_away ?? 0) > (b.score_home ?? 0)).length
         const drawCount = total - homeCount - awayCount
-        const homePct = Math.round((homeCount / total) * 100)
-        const drawPct = Math.round((drawCount / total) * 100)
-        const awayPct = Math.round((awayCount / total) * 100)
+        const homePct = (homeCount / total) * 100
+        const drawPct = (drawCount / total) * 100
+        const awayPct = (awayCount / total) * 100
         const zebraColumns: ('H' | 'D' | 'A')[] = []
         if (homePct <= ZEBRA_THRESHOLD) zebraColumns.push('H')
         if (drawPct <= ZEBRA_THRESHOLD) zebraColumns.push('D')
@@ -298,7 +304,9 @@ export default async function ZebrasPage() {
           matchDatetime: match.match_datetime,
           phase: match.phase, groupName: match.group_name ?? null,
           round: match.round ?? null, city: match.city ?? null,
-          homePct, drawPct, awayPct, zebraColumns,
+          homePct, drawPct, awayPct,
+          homeCount, drawCount, awayCount, totalBets: total,
+          zebraColumns,
         })
       }
     }
@@ -345,7 +353,7 @@ export default async function ZebrasPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const b of groupBets) counts.set(b.first_place, (counts.get(b.first_place) ?? 0) + 1)
       for (const [team, count] of counts) {
-        const pct = Math.round((count / total) * 100)
+        const pct = parseFloat(((count / total) * 100).toFixed(1))
         if (pct > ZEBRA_THRESHOLD) continue
         potentialGroupZebras.push({ groupName, teamName: team, flagCode: teamFlags[team] ?? '', pct, count, total })
       }
@@ -381,7 +389,7 @@ export default async function ZebrasPage() {
         }
       }
       for (const [team, count] of teamCounts) {
-        const pct = Math.round((count / total) * 100)
+        const pct = parseFloat(((count / total) * 100).toFixed(1))
         if (pct > ZEBRA_THRESHOLD) continue
         potentialG4Zebras.push({ teamName: team, flagCode: teamFlags[team] ?? '', pct, count, total })
       }

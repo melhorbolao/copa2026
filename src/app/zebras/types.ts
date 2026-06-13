@@ -47,6 +47,10 @@ export interface PotentialUpset {
   homePct: number
   drawPct: number
   awayPct: number
+  homeCount: number
+  drawCount: number
+  awayCount: number
+  totalBets: number
   zebraColumns: ('H' | 'D' | 'A')[]
 }
 
