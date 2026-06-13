@@ -1,19 +1,20 @@
-INSTRUÇÃO TÉCNICA: IMPLEMENTAÇÃO DE THROTTLING / DEBOUNCE NA TELEMETRIA DE ACESSOS
+INSTRUÇÃO TÉCNICA: OTIMIZAÇÃO DE SUBSCOES REALTIME (REDUÇÃO DE CPU LOAD)
 
-Dando continuidade ao plano de otimização após o upgrade para o Supabase Pro, nosso foco agora é mitigar o Write Bloat (excesso de gravação em disco) causado pela tabela 'page_views'.
+Nossa auditoria no painel Query Performance do Supabase Pro indicou que uma query interna de monitoramento de log/estado (WAL) é executada em excesso (1.228 chamadas, consumindo 58% do tempo do banco). Isso indica um vazamento ou excesso de concorrência nas subscrições Realtime do frontend.
 
-Siga este roteiro analítico e apresente as alterações antes de commitar:
+Execute as seguintes refatorações com foco puramente em código client-side (Next.js/React):
 
-1. AUDITORIA DO DISPARO DE TELEMETRIA:
-- Localize o arquivo ou hook onde os inserts na tabela 'page_views' são acionados (geralmente no layout principal, em um componente de Router/Navigation Guard, ou em um useEffect que monitora o 'pathname').
+1. ENCONTRAR SUBSCOES REALTIME:
+- Varra o projeto em busca de chamadas como 'supabase.channel()' ou '.on("postgres_changes", ...)'. Identifique onde o site escuta alterações nas tabelas 'bets', 'matches' ou 'participant_scores'.
 
-2. IMPLEMENTAÇÃO DO THROTTLE (CLIENT-SIDE):
-- Crie um mecanismo de controle de tempo (timestamp) na memória do cliente.
-- Regra: O sistema só deve realizar um novo insert na tabela 'page_views' se o intervalo entre o acesso atual e o último acesso registrado para a mesma rota ('path') for MAIOR que 10 segundos.
-- Se o usuário ficar alternando freneticamente entre sub-abas no mesmo componente em um curto espaço de tempo, esses eventos devem ser ignorados (deve registrar apenas o primeiro acesso).
+2. FILTRAGEM ESTRETA (ESTRATÉGIA CLIENT-SIDE):
+- Garanta que nenhuma página assine alterações da tabela inteira se o usuário estiver olhando apenas para um escopo menor. 
+- Exemplo: Na página de palpites de um jogo específico, a subscrição deve incluir o filtro explícito pelo ID do jogo (ex: 'filter=match_id=eq.' + matchId) em vez de escutar todos os palpites do bolão.
 
-3. VERIFICAÇÃO INDEPENDENTE OBRIGATÓRIA:
-Antes de aplicar as mudanças no código, apresente aqui no terminal:
-A) O trecho de código atual que dispara o insert de 'page_views' sem barreiras de tempo.
-B) A lógica proposta com o uso de useRef/localStorage ou controle de estado para segurar o throttle de 10 segundos.
-C) Uma justificativa de redução de escrita baseada em comportamento (ex: "Se um usuário navega por 5 páginas em 8 segundos, o número de inserções cairá de 5 para 1 ou 2").
+3. CICLO DE VIDA E DESMONTAGEM (CLEANUP FUNCTIONS):
+- Certifique-se de que TODOS os useEffects que abrem canais Realtime retornem a função de limpeza ('cleanup') contendo explicitamente o comando 'supabase.removeChannel(channel)'. Se o componente for desmontado e o canal continuar aberto na memória do navegador, o banco continuará sendo metralhado com checagens inúteis.
+
+4. VERIFICAÇÃO INDEPENDENTE OBRIGATÓRIA:
+Antes de salvar os arquivos, apresente aqui no terminal:
+A) Os arquivos onde as subscrições Realtime estavam sendo abertas sem a devida função de cleanup ou sem filtros de ID.
+B) O código corrigido mostrando o encerramento correto do canal no retorno do useEffect.

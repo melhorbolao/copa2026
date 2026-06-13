@@ -166,17 +166,20 @@ export function JogosDashboard({
     return () => { supabase.removeChannel(channel) }
   }, [])
 
-  // Realtime: attendance
+  // Realtime: attendance — filtrado pelo jogo atualmente selecionado
   useEffect(() => {
+    if (!match?.id) return
     const supabase = createClient()
-    const channel = supabase.channel('jogos_attendance_rt')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'stadium_attendance' }, () => {
-        // Refresh page data
+    const channel = supabase.channel(`jogos_attendance_rt_${match.id}`)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'stadium_attendance',
+        filter: `match_id=eq.${match.id}`,
+      }, () => {
         router.refresh()
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, []) // eslint-disable-line
+  }, [match?.id]) // eslint-disable-line
 
   // Handle score save callback (from ScoreHeader)
   const handleScoreSaved = useCallback((sh: number | null, sa: number | null) => {

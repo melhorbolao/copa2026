@@ -519,9 +519,6 @@ export function ZebrasClient({ zebraMatches, ranking, threshold, potentialUpsets
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches' }, () => {
         router.refresh()
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bets' }, () => {
-        router.refresh()
-      })
       .subscribe()
     return () => { void supabase.removeChannel(channel) }
   }, [router])
