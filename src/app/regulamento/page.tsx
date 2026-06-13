@@ -42,8 +42,8 @@ Os prazos são sempre às **23:59 (horário de Brasília)**. Na fase de grupos h
 | Fase de grupos — Rodada 1 + TODOS os bônus pré-torneio | 11/06/2026 | 10/06/2026 23:59 |
 | Fase de grupos — Rodada 2 | 18/06/2026 | ~~17/06/2026 23:59~~ **18/06/2026 07:59** *(prazo alterado)* |
 | Fase de grupos — Rodada 3 | 24/06/2026 | ~~23/06/2026 23:59~~ **24/06/2026 07:59** *(prazo alterado)* |
-| 16 avos de final | 28/06/2026 | 27/06/2026 23:59 |
-| Oitavas de final | 04/07/2026 | 03/07/2026 23:59 |
+| 16 avos de final | 28/06/2026 | ~~27/06/2026 23:59~~ **28/06/2026 08:59** *(prazo alterado)* |
+| Oitavas de final | 04/07/2026 | ~~03/07/2026 23:59~~ **04/07/2026 08:59** *(prazo alterado)* |
 | Quartas de final | 09/07/2026 | 08/07/2026 23:59 |
 | Semifinais | 14/07/2026 | 13/07/2026 23:59 |
 | Disputa de 3º lugar e Final | 18/07/2026 | 17/07/2026 23:59 |
