@@ -232,12 +232,15 @@ VALUES
 (104,'final',NULL,NULL,'TBD','TBD','un','un','2026-07-19 20:00+00','Nova York',            '2026-07-19 19:30+00',false);
 
 -- ================================================================
--- CORRIGE PRAZOS: 23:59 BRT da véspera do 1º jogo de cada etapa
--- BRT = UTC-3 → 23:59 BRT = 02:59 UTC do dia seguinte
+-- CORRIGE PRAZOS (BRT = UTC-3)
+-- R1:        10/06 23:59 BRT → 2026-06-11 02:59+00
+-- R2:        18/06 07:59 BRT → 2026-06-18 10:59+00  (prazo alterado)
+-- R3:        24/06 07:59 BRT → 2026-06-24 10:59+00  (prazo alterado)
+-- Demais:    véspera   23:59 BRT → 02:59 UTC do dia seguinte
 -- ================================================================
 UPDATE public.matches SET betting_deadline = '2026-06-11 02:59+00' WHERE phase = 'group' AND round = 1;
-UPDATE public.matches SET betting_deadline = '2026-06-18 02:59+00' WHERE phase = 'group' AND round = 2;
-UPDATE public.matches SET betting_deadline = '2026-06-24 02:59+00' WHERE phase = 'group' AND round = 3;
+UPDATE public.matches SET betting_deadline = '2026-06-18 10:59+00' WHERE phase = 'group' AND round = 2;
+UPDATE public.matches SET betting_deadline = '2026-06-24 10:59+00' WHERE phase = 'group' AND round = 3;
 UPDATE public.matches SET betting_deadline = '2026-06-28 02:59+00' WHERE phase = 'round_of_32';
 UPDATE public.matches SET betting_deadline = '2026-07-04 02:59+00' WHERE phase = 'round_of_16';
 UPDATE public.matches SET betting_deadline = '2026-07-09 02:59+00' WHERE phase = 'quarterfinal';
