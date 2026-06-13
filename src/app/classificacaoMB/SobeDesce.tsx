@@ -308,6 +308,7 @@ export function SobeDesceSelector({
       label:    'Rodada atual',
       title:    'Evolução desde o início da fase atual',
       disabled: !currentPhaseStartDate,
+      hidden:   true,
     },
     {
       value: 'custom',
@@ -328,7 +329,7 @@ export function SobeDesceSelector({
 
         {/* Botões de modo */}
         <div className="flex flex-wrap gap-1">
-          {options.map(opt => (
+          {options.filter(opt => !opt.hidden).map(opt => (
             <button
               key={opt.value}
               disabled={!!opt.disabled}
