@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { Combobox } from '@/components/ui/Combobox'
 import dynamic from 'next/dynamic'
 import type { MatchInfo, FlatBet, ColPop } from './engine'
@@ -35,6 +36,8 @@ interface Props {
   rulesMap: Record<string, number>
   zebraThreshold: number
   currentParticipantId: string
+  initialPidA: string
+  initialPidB: string
   snapshots: Snapshot[]
   isAdmin: boolean
 }
@@ -45,26 +48,31 @@ export function ComparadorClient(props: Props) {
   const {
     participants, matches,
     betsByParticipant, groupBetsByParticipant, thirdBetsByParticipant, tBetByParticipant,
-    scoresByParticipant, colPopMap, rulesMap, zebraThreshold, currentParticipantId, snapshots,
-    isAdmin,
+    scoresByParticipant, colPopMap, rulesMap, zebraThreshold, currentParticipantId,
+    initialPidA, initialPidB, snapshots, isAdmin,
   } = props
 
+  const router     = useRouter()
   const storageKey = `comparador_last_${currentParticipantId}`
 
-  const [pidA, setPidA] = useState(currentParticipantId)
-  const [pidB, setPidB] = useState('')
+  // Estado inicializado a partir dos URL params (server-rendered)
+  const [pidA, setPidA] = useState(initialPidA)
+  const [pidB, setPidB] = useState(initialPidB)
   const [activeTab, setActiveTab] = useState<'analise' | 'projecao' | 'matrix' | 'diaadia'>('analise')
   const [showCard, setShowCard] = useState(false)
 
-  // Restaura última comparação ao montar
+  // Se não há pidB no URL, tenta restaurar do localStorage e navega para carregar os palpites
   useEffect(() => {
+    if (initialPidB) return
     try {
       const saved = localStorage.getItem(storageKey)
       if (saved) {
-        const parsed = JSON.parse(saved) as { pidA?: string; pidB?: string }
+        const parsed  = JSON.parse(saved) as { pidA?: string; pidB?: string }
         const validIds = new Set(participants.map(p => p.id))
-        if (parsed.pidA && validIds.has(parsed.pidA)) setPidA(parsed.pidA)
-        if (parsed.pidB && validIds.has(parsed.pidB)) setPidB(parsed.pidB)
+        if (parsed.pidB && validIds.has(parsed.pidB)) {
+          const effA = parsed.pidA && validIds.has(parsed.pidA) ? parsed.pidA : initialPidA
+          router.push(`?a=${effA}&b=${parsed.pidB}`, { scroll: false })
+        }
       }
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -77,6 +85,17 @@ export function ComparadorClient(props: Props) {
       localStorage.setItem(storageKey, JSON.stringify({ pidA, pidB }))
     } catch {}
   }, [storageKey, pidA, pidB])
+
+  // Navegação para carregar palpites do novo par selecionado
+  const handlePidAChange = useCallback((newPidA: string) => {
+    setPidA(newPidA)
+    router.push(`?a=${newPidA}${pidB ? `&b=${pidB}` : ''}`, { scroll: false })
+  }, [pidB, router])
+
+  const handlePidBChange = useCallback((newPidB: string) => {
+    setPidB(newPidB)
+    if (newPidB) router.push(`?a=${pidA}&b=${newPidB}`, { scroll: false })
+  }, [pidA, router])
 
   // ── Computed data ──────────────────────────────────────────────────────────
   const nameA = participants.find(p => p.id === pidA)?.apelido ?? 'Participante A'
@@ -169,7 +188,7 @@ export function ComparadorClient(props: Props) {
         <ParticipantPicker
           participants={participants}
           value={pidA}
-          onChange={setPidA}
+          onChange={handlePidAChange}
           exclude={pidB}
           label="Participante A"
           color="blue"
@@ -177,7 +196,7 @@ export function ComparadorClient(props: Props) {
         <ParticipantPicker
           participants={participants}
           value={pidB}
-          onChange={setPidB}
+          onChange={handlePidBChange}
           exclude={pidA}
           label="Participante B"
           color="red"

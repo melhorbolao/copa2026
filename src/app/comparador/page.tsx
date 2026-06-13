@@ -8,12 +8,13 @@ import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { ComparadorClient } from './ComparadorClient'
 import type { Snapshot } from './DiaDiaSection'
-import { getMatchResult, detectMatchZebra } from '@/lib/scoring/engine'
+import { getMatchResult } from '@/lib/scoring/engine'
 import { getVisibilitySettings, isBonusVisible, isMatchBetsVisible, getServerNow } from '@/lib/production-mode'
 import type { MatchInfo, FlatBet, ColPop } from './engine'
 
-// Dados quasi-estáticos: participantes mudam ao aprovação, matches ao resultado,
-// scoring_rules quase nunca. Cache curto evita re-reads a cada acesso.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// Dados quasi-estáticos: participantes mudam ao aprovação, scoring_rules quase nunca.
 const getCachedParticipants = unstable_cache(
   async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -49,7 +50,11 @@ function groupBy<T>(arr: T[], key: (item: T) => string): Record<string, T[]> {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default async function ComparadorPage() {
+export default async function ComparadorPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ a?: string; b?: string }>
+}) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -62,96 +67,94 @@ export default async function ComparadorPage() {
   const participantId = await getActiveParticipantId(supabase, user.id).catch(() => null)
   if (!participantId) redirect('/aguardando-aprovacao')
 
+  // Participantes necessários para validar os params antes das queries
+  const participants = await getCachedParticipants()
+  const validIds = new Set(participants.map(p => p.id))
+
+  // Determina o par ativo a partir dos URL params (?a=UUID&b=UUID)
+  const { a: rawA, b: rawB } = await searchParams
+  const activePidA = (rawA && UUID_RE.test(rawA) && validIds.has(rawA)) ? rawA : participantId
+  const activePidB = (rawB && UUID_RE.test(rawB) && validIds.has(rawB)) ? rawB : null
+
+  // Filtro seletivo: apenas os dois participantes do duelo
+  const filter = activePidB ? [activePidA, activePidB] : [activePidA]
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAuthAdminClient() as any
 
-  // PostgREST aplica max-rows=1000 mesmo com service_role.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async function fetchAll(table: string, select: string): Promise<any[]> {
-    const PAGE = 1000
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rows: any[] = []
-    let from = 0
-    for (;;) {
-      const { data, error } = await admin.from(table).select(select).range(from, from + PAGE - 1)
-      if (error || !data || data.length === 0) break
-      rows.push(...data)
-      if (data.length < PAGE) break
-      from += PAGE
-    }
-    return rows
-  }
-
-  // ── Dados estáticos (cacheados) + dinâmicos (ao vivo) em paralelo ────────────
   const [
-    participants,
     rawMatchesRaw,
     rulesRaw,
-    allBets,
-    allGroupBets,
-    allThirdBets,
-    allTBetsRes,
+    betsRes,
+    groupBetsRes,
+    thirdBetsRes,
+    tBetsRes,
     scoresRes,
+    betDistRes,
     visibilitySettings,
     scorerMappingRes,
     snapshotsRes,
   ] = await Promise.all([
-    // cacheados: participantes (5 min), regras (1 h); partidas: direto (placar precisa ser fresco)
-    getCachedParticipants(),
+    // Partidas: sempre fresco (placar muda ao vivo)
     admin
       .from('matches')
       .select('id, match_number, phase, group_name, round, team_home, team_away, flag_home, flag_away, match_datetime, betting_deadline, score_home, score_away, is_brazil')
       .order('match_datetime', { ascending: true })
       .then((r: { data: object[] | null }) => (r.data ?? []) as object[]),
     getCachedScoringRules(),
-    // ao vivo: apostas mudam a cada salvamento
-    fetchAll('bets', 'participant_id, match_id, score_home, score_away, points'),
-    fetchAll('group_bets', 'participant_id, group_name, first_place, second_place, points'),
-    fetchAll('third_place_bets', 'participant_id, group_name, team, points'),
-    admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer'),
+    // Apostas de jogos: filtradas pelos dois participantes do duelo (antes: todos)
+    admin.from('bets')
+      .select('participant_id, match_id, score_home, score_away, points')
+      .in('participant_id', filter),
+    admin.from('group_bets')
+      .select('participant_id, group_name, first_place, second_place, points')
+      .in('participant_id', filter),
+    admin.from('third_place_bets')
+      .select('participant_id, group_name, team, points')
+      .in('participant_id', filter),
+    admin.from('tournament_bets')
+      .select('participant_id, champion, runner_up, semi1, semi2, top_scorer')
+      .in('participant_id', filter),
     admin.from('participant_scores')
-      .select('participant_id, pts_matches, pts_groups, pts_thirds, pts_tournament, pts_total'),
+      .select('participant_id, pts_matches, pts_groups, pts_thirds, pts_tournament, pts_total')
+      .in('participant_id', filter),
+    // Distribuição agregada por jogo: ~60 linhas em vez de ~5.300 apostas individuais
+    admin.rpc('fn_bet_distribution_by_match'),
     getVisibilitySettings(),
     admin.from('top_scorer_mapping').select('raw_name, standardized_name'),
-    // daily_rankings_snapshot: cresce 200 linhas/dia — pagina com .order() preservado
-    (async () => {
-      const PAGE = 1000
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rows: any[] = []
-      let from = 0
-      for (;;) {
-        const { data, error } = await admin.from('daily_rankings_snapshot')
-          .select('snapshot_date, participant_id, pts_total')
-          .order('snapshot_date', { ascending: true })
-          .range(from, from + PAGE - 1)
-        if (error || !data || data.length === 0) break
-        rows.push(...data)
-        if (data.length < PAGE) break
-        from += PAGE
-      }
-      return rows
-    })(),
+    // Snapshots apenas do par selecionado: elimina a paginação do loop anterior
+    admin.from('daily_rankings_snapshot')
+      .select('snapshot_date, participant_id, pts_total')
+      .in('participant_id', filter)
+      .order('snapshot_date', { ascending: true }),
   ])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rawMatches: any[] = rawMatchesRaw as any[]
+  const rawMatches:   any[] = rawMatchesRaw as any[]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const allTBets: any[]   = allTBetsRes.data ?? []
+  const allBets:      any[] = betsRes.data ?? []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const scores: any[]     = scoresRes.data ?? []
-  const snapshots: Snapshot[] = snapshotsRes as Snapshot[]
+  const allGroupBets: any[] = groupBetsRes.data ?? []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allThirdBets: any[] = thirdBetsRes.data ?? []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allTBets:     any[] = tBetsRes.data ?? []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const scores:       any[] = scoresRes.data ?? []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const betDist:      any[] = betDistRes.data ?? []
+  const snapshots: Snapshot[] = (snapshotsRes.data ?? []) as Snapshot[]
 
-  // Mapeamento De-Para de artilheiros
+  // Mapeamento artilheiros
   const scorerMapping: Record<string, string> = {}
   for (const row of (scorerMappingRes.data ?? []) as { raw_name: string; standardized_name: string | null }[]) {
     if (row.standardized_name) scorerMapping[row.raw_name.toLowerCase().trim()] = row.standardized_name
   }
   const normalizeScorer = (name: string) => scorerMapping[name.toLowerCase().trim()] ?? name
 
-  // ── Build scoring rules map ───────────────────────────────────────────────
+  // ── Regras e limiar de zebra ──────────────────────────────────────────────
   const rulesMap: Record<string, number> = {}
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  // Não converte null→0: o ?? 0 silenciaria os fallbacks em scoreMatchBet
   for (const r of rulesRaw as any[]) { if (r.points !== null && r.points !== undefined) rulesMap[r.key] = r.points }
   const zebraThreshold = rulesMap['percentual_zebra'] ?? 15
 
@@ -164,15 +167,11 @@ export default async function ComparadorPage() {
   const deadlineByMatch: Record<string, string> = {}
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const matchById: Record<string, any> = {}
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const m of rawMatches as any[]) {
     deadlineByMatch[m.id] = m.betting_deadline
     matchById[m.id] = m
   }
-  // Antes do prazo: só apostas próprias.
-  // Após o prazo em jogo JÁ REALIZADO: aposta própria sempre visível (resultado
-  // é público; o participante precisa ver seus pontos). Alheias: isMatchBetsVisible.
-  // Após o prazo em jogo FUTURO (rodada bloqueada): isMatchBetsVisible para todos,
-  // evitando que rodadas futuras não liberadas apareçam na projeção (Copa 2026).
   const filteredMatchBets = (allBets as any[]).filter((bet: any) => {
     const dl = deadlineByMatch[bet.match_id]
     if (!dl) return false
@@ -180,63 +179,60 @@ export default async function ComparadorPage() {
     const m = matchById[bet.match_id]
     if (!m) return false
     const isPlayed = m.score_home !== null && m.score_away !== null
-    // Jogo encerrado: resultado é público — todos os palpites visíveis para comparação
     if (isPlayed) return true
     return isMatchBetsVisible(m.phase, m.round, dl, now, visibilitySettings, isTestModeAdmin)
   })
 
-  // ── Bets grouped by match ─────────────────────────────────────────────────
-  const betsByMatch = groupBy(filteredMatchBets, b => b.match_id)
+  // ── colPopMap e matchZebraMap via distribuição agregada ───────────────────
+  // fn_bet_distribution_by_match retorna ~60 linhas (uma por jogo) em vez de
+  // ~5.300 palpites individuais. O JOIN e o GROUP BY rodam no PostgreSQL.
+  const distByMatch: Record<string, { h: number; d: number; a: number; total: number }> = {}
+  for (const row of betDist as { match_id: string; h: number; d: number; a: number; total: number }[]) {
+    distByMatch[row.match_id] = { h: row.h, d: row.d, a: row.a, total: row.total }
+  }
 
-  // ── matchZebraMap: was the result a zebra? ────────────────────────────────
+  const colPopMap: Record<string, ColPop> = {}
+  for (const [matchId, dist] of Object.entries(distByMatch)) {
+    colPopMap[matchId] = { H: dist.h, D: dist.d, A: dist.a, total: dist.total }
+  }
+
   const matchZebraMap: Record<string, boolean> = {}
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const m of rawMatches as any[]) {
     if (m.score_home === null || m.score_away === null) continue
+    const dist = distByMatch[m.id]
+    if (!dist || dist.total === 0) continue
     const realResult = getMatchResult(m.score_home, m.score_away)
-    const bets = betsByMatch[m.id] ?? []
-    matchZebraMap[m.id] = detectMatchZebra(bets, realResult, zebraThreshold)
-  }
-
-  // ── colPopMap: bet distribution per match ────────────────────────────────
-  const colPopMap: Record<string, ColPop> = {}
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const [matchId, bets] of Object.entries(betsByMatch) as [string, any[]][]) {
-    const counts: ColPop = { H: 0, D: 0, A: 0, total: bets.length }
-    for (const b of bets) {
-      const col = getMatchResult(b.score_home, b.score_away)
-      counts[col]++
-    }
-    colPopMap[matchId] = counts
+    const resultCount = realResult === 'H' ? dist.h : realResult === 'D' ? dist.d : dist.a
+    matchZebraMap[m.id] = (resultCount / dist.total) * 100 <= zebraThreshold
   }
 
   // ── Build MatchInfo[] ─────────────────────────────────────────────────────
   const matches: MatchInfo[] = rawMatches.map(m => ({
-    id:             m.id,
-    matchNumber:    m.match_number,
-    phase:          m.phase,
-    groupName:      m.group_name ?? null,
-    round:          m.round ?? null,
-    teamHome:       m.team_home,
-    teamAway:       m.team_away,
-    flagHome:       m.flag_home ?? '',
-    flagAway:       m.flag_away ?? '',
-    matchDatetime:  m.match_datetime,
+    id:              m.id,
+    matchNumber:     m.match_number,
+    phase:           m.phase,
+    groupName:       m.group_name ?? null,
+    round:           m.round ?? null,
+    teamHome:        m.team_home,
+    teamAway:        m.team_away,
+    flagHome:        m.flag_home ?? '',
+    flagAway:        m.flag_away ?? '',
+    matchDatetime:   m.match_datetime,
     bettingDeadline: m.betting_deadline,
-    scoreHome:      m.score_home ?? null,
-    scoreAway:      m.score_away ?? null,
-    isBrazil:       !!m.is_brazil,
-    isZebra:        matchZebraMap[m.id] ?? false,
+    scoreHome:       m.score_home ?? null,
+    scoreAway:       m.score_away ?? null,
+    isBrazil:        !!m.is_brazil,
+    isZebra:         matchZebraMap[m.id] ?? false,
   }))
 
   // ── betsByParticipant: participantId → matchId → FlatBet ─────────────────
   const betsByParticipant: Record<string, Record<string, FlatBet>> = {}
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const b of filteredMatchBets) {
     ;(betsByParticipant[b.participant_id] ??= {})[b.match_id] = {
       scoreHome: b.score_home,
       scoreAway: b.score_away,
-      points: b.points,
+      points:    b.points,
     }
   }
 
@@ -246,7 +242,7 @@ export default async function ComparadorPage() {
   for (const b of allGroupBets as any[]) {
     if (!bonusVis && b.participant_id !== participantId) continue
     ;(groupBetsByParticipant[b.participant_id] ??= {})[b.group_name] = {
-      first: b.first_place ?? '',
+      first:  b.first_place ?? '',
       second: b.second_place ?? '',
       points: b.points,
     }
@@ -258,7 +254,7 @@ export default async function ComparadorPage() {
   for (const b of allThirdBets as any[]) {
     if (!bonusVis && b.participant_id !== participantId) continue
     ;(thirdBetsByParticipant[b.participant_id] ??= {})[b.group_name] = {
-      team: b.team ?? '',
+      team:   b.team ?? '',
       points: b.points ?? null,
     }
   }
@@ -269,10 +265,10 @@ export default async function ComparadorPage() {
   for (const b of allTBets as any[]) {
     if (!bonusVis && b.participant_id !== participantId) continue
     tBetByParticipant[b.participant_id] = {
-      champion:   b.champion ?? '',
-      runner_up:  b.runner_up ?? '',
-      semi1:      b.semi1 ?? '',
-      semi2:      b.semi2 ?? '',
+      champion:   b.champion   ?? '',
+      runner_up:  b.runner_up  ?? '',
+      semi1:      b.semi1      ?? '',
+      semi2:      b.semi2      ?? '',
       top_scorer: b.top_scorer ? normalizeScorer(b.top_scorer) : '',
     }
   }
@@ -305,6 +301,8 @@ export default async function ComparadorPage() {
         rulesMap={rulesMap}
         zebraThreshold={zebraThreshold}
         currentParticipantId={participantId}
+        initialPidA={activePidA}
+        initialPidB={activePidB ?? ''}
         snapshots={snapshots}
         isAdmin={isAdmin}
       />

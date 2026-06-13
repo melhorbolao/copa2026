@@ -1,5 +1,7 @@
 // GET /api/rankings/snapshots?date=YYYY-MM-DD
-// Agrega participant_points_by_day até a data solicitada e retorna com rank.
+// Delega a agregação e o rank para fn_get_ranking_snapshot (PL/pgSQL STABLE).
+// Antes: baixava N×dias linhas de participant_points_by_day para agregar no Node.js.
+// Agora: retorna ~100 linhas (uma por participante) já rankeadas pelo banco.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
@@ -18,70 +20,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'date param required (YYYY-MM-DD)' }, { status: 400 })
   }
 
-  // participant_points_by_day cresce 200 linhas/dia — pagina manualmente (max-rows=1000 do PostgREST).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rows: any[] = []
-  {
-    const PAGE = 1000
-    let from = 0
-    for (;;) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
-        .from('participant_points_by_day')
-        .select('participant_id, pts_matches, pts_groups, pts_thirds, pts_tournament')
-        .lte('event_date', date)
-        .range(from, from + PAGE - 1)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if ((error as any)?.message) return NextResponse.json({ error: (error as any).message }, { status: 500 })
-      if (!data || data.length === 0) break
-      rows.push(...data)
-      if (data.length < PAGE) break
-      from += PAGE
-    }
-  }
-  if (rows.length === 0) return NextResponse.json([])
+  const { data, error } = await (supabase as any).rpc('fn_get_ranking_snapshot', { p_date: date })
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Aggregate by participant
-  const totals = new Map<string, {
-    pts_matches: number; pts_groups: number; pts_thirds: number; pts_tournament: number; pts_total: number
-  }>()
-
-  for (const row of rows) {
-    let t = totals.get(row.participant_id)
-    if (!t) {
-      t = { pts_matches: 0, pts_groups: 0, pts_thirds: 0, pts_tournament: 0, pts_total: 0 }
-      totals.set(row.participant_id, t)
-    }
-    const m  = row.pts_matches    ?? 0
-    const g  = row.pts_groups     ?? 0
-    const th = row.pts_thirds     ?? 0
-    const to = row.pts_tournament ?? 0
-    t.pts_matches    += m
-    t.pts_groups     += g
-    t.pts_thirds     += th
-    t.pts_tournament += to
-    t.pts_total      += m + g + th + to
-  }
-
-  // Sort desc and assign dense rank (ties share the same rank)
-  const sorted = [...totals.entries()].sort(([, a], [, b]) => b.pts_total - a.pts_total)
-
-  const result = []
-  let rank = 1
-  for (let i = 0; i < sorted.length; i++) {
-    if (i > 0 && sorted[i][1].pts_total < sorted[i - 1][1].pts_total) rank = i + 1
-    const [pid, t] = sorted[i]
-    result.push({
-      participant_id: pid,
-      rank,
-      pts_total:      t.pts_total,
-      pts_matches:    t.pts_matches,
-      pts_groups:     t.pts_groups,
-      pts_thirds:     t.pts_thirds,
-      pts_tournament: t.pts_tournament,
-      snapshot_date:  date,
-    })
-  }
-
+  // Injeta snapshot_date para compatibilidade com SnapshotEntry no cliente
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = (data ?? []).map((row: any) => ({ ...row, snapshot_date: date }))
   return NextResponse.json(result)
 }
