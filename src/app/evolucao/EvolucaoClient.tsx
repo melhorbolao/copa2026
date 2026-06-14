@@ -19,9 +19,46 @@ type RawDailyPoint = {
   pts_tournament: number
 }
 
+type LiveScore = { participant_id: string; pts_total: number }
+
 function fmtShort(d: string) {
   const [, m, day] = d.split('-')
   return `${day}/${m}`
+}
+
+/**
+ * Injeta o ponto "Hoje" ao final do histórico do gráfico.
+ * Usa participant_scores (ao vivo) para o total atual e as 4 referências de ranking.
+ * Só injeta se:
+ *  - houver ao menos 1 jogo finalizado ou em andamento hoje
+ *  - o último ponto histórico não for já de hoje (proteção contra batch recente)
+ */
+function mergeCurrentDayWithHistory(
+  chartHistory: ChartPoint[],
+  liveScores: LiveScore[],
+  selectedId: string,
+  todayStr: string,
+  hasMatchToday: boolean,
+): ChartPoint[] {
+  if (!hasMatchToday || liveScores.length === 0) return chartHistory
+  if (chartHistory[chartHistory.length - 1]?.date === todayStr) return chartHistory
+
+  const sorted = [...liveScores].sort((a, b) => b.pts_total - a.pts_total)
+  const selIdx = sorted.findIndex(s => s.participant_id === selectedId)
+
+  return [
+    ...chartHistory,
+    {
+      dateLabel:    'Hoje',
+      date:         todayStr,
+      selected:     selIdx >= 0 ? sorted[selIdx].pts_total : undefined,
+      selectedRank: selIdx >= 0 ? selIdx + 1 : undefined,
+      leader:       sorted[0]?.pts_total,
+      zona10:       sorted[9]?.pts_total,
+      zona55:       sorted[54]?.pts_total,
+      zona110:      sorted[109]?.pts_total,
+    },
+  ]
 }
 
 const REF_CONFIG: {
@@ -30,10 +67,10 @@ const REF_CONFIG: {
   sublabel: string
   color: string
 }[] = [
-  { key: 'leader',  label: 'Líder',           sublabel: '1º lugar',   color: '#FFD700' },
-  { key: 'zona10',  label: 'Zona Premiação',   sublabel: '10º lugar',  color: '#009c3b' },
-  { key: 'zona55',  label: 'Zona 2º Corte',    sublabel: '55º lugar',  color: '#eab308' },
-  { key: 'zona110', label: 'Zona 1º Corte',    sublabel: '110º lugar', color: '#ef4444' },
+  { key: 'leader',  label: 'Líder',          sublabel: '1º lugar',   color: '#FFD700' },
+  { key: 'zona10',  label: 'Zona Premiação',  sublabel: '10º lugar',  color: '#009c3b' },
+  { key: 'zona55',  label: 'Zona 2º Corte',   sublabel: '55º lugar',  color: '#eab308' },
+  { key: 'zona110', label: 'Zona 1º Corte',   sublabel: '110º lugar', color: '#ef4444' },
 ]
 
 export function EvolucaoClient({
@@ -41,11 +78,17 @@ export function EvolucaoClient({
   panelaIds,
   currentParticipantId,
   rawDailyPoints,
+  liveScores,
+  todayStr,
+  hasMatchToday,
 }: {
   participants: { id: string; apelido: string }[]
   panelaIds: string[]
   currentParticipantId: string
   rawDailyPoints: RawDailyPoint[]
+  liveScores: LiveScore[]
+  todayStr: string
+  hasMatchToday: boolean
 }) {
   const [selectedId, setSelectedId] = useState(currentParticipantId)
   const [viewMode, setViewMode]     = useState<'pontuacao' | 'colocacao'>('pontuacao')
@@ -72,7 +115,7 @@ export function EvolucaoClient({
     return opts
   }, [participants, panelaIds, currentParticipantId])
 
-  // Cálculo do chartData em JS a partir de participant_points_by_day
+  // Cálculo do chartData em JS a partir de participant_points_by_day + ponto "Hoje" ao vivo
   const chartData = useMemo((): ChartPoint[] => {
     // 1. Pontos do dia: { date → { pid → pts } }
     const dailyMap: Record<string, Record<string, number>> = {}
@@ -82,7 +125,6 @@ export function EvolucaoClient({
     }
 
     const allDates = Object.keys(dailyMap).sort()
-    if (allDates.length === 0) return []
 
     // 2. Acumulado progressivo: { date → { pid → pts_total } }
     const running: Record<string, number> = {}
@@ -95,8 +137,8 @@ export function EvolucaoClient({
       cumulativeByDate[date] = { ...running }
     }
 
-    // 3. Para cada data: montar ponto com selecionado + referências (via .reduce/.sort)
-    return allDates.map(date => {
+    // 3. Para cada data histórica: ponto com selecionado + referências via .sort
+    const history: ChartPoint[] = allDates.map(date => {
       const cum = cumulativeByDate[date]
       const sorted = Object.entries(cum).sort((a, b) => b[1] - a[1])
       const selIdx = sorted.findIndex(([pid]) => pid === selectedId)
@@ -112,7 +154,10 @@ export function EvolucaoClient({
         zona110:      sorted[109]?.[1],
       }
     })
-  }, [rawDailyPoints, selectedId])
+
+    // 4. Injeta o ponto "Hoje" ao vivo no final (se houver jogo hoje)
+    return mergeCurrentDayWithHistory(history, liveScores, selectedId, todayStr, hasMatchToday)
+  }, [rawDailyPoints, liveScores, selectedId, todayStr, hasMatchToday])
 
   const selectedName = participants.find(p => p.id === selectedId)?.apelido ?? ''
   const hasData      = chartData.length > 0
