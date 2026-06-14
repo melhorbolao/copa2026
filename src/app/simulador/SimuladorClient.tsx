@@ -1178,20 +1178,14 @@ export function SimuladorClient({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sb = supabase.current as any
       if (opts.jogos) {
-        const matchIds: string[] = []
+        const nonOfficialSimIds: string[] = []
         for (const m of matches) {
           if (m.score_home !== null) continue
-          if (simMap.has(m.id)) matchIds.push(m.id)
+          if (simMap.has(m.id)) nonOfficialSimIds.push(m.id)
         }
-        if (matchIds.length) {
-          setSimMap(prev => {
-            const next = new Map(prev)
-            for (const mid of matchIds) next.delete(mid)
-            return next
-          })
-          for (const mid of matchIds) resetLivePointsForMatch(mid)
-          await sb.from('user_simulations').delete().eq('user_id', userId)
-        }
+        setSimMap(new Map())
+        for (const mid of nonOfficialSimIds) resetLivePointsForMatch(mid)
+        await sb.from('user_simulations').delete().eq('user_id', userId)
       }
       if (!bonusIsLocked) {
         if (opts.grupos12) {
