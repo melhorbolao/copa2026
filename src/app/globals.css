@@ -22,12 +22,12 @@ html {
 
 /* Offset dinâmico para o conteúdo abaixo do ScoreHeader fixo em /jogos */
 .jogos-content-top {
-  padding-top: calc(8rem + var(--banner-h));
+  padding-top: calc(7rem + var(--banner-h));
   padding-bottom: 1rem;
 }
 @media (min-width: 640px) {
   .jogos-content-top {
-    padding-top: calc(5.5rem + var(--banner-h));
+    padding-top: calc(4.5rem + var(--banner-h));
   }
 }
 
