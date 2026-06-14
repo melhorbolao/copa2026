@@ -744,7 +744,7 @@ export function ClassificacaoMBClient({
                 {/* Último / Próximo jogo */}
                 {showLastMatch && (
                   <th
-                    className="hidden lg:table-cell px-1.5 py-2 text-center w-14"
+                    className="table-cell px-1.5 py-2 text-center w-14"
                     title="Palpite no último jogo disputado"
                   >
                     {lastMatch ? `${lastMatch.abbr_home}×${lastMatch.abbr_away}` : 'Último'}
@@ -752,7 +752,7 @@ export function ClassificacaoMBClient({
                 )}
                 {showNextMatch && (
                   <th
-                    className="hidden lg:table-cell px-1.5 py-2 text-center w-14"
+                    className="table-cell px-1.5 py-2 text-center w-14"
                     title="Palpite no próximo jogo"
                   >
                     {nextMatch ? `${nextMatch.abbr_home}×${nextMatch.abbr_away}` : 'Próx.'}
@@ -847,12 +847,12 @@ export function ClassificacaoMBClient({
 
                     {/* Último / Próximo */}
                     {showLastMatch && (
-                      <td className={`hidden lg:table-cell px-1.5 py-1 text-center ${z === 'last' ? 'text-white' : 'text-gray-700'}`}>
+                      <td className={`table-cell px-1.5 py-1 text-center ${z === 'last' ? 'text-white' : 'text-gray-700'}`}>
                         <BetCell bet={row.lastMatchBet} />
                       </td>
                     )}
                     {showNextMatch && (
-                      <td className={`hidden lg:table-cell px-1.5 py-1 text-center ${z === 'last' ? 'text-white' : 'text-gray-700'}`}>
+                      <td className={`table-cell px-1.5 py-1 text-center ${z === 'last' ? 'text-white' : 'text-gray-700'}`}>
                         <BetCell bet={row.nextMatchBet} />
                       </td>
                     )}
