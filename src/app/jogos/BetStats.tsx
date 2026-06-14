@@ -247,7 +247,14 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
         return (
           <div className={`flex items-center px-3 py-1.5 border-t border-gray-100${ownIsExact ? ' bg-blue-50/60' : ' bg-gray-50/60'}`}>
             <div className="flex-1">
-              <span className="text-[10px] sm:text-sm font-bold text-gray-400 uppercase tracking-wide">Meu palpite</span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-[10px] sm:text-sm font-bold text-gray-400 uppercase tracking-wide">Meu palpite</span>
+                {activeParticipantId && rankAfter[activeParticipantId] != null && (
+                  <span className="text-[10px] sm:text-xs font-mono text-gray-400">
+                    #{rankAfter[activeParticipantId]}/{participants.length}
+                  </span>
+                )}
+              </div>
             </div>
             <span className={`${H_W} flex justify-center`}>{ownResult === 'H' ? scoreEl : null}</span>
             <span className={`${D_W} flex justify-center`}>{ownResult === 'D' ? scoreEl : null}</span>
