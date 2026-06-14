@@ -13,7 +13,7 @@ export interface PageVisibilityRow {
 
 const PAGE_ORDER = [
   'jogos', 'palpites', 'acopa', 'tabelaMB', 'classificacaoMB',
-  'estatisticas', 'artilharia', 'simulador', 'comparador', 'minhaPanela', 'participantes', 'premiacaoMB', 'regulamento',
+  'estatisticas', 'artilharia', 'simulador', 'comparador', 'minhaPanela', 'participantes', 'premiacaoMB', 'regulamento', 'evolucao',
 ]
 
 // Pages that always appear in nav when missing from DB (admin can override once row exists)
@@ -27,6 +27,7 @@ const DEFAULT_PAGES: PageVisibilityRow[] = [
   { id: '__default_premiacaoMB',  page_name: 'premiacaoMB',  label: 'Premiação MB',      show_for_admin: true, show_for_users: true,  sort_order: 75 },
   { id: '__default_minhaPanela',  page_name: 'minhaPanela',  label: 'Minha Panela',      show_for_admin: true, show_for_users: true,  sort_order: 72 },
   { id: '__default_iaMb',        page_name: 'ia-no-mb',    label: 'IA no MB',          show_for_admin: true, show_for_users: true,  sort_order: 78 },
+  { id: '__default_evolucao',    page_name: 'evolucao',    label: 'Evolução',           show_for_admin: true, show_for_users: true,  sort_order: 80 },
 ]
 
 // Memoized per request — deduplicates calls from Sidebar, Navbar, and page components
