@@ -249,7 +249,7 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
             <div className="flex-1">
               <span className="text-[10px] sm:text-sm font-bold text-gray-400 uppercase tracking-wide">Meu palpite</span>
               {activeParticipantId && rankAfter[activeParticipantId] != null && (
-                <span className="block text-[10px] font-mono text-gray-400">
+                <span className="block text-xs font-mono text-gray-400">
                   #{rankAfter[activeParticipantId]}/{participants.length}
                 </span>
               )}
