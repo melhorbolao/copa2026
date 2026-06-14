@@ -25,10 +25,10 @@ export interface ShowRefs {
 
 const C = {
   selected: '#002776',
-  leader:   '#FFD700',
-  zona10:   '#009c3b',
-  zona55:   '#eab308',
-  zona110:  '#ef4444',
+  leader:   '#f97316', // laranja destacado
+  zona10:   '#16a34a', // green-600  — zona de premiação
+  zona55:   '#0284c7', // sky-600    — 2º corte
+  zona110:  '#d97706', // amber-600  — 1º corte
 }
 
 function CustomTooltip({ active, payload, label, viewMode, selectedName }: {
@@ -80,6 +80,7 @@ export function EvolucaoChart({
         />
         <YAxis
           reversed={!isPts}
+          domain={isPts ? ['auto', 'auto'] : [1, 212]}
           tick={{ fontSize: 10, fill: '#9CA3AF' }}
           tickLine={false}
           axisLine={false}
