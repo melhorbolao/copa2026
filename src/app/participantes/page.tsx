@@ -38,6 +38,7 @@ export default async function ControlePage({
   searchParams: Promise<{ filter?: string; pagamento?: string; palpite?: string; padrinho?: string }>
 }) {
   const { filter = '', pagamento = '', palpite = '', padrinho = '' } = await searchParams
+  const palpiteArr = palpite ? palpite.split(',').filter(Boolean) : []
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   let isAdmin = false
@@ -361,7 +362,7 @@ export default async function ControlePage({
           rows={allRows}
           activeFilter={filter}
           paymentFilter={pagamento}
-          fillFilter={palpite}
+          fillFilter={palpiteArr}
           padrinhoFilter={padrinho}
           hasAnyEliminated={hasAnyEliminated}
           nextStageIdx={nextStageIdx}

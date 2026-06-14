@@ -37,7 +37,7 @@ interface Props {
   rows: TableRow[]
   activeFilter: string   // view: ativos | todos
   paymentFilter: string  // pagamento: pago | pendente | ''
-  fillFilter: string     // palpite: completo | incompleto | ''
+  fillFilter: string[]   // palpite: array de 'zerado' | 'parcial' | 'completo'
   padrinhoFilter: string // padrinho: nome | ''
   hasAnyEliminated: boolean
   nextStageIdx: number | null
@@ -88,13 +88,17 @@ export function ParticipantesTable({
       if (paymentFilter === 'pendente' && r.paid)  return false
       if (paymentFilter === 'pago'    && !r.paid)  return false
 
-      // Preenchimento da rodada (combinável)
-      if (fillFilter && nextStageIdx !== null) {
+      // Preenchimento da rodada — OR entre os valores selecionados
+      if (fillFilter.length > 0 && nextStageIdx !== null) {
         const pct = r.stages[nextStageIdx].pct
-        if (fillFilter === 'zerado')    { if (pct !== 0)                   return false }
-        if (fillFilter === 'parcial')   { if (!(pct > 0 && pct < 100))     return false }
-        if (fillFilter === 'completo')  { if (pct !== 100)                  return false }
-        if (fillFilter === 'incompleto'){ if (!(pct !== -1 && pct < 100))   return false }
+        const matches = fillFilter.some(f => {
+          if (f === 'zerado')     return pct === 0
+          if (f === 'parcial')    return pct > 0 && pct < 100
+          if (f === 'completo')   return pct === 100
+          if (f === 'incompleto') return pct !== -1 && pct < 100
+          return false
+        })
+        if (!matches) return false
       }
 
       // Padrinho (admin)

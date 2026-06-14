@@ -16,8 +16,12 @@ export function ParticipantesFilter({ nextStageLabel, hasAnyEliminated, fillCoun
 
   const currentFilter    = searchParams.get('filter')    ?? ''
   const currentPagamento = searchParams.get('pagamento') ?? ''
-  const currentPalpite   = searchParams.get('palpite')   ?? ''
   const currentPadrinho  = searchParams.get('padrinho')  ?? ''
+
+  // palpite suporta múltiplos valores separados por vírgula
+  const palpiteSet = new Set(
+    (searchParams.get('palpite') ?? '').split(',').filter(Boolean)
+  )
 
   const viewFilter = currentFilter || (hasAnyEliminated ? 'ativos' : '')
 
@@ -30,6 +34,27 @@ export function ParticipantesFilter({ nextStageLabel, hasAnyEliminated, fillCoun
 
   const toggleParam = (key: string, value: string, current: string) =>
     setParam(key, current === value ? '' : value)
+
+  const togglePalpite = (value: string) => {
+    const next = new Set(palpiteSet)
+    if (next.has(value)) next.delete(value)
+    else next.add(value)
+    const p = new URLSearchParams(searchParams.toString())
+    const joined = [...next].join(',')
+    if (joined) p.set('palpite', joined)
+    else        p.delete('palpite')
+    router.push(`?${p.toString()}`)
+  }
+
+  const hasActiveFilters = currentPagamento || palpiteSet.size > 0 || currentPadrinho
+
+  const clearAllFilters = () => {
+    const p = new URLSearchParams(searchParams.toString())
+    p.delete('pagamento')
+    p.delete('palpite')
+    p.delete('padrinho')
+    router.push(`?${p.toString()}`)
+  }
 
   const pill = (active: boolean, color: 'blue' | 'red' | 'green' | 'amber') => {
     const on: Record<string, string> = {
@@ -83,37 +108,32 @@ export function ParticipantesFilter({ nextStageLabel, hasAnyEliminated, fillCoun
           <>
             <span className="text-gray-300 select-none">|</span>
             <button
-              onClick={() => toggleParam('palpite', 'zerado', currentPalpite)}
-              className={pill(currentPalpite === 'zerado', 'red')}
+              onClick={() => togglePalpite('zerado')}
+              className={pill(palpiteSet.has('zerado'), 'red')}
             >
               Zerado · {fillCounts.zerado}
             </button>
             <button
-              onClick={() => toggleParam('palpite', 'parcial', currentPalpite)}
-              className={pill(currentPalpite === 'parcial', 'amber')}
+              onClick={() => togglePalpite('parcial')}
+              className={pill(palpiteSet.has('parcial'), 'amber')}
             >
               Parcial · {fillCounts.parcial}
             </button>
             <button
-              onClick={() => toggleParam('palpite', 'completo', currentPalpite)}
-              className={pill(currentPalpite === 'completo', 'green')}
+              onClick={() => togglePalpite('completo')}
+              className={pill(palpiteSet.has('completo'), 'green')}
             >
               Completo · {fillCounts.completo}
             </button>
           </>
         )}
 
-        {(currentPagamento || currentPalpite) && (
+        {hasActiveFilters && (
           <button
-            onClick={() => {
-              const p = new URLSearchParams(searchParams.toString())
-              p.delete('pagamento')
-              p.delete('palpite')
-              router.push(`?${p.toString()}`)
-            }}
-            className="text-xs text-gray-400 hover:text-gray-600 transition"
+            onClick={clearAllFilters}
+            className="rounded-full border border-gray-300 bg-white px-3 py-1 text-xs font-semibold text-gray-500 hover:border-gray-400 hover:text-gray-700 transition"
           >
-            limpar
+            ✕ Limpar filtros
           </button>
         )}
       </div>
