@@ -476,11 +476,17 @@ export default async function ClassificacaoMBPage() {
           id: lastMatch.id,
           abbr_home: abbr(lastMatch.team_home),
           abbr_away: abbr(lastMatch.team_away),
+          score_home: lastMatch.score_home ?? 0,
+          score_away: lastMatch.score_away ?? 0,
+          penalty_winner: lastMatch.penalty_winner ?? null,
         } : null}
         nextMatch={nextMatch ? {
           id: nextMatch.id,
           abbr_home: abbr(nextMatch.team_home),
           abbr_away: abbr(nextMatch.team_away),
+          score_home: nextMatch.score_home ?? 0,
+          score_away: nextMatch.score_away ?? 0,
+          penalty_winner: nextMatch.penalty_winner ?? null,
         } : null}
         eliminatedTeams={eliminatedTeams}
         eliminatedStdScorers={[...new Set(eliminatedStdScorers)]}

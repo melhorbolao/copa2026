@@ -31,7 +31,7 @@ interface ParticipantRow {
   nextMatchBet: { score_home: number; score_away: number } | null
 }
 
-interface MatchInfo { id: string; abbr_home: string; abbr_away: string }
+interface MatchInfo { id: string; abbr_home: string; abbr_away: string; score_home: number; score_away: number; penalty_winner: string | null }
 
 interface Props {
   rows: ParticipantRow[]
@@ -224,7 +224,7 @@ const ZONE_STATUS: Record<Zone, string> = {
 }
 
 function CompactRanking({
-  ranked, premioSpots, isUniqueLast, renderedAt, matchesRegistered, groupsDefined,
+  ranked, premioSpots, isUniqueLast, renderedAt, matchesRegistered, groupsDefined, lastMatch,
   deltaMap, highlights, sdActive,
   highlightMode, activeParticipantId, panelaSet, tribeMemberSet,
 }: {
@@ -234,6 +234,7 @@ function CompactRanking({
   renderedAt: string
   matchesRegistered: number
   groupsDefined: number
+  lastMatch: MatchInfo | null
   deltaMap: Map<string, DeltaEntry> | null
   highlights: SobeDesceHighlights
   sdActive: boolean
@@ -300,7 +301,13 @@ function CompactRanking({
         <p className="text-xs text-gray-400 mt-0.5">
           {dateStr}
           {matchesRegistered > 0 && (
-            <> · {matchesRegistered} jogos registrados e {groupsDefined}/12 grupos definidos</>
+            <>
+              {' · '}{matchesRegistered} jogos registrados
+              {lastMatch && (
+                <> · último {lastMatch.abbr_home} {lastMatch.score_home}×{lastMatch.score_away}{lastMatch.penalty_winner ? 'P' : ''} {lastMatch.abbr_away}</>
+              )}
+              {' · '}{groupsDefined}/12 grupos definidos
+            </>
           )}
         </p>
       </div>
@@ -709,6 +716,7 @@ export function ClassificacaoMBClient({
         renderedAt={renderedAt}
         matchesRegistered={matchesRegistered}
         groupsDefined={groupsDefined}
+        lastMatch={lastMatch}
         deltaMap={deltaMap}
         highlights={highlights}
         sdActive={sdActive}
@@ -722,7 +730,11 @@ export function ClassificacaoMBClient({
         <div className="flex flex-wrap items-baseline gap-3">
           <h1 className="text-2xl font-black text-gray-900">Classificação Detalhada</h1>
           <span className="text-[10px] text-gray-400">{formatRenderedAt(renderedAt)}</span>
-          <span className="text-[10px] text-gray-400">· {matchesRegistered} jogos registrados e {groupsDefined}/12 grupos definidos</span>
+          <span className="text-[10px] text-gray-400">
+            · {matchesRegistered} jogos registrados
+            {lastMatch && <> · último {lastMatch.abbr_home} {lastMatch.score_home}×{lastMatch.score_away}{lastMatch.penalty_winner ? 'P' : ''} {lastMatch.abbr_away}</>}
+            {' · '}{groupsDefined}/12 grupos definidos
+          </span>
         </div>
       </div>
 
