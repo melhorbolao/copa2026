@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAuthAdminClient } from '@/lib/supabase/server'
 import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { RegulamentoTabs } from './RegulamentoTabs'
@@ -183,13 +183,19 @@ Os prazos são sempre às **23:59 (horário de Brasília)**. Na fase de grupos h
 
 export default async function RegulamentoPage() {
   const supabase = await createClient()
+  const adminClient = createAuthAdminClient()
   const [
     { data: { user } },
     { data: rules },
+    { data: participants },
   ] = await Promise.all([
     supabase.auth.getUser(),
     supabase.from('scoring_rules').select('*'),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (adminClient as any).from('participants').select('paid'),
   ])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pagos = (participants ?? []).filter((p: any) => p.paid).length
 
   let isAdmin = false
   let userRole = 'user'
@@ -210,6 +216,7 @@ export default async function RegulamentoPage() {
           regulamentoContent={REGULAMENTO}
           rules={rules ?? []}
           isAdmin={isAdmin}
+          pagos={pagos}
         />
       </div>
     </>
