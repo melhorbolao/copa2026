@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useTransition } from 'react'
+import { useState, useMemo, useRef, useTransition } from 'react'
 import {
   createTribo, renameTribo, deleteTribo, saveTribeMembers, getTribeMemberIds,
   type Tribe, type Participant,
@@ -30,6 +30,7 @@ export function TribosClient({ initialTribes, participants }: Props) {
 
   const [isPending, startTransition] = useTransition()
   const [feedback, setFeedback]     = useState<{ ok: boolean; msg: string } | null>(null)
+  const loadingTribeRef             = useRef<string>('')
 
   function showMsg(ok: boolean, msg: string) {
     setFeedback({ ok, msg })
@@ -93,14 +94,18 @@ export function TribosClient({ initialTribes, participants }: Props) {
 
   // ── Selecionar Tribo ───────────────────────────────────────────────────────
   async function handleSelectTribe(id: string) {
+    loadingTribeRef.current = id
     setSelectedId(id)
     setLeftSel(new Set())
     setRightSel(new Set())
     setLeftSearch('')
     setRightSearch('')
-    if (!id) { setMemberIds(new Set()); return }
+    setMemberIds(new Set())
+    if (!id) return
     setLoadingMembers(true)
     const ids = await getTribeMemberIds(id)
+    // Ignora resposta se o usuário já trocou de tribo enquanto carregava
+    if (loadingTribeRef.current !== id) return
     setMemberIds(new Set(ids))
     setLoadingMembers(false)
   }
@@ -134,11 +139,15 @@ export function TribosClient({ initialTribes, participants }: Props) {
 
   // ── Salvar membros ─────────────────────────────────────────────────────────
   function handleSaveMembers() {
-    if (!selectedId) return
+    if (!selectedId || loadingMembers) return
     startTransition(async () => {
-      const res = await saveTribeMembers(selectedId, [...memberIds])
-      if (res.error) showMsg(false, res.error)
-      else showMsg(true, 'Membros salvos com sucesso.')
+      try {
+        const res = await saveTribeMembers(selectedId, [...memberIds])
+        if (res.error) showMsg(false, res.error)
+        else showMsg(true, 'Membros salvos com sucesso.')
+      } catch {
+        showMsg(false, 'Erro inesperado ao salvar. Tente novamente.')
+      }
     })
   }
 
@@ -252,7 +261,7 @@ export function TribosClient({ initialTribes, participants }: Props) {
           {selectedId && (
             <button
               onClick={handleSaveMembers}
-              disabled={isPending}
+              disabled={isPending || loadingMembers}
               className="rounded-lg bg-azul-escuro px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition"
             >
               {isPending ? 'Salvando…' : 'Salvar Membros'}
