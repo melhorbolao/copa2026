@@ -45,7 +45,7 @@ interface Props {
   betsByParticipant:  Record<string, Record<string, BetInfo>>
 }
 
-const MAX_PANELA = 12
+const MAX_PANELA = 20
 
 // ── Formatadores ──────────────────────────────────────────────────────────────
 
