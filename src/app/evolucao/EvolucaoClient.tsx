@@ -171,7 +171,7 @@ export function EvolucaoClient({
     <main className="min-h-screen bg-gray-50 pb-16">
       <div className="mx-auto max-w-4xl px-4 pt-6 space-y-4">
 
-        <h1 className="text-xl font-bold text-azul-escuro">Evolução do Bolão</h1>
+        <h1 className="text-xl font-bold text-azul-escuro">Evolução do Participante no Melhor Bolão</h1>
 
         {/* Card de filtros */}
         <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-4 space-y-4">
