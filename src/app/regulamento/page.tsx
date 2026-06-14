@@ -37,16 +37,16 @@ Os prazos são sempre às **23:59 (horário de Brasília)**. Na fase de grupos h
 
 ### Tabela de Fases e Prazos
 
-| Etapa | Primeiro jogo | Prazo (BRT) |
-|---|---|---|
-| Fase de grupos — Rodada 1 + TODOS os bônus pré-torneio | 11/06/2026 | 10/06/2026 23:59 |
-| Fase de grupos — Rodada 2 | 18/06/2026 | ~~17/06/2026 23:59~~ **18/06/2026 08:59** *(prazo alterado)* |
-| Fase de grupos — Rodada 3 | 24/06/2026 | ~~23/06/2026 23:59~~ **24/06/2026 08:59** *(prazo alterado)* |
-| 16 avos de final | 28/06/2026 | ~~27/06/2026 23:59~~ **28/06/2026 08:59** *(prazo alterado)* |
-| Oitavas de final | 04/07/2026 | ~~03/07/2026 23:59~~ **04/07/2026 08:59** *(prazo alterado)* |
-| Quartas de final | 09/07/2026 | 08/07/2026 23:59 |
-| Semifinais | 14/07/2026 | 13/07/2026 23:59 |
-| Disputa de 3º lugar e Final | 18/07/2026 | 17/07/2026 23:59 |
+| Etapa | Primeiro jogo | Prazo (BRT) | Quem envia palpites |
+|---|---|---|---|
+| Fase de grupos — Rodada 1 + TODOS os bônus pré-torneio | 11/06/2026 | 10/06/2026 23:59 | Todos os participantes |
+| Fase de grupos — Rodada 2 | 18/06/2026 | ~~17/06/2026 23:59~~ **18/06/2026 08:59** *(prazo alterado)* | Todos os participantes |
+| Fase de grupos — Rodada 3 | 24/06/2026 | ~~23/06/2026 23:59~~ **24/06/2026 08:59** *(prazo alterado)* | Todos os participantes |
+| 16 avos de final | 28/06/2026 | ~~27/06/2026 23:59~~ **28/06/2026 08:59** *(prazo alterado)* | G110 (50% melhores após primeira fase) |
+| Oitavas de final | 04/07/2026 | ~~03/07/2026 23:59~~ **04/07/2026 08:59** *(prazo alterado)* | G110 (50% melhores após primeira fase) |
+| Quartas de final | 09/07/2026 | 08/07/2026 23:59 | G55 (25% melhores após as oitavas) |
+| Semifinais | 14/07/2026 | 13/07/2026 23:59 | G55 (25% melhores após as oitavas) |
+| Disputa de 3º lugar e Final | 18/07/2026 | 17/07/2026 23:59 | G55 (25% melhores após as oitavas) |
 
 ## 3. Pontuação dos Jogos
 
