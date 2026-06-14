@@ -127,7 +127,9 @@ export function EvolucaoClient({
     const allDates = Object.keys(dailyMap).sort()
 
     // 2. Acumulado progressivo: { date → { pid → pts_total } }
-    const running: Record<string, number> = {}
+    // Inicializa o participante selecionado em 0 para que sua linha apareça
+    // mesmo em dias onde ele zerou (sem entrada na tabela)
+    const running: Record<string, number> = { [selectedId]: 0 }
     const cumulativeByDate: Record<string, Record<string, number>> = {}
     for (const date of allDates) {
       const day = dailyMap[date]
