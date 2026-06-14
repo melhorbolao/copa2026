@@ -89,7 +89,11 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
     const t = { H: 0, D: 0, A: 0 }
     for (const b of matchBets) t[getMatchResult(b.score_home, b.score_away)]++
     const total = matchBets.length || 1
-    return { H: (t.H / total) * 100, D: (t.D / total) * 100, A: (t.A / total) * 100 }
+    return {
+      H: { pct: (t.H / total) * 100, count: t.H },
+      D: { pct: (t.D / total) * 100, count: t.D },
+      A: { pct: (t.A / total) * 100, count: t.A },
+    }
   }, [matchBets])
 
   const avgPts = useMemo(() => {
@@ -159,12 +163,13 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
       <div className="flex items-center px-3 pb-2 border-b border-gray-100">
         <div className="flex-1" />
         {(['H', 'D', 'A'] as const).map(r => {
-          const pct  = colTotals[r]
+          const { pct, count } = colTotals[r]
           const w    = r === 'H' ? H_W : r === 'D' ? D_W : A_W
           const isZebraCol = matchBets.length > 0 && pct <= zebraThreshold
           return (
-            <span key={r} className={`${w} text-center text-[10px] sm:text-base font-bold tabular-nums flex items-center justify-center leading-none rounded py-1 ${isZebraCol ? 'bg-black text-white' : 'text-gray-400'}`}>
+            <span key={r} className={`${w} text-center text-[10px] sm:text-base font-bold tabular-nums flex flex-col items-center justify-center leading-none rounded py-1 ${isZebraCol ? 'bg-black text-white' : 'text-gray-400'}`}>
               {fmtPct(pct)}
+              <span className={`text-[9px] sm:text-xs font-normal mt-0.5 ${isZebraCol ? 'text-gray-300' : 'text-gray-400'}`}>{count}</span>
             </span>
           )
         })}
