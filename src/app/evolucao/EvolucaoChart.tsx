@@ -25,7 +25,7 @@ export interface ShowRefs {
 
 const C = {
   selected: '#002776',
-  leader:   '#f97316', // laranja destacado
+  leader:   '#dc2626', // red-600 — líder
   zona10:   '#16a34a', // green-600  — zona de premiação
   zona55:   '#0284c7', // sky-600    — 2º corte
   zona110:  '#d97706', // amber-600  — 1º corte

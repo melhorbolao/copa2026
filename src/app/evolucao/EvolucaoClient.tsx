@@ -67,7 +67,7 @@ const REF_CONFIG: {
   sublabel: string
   color: string
 }[] = [
-  { key: 'leader',  label: 'Líder',          sublabel: '1º lugar',   color: '#f97316' },
+  { key: 'leader',  label: 'Líder',          sublabel: '1º lugar',   color: '#dc2626' },
   { key: 'zona10',  label: 'Zona Premiação',  sublabel: '10º lugar',  color: '#16a34a' },
   { key: 'zona55',  label: 'Zona 2º Corte',   sublabel: '55º lugar',  color: '#0284c7' },
   { key: 'zona110', label: 'Zona 1º Corte',   sublabel: '110º lugar', color: '#d97706' },
