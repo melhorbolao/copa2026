@@ -23,7 +23,6 @@ export default async function ZebrasPage() {
   ])
   if (!participantId) redirect('/aguardando-aprovacao')
 
-  const isAdmin = profile?.is_admin ?? false
   await requirePageAccess('zebras', profile?.role ?? 'user')
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -234,101 +233,16 @@ export default async function ZebrasPage() {
     })
   }
 
-  // Admin: jogos com prazo AINDA ABERTO (fora da MV) — mantém visibilidade total
-  const adminPreDeadlineUpsets: PotentialUpset[] = []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let adminPreDeadlineMatches: any[] = []
-  if (isAdmin) {
-    const { data: preMatches } = await admin
-      .from('matches')
-      .select('id, team_home, team_away, flag_home, flag_away, match_datetime, phase, group_name, round, city')
-      .is('score_home', null)
-      .neq('team_home', 'TBD')
-      .neq('team_away', 'TBD')
-      .gt('betting_deadline', now)
-      .order('match_datetime', { ascending: true })
-
-    adminPreDeadlineMatches = preMatches ?? []
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    for (const m of adminPreDeadlineMatches as any[]) {
-      if (m.team_home && m.flag_home) teamFlags[m.team_home] = m.flag_home
-      if (m.team_away && m.flag_away) teamFlags[m.team_away] = m.flag_away
-    }
-
-    if (adminPreDeadlineMatches.length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const preIds = (adminPreDeadlineMatches as any[]).map((m: any) => m.id)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let preBets: any[] = []
-      {
-        const PAGE = 1000; let from = 0
-        for (;;) {
-          const { data, error } = await admin.from('bets').select('match_id, score_home, score_away').in('match_id', preIds).range(from, from + PAGE - 1)
-          if (error || !data || data.length === 0) break
-          preBets.push(...data)
-          if (data.length < PAGE) break
-          from += PAGE
-        }
-      }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const preBetsByMatch = new Map<string, any[]>()
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      for (const bet of preBets as any[]) {
-        const list = preBetsByMatch.get(bet.match_id) ?? []
-        list.push(bet)
-        preBetsByMatch.set(bet.match_id, list)
-      }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      for (const match of adminPreDeadlineMatches as any[]) {
-        const matchBets = preBetsByMatch.get(match.id) ?? []
-        if (matchBets.length === 0) continue
-        const total = matchBets.length
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const homeCount = matchBets.filter((b: any) => (b.score_home ?? 0) > (b.score_away ?? 0)).length
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const awayCount = matchBets.filter((b: any) => (b.score_away ?? 0) > (b.score_home ?? 0)).length
-        const drawCount = total - homeCount - awayCount
-        const homePct = (homeCount / total) * 100
-        const drawPct = (drawCount / total) * 100
-        const awayPct = (awayCount / total) * 100
-        const zebraColumns: ('H' | 'D' | 'A')[] = []
-        if (homePct <= ZEBRA_THRESHOLD) zebraColumns.push('H')
-        if (drawPct <= ZEBRA_THRESHOLD) zebraColumns.push('D')
-        if (awayPct <= ZEBRA_THRESHOLD) zebraColumns.push('A')
-        if (zebraColumns.length === 0) continue
-        adminPreDeadlineUpsets.push({
-          id: match.id,
-          teamHome: match.team_home, teamAway: match.team_away,
-          flagHome: match.flag_home ?? '', flagAway: match.flag_away ?? '',
-          matchDatetime: match.match_datetime,
-          phase: match.phase, groupName: match.group_name ?? null,
-          round: match.round ?? null, city: match.city ?? null,
-          homePct, drawPct, awayPct,
-          homeCount, drawCount, awayCount, totalBets: total,
-          zebraColumns,
-        })
-      }
-    }
-  }
-
-  const potentialUpsets: PotentialUpset[] = [...potentialUpsetsFromMv, ...adminPreDeadlineUpsets]
+  const potentialUpsets: PotentialUpset[] = potentialUpsetsFromMv
 
   // 2. Grupos com classificação ainda indefinida
-  const pendingGroupNames = new Set<string>([
-    // grupos na MV (prazo encerrado, sem placar)
-    ...(radarMv ?? [])
+  const pendingGroupNames = new Set<string>(
+    (radarMv ?? [])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .filter((r: any) => r.phase === 'group' && r.group_name)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .map((r: any) => r.group_name as string),
-    // grupos admin pré-prazo
-    ...adminPreDeadlineMatches
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .filter((m: any) => m.phase === 'group' && m.group_name)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .map((m: any) => m.group_name as string),
-  ])
+      .map((r: any) => r.group_name as string)
+  )
 
   const potentialGroupZebras: PotentialGroupZebra[] = []
   if (pendingGroupNames.size > 0) {
@@ -364,7 +278,7 @@ export default async function ZebrasPage() {
   // 3. G4 da Copa: seleções apostadas em ≤ 15% dos bets (em qualquer posição do G4)
   const potentialG4Zebras: PotentialG4Zebra[] = []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const bonusDeadlinePassed = isAdmin || (matchesRaw ?? []).some((m: any) => m.phase === 'group')
+  const bonusDeadlinePassed = (matchesRaw ?? []).some((m: any) => m.phase === 'group')
   if (bonusDeadlinePassed) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: tBetsData } = await admin.from('tournament_bets').select('champion, runner_up, semi1, semi2') as any
