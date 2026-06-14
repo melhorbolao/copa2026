@@ -105,6 +105,5 @@ export async function saveTribeMembers(
     const { error: insError } = await a.from('participant_tribes').insert(rows)
     if (insError) return { error: insError.message }
   }
-  revalidatePath('/admin/tribos')
   return {}
 }
