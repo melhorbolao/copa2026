@@ -91,7 +91,7 @@ export function EvolucaoChart({
 
         {/* Linha do participante selecionado */}
         <Line
-          type="monotone"
+          type="linear"
           dataKey={isPts ? 'selected' : 'selectedRank'}
           name={selectedName}
           stroke={C.selected}
@@ -103,16 +103,16 @@ export function EvolucaoChart({
 
         {/* Modo pontuação: linhas dinâmicas de referência */}
         {isPts && show.leader && (
-          <Line type="monotone" dataKey="leader" name="Líder" stroke={C.leader} strokeWidth={1.5} strokeDasharray="6 3" dot={false} connectNulls />
+          <Line type="linear" dataKey="leader" name="Líder" stroke={C.leader} strokeWidth={1.5} strokeDasharray="6 3" dot={false} connectNulls />
         )}
         {isPts && show.zona10 && (
-          <Line type="monotone" dataKey="zona10" name="Zona Premiação (10º)" stroke={C.zona10} strokeWidth={1.5} strokeDasharray="6 3" dot={false} connectNulls />
+          <Line type="linear" dataKey="zona10" name="Zona Premiação (10º)" stroke={C.zona10} strokeWidth={1.5} strokeDasharray="6 3" dot={false} connectNulls />
         )}
         {isPts && show.zona55 && (
-          <Line type="monotone" dataKey="zona55" name="Zona 2º Corte (55º)" stroke={C.zona55} strokeWidth={1.5} strokeDasharray="6 3" dot={false} connectNulls />
+          <Line type="linear" dataKey="zona55" name="Zona 2º Corte (55º)" stroke={C.zona55} strokeWidth={1.5} strokeDasharray="6 3" dot={false} connectNulls />
         )}
         {isPts && show.zona110 && (
-          <Line type="monotone" dataKey="zona110" name="Zona 1º Corte (110º)" stroke={C.zona110} strokeWidth={1.5} strokeDasharray="6 3" dot={false} connectNulls />
+          <Line type="linear" dataKey="zona110" name="Zona 1º Corte (110º)" stroke={C.zona110} strokeWidth={1.5} strokeDasharray="6 3" dot={false} connectNulls />
         )}
 
         {/* Modo colocação: linhas horizontais fixas de referência */}
