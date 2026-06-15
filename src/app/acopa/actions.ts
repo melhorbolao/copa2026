@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidateTag } from 'next/cache'
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient, createAuthAdminClient } from '@/lib/supabase/server'
 import { recalculateAfterMatchScore, recalculateTournamentBets } from '@/lib/scoring/recalculate'
 
 export async function saveOfficialTopScorer(name: string): Promise<{ error?: string }> {
@@ -36,14 +36,14 @@ async function getCallerPermissions() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const { data: profile } = await supabase
-    .from('users')
-    .select('is_admin, approved, paid')
-    .eq('id', user.id)
-    .single()
+  const admin = createAuthAdminClient()
+  const [{ data: profile }, { data: link }] = await Promise.all([
+    admin.from('users').select('is_admin').eq('id', user.id).single(),
+    admin.from('user_participants').select('participant_id').eq('user_id', user.id).limit(1).maybeSingle(),
+  ])
 
-  const isAdmin       = profile?.is_admin   ?? false
-  const isParticipant = (profile?.approved && profile?.paid) ?? false
+  const isAdmin       = profile?.is_admin ?? false
+  const isParticipant = !!link
 
   return { isAdmin, isParticipant }
 }
