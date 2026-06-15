@@ -291,7 +291,7 @@ export function SobeDesceSelector({
   tribes, activeTribeId, onTribeSelect,
 }: SobeDesceSelectorProps) {
   const [tribeOpen, setTribeOpen] = useState(false)
-  const options: { value: SobeDesceMode; label: string; title: string; disabled?: boolean }[] = [
+  const options: { value: SobeDesceMode; label: string; title: string; disabled?: boolean; hidden?: boolean }[] = [
     {
       value: 'hidden',
       label: 'Ocultar',

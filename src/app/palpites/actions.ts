@@ -411,7 +411,7 @@ export async function fillG4FromBracket(data: {
   // Limpa os campos G4 antes de gravar os novos valores. Isso evita que
   // valores antigos conflitem com os novos (ex.: mesmo time em outra posição).
   await admin.from('tournament_bets')
-    .update({ champion: null, runner_up: null, semi1: null, semi2: null })
+    .update({ champion: null as unknown as string, runner_up: null as unknown as string, semi1: null as unknown as string, semi2: null as unknown as string })
     .eq('participant_id', participantId)
 
   const { error } = await admin.from('tournament_bets').upsert(
