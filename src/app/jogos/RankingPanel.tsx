@@ -68,7 +68,7 @@ function ExportableSecador({
       {/* Cabeçalho */}
       <div style={{ background: '#ecfdf5', borderBottom: '1px solid #d1fae5', padding: '10px 16px' }}>
         <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: '#065f46', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          {afterDeadline ? 'Cravaram' : 'Cravando'} o placar {abbr(match.team_home)}{scoreStr ? ` ${match.score_home}X${match.score_away}` : ''} {abbr(match.team_away)} ({sorted.length})
+          {afterDeadline ? 'Cravaram' : 'Cravando'} {abbr(match.team_home)}{scoreStr ? ` ${match.score_home}X${match.score_away}` : ''} {abbr(match.team_away)} ({sorted.length})
         </p>
       </div>
 
