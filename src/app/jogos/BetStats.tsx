@@ -185,7 +185,11 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
   const hasResult      = match.score_home !== null && match.score_away !== null
   const zebraThreshold = rules['percentual_zebra'] ?? 15
 
-  // ── Share Resumo (mobile) ──────────────────────────────────────────────────
+  // ── Share Resumo (mobile) — visível apenas dentro da janela de edição de resultado ──
+  const EDIT_WINDOW_MS = 4 * 60 * 60 * 1000
+  const matchStart = new Date(match.match_datetime).getTime()
+  const inEditWindow = Date.now() >= matchStart && Date.now() <= matchStart + EDIT_WINDOW_MS
+
   const [showBetExport, setShowBetExport] = useState(false)
   const [isSharingBet, setIsSharingBet]   = useState(false)
   const betExportRef = useRef<HTMLDivElement>(null)
@@ -339,24 +343,26 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
       {/* Title */}
       <div className="px-4 pt-3 pb-1 text-center relative">
         <h2 className="text-[11px] sm:text-base font-bold text-gray-500 uppercase tracking-wide">Distribuição de Palpites</h2>
-        {/* Botão compartilhar resumo — somente mobile */}
-        <button
-          onClick={() => { setIsSharingBet(true); setShowBetExport(true) }}
-          disabled={isSharingBet}
-          className="block md:hidden absolute right-3 top-2 rounded-full p-1.5 text-gray-400 hover:text-azul-escuro hover:bg-gray-100 transition disabled:opacity-50"
-          aria-label="Compartilhar resumo de palpites"
-          title="Compartilhar resumo"
-        >
-          {isSharingBet ? (
-            <span className="text-[10px]">…</span>
-          ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-              <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" />
-              <polyline points="16 6 12 2 8 6" />
-              <line x1="12" y1="2" x2="12" y2="15" />
-            </svg>
-          )}
-        </button>
+        {/* Botão compartilhar resumo — somente mobile e dentro da janela de edição */}
+        {inEditWindow && (
+          <button
+            onClick={() => { setIsSharingBet(true); setShowBetExport(true) }}
+            disabled={isSharingBet}
+            className="block md:hidden absolute right-3 top-2 rounded-full p-1.5 text-gray-400 hover:text-azul-escuro hover:bg-gray-100 transition disabled:opacity-50"
+            aria-label="Compartilhar resumo de palpites"
+            title="Compartilhar resumo"
+          >
+            {isSharingBet ? (
+              <span className="text-[10px]">…</span>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" />
+                <polyline points="16 6 12 2 8 6" />
+                <line x1="12" y1="2" x2="12" y2="15" />
+              </svg>
+            )}
+          </button>
+        )}
       </div>
 
       {/* % column headers — destaca possíveis zebras (% ≤ threshold) */}

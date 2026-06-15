@@ -250,24 +250,26 @@ export function RankingPanel({
                   Secador
                 </button>
               )}
-              {/* Botão compartilhar secador — somente mobile, visível quando há cravando */}
-              <button
-                onClick={() => { setIsSharingSecador(true); setShowSecadorExport(true) }}
-                disabled={isSharingSecador}
-                className="block md:hidden rounded-full p-1.5 text-emerald-600 hover:bg-emerald-100 transition disabled:opacity-50"
-                aria-label="Compartilhar quem está cravando"
-                title="Compartilhar secador"
-              >
-                {isSharingSecador ? (
-                  <span className="text-[10px] px-1">…</span>
-                ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                    <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" />
-                    <polyline points="16 6 12 2 8 6" />
-                    <line x1="12" y1="2" x2="12" y2="15" />
-                  </svg>
-                )}
-              </button>
+              {/* Botão compartilhar secador — somente mobile e dentro da janela de edição */}
+              {!afterDeadline && (
+                <button
+                  onClick={() => { setIsSharingSecador(true); setShowSecadorExport(true) }}
+                  disabled={isSharingSecador}
+                  className="block md:hidden rounded-full p-1.5 text-emerald-600 hover:bg-emerald-100 transition disabled:opacity-50"
+                  aria-label="Compartilhar quem está cravando"
+                  title="Compartilhar secador"
+                >
+                  {isSharingSecador ? (
+                    <span className="text-[10px] px-1">…</span>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                      <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" />
+                      <polyline points="16 6 12 2 8 6" />
+                      <line x1="12" y1="2" x2="12" y2="15" />
+                    </svg>
+                  )}
+                </button>
+              )}
             </div>
           </div>
 
