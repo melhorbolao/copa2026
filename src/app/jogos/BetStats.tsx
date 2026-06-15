@@ -60,6 +60,7 @@ function ExportableBetStats({
   zebraThreshold,
   teamAbbrs,
   hasResult,
+  isZebra,
 }: {
   match: MatchFull
   groups: BetGroup[]
@@ -69,11 +70,22 @@ function ExportableBetStats({
   zebraThreshold: number
   teamAbbrs: Record<string, string>
   hasResult: boolean
+  isZebra: boolean
 }) {
   const abbr = (t: string) => teamAbbrs[t] ?? t.slice(0, 3).toUpperCase()
 
   return (
-    <div style={{ background: 'white', borderRadius: 16, overflow: 'hidden', border: '1px solid #e5e7eb' }}>
+    <div style={{ background: 'white', borderRadius: 16, overflow: 'hidden', border: '1px solid #e5e7eb', position: 'relative' }}>
+
+      {/* Zebra — idêntica ao site: absoluta à esquerda, centralizada verticalmente */}
+      {isZebra && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src="/zebra.png"
+          alt="zebra"
+          style={{ position: 'absolute', left: 4, top: '50%', transform: 'translateY(-50%)', width: 80, height: 80, objectFit: 'contain', zIndex: 1, pointerEvents: 'none' }}
+        />
+      )}
 
       {/* Barra de placar — replica o header escuro do site com bandeiras e cores */}
       <div style={{ background: SCORE_BG, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px 16px' }}>
@@ -488,6 +500,7 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
             zebraThreshold={zebraThreshold}
             teamAbbrs={teamAbbrs}
             hasResult={hasResult}
+            isZebra={isZebra}
           />
         </div>
       </div>
