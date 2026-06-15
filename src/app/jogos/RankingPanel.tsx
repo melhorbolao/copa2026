@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { toBlob } from 'html-to-image'
 import type { MatchFull, BetRaw, Participant } from './JogosDashboard'
 
 const EDIT_WINDOW_MS = 4 * 60 * 60 * 1000
@@ -29,6 +30,122 @@ interface Props {
 type SortKey = 'pos' | 'total' | 'match' | 'delta' | 'name'
 type SortDir = 'asc' | 'desc'
 
+// ── Ghost component: painel do Secador para exportação ────────────────────────
+
+function ExportableSecador({
+  match,
+  cravando,
+  participantMap,
+  matchPoints,
+  rankBefore,
+  rankAfter,
+  abbr,
+}: {
+  match: MatchFull
+  cravando: BetRaw[]
+  participantMap: Map<string, Participant>
+  matchPoints: Record<string, number>
+  rankBefore: Record<string, number>
+  rankAfter: Record<string, number>
+  abbr: (t: string) => string
+}) {
+  const sorted = [...cravando].sort((a, b) => {
+    const pa = participantMap.get(a.participant_id)?.apelido ?? ''
+    const pb = participantMap.get(b.participant_id)?.apelido ?? ''
+    return pa.localeCompare(pb, 'pt-BR')
+  })
+
+  // Layout de colunas: 1 coluna até 20 cravando; mais de 20 → grid dinâmico (max 4 colunas)
+  const ITEMS_PER_COL = 10
+  const numCols = sorted.length > 20
+    ? Math.min(Math.ceil(sorted.length / ITEMS_PER_COL), 4)
+    : 1
+  const itemsPerCol = Math.ceil(sorted.length / numCols)
+  const columns = Array.from({ length: numCols }, (_, i) =>
+    sorted.slice(i * itemsPerCol, (i + 1) * itemsPerCol)
+  )
+
+  const scoreStr = match.score_home !== null && match.score_away !== null
+    ? `${match.score_home}×${match.score_away}`
+    : null
+
+  const matchLabel = scoreStr
+    ? `${abbr(match.team_home)} ${scoreStr} ${abbr(match.team_away)}`
+    : `${abbr(match.team_home)} × ${abbr(match.team_away)}`
+
+  // Cores alternadas para os avatares iniciais
+  const AVATAR_COLORS = [
+    'bg-emerald-100 text-emerald-700',
+    'bg-sky-100 text-sky-700',
+    'bg-violet-100 text-violet-700',
+    'bg-amber-100 text-amber-700',
+  ]
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden" style={{ height: 'auto', maxHeight: 'none' }}>
+      {/* Cabeçalho */}
+      <div className="px-4 py-3 border-b border-gray-100 bg-emerald-50">
+        <p className="text-base font-black text-emerald-800">✓ Cravando o placar</p>
+        <p className="text-xs text-emerald-600 mt-0.5">{matchLabel} · {sorted.length} participante{sorted.length !== 1 ? 's' : ''}</p>
+      </div>
+
+      {/* Lista — single ou multi-coluna */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${numCols}, 1fr)`,
+          height: 'auto',
+          maxHeight: 'none',
+        }}
+      >
+        {columns.map((col, ci) => (
+          <div key={ci} className={ci > 0 ? 'border-l border-gray-100' : ''}>
+            {col.map((b, idx) => {
+              const p = participantMap.get(b.participant_id)
+              if (!p) return null
+              const before   = rankBefore[p.id] ?? 0
+              const after    = rankAfter[p.id]  ?? 0
+              const delta    = before - after
+              const pts      = matchPoints[p.id] ?? 0
+              const initial  = p.apelido[0]?.toUpperCase() ?? '?'
+              const colorCls = AVATAR_COLORS[(ci * itemsPerCol + idx) % AVATAR_COLORS.length]
+
+              return (
+                <div key={p.id} className="flex items-center gap-2 px-3 py-2 border-b border-gray-50 last:border-0">
+                  {/* Avatar com inicial */}
+                  <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${colorCls}`}>
+                    {initial}
+                  </div>
+
+                  {/* Nome + placar apostado */}
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-sm text-gray-800 truncate">{p.apelido}</div>
+                    <div className="text-xs text-gray-400 font-mono">{b.score_home}×{b.score_away}</div>
+                  </div>
+
+                  {/* Pts ganhos + variação de posição */}
+                  <div className="text-right flex-shrink-0">
+                    {pts > 0 && (
+                      <div className="text-emerald-600 font-bold text-sm tabular-nums">+{pts} pts</div>
+                    )}
+                    <div className="text-xs text-gray-400 tabular-nums">
+                      {before}→{after}
+                      {delta > 0 && <span className="text-emerald-500 font-bold ml-0.5">↑{delta}</span>}
+                      {delta < 0 && <span className="text-rose-400 font-bold ml-0.5">↓{Math.abs(delta)}</span>}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Componente principal ───────────────────────────────────────────────────────
+
 export function RankingPanel({
   match, matchBets, participants, matchPoints, ptsWithoutMatch,
   rankBefore, rankAfter, quase, abbr, isAdmin,
@@ -38,6 +155,11 @@ export function RankingPanel({
   const [sortKey, setSortKey] = useState<SortKey>('pos')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
 
+  // ── Share Secador (mobile) ─────────────────────────────────────────────────
+  const [showSecadorExport, setShowSecadorExport] = useState(false)
+  const [isSharingSecador, setIsSharingSecador]   = useState(false)
+  const secadorExportRef = useRef<HTMLDivElement>(null)
+
   const hasResult = match.score_home !== null && match.score_away !== null
   const afterDeadline = Date.now() > new Date(match.match_datetime).getTime() + EDIT_WINDOW_MS
 
@@ -45,6 +167,51 @@ export function RankingPanel({
     hasResult && b.score_home === match.score_home && b.score_away === match.score_away
   )
   const cravandoPids = new Set(cravando.map(b => b.participant_id))
+
+  // Largura do ghost varia com o número de colunas
+  const ITEMS_PER_COL = 10
+  const numSecadorCols = cravando.length > 20
+    ? Math.min(Math.ceil(cravando.length / ITEMS_PER_COL), 4)
+    : 1
+  const secadorGhostWidth = numSecadorCols === 1 ? 390 : numSecadorCols * 300
+
+  useEffect(() => {
+    if (!showSecadorExport || !secadorExportRef.current) return
+    const el = secadorExportRef.current
+    let cancelled = false
+
+    async function capture() {
+      await document.fonts.ready
+      if (cancelled) return
+      try {
+        const opts = { pixelRatio: 2, cacheBust: true, backgroundColor: '#ffffff' }
+        await toBlob(el, opts).catch(() => null)
+        if (cancelled) return
+        const blob = await toBlob(el, opts)
+        if (cancelled || !blob) return
+        const file = new File([blob], 'secador.png', { type: 'image/png' })
+        if (navigator.share && navigator.canShare?.({ files: [file] })) {
+          await navigator.share({ files: [file] })
+        } else {
+          const url = URL.createObjectURL(blob)
+          const a   = document.createElement('a')
+          a.href     = url
+          a.download = 'secador.png'
+          a.click()
+          URL.revokeObjectURL(url)
+        }
+      } catch (err: unknown) {
+        if (!cancelled && err instanceof Error && err.name !== 'AbortError') {
+          console.error('Erro ao compartilhar secador:', err)
+        }
+      } finally {
+        if (!cancelled) { setShowSecadorExport(false); setIsSharingSecador(false) }
+      }
+    }
+
+    void capture()
+    return () => { cancelled = true }
+  }, [showSecadorExport])
 
   const topGainer = participants
     .filter(p => cravandoPids.has(p.id) && (matchPoints[p.id] ?? 0) > 0)
@@ -105,6 +272,7 @@ export function RankingPanel({
   }
 
   return (
+    <>
     <div className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
 
       {/* Cravando agora */}
@@ -112,15 +280,35 @@ export function RankingPanel({
         <div className="bg-emerald-50 border-b border-emerald-100 px-4 py-3">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wide">✓ {afterDeadline ? 'Cravaram' : 'Cravando agora'} ({cravando.length})</span>
-            {!afterDeadline && !secador && secadorAllowed && (
+            <div className="flex items-center gap-2">
+              {!afterDeadline && !secador && secadorAllowed && (
+                <button
+                  onClick={() => setSecador(true)}
+                  className="px-3 py-1 rounded-full text-[10px] font-bold text-gray-400 border border-gray-200 hover:border-gray-400 hover:text-gray-600 transition"
+                  title="Ativar secador"
+                >
+                  Secador
+                </button>
+              )}
+              {/* Botão compartilhar secador — somente mobile, visível quando há cravando */}
               <button
-                onClick={() => setSecador(true)}
-                className="px-3 py-1 rounded-full text-[10px] font-bold text-gray-400 border border-gray-200 hover:border-gray-400 hover:text-gray-600 transition"
-                title="Ativar secador"
+                onClick={() => { setIsSharingSecador(true); setShowSecadorExport(true) }}
+                disabled={isSharingSecador}
+                className="block md:hidden rounded-full p-1.5 text-emerald-600 hover:bg-emerald-100 transition disabled:opacity-50"
+                aria-label="Compartilhar quem está cravando"
+                title="Compartilhar secador"
               >
-                Secador
+                {isSharingSecador ? (
+                  <span className="text-[10px] px-1">…</span>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                    <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" />
+                    <polyline points="16 6 12 2 8 6" />
+                    <line x1="12" y1="2" x2="12" y2="15" />
+                  </svg>
+                )}
               </button>
-            )}
+            </div>
           </div>
 
           <div className="flex items-start gap-2">
@@ -242,5 +430,23 @@ export function RankingPanel({
         </div>
       </div>
     </div>
+
+    {/* Ghost para exportação do Secador — montado apenas ao compartilhar, desmontado após captura */}
+    {showSecadorExport && (
+      <div style={{ position: 'absolute', top: 0, left: 0, overflow: 'hidden', height: 0, width: 0 }} aria-hidden="true">
+        <div ref={secadorExportRef} style={{ width: `${secadorGhostWidth}px`, height: 'auto', maxHeight: 'none' }}>
+          <ExportableSecador
+            match={match}
+            cravando={cravando}
+            participantMap={participantMap}
+            matchPoints={matchPoints}
+            rankBefore={rankBefore}
+            rankAfter={rankAfter}
+            abbr={abbr}
+          />
+        </div>
+      </div>
+    )}
+    </>
   )
 }

@@ -1,15 +1,20 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
+import { toBlob } from 'html-to-image'
 import { getMatchResult, scoreMatchBet } from '@/lib/scoring/engine'
 import type { MatchFull, BetRaw, Participant } from './JogosDashboard'
 
 const MEDAL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' }
 
-// Mobile: slightly wider than score boxes. Desktop (sm:): expanded for better readability
-const H_W = 'w-10 sm:w-20'  // 40px → 80px
-const D_W = 'w-11 sm:w-24'  // 44px → 96px
-const A_W = 'w-10 sm:w-20'  // 40px → 80px
+const H_W = 'w-10 sm:w-20'
+const D_W = 'w-11 sm:w-24'
+const A_W = 'w-10 sm:w-20'
+
+// Fixed-width variants for the export ghost (no responsive breakpoints)
+const EXP_H_W = 'w-10'
+const EXP_D_W = 'w-11'
+const EXP_A_W = 'w-10'
 
 interface Props {
   match: MatchFull
@@ -20,6 +25,7 @@ interface Props {
   rankAfter: Record<string, number>
   hasAnyScore: boolean
   activeParticipantId?: string | null
+  teamAbbrs?: Record<string, string>
 }
 
 type BetGroup = {
@@ -39,9 +45,168 @@ function fmtPct(n: number) {
   return n.toFixed(1).replace('.', ',') + '%'
 }
 
-export function BetStats({ match, matchBets, participants, isZebra, rules, rankAfter, hasAnyScore, activeParticipantId }: Props) {
+// ── Ghost component: renderiza distribuição sem "Meu palpite" ──────────────────
+
+function ExportableBetStats({
+  match,
+  groups,
+  colTotals,
+  avgPts,
+  matchBetsCount,
+  zebraThreshold,
+  teamAbbrs,
+  hasResult,
+}: {
+  match: MatchFull
+  groups: BetGroup[]
+  colTotals: { H: { pct: number; count: number }; D: { pct: number; count: number }; A: { pct: number; count: number } }
+  avgPts: number | null
+  matchBetsCount: number
+  zebraThreshold: number
+  teamAbbrs: Record<string, string>
+  hasResult: boolean
+}) {
+  const abbr = (t: string) => teamAbbrs[t] ?? t.slice(0, 3).toUpperCase()
+
+  const matchHeader = hasResult
+    ? `${abbr(match.team_home)} ${match.score_home}×${match.score_away} ${abbr(match.team_away)}`
+    : (() => {
+        try {
+          const d = new Date(match.match_datetime)
+          const date = d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
+          return `${abbr(match.team_home)} × ${abbr(match.team_away)} · ${date}`
+        } catch { return `${abbr(match.team_home)} × ${abbr(match.team_away)}` }
+      })()
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+      {/* Cabeçalho do jogo */}
+      <div className="px-4 py-3 border-b border-gray-100 text-center">
+        <p className="text-base font-black text-gray-800">{matchHeader}</p>
+        <p className="text-xs text-gray-400 mt-0.5">Distribuição de Palpites · {matchBetsCount} palpites</p>
+      </div>
+
+      {/* Cabeçalho de % por resultado (H/D/A) */}
+      <div className="flex items-center px-3 pb-2 pt-2 border-b border-gray-100">
+        <div className="flex-1" />
+        {(['H', 'D', 'A'] as const).map(r => {
+          const { pct, count } = colTotals[r]
+          const w = r === 'H' ? EXP_H_W : r === 'D' ? EXP_D_W : EXP_A_W
+          const isZebraCol = matchBetsCount > 0 && pct <= zebraThreshold
+          return (
+            <span key={r} className={`${w} text-center text-[10px] font-bold tabular-nums flex flex-col items-center justify-center leading-none rounded py-1 ${isZebraCol ? 'bg-black text-white' : 'text-gray-400'}`}>
+              {fmtPct(pct)}
+              <span className={`text-[9px] font-normal mt-0.5 ${isZebraCol ? 'text-gray-300' : 'text-gray-400'}`}>{count}</span>
+            </span>
+          )
+        })}
+        <div className="flex-1" />
+      </div>
+
+      {/* Linhas de palpite — sem "Meu palpite" (classe meu-palpite-row omitida intencionalmente) */}
+      <div className="divide-y divide-gray-50">
+        {groups.map(g => {
+          const baseColor = g.isExact
+            ? 'text-blue-600'
+            : (g.pts !== null && g.pts > 0)
+              ? 'text-gray-800'
+              : (g.pts === 0 && hasResult)
+                ? 'text-gray-300'
+                : 'text-gray-700'
+          const scoreClass = `font-mono font-bold text-sm tabular-nums ${baseColor}${g.isImpossible ? ' line-through' : ''}`
+          const metaClass = `text-xs tabular-nums whitespace-nowrap ${
+            g.isExact ? 'text-blue-500 font-semibold' : (g.pts === 0 && hasResult) ? 'text-gray-300' : 'text-gray-500'
+          }`
+          const ptsClass = `text-sm font-bold tabular-nums ${
+            g.isExact ? 'text-blue-600' : (g.pts === 0 && hasResult) ? 'text-gray-300' : 'text-gray-400'
+          }`
+
+          const scoreEl = (
+            <span className="flex items-center justify-center gap-0.5">
+              {g.medals.map(r => <span key={r} className="text-xs leading-none">{MEDAL[r]}</span>)}
+              {g.hasLantern && <span className="text-xs leading-none">🔦</span>}
+              <span className={scoreClass}>{g.score_home}x{g.score_away}</span>
+            </span>
+          )
+
+          return (
+            <div key={`${g.score_home}-${g.score_away}`} className={`flex items-center px-3 py-1${g.isExact ? ' bg-blue-50/60' : ''}`}>
+              <div className="flex-1" />
+              <span className={`${EXP_H_W} flex justify-center`}>{g.result === 'H' ? scoreEl : null}</span>
+              <span className={`${EXP_D_W} flex justify-center`}>{g.result === 'D' ? scoreEl : null}</span>
+              <span className={`${EXP_A_W} flex justify-center`}>{g.result === 'A' ? scoreEl : null}</span>
+              <div className="flex-1 flex justify-end items-center gap-1.5">
+                <span className={metaClass}>{g.count} ({g.pct.toFixed(0)}%)</span>
+                <span className={ptsClass}>{g.pts !== null ? (g.pts > 0 ? `+${g.pts}` : '0') : ''}</span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {avgPts !== null && (
+        <div className="px-3 py-2 text-right border-t border-gray-50">
+          <div className="text-sm font-bold text-gray-600 tabular-nums">
+            {avgPts.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+          </div>
+          <div className="text-[10px] text-gray-400">(média)</div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Componente principal ───────────────────────────────────────────────────────
+
+export function BetStats({ match, matchBets, participants, isZebra, rules, rankAfter, hasAnyScore, activeParticipantId, teamAbbrs = {} }: Props) {
   const hasResult      = match.score_home !== null && match.score_away !== null
   const zebraThreshold = rules['percentual_zebra'] ?? 15
+
+  // ── Share Resumo (mobile) ──────────────────────────────────────────────────
+  const [showBetExport, setShowBetExport] = useState(false)
+  const [isSharingBet, setIsSharingBet]   = useState(false)
+  const betExportRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!showBetExport || !betExportRef.current) return
+    const el = betExportRef.current
+    let cancelled = false
+
+    async function capture() {
+      await document.fonts.ready
+      if (cancelled) return
+      try {
+        const opts = { pixelRatio: 2, cacheBust: true, backgroundColor: '#ffffff' }
+        await toBlob(el, opts).catch(() => null)
+        if (cancelled) return
+        const blob = await toBlob(el, opts)
+        if (cancelled || !blob) return
+        const file = new File([blob], 'resumo-palpites.png', { type: 'image/png' })
+        if (navigator.share && navigator.canShare?.({ files: [file] })) {
+          // Apenas imagem — sem title/text para compartilhamento limpo
+          await navigator.share({ files: [file] })
+        } else {
+          const url = URL.createObjectURL(blob)
+          const a   = document.createElement('a')
+          a.href     = url
+          a.download = 'resumo-palpites.png'
+          a.click()
+          URL.revokeObjectURL(url)
+        }
+      } catch (err: unknown) {
+        if (!cancelled && err instanceof Error && err.name !== 'AbortError') {
+          console.error('Erro ao compartilhar resumo de palpites:', err)
+        }
+      } finally {
+        if (!cancelled) { setShowBetExport(false); setIsSharingBet(false) }
+      }
+    }
+
+    void capture()
+    return () => { cancelled = true }
+  }, [showBetExport])
+
+  // ── Dados computados ───────────────────────────────────────────────────────
 
   const medalTier = useMemo(() => {
     const m = new Map<string, number>()
@@ -134,6 +299,7 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
   }
 
   return (
+    <>
     <div className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden relative">
 
       {/* Zebra — absolute so it never shifts the score columns */}
@@ -148,16 +314,27 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
       )}
 
       {/* Title */}
-      <div className="px-4 pt-3 pb-1 text-center">
+      <div className="px-4 pt-3 pb-1 text-center relative">
         <h2 className="text-[11px] sm:text-base font-bold text-gray-500 uppercase tracking-wide">Distribuição de Palpites</h2>
+        {/* Botão compartilhar resumo — somente mobile */}
+        <button
+          onClick={() => { setIsSharingBet(true); setShowBetExport(true) }}
+          disabled={isSharingBet}
+          className="block md:hidden absolute right-3 top-2 rounded-full p-1.5 text-gray-400 hover:text-azul-escuro hover:bg-gray-100 transition disabled:opacity-50"
+          aria-label="Compartilhar resumo de palpites"
+          title="Compartilhar resumo"
+        >
+          {isSharingBet ? (
+            <span className="text-[10px]">…</span>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+              <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" />
+              <polyline points="16 6 12 2 8 6" />
+              <line x1="12" y1="2" x2="12" y2="15" />
+            </svg>
+          )}
+        </button>
       </div>
-
-      {/*
-        Layout mirrors ScoreHeader exactly:
-        [px-3] [flex-1 left spacer] [H: w-8=32px] [D: w-9=36px] [A: w-8=32px] [flex-1 right spacer] [px-3]
-        The score strip (100px) sits between two equal flex-1 halves, so its center = card center,
-        matching the ScoreHeader pill which uses the same px-3 + flex-1 structure.
-      */}
 
       {/* % column headers — destaca possíveis zebras (% ≤ threshold) */}
       <div className="flex items-center px-3 pb-2 border-b border-gray-100">
@@ -207,15 +384,10 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
               key={`${g.score_home}-${g.score_away}`}
               className={`flex items-center px-3 py-1${g.isExact ? ' bg-blue-50/60' : ''}`}
             >
-              {/* Left spacer — mirrors header left flex-1 section */}
               <div className="flex-1" />
-
-              {/* Score columns — w-8/w-9/w-8 matches ScoreBox/logo/ScoreBox in header */}
               <span className={`${H_W} flex justify-center`}>{g.result === 'H' ? scoreEl : null}</span>
               <span className={`${D_W} flex justify-center`}>{g.result === 'D' ? scoreEl : null}</span>
               <span className={`${A_W} flex justify-center`}>{g.result === 'A' ? scoreEl : null}</span>
-
-              {/* Mobile: ambos à direita. Desktop: contagem colada à col A, pts na extremidade */}
               <div className="flex-1 flex justify-end items-center gap-1.5 sm:justify-start sm:gap-0">
                 <span className={`${metaClass} sm:w-28 sm:text-right`}>{g.count}{'   '}({g.pct.toFixed(0)}%)</span>
                 <span className={`${ptsClass} sm:flex-1 sm:text-right`}>
@@ -237,7 +409,7 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
         </div>
       )}
 
-      {/* Seu palpite */}
+      {/* Meu palpite — classe meu-palpite-row marca esta linha para referência; o ghost não a inclui */}
       {ownBet && ownResult && (() => {
         const scoreColor = ownIsExact
           ? 'text-blue-600'
@@ -250,7 +422,7 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
           </span>
         )
         return (
-          <div className={`flex items-center px-3 py-1.5 border-t border-gray-100${ownIsExact ? ' bg-blue-50/60' : ' bg-gray-50/60'}`}>
+          <div className={`meu-palpite-row flex items-center px-3 py-1.5 border-t border-gray-100${ownIsExact ? ' bg-blue-50/60' : ' bg-gray-50/60'}`}>
             <div className="flex-1">
               <span className="text-[10px] sm:text-sm font-bold text-gray-400 uppercase tracking-wide">Meu palpite</span>
               {activeParticipantId && rankAfter[activeParticipantId] != null && (
@@ -273,5 +445,24 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
         )
       })()}
     </div>
+
+    {/* Ghost para exportação — montado apenas ao compartilhar, desmontado após captura */}
+    {showBetExport && (
+      <div style={{ position: 'absolute', top: 0, left: 0, overflow: 'hidden', height: 0, width: 0 }} aria-hidden="true">
+        <div ref={betExportRef} style={{ width: '390px' }}>
+          <ExportableBetStats
+            match={match}
+            groups={groups}
+            colTotals={colTotals}
+            avgPts={avgPts}
+            matchBetsCount={matchBets.length}
+            zebraThreshold={zebraThreshold}
+            teamAbbrs={teamAbbrs}
+            hasResult={hasResult}
+          />
+        </div>
+      </div>
+    )}
+    </>
   )
 }

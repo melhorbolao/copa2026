@@ -1030,6 +1030,10 @@ export function ClassificacaoMBClient({
             matchesRegistered={matchesRegistered}
             groupsDefined={groupsDefined}
             lastMatch={lastMatch}
+            highlightMode={highlightMode}
+            activeParticipantId={activeParticipantId}
+            panelaSet={panelaSet}
+            tribeMemberSet={tribeMemberSet}
           />
         </div>
       </div>

@@ -370,6 +370,7 @@ export function JogosDashboard({
           rankAfter={rankAfter}
           hasAnyScore={match.score_home !== null || Object.values(livePoints).some(pts => pts > 0)}
           activeParticipantId={activeParticipantId}
+          teamAbbrs={teamAbbrs}
         />
 
         <RankingPanel

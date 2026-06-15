@@ -1,5 +1,7 @@
 'use client'
 
+import type { HighlightMode } from './SobeDesce'
+
 type Zone = 'premio' | 'corte2' | 'corte1' | 'out' | 'last'
 
 const ZONE_ROW: Record<Zone, string> = {
@@ -50,9 +52,16 @@ interface Props {
   matchesRegistered: number
   groupsDefined: number
   lastMatch: LastMatch | null
+  highlightMode?: HighlightMode
+  activeParticipantId?: string
+  panelaSet?: Set<string>
+  tribeMemberSet?: Set<string>
 }
 
-export function ExportableRankingBoard({ ranked, premioSpots, renderedAt, matchesRegistered, groupsDefined, lastMatch }: Props) {
+export function ExportableRankingBoard({
+  ranked, premioSpots, renderedAt, matchesRegistered, groupsDefined, lastMatch,
+  highlightMode, activeParticipantId, panelaSet, tribeMemberSet,
+}: Props) {
   const n = ranked.length
   if (n === 0) return null
 
@@ -110,14 +119,25 @@ export function ExportableRankingBoard({ ranked, premioSpots, renderedAt, matche
             {block.map((r, ri) => {
               const z = zoneOf(r)
               const boundary = ri > 0 && zoneOf(block[ri - 1]) !== z
+
+              const isActive = activeParticipantId ? r.id === activeParticipantId : false
+              const isPanela = panelaSet?.has(r.id) ?? false
+              const shouldHighlight = !!highlightMode && highlightMode !== 'none' && z !== 'last' && (
+                (highlightMode === 'me'     && isActive) ||
+                (highlightMode === 'panela' && (isActive || isPanela)) ||
+                (highlightMode === 'tribo'  && (tribeMemberSet?.has(r.id) ?? false))
+              )
+              const highlightRing = shouldHighlight ? 'ring-1 ring-inset ring-red-500' : ''
+              const textCls = shouldHighlight ? 'text-red-600 font-semibold' : ZONE_TEXT[z]
+
               return (
                 <div
                   key={r.id}
-                  className={`grid grid-cols-[1.5rem_1fr_2rem] px-2 py-[3px] text-[12px] ${ZONE_ROW[z]} ${boundary ? 'border-t border-gray-200' : ''}`}
+                  className={`grid grid-cols-[1.5rem_1fr_2rem] px-2 py-[3px] text-[12px] ${ZONE_ROW[z]} ${boundary ? 'border-t border-gray-200' : ''} ${highlightRing}`}
                 >
-                  <span className={`text-right pr-0.5 tabular-nums ${ZONE_TEXT[z]}`}>{r.rank}</span>
-                  <span className={`pl-1 truncate ${ZONE_TEXT[z]}`}>{r.apelido}{z === 'last' && ' 🔦'}</span>
-                  <span className={`text-right tabular-nums font-bold ${ZONE_TEXT[z]}`}>{r.pts}</span>
+                  <span className={`text-right pr-0.5 tabular-nums ${textCls}`}>{r.rank}</span>
+                  <span className={`pl-1 truncate ${textCls}`}>{r.apelido}{z === 'last' && ' 🔦'}</span>
+                  <span className={`text-right tabular-nums font-bold ${textCls}`}>{r.pts}</span>
                 </div>
               )
             })}
