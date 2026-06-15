@@ -215,10 +215,10 @@ export function ScoreHeader({
             <div className="flex flex-col flex-1 items-end min-w-0">
               <div className="flex items-center gap-1.5 justify-end w-full">
                 <div className="min-w-0 text-right">
-                  <div className="text-[10px] text-gray-300 leading-tight truncate font-medium">
+                  <div className="text-[11px] text-gray-300 leading-tight truncate font-medium">
                     {fmtDay(match.match_datetime)}
                   </div>
-                  <div className="text-[10px] text-gray-400 leading-tight truncate">
+                  <div className="text-[11px] text-gray-400 leading-tight truncate">
                     {fmtTime(match.match_datetime)}
                   </div>
                   <div className="text-[10px] text-gray-500 leading-tight mt-0.5 truncate hidden sm:block">{match.city}</div>
@@ -318,9 +318,15 @@ function NavArrow({ dir, disabled, onClick }: { dir: 'left' | 'right'; disabled:
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`flex items-center justify-center w-8 h-8 transition ${disabled ? 'opacity-20 cursor-not-allowed' : 'active:scale-95'}`}
+      className={`flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 transition ${disabled ? 'opacity-20 cursor-not-allowed' : 'active:scale-95'}`}
     >
-      <svg width="28" height="20" viewBox="0 0 28 20" fill="none">
+      <svg width="20" height="14" className="sm:hidden" viewBox="0 0 28 20" fill="none">
+        {dir === 'left'
+          ? <path d="M17 2L5 10L17 18" stroke={disabled ? '#555' : '#ccc'} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
+          : <path d="M11 2L23 10L11 18" stroke={disabled ? '#555' : '#ccc'} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
+        }
+      </svg>
+      <svg width="28" height="20" className="hidden sm:block" viewBox="0 0 28 20" fill="none">
         {dir === 'left'
           ? <path d="M17 2L5 10L17 18" stroke={disabled ? '#555' : '#ccc'} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
           : <path d="M11 2L23 10L11 18" stroke={disabled ? '#555' : '#ccc'} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
