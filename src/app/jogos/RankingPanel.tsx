@@ -36,34 +36,24 @@ function ExportableSecador({
   match,
   cravando,
   participantMap,
-  matchPoints,
   rankBefore,
   rankAfter,
   abbr,
+  afterDeadline,
 }: {
   match: MatchFull
   cravando: BetRaw[]
   participantMap: Map<string, Participant>
-  matchPoints: Record<string, number>
   rankBefore: Record<string, number>
   rankAfter: Record<string, number>
   abbr: (t: string) => string
+  afterDeadline: boolean
 }) {
   const sorted = [...cravando].sort((a, b) => {
     const pa = participantMap.get(a.participant_id)?.apelido ?? ''
     const pb = participantMap.get(b.participant_id)?.apelido ?? ''
     return pa.localeCompare(pb, 'pt-BR')
   })
-
-  // Layout de colunas: 1 coluna até 20 cravando; mais de 20 → grid dinâmico (max 4 colunas)
-  const ITEMS_PER_COL = 10
-  const numCols = sorted.length > 20
-    ? Math.min(Math.ceil(sorted.length / ITEMS_PER_COL), 4)
-    : 1
-  const itemsPerCol = Math.ceil(sorted.length / numCols)
-  const columns = Array.from({ length: numCols }, (_, i) =>
-    sorted.slice(i * itemsPerCol, (i + 1) * itemsPerCol)
-  )
 
   const scoreStr = match.score_home !== null && match.score_away !== null
     ? `${match.score_home}×${match.score_away}`
@@ -73,72 +63,47 @@ function ExportableSecador({
     ? `${abbr(match.team_home)} ${scoreStr} ${abbr(match.team_away)}`
     : `${abbr(match.team_home)} × ${abbr(match.team_away)}`
 
-  // Cores alternadas para os avatares iniciais
-  const AVATAR_COLORS = [
-    'bg-emerald-100 text-emerald-700',
-    'bg-sky-100 text-sky-700',
-    'bg-violet-100 text-violet-700',
-    'bg-amber-100 text-amber-700',
-  ]
-
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden" style={{ height: 'auto', maxHeight: 'none' }}>
+    <div style={{ background: 'white', borderRadius: 16, border: '1px solid #e5e7eb', overflow: 'hidden', height: 'auto', maxHeight: 'none' }}>
       {/* Cabeçalho */}
-      <div className="px-4 py-3 border-b border-gray-100 bg-emerald-50">
-        <p className="text-base font-black text-emerald-800">✓ Cravando o placar</p>
-        <p className="text-xs text-emerald-600 mt-0.5">{matchLabel} · {sorted.length} participante{sorted.length !== 1 ? 's' : ''}</p>
+      <div style={{ background: '#ecfdf5', borderBottom: '1px solid #d1fae5', padding: '10px 16px' }}>
+        <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: '#065f46', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          ✓ {afterDeadline ? 'Cravaram' : 'Cravando'} o placar{scoreStr ? ` ${scoreStr}` : ''} ({sorted.length})
+        </p>
+        <p style={{ margin: '2px 0 0', fontSize: 10, color: '#059669' }}>{matchLabel}</p>
       </div>
 
-      {/* Lista — single ou multi-coluna */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: `repeat(${numCols}, 1fr)`,
-          height: 'auto',
-          maxHeight: 'none',
-        }}
-      >
-        {columns.map((col, ci) => (
-          <div key={ci} className={ci > 0 ? 'border-l border-gray-100' : ''}>
-            {col.map((b, idx) => {
-              const p = participantMap.get(b.participant_id)
-              if (!p) return null
-              const before   = rankBefore[p.id] ?? 0
-              const after    = rankAfter[p.id]  ?? 0
-              const delta    = before - after
-              const pts      = matchPoints[p.id] ?? 0
-              const initial  = p.apelido[0]?.toUpperCase() ?? '?'
-              const colorCls = AVATAR_COLORS[(ci * itemsPerCol + idx) % AVATAR_COLORS.length]
+      {/* Secador + chips — layout idêntico ao da tela */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '12px 16px', height: 'auto', maxHeight: 'none' }}>
+        {/* Secador apontando para os participantes (scaleX(-1) = vira para a direita) */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/secador.png"
+          alt="secador"
+          style={{ width: 80, height: 80, objectFit: 'contain', flexShrink: 0, transform: 'scaleX(-1)', alignSelf: 'center' }}
+        />
 
-              return (
-                <div key={p.id} className="flex items-center gap-2 px-3 py-2 border-b border-gray-50 last:border-0">
-                  {/* Avatar com inicial */}
-                  <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${colorCls}`}>
-                    {initial}
-                  </div>
-
-                  {/* Nome + placar apostado */}
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-sm text-gray-800 truncate">{p.apelido}</div>
-                    <div className="text-xs text-gray-400 font-mono">{b.score_home}×{b.score_away}</div>
-                  </div>
-
-                  {/* Pts ganhos + variação de posição */}
-                  <div className="text-right flex-shrink-0">
-                    {pts > 0 && (
-                      <div className="text-emerald-600 font-bold text-sm tabular-nums">+{pts} pts</div>
-                    )}
-                    <div className="text-xs text-gray-400 tabular-nums">
-                      {before}→{after}
-                      {delta > 0 && <span className="text-emerald-500 font-bold ml-0.5">↑{delta}</span>}
-                      {delta < 0 && <span className="text-rose-400 font-bold ml-0.5">↓{Math.abs(delta)}</span>}
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        ))}
+        {/* Chips: apenas nome + variação de posição (sem placar repetido, sem pontos) */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', height: 'auto' }}>
+          {sorted.map(b => {
+            const p = participantMap.get(b.participant_id)
+            if (!p) return null
+            const before = rankBefore[p.id] ?? 0
+            const after  = rankAfter[p.id]  ?? 0
+            const delta  = before - after
+            return (
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'white', border: '1px solid #a7f3d0', borderRadius: 9999, padding: '4px 10px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                <span style={{ fontWeight: 600, fontSize: 12, color: '#1f2937' }}>{p.apelido}</span>
+                <span style={{ color: '#d1d5db', fontSize: 10 }}>·</span>
+                <span style={{ color: '#9ca3af', fontVariantNumeric: 'tabular-nums', fontSize: 11 }}>
+                  {before}→{after}
+                </span>
+                {delta > 0 && <span style={{ color: '#10b981', fontWeight: 700, fontSize: 11 }}>↑{delta}</span>}
+                {delta < 0 && <span style={{ color: '#fb7185', fontWeight: 700, fontSize: 11 }}>↓{Math.abs(delta)}</span>}
+              </div>
+            )
+          })}
+        </div>
       </div>
     </div>
   )
@@ -168,12 +133,8 @@ export function RankingPanel({
   )
   const cravandoPids = new Set(cravando.map(b => b.participant_id))
 
-  // Largura do ghost varia com o número de colunas
-  const ITEMS_PER_COL = 10
-  const numSecadorCols = cravando.length > 20
-    ? Math.min(Math.ceil(cravando.length / ITEMS_PER_COL), 4)
-    : 1
-  const secadorGhostWidth = numSecadorCols === 1 ? 390 : numSecadorCols * 300
+  // Largura do ghost: mobile para grupos pequenos, mais largo para muitos cravando
+  const secadorGhostWidth = cravando.length <= 20 ? 390 : 700
 
   useEffect(() => {
     if (!showSecadorExport || !secadorExportRef.current) return
@@ -439,10 +400,10 @@ export function RankingPanel({
             match={match}
             cravando={cravando}
             participantMap={participantMap}
-            matchPoints={matchPoints}
             rankBefore={rankBefore}
             rankAfter={rankAfter}
             abbr={abbr}
+            afterDeadline={afterDeadline}
           />
         </div>
       </div>

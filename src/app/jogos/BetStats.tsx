@@ -3,6 +3,7 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
 import { toBlob } from 'html-to-image'
 import { getMatchResult, scoreMatchBet } from '@/lib/scoring/engine'
+import { Flag } from '@/components/ui/Flag'
 import type { MatchFull, BetRaw, Participant } from './JogosDashboard'
 
 const MEDAL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' }
@@ -47,6 +48,9 @@ function fmtPct(n: number) {
 
 // ── Ghost component: renderiza distribuição sem "Meu palpite" ──────────────────
 
+const CYAN = '#04EFD0'
+const SCORE_BG = '#2a2a2a'
+
 function ExportableBetStats({
   match,
   groups,
@@ -68,22 +72,41 @@ function ExportableBetStats({
 }) {
   const abbr = (t: string) => teamAbbrs[t] ?? t.slice(0, 3).toUpperCase()
 
-  const matchHeader = hasResult
-    ? `${abbr(match.team_home)} ${match.score_home}×${match.score_away} ${abbr(match.team_away)}`
-    : (() => {
-        try {
-          const d = new Date(match.match_datetime)
-          const date = d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
-          return `${abbr(match.team_home)} × ${abbr(match.team_away)} · ${date}`
-        } catch { return `${abbr(match.team_home)} × ${abbr(match.team_away)}` }
-      })()
-
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-      {/* Cabeçalho do jogo */}
-      <div className="px-4 py-3 border-b border-gray-100 text-center">
-        <p className="text-base font-black text-gray-800">{matchHeader}</p>
-        <p className="text-xs text-gray-400 mt-0.5">Distribuição de Palpites · {matchBetsCount} palpites</p>
+    <div style={{ background: 'white', borderRadius: 16, overflow: 'hidden', border: '1px solid #e5e7eb' }}>
+
+      {/* Barra de placar — replica o header escuro do site com bandeiras e cores */}
+      <div style={{ background: SCORE_BG, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px 16px' }}>
+        {/* Casa */}
+        <div style={{ background: '#000', display: 'flex', alignItems: 'center', gap: 6, padding: '0 10px', height: 40 }}>
+          <Flag code={match.flag_home} size="sm" />
+          <span style={{ color: '#fff', fontSize: 13, fontWeight: 900, letterSpacing: '0.05em' }}>{abbr(match.team_home)}</span>
+        </div>
+        {/* Placar casa */}
+        <div style={{ background: CYAN, color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 18, padding: '0 10px', height: 40, minWidth: 36, fontFamily: 'monospace' }}>
+          {match.score_home !== null ? match.score_home : <span style={{ opacity: 0.4 }}>–</span>}
+        </div>
+        {/* Logo no centro vermelho */}
+        <div style={{ background: '#FD1111', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 40, position: 'relative', flexShrink: 0 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logoCopa.png" alt="" style={{ height: 34, width: 'auto', position: 'absolute' }} />
+        </div>
+        {/* Placar visitante */}
+        <div style={{ background: CYAN, color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 18, padding: '0 10px', height: 40, minWidth: 36, fontFamily: 'monospace' }}>
+          {match.score_away !== null ? match.score_away : <span style={{ opacity: 0.4 }}>–</span>}
+        </div>
+        {/* Visitante */}
+        <div style={{ background: '#000', display: 'flex', alignItems: 'center', gap: 6, padding: '0 10px', height: 40, flexDirection: 'row-reverse' }}>
+          <Flag code={match.flag_away} size="sm" />
+          <span style={{ color: '#fff', fontSize: 13, fontWeight: 900, letterSpacing: '0.05em' }}>{abbr(match.team_away)}</span>
+        </div>
+      </div>
+
+      {/* Subtítulo */}
+      <div style={{ padding: '8px 16px 4px', textAlign: 'center', borderBottom: '1px solid #f3f4f6' }}>
+        <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+          Distribuição de Palpites · {matchBetsCount} palpites
+        </p>
       </div>
 
       {/* Cabeçalho de % por resultado (H/D/A) */}
