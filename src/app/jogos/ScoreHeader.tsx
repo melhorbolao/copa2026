@@ -17,9 +17,12 @@ function canEditScore(match: MatchFull, isAdmin: boolean): boolean {
   return now >= start && now <= start + EDIT_WINDOW_MS
 }
 
-function fmtDate(iso: string) {
-  const d = new Date(iso)
-  return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }).replace(',', ' •')
+function fmtDay(iso: string) {
+  return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' })
+}
+
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
 }
 
 interface Props {
@@ -212,8 +215,11 @@ export function ScoreHeader({
             <div className="flex flex-col flex-1 items-end min-w-0">
               <div className="flex items-center gap-1.5 justify-end w-full">
                 <div className="min-w-0 text-right">
-                  <div className="text-xs text-gray-300 leading-tight truncate font-medium">
-                    {fmtDate(match.match_datetime)}
+                  <div className="text-[10px] text-gray-300 leading-tight truncate font-medium">
+                    {fmtDay(match.match_datetime)}
+                  </div>
+                  <div className="text-[10px] text-gray-400 leading-tight truncate">
+                    {fmtTime(match.match_datetime)}
                   </div>
                   <div className="text-[10px] text-gray-500 leading-tight mt-0.5 truncate hidden sm:block">{match.city}</div>
                 </div>
