@@ -1,20 +1,26 @@
-INSTRUÇÃO TÉCNICA: OTIMIZAÇÃO DE SUBSCOES REALTIME (REDUÇÃO DE CPU LOAD)
+ESPECIFICAÇÃO TÉCNICA: BOTÃO "COMPARTILHAR CLASSIFICAÇÃO" (MOBILE ONLY)
 
-Nossa auditoria no painel Query Performance do Supabase Pro indicou que uma query interna de monitoramento de log/estado (WAL) é executada em excesso (1.228 chamadas, consumindo 58% do tempo do banco). Isso indica um vazamento ou excesso de concorrência nas subscrições Realtime do frontend.
+Objetivo: Criar uma funcionalidade exclusiva para dispositivos móveis que gere e compartilhe uma imagem de alta resolução da Classificação Geral completa, formatada em múltiplas colunas (layout desktop), sem destaques ativos.
 
-Execute as seguintes refatorações com foco puramente em código client-side (Next.js/React):
+1. BIBLIOTECA DE CAPTURA:
+- Instale a biblioteca 'html-to-image' (mais recomendada e moderna para ecossistemas React/Next.js) ou utilize o 'html2canvas' caso já exista no projeto.
 
-1. ENCONTRAR SUBSCOES REALTIME:
-- Varra o projeto em busca de chamadas como 'supabase.channel()' ou '.on("postgres_changes", ...)'. Identifique onde o site escuta alterações nas tabelas 'bets', 'matches' ou 'participant_scores'.
+2. O COMPONENTE "FANTASMA" (OFF-SCREEN RENDERING):
+- Crie um componente chamado '<ExportableRankingBoard />'.
+- Este componente NÃO deve ser visível na interface normal. Ele deve ficar encapsulado em uma div invisível (ex: `position: absolute, left: -9999px, opacity: 0`).
+- Estilização Forçada: A div contêiner deste componente deve ter uma largura fixa grande (ex: 'width: 1600px') para forçar o desenho da tabela em formato de grid multicolunas (idêntico à visualização no desktop), acomodando todos os participantes.
+- Injeção de Dados: O componente deve receber o array de classificação atual como prop. IMPORTANTE: Ele deve ignorar qualquer estado global de highlight/destaque (Tribos ou Usuário Logado). O fundo das linhas deve ser limpo/padrão, respeitando apenas as cores de zonas de corte (Premiação, Lanterna, etc.).
 
-2. FILTRAGEM ESTRETA (ESTRATÉGIA CLIENT-SIDE):
-- Garanta que nenhuma página assine alterações da tabela inteira se o usuário estiver olhando apenas para um escopo menor. 
-- Exemplo: Na página de palpites de um jogo específico, a subscrição deve incluir o filtro explícito pelo ID do jogo (ex: 'filter=match_id=eq.' + matchId) em vez de escutar todos os palpites do bolão.
+3. O BOTÃO E A UI (MOBILE ONLY):
+- Adicione um botão "Compartilhar Tabela" ou um ícone de Share (lucide-react) no cabeçalho da página de Classificação ou flutuante (FAB).
+- Regra de Visibilidade Tailwind: O botão deve ter as classes `block md:hidden` (ou equivalente no seu tema) para sumir completamente quando acessado por um computador.
+- Ao clicar no botão, exiba um indicador de carregamento (Spinner ou texto "Gerando imagem..."), pois a renderização da imagem leva cerca de 1 a 2 segundos.
 
-3. CICLO DE VIDA E DESMONTAGEM (CLEANUP FUNCTIONS):
-- Certifique-se de que TODOS os useEffects que abrem canais Realtime retornem a função de limpeza ('cleanup') contendo explicitamente o comando 'supabase.removeChannel(channel)'. Se o componente for desmontado e o canal continuar aberto na memória do navegador, o banco continuará sendo metralhado com checagens inúteis.
+4. LÓGICA DE COMPARTILHAMENTO (NATIVE WEB SHARE API):
+- Ao concluir a geração do Blob/DataURL da imagem pelo 'html-to-image', converta-o para um objeto 'File'.
+- Utilize a API nativa do navegador: `navigator.share({ files: [imageFile], title: 'Classificação Melhor Bolão', text: 'Confira a classificação atualizada!' })`.
+- Fallback: Se o dispositivo do usuário for antigo e não suportar o 'navigator.share', faça o download automático da imagem como 'classificacao.png'.
 
-4. VERIFICAÇÃO INDEPENDENTE OBRIGATÓRIA:
-Antes de salvar os arquivos, apresente aqui no terminal:
-A) Os arquivos onde as subscrições Realtime estavam sendo abertas sem a devida função de cleanup ou sem filtros de ID.
-B) O código corrigido mostrando o encerramento correto do canal no retorno do useEffect.
+5. DIRETRIZ DE PERFORMANCE (VERIFICAÇÃO INDEPENDENTE OBRIGATÓRIA):
+- ANTES de implementar, apresente no terminal a arquitetura do componente para garantir que ele NÃO fará um novo fetch no Supabase. Ele deve estritamente usar a variável de estado que já armazena a classificação da tela visível. 
+- O componente invisível só deve ser montado no DOM (renderização condicional) no momento em que o usuário clicar no botão "Compartilhar", sendo destruído logo após a imagem ser gerada, para não pesar a memória do celular.

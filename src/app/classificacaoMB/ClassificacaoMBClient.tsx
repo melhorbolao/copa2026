@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useMemo, useEffect, useState } from 'react'
+import { memo, useMemo, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -12,6 +12,8 @@ import {
   type SobeDesceHighlights,
   type HighlightMode,
 } from './SobeDesce'
+import { toBlob } from 'html-to-image'
+import { ExportableRankingBoard } from './ExportableRankingBoard'
 
 interface ParticipantRow {
   id: string
@@ -429,6 +431,43 @@ export function ClassificacaoMBClient({
   const [sortKey, setSortKey] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
+  // ── Compartilhar Tabela (mobile) ───────────────────────────────────────────
+  const [showExport, setShowExport] = useState(false)
+  const [isSharing, setIsSharing]   = useState(false)
+  const exportRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!showExport || !exportRef.current) return
+    const el = exportRef.current
+    let cancelled = false
+
+    toBlob(el, { pixelRatio: 2 })
+      .then(async (blob) => {
+        if (cancelled || !blob) return
+        const file = new File([blob], 'classificacao.png', { type: 'image/png' })
+        if (navigator.share && navigator.canShare?.({ files: [file] })) {
+          await navigator.share({ files: [file], title: 'Classificação Melhor Bolão', text: 'Confira a classificação atualizada!' })
+        } else {
+          const url = URL.createObjectURL(blob)
+          const a   = document.createElement('a')
+          a.href     = url
+          a.download = 'classificacao.png'
+          a.click()
+          URL.revokeObjectURL(url)
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled && err instanceof Error && err.name !== 'AbortError') {
+          console.error('Erro ao compartilhar classificação:', err)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) { setShowExport(false); setIsSharing(false) }
+      })
+
+    return () => { cancelled = true }
+  }, [showExport])
+
   // ── Destaque de Tribo (admin/master only) ──────────────────────────────────
   const [activeTribeId, setActiveTribeId]   = useState<string | null>(null)
   const [tribeMemberSet, setTribeMemberSet] = useState<Set<string>>(new Set())
@@ -609,6 +648,7 @@ export function ClassificacaoMBClient({
   }
 
   return (
+    <>
     <div className="mx-auto max-w-full px-2 py-4 pb-32 sm:px-4 sm:py-6">
 
       {/* Banner: Minha Posição */}
@@ -944,5 +984,45 @@ export function ClassificacaoMBClient({
       </div>
       </div>
     </div>
+
+    {/* Botão Compartilhar Tabela — apenas mobile */}
+    <button
+      onClick={() => { setIsSharing(true); setShowExport(true) }}
+      disabled={isSharing}
+      className="block md:hidden fixed bottom-6 right-4 z-50 flex items-center gap-2 rounded-full bg-azul-escuro px-4 py-3 text-sm font-semibold text-white shadow-lg disabled:opacity-70 transition"
+      aria-label="Compartilhar classificação"
+    >
+      {isSharing ? (
+        <span>Gerando imagem...</span>
+      ) : (
+        <>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+            <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" />
+            <polyline points="16 6 12 2 8 6" />
+            <line x1="12" y1="2" x2="12" y2="15" />
+          </svg>
+          <span>Compartilhar Tabela</span>
+        </>
+      )}
+    </button>
+
+    {/* Componente invisível para exportação — montado apenas ao compartilhar */}
+    {showExport && (
+      <div
+        ref={exportRef}
+        style={{ position: 'fixed', left: '-9999px', top: 0, width: '1600px', pointerEvents: 'none' }}
+        aria-hidden="true"
+      >
+        <ExportableRankingBoard
+          ranked={ranked}
+          premioSpots={premioSpots}
+          renderedAt={renderedAt}
+          matchesRegistered={matchesRegistered}
+          groupsDefined={groupsDefined}
+          lastMatch={lastMatch}
+        />
+      </div>
+    )}
+    </>
   )
 }
