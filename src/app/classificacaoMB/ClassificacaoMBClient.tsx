@@ -442,13 +442,16 @@ export function ClassificacaoMBClient({
     let cancelled = false
 
     async function capture() {
-      // Aguarda fontes carregarem e um frame extra para garantir layout completo
       await document.fonts.ready
-      await new Promise(resolve => requestAnimationFrame(resolve))
       if (cancelled) return
 
       try {
-        const blob = await toBlob(el, { pixelRatio: 2, cacheBust: true })
+        const opts = { pixelRatio: 2, cacheBust: true, backgroundColor: '#ffffff' }
+        // Primeira chamada: aquece o cache interno de fontes/recursos da lib
+        await toBlob(el, opts).catch(() => null)
+        if (cancelled) return
+        // Segunda chamada: captura com todos os recursos já cacheados
+        const blob = await toBlob(el, opts)
         if (cancelled || !blob) return
         const file = new File([blob], 'classificacao.png', { type: 'image/png' })
         if (navigator.share && navigator.canShare?.({ files: [file] })) {
@@ -1015,18 +1018,19 @@ export function ClassificacaoMBClient({
     {/* Componente invisível para exportação — montado apenas ao compartilhar */}
     {showExport && (
       <div
-        ref={exportRef}
-        style={{ position: 'absolute', left: '-9999px', top: 0, width: '1600px', pointerEvents: 'none' }}
+        style={{ position: 'absolute', top: 0, left: 0, overflow: 'hidden', height: 0, width: 0 }}
         aria-hidden="true"
       >
-        <ExportableRankingBoard
-          ranked={ranked}
-          premioSpots={premioSpots}
-          renderedAt={renderedAt}
-          matchesRegistered={matchesRegistered}
-          groupsDefined={groupsDefined}
-          lastMatch={lastMatch}
-        />
+        <div ref={exportRef} style={{ width: '1600px' }}>
+          <ExportableRankingBoard
+            ranked={ranked}
+            premioSpots={premioSpots}
+            renderedAt={renderedAt}
+            matchesRegistered={matchesRegistered}
+            groupsDefined={groupsDefined}
+            lastMatch={lastMatch}
+          />
+        </div>
       </div>
     )}
     </>
