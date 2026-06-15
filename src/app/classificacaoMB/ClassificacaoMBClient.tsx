@@ -441,8 +441,14 @@ export function ClassificacaoMBClient({
     const el = exportRef.current
     let cancelled = false
 
-    toBlob(el, { pixelRatio: 2 })
-      .then(async (blob) => {
+    async function capture() {
+      // Aguarda fontes carregarem e um frame extra para garantir layout completo
+      await document.fonts.ready
+      await new Promise(resolve => requestAnimationFrame(resolve))
+      if (cancelled) return
+
+      try {
+        const blob = await toBlob(el, { pixelRatio: 2, cacheBust: true })
         if (cancelled || !blob) return
         const file = new File([blob], 'classificacao.png', { type: 'image/png' })
         if (navigator.share && navigator.canShare?.({ files: [file] })) {
@@ -455,16 +461,16 @@ export function ClassificacaoMBClient({
           a.click()
           URL.revokeObjectURL(url)
         }
-      })
-      .catch((err: unknown) => {
+      } catch (err: unknown) {
         if (!cancelled && err instanceof Error && err.name !== 'AbortError') {
           console.error('Erro ao compartilhar classificação:', err)
         }
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) { setShowExport(false); setIsSharing(false) }
-      })
+      }
+    }
 
+    void capture()
     return () => { cancelled = true }
   }, [showExport])
 
@@ -1010,7 +1016,7 @@ export function ClassificacaoMBClient({
     {showExport && (
       <div
         ref={exportRef}
-        style={{ position: 'fixed', left: '-9999px', top: 0, width: '1600px', pointerEvents: 'none' }}
+        style={{ position: 'absolute', left: '-9999px', top: 0, width: '1600px', pointerEvents: 'none' }}
         aria-hidden="true"
       >
         <ExportableRankingBoard
