@@ -211,15 +211,15 @@ export function ScoreHeader({
             {/* Right: date/city + stadium icon — flex-col mirrors center section height */}
             <div className="flex flex-col flex-1 items-end min-w-0">
               <div className="flex items-center gap-1.5 justify-end w-full">
-                <div className="min-w-0 text-right hidden sm:block">
+                <div className="min-w-0 text-right">
                   <div className="text-xs text-gray-300 leading-tight truncate font-medium">
                     {fmtDate(match.match_datetime)}
                   </div>
-                  <div className="text-[10px] text-gray-500 leading-tight mt-0.5 truncate">{match.city}</div>
+                  <div className="text-[10px] text-gray-500 leading-tight mt-0.5 truncate hidden sm:block">{match.city}</div>
                 </div>
                 <button
                   onClick={() => setShowPresence(v => !v)}
-                  className="relative shrink-0 flex items-center justify-center h-8 w-8"
+                  className="relative shrink-0 hidden sm:flex items-center justify-center h-8 w-8"
                   title="No Estádio"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
