@@ -455,7 +455,8 @@ export function ClassificacaoMBClient({
         if (cancelled || !blob) return
         const file = new File([blob], 'classificacao.png', { type: 'image/png' })
         if (navigator.share && navigator.canShare?.({ files: [file] })) {
-          await navigator.share({ files: [file], title: 'Classificação Melhor Bolão', text: 'Confira a classificação atualizada!' })
+          const stamp = (() => { try { const d = new Date(renderedAt); return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }) } catch { return '' } })()
+          await navigator.share({ files: [file], title: 'Classificação Melhor Bolão', text: `Classificação Melhor Bolão ${stamp}` })
         } else {
           const url = URL.createObjectURL(blob)
           const a   = document.createElement('a')
