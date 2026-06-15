@@ -30,13 +30,12 @@ function calcCuts(n: number) {
   return { cut1, cut2 }
 }
 
-function formatDate(iso: string) {
+function formatStamp(iso: string) {
   try {
-    return new Date(iso).toLocaleString('pt-BR', {
-      day: '2-digit', month: '2-digit', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
-      timeZone: 'America/Sao_Paulo',
-    })
+    const d = new Date(iso)
+    const day   = d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' })
+    const time  = d.toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
+    return `${day} - ${time}`
   } catch { return '' }
 }
 
@@ -84,19 +83,16 @@ export function ExportableRankingBoard({ ranked, premioSpots, renderedAt, matche
   return (
     <div className="rounded-2xl border border-gray-200 bg-white">
       <div className="border-b border-gray-100 px-4 py-3">
-        <p className="text-base font-black text-gray-800">Classificação Melhor Bolão</p>
-        <p className="text-xs text-gray-400 mt-0.5">
-          {formatDate(renderedAt)}
-          {matchesRegistered > 0 && (
-            <>
-              {' · '}{matchesRegistered} jogos registrados
-              {lastMatch && (
-                <> · último {lastMatch.abbr_home} {lastMatch.score_home}×{lastMatch.score_away}{lastMatch.penalty_winner ? 'P' : ''} {lastMatch.abbr_away}</>
-              )}
-              {' · '}{groupsDefined}/12 grupos definidos
-            </>
-          )}
+        <p className="text-base font-black text-gray-800">
+          Classificação Melhor Bolão {formatStamp(renderedAt)}
         </p>
+        {matchesRegistered > 0 && (
+          <p className="text-xs text-gray-400 mt-0.5">
+            {matchesRegistered} jogos registrados
+            {lastMatch && <> · último {lastMatch.abbr_home} {lastMatch.score_home}×{lastMatch.score_away}{lastMatch.penalty_winner ? 'P' : ''} {lastMatch.abbr_away}</>}
+            {' · '}{groupsDefined}/12 grupos definidos
+          </p>
+        )}
       </div>
 
       <div className="grid divide-x divide-gray-100" style={{ gridTemplateColumns: `repeat(${blocks.length}, 1fr)` }}>
