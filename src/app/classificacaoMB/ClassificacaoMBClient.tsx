@@ -841,25 +841,20 @@ export function ClassificacaoMBClient({
                 const z         = zoneOf(row)
                 const boundary  = tiedAtBoundary && row.pts === cutPts
 
-                let rowBg: string
-                if (z === 'last') {
-                  rowBg = ZONE_ROW.last
-                } else if (highlightMode === 'panela') {
-                  if (isActive)      rowBg = 'bg-verde-100'
-                  else if (isPanela) rowBg = 'bg-indigo-50'
-                  else               rowBg = ZONE_ROW[z]
-                } else if (highlightMode === 'me' && isActive) {
-                  rowBg = 'bg-verde-100'
-                } else {
-                  rowBg = ZONE_ROW[z]
-                }
+                const rowBg = z === 'last' ? ZONE_ROW.last : ZONE_ROW[z]
+                const shouldHighlight = z !== 'last' && (
+                  (highlightMode === 'me'     && isActive) ||
+                  (highlightMode === 'panela' && (isActive || isPanela)) ||
+                  (highlightMode === 'tribo'  && tribeMemberSet.has(row.id))
+                )
                 const highlighted = highlightMode !== 'none'
-                const fontCls = z === 'last' ? 'font-bold' : (isActive && highlighted ? 'font-semibold' : '')
+                const fontCls = z === 'last' ? 'font-bold' : ''
+                const highlightCls = shouldHighlight ? '[&_td]:!text-red-600 [&_td]:!font-bold' : ''
 
                 return (
                   <tr
                     key={row.id}
-                    className={`border-b border-gray-100 last:border-0 ${rowBg} ${fontCls} ${z === 'last' ? '[&_*]:!text-white' : ''}`}
+                    className={`border-b border-gray-100 last:border-0 ${rowBg} ${fontCls} ${highlightCls} ${z === 'last' ? '[&_*]:!text-white' : ''}`}
                   >
                     {showPremio && (
                       <td className="px-1.5 py-1 text-center text-gray-400 tabular-nums">
