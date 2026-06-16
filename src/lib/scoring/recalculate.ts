@@ -411,6 +411,15 @@ export async function recalculateAfterMatchScore(matchId: string): Promise<void>
 
   // Único upsert em lote → único disparo do trigger → único REFRESH da MV
   await refreshParticipantTotals([...allIds])
+
+  // Sincroniza participant_points_by_day com os pontos de hoje, garantindo que
+  // o Sobe e Desce use a mesma fonte de dados tanto para snapshot quanto para "agora".
+  const todayBR = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
+  try {
+    await recalculateDailyPoints({ upToDate: todayBR })
+  } catch (e) {
+    console.error('[recalculateAfterMatchScore] daily-points rebuild failed:', e)
+  }
 }
 
 // ── Full recalculation (admin reset) ─────────────────────────────────────────

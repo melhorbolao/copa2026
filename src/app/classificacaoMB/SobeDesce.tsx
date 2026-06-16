@@ -134,7 +134,7 @@ export function useSobeDesce({
     if (mode === 'hidden') return null
     if (mode === 'custom') {
       const today = todayBR()
-      return (customTo && customTo < today) ? customTo : null
+      return (customTo && customTo <= today) ? customTo : null
     }
     // Só faz sentido buscar "to" se lastDataDate for posterior ao refDate
     return (lastDataDate && refDate && lastDataDate > refDate) ? lastDataDate : null
