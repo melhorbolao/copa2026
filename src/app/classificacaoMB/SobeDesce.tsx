@@ -91,7 +91,7 @@ interface UseSobeDesceOptions {
   lastResultDate:        string | null
   currentPhaseStartDate: string | null
   /** Array estável (memoizado no componente pai) */
-  rankedRows: ReadonlyArray<{ id: string; pts: number; rank: number }>
+  rankedRows: ReadonlyArray<{ id: string; pts: number; storedPts: number; rank: number }>
   /** Última data com dados em participant_points_by_day (limite para o seletor) */
   lastDataDate: string | null
 }
@@ -227,13 +227,14 @@ export function useSobeDesce({
         }
       }
     } else {
-      // Fallback: sem snapshot TO (lastDataDate == refDate ou não disponível)
-      // Compara snapshot FROM com ranking ao vivo — pode ter pequenas divergências
+      // Fallback: sem snapshot TO (lastDataDate == refDate ou não disponível).
+      // Usa participant_scores.pts_total (storedPts) — mesma fonte que participant_points_by_day —
+      // garantindo que storedPts >= ref.pts_total e nunca haverá delta negativo.
       for (const row of rankedRows) {
         const ref = byPidFrom.get(row.id)
         map.set(row.id, {
           deltaRank: ref ? ref.rank - row.rank : 0,
-          deltaPts:  ref ? row.pts - ref.pts_total : row.pts,
+          deltaPts:  ref ? row.storedPts - ref.pts_total : row.storedPts,
         })
       }
     }

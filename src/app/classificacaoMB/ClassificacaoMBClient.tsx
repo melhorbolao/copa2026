@@ -29,6 +29,7 @@ interface ParticipantRow {
   tournamentBet: {
     champion: string; runner_up: string; semi1: string; semi2: string; top_scorer: string
   } | null
+  storedPts: number
   lastMatchBet: { score_home: number; score_away: number } | null
   nextMatchBet: { score_home: number; score_away: number } | null
 }
@@ -605,7 +606,7 @@ export function ClassificacaoMBClient({
 
   // ── Sobe e Desce ───────────────────────────────────────────────────────────
   const rankedRowsForSD = useMemo(
-    () => ranked.map(r => ({ id: r.id, pts: r.pts, rank: r.rank })),
+    () => ranked.map(r => ({ id: r.id, pts: r.pts, storedPts: r.storedPts, rank: r.rank })),
     [ranked],
   )
   const {

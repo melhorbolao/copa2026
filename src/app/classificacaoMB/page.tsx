@@ -100,7 +100,7 @@ export default async function ClassificacaoMBPage() {
     fetchAll('bets', 'participant_id, match_id, score_home, score_away, points'),
     fetchAll('group_bets', 'participant_id, points'),
     admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer'),
-    admin.from('participant_scores').select('participant_id, pts_thirds'),
+    admin.from('participant_scores').select('participant_id, pts_thirds, pts_total'),
     supabase.from('scoring_rules').select('key, points'),
   ])
 
@@ -249,7 +249,7 @@ export default async function ClassificacaoMBPage() {
     participant_id: string; champion: string; runner_up: string
     semi1: string; semi2: string; top_scorer: string
   }[]
-  const scoresData = (scoresRes.data ?? []) as { participant_id: string; pts_thirds: number | null }[]
+  const scoresData = (scoresRes.data ?? []) as { participant_id: string; pts_thirds: number | null; pts_total: number | null }[]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rules: Record<string, number> = Object.fromEntries((rulesRes.data ?? []).map((r: any) => [r.key, r.points]))
   const zebraThreshold = rules['percentual_zebra'] ?? 15
@@ -311,8 +311,11 @@ export default async function ClassificacaoMBPage() {
   const nextMatch = pendingMatches.length > 0   ? pendingMatches[0] : null
 
   // ── Estatísticas por participante ──────────────────────────────────────────
-  const ptsThirdsMap: Record<string, number> = Object.fromEntries(
+  const ptsThirdsMap:  Record<string, number> = Object.fromEntries(
     scoresData.map(s => [s.participant_id, s.pts_thirds ?? 0])
+  )
+  const storedPtsMap: Record<string, number> = Object.fromEntries(
+    scoresData.map(s => [s.participant_id, s.pts_total ?? 0])
   )
 
   // Distribuição de resultados por jogo (para detectar apostas em possível zebra)
@@ -424,6 +427,7 @@ export default async function ClassificacaoMBPage() {
       pontuados:      pontuadosMap[p.id]   ?? 0,
       zebraApostada:  zebraApostMap[p.id]  ?? 0,
       zebraPontuada:  zebraPontMap[p.id]   ?? 0,
+      storedPts:      storedPtsMap[p.id]   ?? 0,
       tournamentBet:  (bonusVis || p.id === activeParticipantId) ? (tBetMap[p.id] ?? null) : null,
       lastMatchBet:   lastMatchBets[p.id]  ?? null,
       nextMatchBet:   nextMatchBets[p.id]  ?? null,
