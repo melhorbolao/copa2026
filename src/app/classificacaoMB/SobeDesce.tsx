@@ -105,7 +105,7 @@ export function useSobeDesce({
   const router = useRouter()
 
   const [mode,        setMode]        = useState<SobeDesceMode>('hidden')
-  const [customFrom,  setCustomFrom]  = useState(() => subtractDays(lastDataDate ?? todayBR(), 7))
+  const [customFrom,  setCustomFrom]  = useState('2026-06-11')
   const [customTo,    setCustomTo]    = useState(() => lastDataDate ?? subtractDays(todayBR(), 1))
   const [snapshots,   setSnapshots]   = useState<SnapshotEntry[] | null>(null)
   const [snapshotsTo, setSnapshotsTo] = useState<SnapshotEntry[] | null>(null)
