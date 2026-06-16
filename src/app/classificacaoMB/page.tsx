@@ -160,11 +160,12 @@ export default async function ClassificacaoMBPage() {
     artillaryPointsActive = artillaryRow?.data?.value === 'true'
 
     // ── Auto-recalc de pontos diários ────────────────────────────────────────
-    const nowBR = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
+    // UTC-6: consistente com daily-points.ts — dia bolão começa às 06:00 UTC
+    const nowBR = new Intl.DateTimeFormat('fr-CA', { timeZone: 'Etc/GMT+6' }).format(new Date())
     const lastRunDate = dailyRunRow?.data?.value ?? null
     if (lastRunDate !== nowBR) {
       const yday = new Date(); yday.setDate(yday.getDate() - 1)
-      const yesterdayBR = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(yday)
+      const yesterdayBR = new Intl.DateTimeFormat('fr-CA', { timeZone: 'Etc/GMT+6' }).format(yday)
       try {
         await recalculateDailyPoints({ upToDate: yesterdayBR })
         await admin.from('tournament_settings').upsert(
@@ -449,8 +450,9 @@ export default async function ClassificacaoMBPage() {
   const abbr = (team: string) => teamAbbrs[team] ?? team.slice(0, 3).toUpperCase()
 
   // ── Datas para "Sobe e Desce" ─────────────────────────────────────────────
+  // UTC-6: jogos às 1h/2h BRT são do dia anterior no bolão
   const toBRDate = (isoStr: string) =>
-    new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date(isoStr))
+    new Intl.DateTimeFormat('fr-CA', { timeZone: 'Etc/GMT+6' }).format(new Date(isoStr))
 
   // Data do resultado mais recente (para modo "Último dia")
   const lastResultDate = completedMatches.length > 0

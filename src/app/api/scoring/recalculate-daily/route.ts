@@ -9,8 +9,9 @@ import { recalculateDailyPoints } from '@/lib/scoring/daily-points'
 
 export const dynamic = 'force-dynamic'
 
+// UTC-6: consistente com daily-points.ts (jogos às 1h/2h BRT = dia anterior no bolão)
 function toBRDate(d: Date): string {
-  return new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(d)
+  return new Intl.DateTimeFormat('fr-CA', { timeZone: 'Etc/GMT+6' }).format(d)
 }
 
 export async function POST(req: NextRequest) {

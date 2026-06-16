@@ -24,13 +24,13 @@ export default async function EvolucaoPage() {
   const admin = createAuthAdminClient() as any
   const now   = await getServerNow()
 
-  // Data de hoje no fuso Brasília (UTC-3): subtrai 3h e pega a parte YYYY-MM-DD
-  const todayStr = new Date(now.getTime() - 3 * 60 * 60 * 1000)
+  // Dia bolão = UTC-6 (BRT - 3h): jogos às 1h/2h BRT pertencem ao dia anterior
+  // meia-noite UTC-6 = 06:00 UTC; subtrai 6h para obter a data correta
+  const todayStr = new Date(now.getTime() - 6 * 60 * 60 * 1000)
     .toISOString().split('T')[0]
 
-  // Janela UTC correspondente ao dia de hoje em Brasília
-  // meia-noite Brasília = 03:00 UTC; fim do dia = 03:00 UTC do dia seguinte
-  const todayStartUTC   = `${todayStr}T03:00:00.000Z`
+  // Janela UTC correspondente ao dia bolão: meia-noite UTC-6 = 06:00 UTC
+  const todayStartUTC   = `${todayStr}T06:00:00.000Z`
   const tomorrowStartUTC = new Date(new Date(todayStartUTC).getTime() + 24 * 60 * 60 * 1000).toISOString()
 
   const [participantsRes, panelaRes, dailyPointsRes, liveScoresRes, matchesTodayRes] = await Promise.all([

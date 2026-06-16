@@ -414,7 +414,8 @@ export async function recalculateAfterMatchScore(matchId: string): Promise<void>
 
   // Sincroniza participant_points_by_day com os pontos de hoje, garantindo que
   // o Sobe e Desce use a mesma fonte de dados tanto para snapshot quanto para "agora".
-  const todayBR = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
+  // UTC-6: consistente com daily-points.ts
+  const todayBR = new Intl.DateTimeFormat('fr-CA', { timeZone: 'Etc/GMT+6' }).format(new Date())
   try {
     await recalculateDailyPoints({ upToDate: todayBR })
   } catch (e) {

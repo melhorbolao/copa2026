@@ -3,8 +3,9 @@
 
 import { createAuthAdminClient } from '@/lib/supabase/server'
 
+// UTC-6: jogos que começam às 1h ou 2h BRT são atribuídos ao dia anterior no bolão
 function toBRDate(isoDatetime: string): string {
-  return new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date(isoDatetime))
+  return new Intl.DateTimeFormat('fr-CA', { timeZone: 'Etc/GMT+6' }).format(new Date(isoDatetime))
 }
 
 interface DayRow {
