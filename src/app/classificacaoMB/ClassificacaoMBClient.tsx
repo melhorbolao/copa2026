@@ -540,7 +540,7 @@ export function ClassificacaoMBClient({
     for (let i = 0; i < sorted.length; i++) {
       const rank = i === 0 ? 1
         : sorted[i].pts === sorted[i - 1].pts ? withRank[i - 1].rank
-        : withRank[i - 1].rank + 1
+        : i + 1
       withRank.push({ ...sorted[i], rank })
     }
 
