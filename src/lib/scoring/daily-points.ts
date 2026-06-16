@@ -135,12 +135,17 @@ export async function recalculateDailyPoints(options?: { upToDate?: string }): P
     ? [...acc.values()].filter(r => r.event_date <= upToDate)
     : [...acc.values()]
 
-  // Full replace
+  // Full replace — usa UPSERT para sobreviver a chamadas concorrentes:
+  // se duas execuções simultâneas derem DELETE ao mesmo tempo e ambas tentarem
+  // inserir as mesmas linhas, o UPSERT faz UPDATE em vez de criar duplicatas.
+  // Requer constraint UNIQUE (event_date, participant_id) no banco.
   await admin.from('participant_points_by_day').delete().gte('event_date', '1900-01-01')
 
   if (rows.length > 0) {
     for (let i = 0; i < rows.length; i += 500) {
-      const { error } = await admin.from('participant_points_by_day').insert(rows.slice(i, i + 500))
+      const { error } = await admin
+        .from('participant_points_by_day')
+        .upsert(rows.slice(i, i + 500), { onConflict: 'event_date,participant_id' })
       if (error) throw new Error(error.message)
     }
   }
