@@ -266,13 +266,11 @@ function CompactRanking({
     return 'out'
   }
 
-  // Destaque via borda esquerda colorida (prioridade: subida > queda > max pts > min pts)
+  // Destaque via borda esquerda colorida (subida e queda apenas)
   function sdBorder(rowId: string): string {
     if (!sdActive) return ''
     if (highlights.maxUpIds.has(rowId))   return 'border-l-2 border-verde-500'
     if (highlights.maxDownIds.has(rowId)) return 'border-l-2 border-red-500'
-    if (highlights.maxPtsIds.has(rowId))  return 'border-l-2 border-amber-400'
-    if (highlights.minPtsIds.has(rowId))  return 'border-l-2 border-slate-300'
     return 'border-l-2 border-transparent'
   }
 
@@ -360,10 +358,6 @@ function CompactRanking({
 
                     <span className={`pl-1 truncate ${textCls}`} title={r.apelido}>
                       {r.apelido}{z === 'last' && ' 🔦'}
-                      {sdActive && highlights.maxUpIds.has(r.id)   && <span className="ml-0.5 text-[8px]" title="Maior subida do período">🚀</span>}
-                      {sdActive && highlights.maxDownIds.has(r.id) && <span className="ml-0.5 text-[8px]" title="Maior queda do período">📉</span>}
-                      {sdActive && highlights.maxPtsIds.has(r.id)  && <span className="ml-0.5 text-[8px]" title="Maior pontuação do período">🔥</span>}
-                      {sdActive && highlights.minPtsIds.has(r.id)  && <span className="ml-0.5 text-[8px]" title="Menor pontuação do período">🥶</span>}
                     </span>
 
                     <span className={`text-right tabular-nums font-bold ${textCls}`}>{r.pts}</span>
@@ -393,22 +387,6 @@ function CompactRanking({
             {label}
           </span>
         ))}
-        {sdActive && (
-          <>
-            <span className="flex items-center gap-1 text-[11px] text-gray-500">
-              <span className="inline-block h-3 w-0.5 rounded-sm bg-verde-500" />🚀 Maior subida
-            </span>
-            <span className="flex items-center gap-1 text-[11px] text-gray-500">
-              <span className="inline-block h-3 w-0.5 rounded-sm bg-red-500" />📉 Maior queda
-            </span>
-            <span className="flex items-center gap-1 text-[11px] text-gray-500">
-              <span className="inline-block h-3 w-0.5 rounded-sm bg-amber-400" />🔥 Maior pontuação
-            </span>
-            <span className="flex items-center gap-1 text-[11px] text-gray-500">
-              <span className="inline-block h-3 w-0.5 rounded-sm bg-slate-300" />🥶 Menor pontuação
-            </span>
-          </>
-        )}
       </div>
     </div>
   )
