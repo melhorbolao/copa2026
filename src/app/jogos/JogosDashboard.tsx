@@ -28,12 +28,13 @@ const GOAL_ANIM_MS = 3 * 60 * 1000
 
 function defaultMatchIdx(matches: MatchFull[]): number {
   const now = Date.now()
-  // find in-progress (started, within 2h)
-  const inProgress = matches.findIndex(m => {
+  // find in-progress (started, within 4h) — se houver dois simultâneos, o último na tabela
+  let lastInProgress = -1
+  matches.forEach((m, i) => {
     const t = new Date(m.match_datetime).getTime()
-    return now >= t && now <= t + 4 * 3600_000
+    if (now >= t && now <= t + 4 * 3600_000) lastInProgress = i
   })
-  if (inProgress >= 0) return inProgress
+  if (lastInProgress >= 0) return lastInProgress
   // next upcoming
   const next = matches.findIndex(m => new Date(m.match_datetime).getTime() > now)
   if (next >= 0) return next
