@@ -75,7 +75,7 @@ export function DiaDiaChart({ data, nameA, nameB }: {
         />
         <Tooltip content={<CustomTooltip nameA={nameA} nameB={nameB} />} />
         <Line
-          type="monotone"
+          type="linear"
           dataKey="A"
           name={nameA}
           stroke="#002776"
@@ -85,7 +85,7 @@ export function DiaDiaChart({ data, nameA, nameB }: {
           connectNulls
         />
         <Line
-          type="monotone"
+          type="linear"
           dataKey="B"
           name={nameB}
           stroke="#EF4444"
