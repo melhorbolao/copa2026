@@ -126,15 +126,23 @@ export function useSobeDesce({
     }
   }, [mode, lastResultDate, currentPhaseStartDate, customFrom])
 
-  // Data TO: só modo custom com data anterior a hoje
+  // Data TO:
+  //   • custom: data fim escolhida pelo usuário (se for passada)
+  //   • last_day / current_round: lastDataDate (ponta "atual" do mesmo data source do snapshot,
+  //     evita comparar participant_points_by_day com cálculo ao vivo que pode divergir)
   const refDateTo = useMemo((): string | null => {
-    if (mode !== 'custom') return null
-    const today = todayBR()
-    return (customTo && customTo < today) ? customTo : null
-  }, [mode, customTo])
+    if (mode === 'hidden') return null
+    if (mode === 'custom') {
+      const today = todayBR()
+      return (customTo && customTo < today) ? customTo : null
+    }
+    // Só faz sentido buscar "to" se lastDataDate for posterior ao refDate
+    return (lastDataDate && refDate && lastDataDate > refDate) ? lastDataDate : null
+  }, [mode, customTo, lastDataDate, refDate])
 
   const refDateLabel   = refDate   ? formatDateBR(refDate)   : ''
-  const refToDateLabel = refDateTo ? formatDateBR(refDateTo) : ''
+  // Label "até X" só aparece no modo custom (nos outros modos o to é transparente ao usuário)
+  const refToDateLabel = (mode === 'custom' && refDateTo) ? formatDateBR(refDateTo) : ''
 
   // Busca snapshot FROM quando a data de referência muda
   useEffect(() => {
@@ -186,20 +194,41 @@ export function useSobeDesce({
     const map = new Map<string, DeltaEntry>()
 
     if (snapshotsTo && snapshotsTo.length > 0) {
-      // Comparação entre dois snapshots passados
       const byPidTo = new Map(snapshotsTo.map(s => [s.participant_id, s]))
-      for (const [pid, fromEntry] of byPidFrom) {
-        const toEntry = byPidTo.get(pid)
-        if (toEntry) {
-          map.set(pid, {
-            deltaRank: fromEntry.rank    - toEntry.rank,
-            deltaPts:  toEntry.pts_total - fromEntry.pts_total,
-          })
+
+      if (mode === 'custom') {
+        // Modo custom: comparação puramente entre dois snapshots históricos
+        for (const [pid, fromEntry] of byPidFrom) {
+          const toEntry = byPidTo.get(pid)
+          if (toEntry) {
+            map.set(pid, {
+              deltaRank: fromEntry.rank    - toEntry.rank,
+              deltaPts:  toEntry.pts_total - fromEntry.pts_total,
+            })
+          }
+        }
+      } else {
+        // Modos last_day / current_round:
+        //   deltaRank → rank histórico vs rank ao vivo (o que o usuário vê na tela)
+        //   deltaPts  → snapshot-a-snapshot (mesma fonte: participant_points_by_day)
+        //   Isso evita negativos causados por divergência entre cálculo ao vivo e dados históricos
+        for (const row of rankedRows) {
+          const fromEntry = byPidFrom.get(row.id)
+          const toEntry   = byPidTo.get(row.id)
+          if (fromEntry) {
+            map.set(row.id, {
+              deltaRank: fromEntry.rank - row.rank,
+              deltaPts:  toEntry ? toEntry.pts_total - fromEntry.pts_total : 0,
+            })
+          } else if (toEntry) {
+            // Participante não existia no snapshot FROM: mostra total ganho no período
+            map.set(row.id, { deltaRank: 0, deltaPts: toEntry.pts_total })
+          }
         }
       }
     } else {
-      // Comparação do snapshot FROM com o ranking atual
-      // Participantes sem snapshot (0 pts histórico) entram com deltaPts = pts atual e deltaRank = 0
+      // Fallback: sem snapshot TO (lastDataDate == refDate ou não disponível)
+      // Compara snapshot FROM com ranking ao vivo — pode ter pequenas divergências
       for (const row of rankedRows) {
         const ref = byPidFrom.get(row.id)
         map.set(row.id, {
@@ -208,7 +237,7 @@ export function useSobeDesce({
         })
       }
     }
-    return map.size > 0 ? map : null  // null só se não houver snapshot algum
+    return map.size > 0 ? map : null
   }, [snapshots, snapshotsTo, rankedRows, mode])
 
   // Destaques
