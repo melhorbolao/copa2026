@@ -77,14 +77,8 @@ export function JogosDashboard({
   const prevScoreRef  = useRef<{ home: number | null; away: number | null }>({ home: null, away: null })
   const goalTimersRef = useRef<{ home?: ReturnType<typeof setTimeout>; away?: ReturnType<typeof setTimeout> }>({})
 
-  // Current match index
-  const [matchIdx, setMatchIdx] = useState(() => {
-    if (initialMatchId) {
-      const idx = initialMatches.findIndex(m => m.id === initialMatchId)
-      if (idx >= 0) return idx
-    }
-    return defaultMatchIdx(initialMatches)
-  })
+  // Current match index — auto-detecção sempre vence (jogo em andamento ou próximo)
+  const [matchIdx, setMatchIdx] = useState(() => defaultMatchIdx(initialMatches))
 
   const match = matches[matchIdx] ?? matches[0]
 
