@@ -20,14 +20,8 @@ html {
   }
 }
 
-/* Offset dinâmico para o conteúdo abaixo do ScoreHeader fixo em /jogos */
 .jogos-content-top {
   padding-bottom: 1rem;
-}
-@media (min-width: 640px) {
-  .jogos-content-top {
-    padding-top: calc(4.5rem + var(--banner-h));
-  }
 }
 
 /* Scrollbar sutil para containers com overflow-x */
