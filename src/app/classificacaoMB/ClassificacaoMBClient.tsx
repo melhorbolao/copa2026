@@ -176,8 +176,8 @@ function formatRenderedAt(iso: string): string {
 function calcCuts(n: number): { cut1: number; cut2: number } {
   // Primeiro corte: 50% rounded up to next multiple of 10 (regulamento §28)
   const cut1 = Math.min(Math.ceil((n * 0.5) / 10) * 10, n)
-  // Segundo corte: 50% of cut1 survivors, same rounding (regulamento §29)
-  const cut2 = Math.min(Math.ceil((cut1 * 0.5) / 10) * 10, cut1)
+  // Segundo corte: 50% of cut1 survivors, arredondado para cima (regulamento §29)
+  const cut2 = Math.min(Math.ceil(cut1 * 0.5), cut1)
   return { cut1, cut2 }
 }
 

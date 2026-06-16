@@ -169,7 +169,7 @@ const SIM_ZONE_DOT: Record<SimZone, string> = {
 
 function calcSimCuts(n: number): { cut1: number; cut2: number } {
   const cut1 = Math.min(Math.ceil((n * 0.5) / 10) * 10, n)
-  const cut2 = Math.min(Math.ceil((cut1 * 0.5) / 10) * 10, cut1)
+  const cut2 = Math.min(Math.ceil(cut1 * 0.5), cut1)
   return { cut1, cut2 }
 }
 
