@@ -22,7 +22,6 @@ html {
 
 /* Offset dinâmico para o conteúdo abaixo do ScoreHeader fixo em /jogos */
 .jogos-content-top {
-  padding-top: calc(2rem + var(--banner-h));
   padding-bottom: 1rem;
 }
 @media (min-width: 640px) {
