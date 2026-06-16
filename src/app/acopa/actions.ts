@@ -71,7 +71,7 @@ export async function saveOfficialScore(
       return { error: 'Fora da janela de edição (início do jogo + 4h)' }
     }
 
-    const admin = await createAdminClient()
+    const admin = createAuthAdminClient()
     const { error } = await admin
       .from('matches')
       .update({ score_home: scoreHome, score_away: scoreAway })
@@ -110,7 +110,7 @@ export async function savePenaltyWinner(
       return { error: 'Fora da janela de edição (início do jogo + 4h)' }
     }
 
-    const admin = await createAdminClient()
+    const admin = createAuthAdminClient()
     const { error } = await admin
       .from('matches')
       .update({ penalty_winner: winner })
