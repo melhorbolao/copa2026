@@ -10,7 +10,7 @@ interface Props {
   padrinhos: string[]
 }
 
-export function ParticipantesFilter({ nextStageLabel, hasAnyEliminated, fillCounts, isAdmin, padrinhos }: Props) {
+export function ParticipantesFilter({ nextStageLabel, hasAnyEliminated, fillCounts, padrinhos }: Props) {
   const router      = useRouter()
   const searchParams = useSearchParams()
 
@@ -138,8 +138,8 @@ export function ParticipantesFilter({ nextStageLabel, hasAnyEliminated, fillCoun
         )}
       </div>
 
-      {/* Filtro por padrinho — apenas admins */}
-      {isAdmin && padrinhos.length > 0 && (
+      {/* Filtro por padrinho */}
+      {padrinhos.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs text-gray-400 font-medium">Padrinho:</span>
           <select

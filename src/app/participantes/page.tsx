@@ -92,9 +92,7 @@ export default async function ControlePage({
     fetchAll('third_place_bets', 'participant_id, group_name'),
     getPhaseSettings(),
     getQualifiedSets(),
-    isAdmin
-      ? fetchAll('user_participants', 'participant_id, users(padrinho)') as Promise<{ participant_id: string; users: { padrinho: string | null } | null }[]>
-      : Promise.resolve([]),
+    fetchAll('user_participants', 'participant_id, users(padrinho)') as Promise<{ participant_id: string; users: { padrinho: string | null } | null }[]>,
   ])
 
   // Mapa de padrinho por participante (apenas admin)
@@ -104,11 +102,9 @@ export default async function ControlePage({
       padrinhoByPid.set(up.participant_id, up.users?.padrinho ?? null)
     }
   }
-  const padrinhoOptions = isAdmin
-    ? [...new Set(
-        [...padrinhoByPid.values()].filter((v): v is string => v !== null && v.trim() !== '')
-      )].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }))
-    : []
+  const padrinhoOptions = [...new Set(
+    [...padrinhoByPid.values()].filter((v): v is string => v !== null && v.trim() !== '')
+  )].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }))
 
   // Valida duplicidade G4 por participante
   function getG4Errors(bet: { champion?: string|null; runner_up?: string|null; semi1?: string|null; semi2?: string|null }): string[] {
