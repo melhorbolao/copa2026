@@ -33,7 +33,10 @@ export default async function EvolucaoPage() {
   const todayStartUTC   = `${todayStr}T06:00:00.000Z`
   const tomorrowStartUTC = new Date(new Date(todayStartUTC).getTime() + 24 * 60 * 60 * 1000).toISOString()
 
-  const [participantsRes, panelaRes, dailyPointsRes, liveScoresRes, matchesTodayRes] = await Promise.all([
+  const [
+    participantsRes, panelaRes, dailyPointsRes, liveScoresRawRes, matchesTodayRes,
+    artillarySettingRes, officialScorerSettingRes, rulesRes, scorerMappingRes, tournamentBetsRes, topScorersRes,
+  ] = await Promise.all([
     admin.from('participants').select('id, apelido').order('apelido'),
     admin.from('user_panela')
       .select('member_participant_id')
@@ -50,6 +53,19 @@ export default async function EvolucaoPage() {
       .select('match_datetime, score_home')
       .gte('match_datetime', todayStartUTC)
       .lt('match_datetime', tomorrowStartUTC),
+    // Configurações de artilharia (para alinhar live scores com a classificação)
+    admin.from('tournament_settings').select('value').eq('key', 'artillary_points_active').maybeSingle()
+      .then((r: { data: { value: string } | null }) => r, () => ({ data: null })),
+    admin.from('tournament_settings').select('value').eq('key', 'official_top_scorer').maybeSingle()
+      .then((r: { data: { value: string } | null }) => r, () => ({ data: null })),
+    admin.from('scoring_rules').select('key, points')
+      .then((r: { data: { key: string; points: number }[] | null }) => r, () => ({ data: [] })),
+    admin.from('top_scorer_mapping').select('raw_name, standardized_name')
+      .then((r: { data: { raw_name: string; standardized_name: string }[] | null }) => r, () => ({ data: [] })),
+    admin.from('tournament_bets').select('participant_id, top_scorer')
+      .then((r: { data: { participant_id: string; top_scorer: string | null }[] | null }) => r, () => ({ data: [] })),
+    admin.from('top_scorers').select('player_name, goals_count').order('goals_count', { ascending: false })
+      .then((r: { data: { player_name: string; goals_count: number }[] | null }) => r, () => ({ data: [] })),
   ])
 
   const participants: { id: string; apelido: string }[] = participantsRes.data ?? []
@@ -66,7 +82,55 @@ export default async function EvolucaoPage() {
     pts_tournament: number
   }[] = dailyPointsRes.data ?? []
 
-  const liveScores: { participant_id: string; pts_total: number }[] = liveScoresRes.data ?? []
+  // ── Ajuste de artilharia nos live scores ─────────────────────────────────────
+  // participant_scores.pts_total inclui artilharia de tournament_bets.points (sempre).
+  // classificacaoMB calcula ptsG4 ao vivo e zera artilharia quando o flag está off.
+  // Aqui replicamos essa lógica para que o ponto "Hoje" do gráfico seja consistente.
+  const artillaryActive = artillarySettingRes?.data?.value === 'true'
+  const artilheiroPts = ((rulesRes.data ?? []) as { key: string; points: number }[])
+    .find(r => r.key === 'artilheiro')?.points ?? 18
+
+  const scorerMapping: Record<string, string> = Object.fromEntries(
+    ((scorerMappingRes.data ?? []) as { raw_name: string; standardized_name: string }[])
+      .map(m => [m.raw_name.toLowerCase().trim(), m.standardized_name])
+  )
+
+  // Artilheiros ARMAZENADOS em tournament_bets.points: baseados em official_top_scorer setting
+  let storedOfficialScorers: string[] = []
+  if (officialScorerSettingRes?.data?.value) {
+    try { storedOfficialScorers = JSON.parse(officialScorerSettingRes.data.value) }
+    catch { storedOfficialScorers = [officialScorerSettingRes.data.value] }
+  }
+
+  // Artilheiros CORRETOS para a classificação atual (espelha classificacaoMB)
+  let currentOfficialScorers: string[] = []
+  if (artillaryActive) {
+    const topScorersData = (topScorersRes?.data ?? []) as { player_name: string; goals_count: number }[]
+    if (topScorersData.length > 0) {
+      const maxGoals = topScorersData[0].goals_count
+      if (maxGoals > 0) {
+        currentOfficialScorers = topScorersData.filter(s => s.goals_count === maxGoals).map(s => s.player_name)
+      }
+    }
+  }
+
+  const storedArtilhariaSet  = new Set<string>()
+  const currentArtilhariaSet = new Set<string>()
+  const tourBets = (tournamentBetsRes.data ?? []) as { participant_id: string; top_scorer: string | null }[]
+  for (const tb of tourBets) {
+    if (!tb.top_scorer) continue
+    const norm = (scorerMapping[tb.top_scorer.toLowerCase().trim()] ?? tb.top_scorer).trim().toLowerCase()
+    if (storedOfficialScorers.some(s => s.trim().toLowerCase() === norm))  storedArtilhariaSet.add(tb.participant_id)
+    if (currentOfficialScorers.some(s => s.trim().toLowerCase() === norm)) currentArtilhariaSet.add(tb.participant_id)
+  }
+
+  const rawLiveScores = (liveScoresRawRes.data ?? []) as { participant_id: string; pts_total: number }[]
+  const liveScores: { participant_id: string; pts_total: number }[] = rawLiveScores.map(ls => ({
+    participant_id: ls.participant_id,
+    pts_total: ls.pts_total
+      - (storedArtilhariaSet.has(ls.participant_id)  ? artilheiroPts : 0)
+      + (currentArtilhariaSet.has(ls.participant_id) ? artilheiroPts : 0),
+  }))
 
   // Ao menos 1 jogo finalizado (score_home != null) ou já iniciado (match_datetime <= now)
   const hasMatchToday: boolean = (matchesTodayRes.data ?? []).some(
