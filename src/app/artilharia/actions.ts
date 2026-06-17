@@ -70,7 +70,8 @@ export async function deleteTopScorer(id: string): Promise<{ error?: string }> {
       .from('users').select('is_admin').eq('id', user.id).single()
     if (!profile?.is_admin) return { error: 'Acesso negado' }
 
-    const { error } = await supabase.from('top_scorers').delete().eq('id', id)
+    const admin = createAuthAdminClient()
+    const { error } = await admin.from('top_scorers').delete().eq('id', id)
     if (error) return { error: error.message }
     return {}
   } catch (err) {
@@ -151,7 +152,10 @@ export async function insertTopScorer(
       .select('id')
       .single()
 
-    if (error) return { error: error.message }
+    if (error) {
+      if (error.code === '23505') return { error: 'Já existe um artilheiro com esse nome.' }
+      return { error: error.message }
+    }
     return { id: data.id }
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Erro inesperado' }
