@@ -64,11 +64,11 @@ function ExportableSecador({
     : `${abbr(match.team_home)} × ${abbr(match.team_away)}`
 
   return (
-    <div style={{ background: 'white', borderRadius: 16, border: '1px solid #e5e7eb', overflow: 'hidden', height: 'auto', maxHeight: 'none' }}>
+    <div style={{ background: '#ecfdf5', borderRadius: 16, border: '1px solid #d1fae5', overflow: 'hidden', height: 'auto', maxHeight: 'none' }}>
       {/* Cabeçalho */}
-      <div style={{ background: '#ecfdf5', borderBottom: '1px solid #d1fae5', padding: '10px 16px' }}>
+      <div style={{ padding: '10px 16px' }}>
         <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: '#065f46', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          {afterDeadline ? 'Cravaram' : 'Cravando'} {abbr(match.team_home)}{scoreStr ? ` ${match.score_home}X${match.score_away}` : ''} {abbr(match.team_away)} ({sorted.length})
+          {afterDeadline ? 'Cravaram' : 'Cravando'} {matchLabel} ({sorted.length})
         </p>
       </div>
 
@@ -79,7 +79,7 @@ function ExportableSecador({
         <img
           src="/secador.png"
           alt="secador"
-          style={{ width: 80, height: 80, objectFit: 'contain', flexShrink: 0, transform: 'scaleX(-1)', alignSelf: 'center' }}
+          style={{ width: 80, height: 80, objectFit: 'contain', flexShrink: 0, transform: 'scaleX(-1)', alignSelf: 'flex-start' }}
         />
 
         {/* Chips: apenas nome + variação de posição (sem placar repetido, sem pontos) */}
@@ -126,6 +126,13 @@ export function RankingPanel({
 
   const hasResult = match.score_home !== null && match.score_away !== null
   const afterDeadline = Date.now() > new Date(match.match_datetime).getTime() + EDIT_WINDOW_MS
+
+  const scoreStr = match.score_home !== null && match.score_away !== null
+    ? `${match.score_home}×${match.score_away}`
+    : null
+  const matchLabel = scoreStr
+    ? `${abbr(match.team_home)} ${scoreStr} ${abbr(match.team_away)}`
+    : `${abbr(match.team_home)} × ${abbr(match.team_away)}`
 
   const cravando = matchBets.filter(b =>
     hasResult && b.score_home === match.score_home && b.score_away === match.score_away
@@ -255,7 +262,7 @@ export function RankingPanel({
       {cravando.length > 0 && (
         <div className="bg-emerald-50 border-b border-emerald-100 px-4 py-3">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wide">✓ {afterDeadline ? 'Cravaram' : 'Cravando agora'} ({cravando.length})</span>
+            <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wide">{afterDeadline ? 'Cravaram' : 'Cravando'} {matchLabel} ({cravando.length})</span>
             <div className="flex items-center gap-2">
               {!afterDeadline && !secador && secadorAllowed && (
                 <button
