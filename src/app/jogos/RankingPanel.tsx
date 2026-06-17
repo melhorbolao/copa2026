@@ -212,15 +212,31 @@ export function RankingPanel({
       delta: (rankBefore[p.id] ?? participants.length) - (rankAfter[p.id] ?? participants.length),
     }))
     .sort((a, b) => {
-      let diff = 0
-      if (sortKey === 'pos') diff = a.after - b.after
-      else if (sortKey === 'total') diff = b.total - a.total
-      else if (sortKey === 'match') diff = b.ptsGained - a.ptsGained
-      else if (sortKey === 'delta') diff = b.delta - a.delta
-      else if (sortKey === 'name') return sortDir === 'asc'
-        ? a.apelido.localeCompare(b.apelido, 'pt-BR')
+      const dir = sortDir === 'asc' ? 1 : -1
+      const byName = () => a.apelido.localeCompare(b.apelido, 'pt-BR')
+
+      if (sortKey === 'pos') {
+        return (a.after - b.after) || (b.total - a.total) || byName()
+      }
+      if (sortKey === 'total') {
+        const primary = (b.total - a.total) * dir
+        if (primary !== 0) return primary
+        const secondary = (b.ptsGained - a.ptsGained) * dir
+        return secondary !== 0 ? secondary : byName()
+      }
+      if (sortKey === 'match') {
+        const primary = (b.ptsGained - a.ptsGained) * dir
+        if (primary !== 0) return primary
+        const secondary = (b.total - a.total) * dir
+        return secondary !== 0 ? secondary : byName()
+      }
+      if (sortKey === 'delta') {
+        return ((b.delta - a.delta) * dir) || byName()
+      }
+      // name
+      return dir === 1
+        ? byName()
         : b.apelido.localeCompare(a.apelido, 'pt-BR')
-      return sortDir === 'asc' ? diff : -diff
     })
 
   if (!hasResult) {
