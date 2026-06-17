@@ -1,9 +1,9 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { StickyStats } from './StickyStats'
 import { Countdown } from './Countdown'
 import { RoundProgress } from './RoundProgress'
@@ -333,6 +333,25 @@ function PalpitesTabPane({
     [visibleGroupMatches, isGroupEtapa, visibleGroupOrder, groupTeams, visibleKnockoutPhases, resolvedKnockoutByPhase],
   )
 
+  const allVisibleMatchIds = useMemo(
+    () => [
+      ...visibleGroupMatches.map(m => m.id),
+      ...visibleKnockoutPhases.flatMap(p => resolvedKnockoutByPhase[p] ?? []).map(m => m.id),
+    ],
+    [visibleGroupMatches, visibleKnockoutPhases, resolvedKnockoutByPhase],
+  )
+
+  const etapaLabel =
+    etapa === 'r1' ? 'Rodada 1' :
+    etapa === 'r2' ? 'Rodada 2' :
+    etapa === 'r3' ? 'Rodada 3' :
+    etapa === 'r32' ? 'Rodada de 32' :
+    etapa === 'r16' ? 'Oitavas de Final' :
+    etapa === 'qf' ? 'Quartas de Final' :
+    etapa === 'sf' ? 'Semifinais' :
+    etapa === 'final' ? '3º Lugar e Final' :
+    'Rodada'
+
   const tableHead = (
     <thead className="sticky top-0 z-10 border-b border-gray-200 bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-400">
       <tr>
@@ -513,6 +532,11 @@ function PalpitesTabPane({
           )}
         </ThirdPlaceProvider>
       </div>
+      <ValidarButton
+        visibleMatchIds={allVisibleMatchIds}
+        betMap={betMap}
+        etapaLabel={etapaLabel}
+      />
     </>
   )
 }
@@ -554,5 +578,93 @@ function TabLink({ href, label, active }: { href: string; label: string; active:
     >
       {label}
     </Link>
+  )
+}
+
+function ValidarButton({
+  visibleMatchIds,
+  betMap,
+  etapaLabel,
+}: {
+  visibleMatchIds: string[]
+  betMap: Record<string, BetVal>
+  etapaLabel: string
+}) {
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [stats, setStats] = useState<{ total: number; preenchidos: number; pendentes: number } | null>(null)
+
+  const handleValidarClick = () => {
+    // Proteção anti-perda: força blur para disparar auto-save de input em foco
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur()
+    }
+
+    const total = visibleMatchIds.length
+    const preenchidos = visibleMatchIds.filter(id => betMap[id] !== undefined).length
+    const pendentes = total - preenchidos
+
+    setStats({ total, preenchidos, pendentes })
+    setOpen(true)
+  }
+
+  const handleOk = () => {
+    setOpen(false)
+    router.refresh()
+  }
+
+  if (visibleMatchIds.length === 0) return null
+
+  return (
+    <>
+      <div className="fixed bottom-5 left-0 right-0 z-20 flex justify-center pointer-events-none">
+        <button
+          onClick={handleValidarClick}
+          className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-verde-600 px-6 py-3 text-sm font-bold text-white shadow-lg ring-1 ring-verde-700/30 hover:bg-verde-700 active:scale-95 transition-all"
+        >
+          <span>✓</span>
+          <span>Validar</span>
+        </button>
+      </div>
+
+      {open && stats && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+          onClick={e => { if (e.target === e.currentTarget) handleOk() }}
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+            {stats.pendentes > 0 ? (
+              <>
+                <div className="mb-3 flex items-center gap-2">
+                  <span className="text-2xl">⚠️</span>
+                  <h2 className="text-base font-bold text-gray-900">Palpites incompletos</h2>
+                </div>
+                <p className="text-sm text-gray-600">
+                  Palpites da {etapaLabel}:{' '}
+                  <span className="font-semibold text-verde-700">{stats.preenchidos} preenchido{stats.preenchidos !== 1 ? 's' : ''}</span>,{' '}
+                  <span className="font-semibold text-amber-600">{stats.pendentes} pendente{stats.pendentes !== 1 ? 's' : ''}</span>.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="mb-3 flex items-center gap-2">
+                  <span className="text-2xl">✅</span>
+                  <h2 className="text-base font-bold text-gray-900">Tudo preenchido!</h2>
+                </div>
+                <p className="text-sm text-gray-600">
+                  Palpites da {etapaLabel} 100% preenchidos e salvos!
+                </p>
+              </>
+            )}
+            <button
+              onClick={handleOk}
+              className="mt-5 w-full rounded-lg bg-verde-600 py-2.5 text-sm font-bold text-white hover:bg-verde-700 transition-colors"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   )
 }

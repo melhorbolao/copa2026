@@ -1,53 +1,32 @@
-ESPECIFICAÇÃO TÉCNICA: EVOLUÇÃO DE EXPORTAÇÃO DE IMAGENS E COMPARTILHAMENTO EM TEMPO REAL (MOBILE)
+ESPECIFICAÇÃO TÉCNICA: BOTÃO "VALIDAR" (UX PLACEBO E AUDITORIA DE RODADA) 
 
-Objetivo: Refatorar o mecanismo de captura da Classificação Geral para refletir os destaques visuais ativos na tela do usuário e criar duas novas ferramentas de compartilhamento gráfico na tela de "Jogos", focadas na experiência mobile e na viralização nos grupos de WhatsApp.
+Objetivo: Melhorar a experiência do usuário (UX) na página de "Meus Palpites". O sistema de auto-save célula a célula deve ser mantido, mas adicionaremos um botão "Validar" que atua como um auditor da rodada e traz conforto psicológico. Devemos garantir que dados digitados instantes antes do clique não sejam perdidos.
 
----
+Siga estas diretrizes para a implementação no componente correspondente:
 
-1. REQUISITO 1: PRESERVAÇÃO DE DESTAQUES NA EXPORTAÇÃO DA CLASSIFICAÇÃO
+1. UI: O BOTÃO "VALIDAR"
+- Adicione um botão com o rótulo "Validar" em posição de destaque (ex: sticky bottom ou acima da lista de jogos).
+- O botão não deve interromper o fluxo de auto-save, apenas complementá-lo.
 
-Modificação do comportamento do componente invisível de captura (<ExportableRankingBoard />):
-- Lógica Anterior: Forçava uma tabela limpa e sem destaques.
-- Nova Regra: O componente de renderização fantasma deve receber, via props ou contexto, os estados exatos de filtragem e destaque que estão ativos na tela do usuário no momento do clique (ex: 'highlightedUserIds', 'activeTribeId', 'currentUserId').
-- Estilização Dinâmica: Se o usuário estiver com o botão "Destacar meu nome" ou "Destacar minha panela" ativado, o componente oculto deve aplicar rigorosamente as mesmas classes CSS de highlight (fundo azul e borda/texto ouro) nas linhas correspondentes antes de disparar o gatilho da biblioteca 'html-to-image'.
-- Resultado Esperado: A imagem gerada será um clone fiel da experiência personalizada do usuário, ideal para ele compartilhar o seu próprio posicionamento ou o da sua "panela".
+2. PROTEÇÃO ANTI-PERDA DE DADOS (FORÇAR ONBLUR):
+- A primeira linha da função disparada pelo clique do botão (ex: `handleValidarClick`) DEVE remover o foco do elemento ativo atual.
+- Utilize: `if (document.activeElement instanceof HTMLElement) { document.activeElement.blur(); }`
+- Isso garante que, se o usuário clicar no botão enquanto o cursor ainda pisca dentro do input do placar, o evento `onBlur` do input será forçado e o auto-save correspondente será disparado em background com sucesso antes do término da função.
 
----
+3. LÓGICA DE AUDITORIA (IN-MEMORY):
+- Após forçar o blur, o script deve analisar a array local de jogos exibida na tela.
+- Calcule utilizando a memória do cliente:
+  * 'totalJogos': Quantidade de partidas listadas na rodada.
+  * 'preenchidos': Quantidade de partidas onde AMBOS os placares (mandante e visitante) não são nulos e são válidos.
+  * 'pendentes': Diferença entre 'totalJogos' e 'preenchidos'.
 
-2. REQUISITO 2A: "COMPARTILHAR RESUMO" (TELA JOGOS - MOBILE ONLY)
+4. UX: O POP-UP DE FEEDBACK (MODAL/DIALOG):
+- Utilize um Dialog/AlertDialog (Shadcn UI ou equivalente) para exibir o resultado.
+- Cenário A (Incompleto): Se 'pendentes > 0', ícone de alerta e mensagem: "Palpites da [Rodada]: {preenchidos} preenchidos, {pendentes} pendentes."
+- Cenário B (Completo): Se 'pendentes === 0', check verde e mensagem: "Palpites da [Rodada] 100% preenchidos e salvos!".
 
-Interface e Comportamento do Botão de Resumo de Palpites:
-- Localização: Inserido no cabeçalho do card de cada partida ou junto às estatísticas de distribuição de palpites do jogo na aba "Jogos".
-- Visibilidade: Exibido apenas em telas menores (classes Tailwind `block md:hidden`).
-- Regra de Negócio (Remoção de Dado Sensível):
-  * Ao clicar em "Compartilhar resumo", o sistema gera uma árvore DOM fantasma da tabela de distribuição de palpites daquele jogo específico (que mostra os percentuais de vitória/empate ou placares mais apostados).
-  * O script deve forçar programaticamente a ocultação da linha de identificação pessoal (classe `.meu-palpite-row` ou similar) aplicando `display: none !important`. O objetivo é que o palpite individual do usuário não seja revelado na imagem pública.
-- Fluxo de Disparo: Converte o componente modificado em imagem de alta resolução (PNG/Blob) e aciona a Web Share API (`navigator.share`).
-- Restrição do Compartilhamento: O payload enviado ao WhatsApp deve conter estritamente o arquivo de imagem no array de `files`. Os campos `text` e `title` devem ser deixados vazios ou nulos para que a imagem seja compartilhada de forma limpa, sem textos descritivos automáticos.
+5. AÇÃO DE ENCERRAMENTO (REFRESH):
+- O botão de confirmação ("OK") do modal deve fechar o pop-up e acionar um refresh da página (`window.location.reload()` ou `router.refresh()`). Como o usuário passará alguns segundos lendo o modal, a requisição de rede do auto-save (disparada pelo blur forçado) terá tempo de sobra para concluir com segurança no banco de dados.
 
----
-
-3. REQUISITO 2B: "COMPARTILHAR SECADOR" (TELA JOGOS - MOBILE ONLY)
-
-Interface e Mecanismo de Expansão Vertical Completa:
-- Regra de Ativação (Condicional Crítica): O botão "Compartilhar secador" (identificado por um ícone visual correspondente, como um secador ou um emoji de olho 👁️) só deve ficar ativo ou visível se o estado em tempo real do jogo indicar que existem usuários acertando em cheio o placar atual (ou seja, `participantsCravando.length > 0`).
-- Resolução do Gargalo Mobile (Off-Screen Layout):
-  * No celular, a lista de "secadores" sofre clipping por causa do espaço reduzido da tela. Para garantir que 100% dos usuários cravando apareçam na mesma imagem, o componente fantasma de exportação deve ser forçado com `height: auto` e `max-height: none`.
-  * Caso o número de participantes cravando seja muito volumoso (ex: mais de 20 pessoas no placar de 1x0), o componente fantasma deve se auto-organizar em uma estrutura de grid de múltiplas colunas compactas (idêntica à lógica usada na imagem de classificação geral do PC), distribuindo os nomes horizontalmente para que caibam todos em um único enquadramento retangular limpo.
-- Conteúdo da Imagem: Deve listar o Avatar, Nome/Apelido do participante, a indicação do placar que ele cravou e a variação projetada de pontos (ex: "+33 PTS").
-- Disparo: Conversão imediata para imagem e abertura da gaveta de compartilhamento nativa do smartphone.
-
----
-
-4. DIRETRIZES TÉCNICAS, MEMÓRIA E PERFORMANCE (MANDATÓRIAS):
-
-- Renderização sob Demanda: Tanto o nó fantasma do "Resumo" quanto o do "Secador" não devem ficar montados no DOM de forma latente. Eles só devem ser inseridos no HTML condicionalmente quando o respectivo botão for pressionado. Assim que o processamento do `html-to-image` gerar o arquivo e abrir o menu de compartilhamento, os componentes devem ser imediatamente desmontados (`unmounted`) para poupar a memória RAM do smartphone.
-- Otimização do Banco de Dados: Estas operações de geração de imagem operam em nível estritamente client-side. Elas devem reaproveitar as variáveis de estado local, coleções de objetos e caches de consultas que a página de Jogos já possui na memória do navegador. É terminantemente proibido realizar novos fetches ou chamadas adicionais de API ao Supabase para construir as imagens.
-
----
-
-5. PROTOCOLO DE VALIDAÇÃO (VERIFICAÇÃO INDEPENDENTE PARA O CLAUDE CODE)
-
-Antes de autorizar o commit das alterações nos arquivos 'src/app/jogos/page.tsx' ou componentes relacionados, instrua o Claude a apresentar no terminal:
-A) O mapeamento de classes CSS que ele utilizará para ocultar a linha "MEU PALPITE" na árvore DOM clonada.
-B) A lógica de cálculo do layout de colunas dinâmicas para o painel do Secador caso a lista de usuários cravando exceda o limite vertical do celular.
+6. VERIFICAÇÃO INDEPENDENTE OBRIGATÓRIA:
+Apresente a função de clique do botão demonstrando a injeção do comando `document.activeElement.blur()` logo no início do bloco, antes da lógica de contagem e renderização do modal.
