@@ -41,13 +41,14 @@ interface RankedRow extends Participant {
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const PHASE_FILTERS = [
-  { value: 'all',    label: 'Todos',   phases: ['group','round_of_32','round_of_16','quarterfinal','semifinal','third_place','final'] },
-  { value: 'group',  label: 'Grupos',  phases: ['group'] },
-  { value: 'r32',    label: '16avos',  phases: ['round_of_32'] },
-  { value: 'r16',    label: 'Oitavas', phases: ['round_of_16'] },
-  { value: 'qf',     label: 'Quartas', phases: ['quarterfinal'] },
-  { value: 'sf',     label: 'Semis',   phases: ['semifinal'] },
-  { value: 'final',  label: 'Final',   phases: ['third_place','final'] },
+  { value: 'all',       label: 'Todos',            phases: ['group','round_of_32','round_of_16','quarterfinal','semifinal','third_place','final'] },
+  { value: 'alterados', label: '⏱️ Alterados',     phases: [] },
+  { value: 'group',     label: 'Grupos',            phases: ['group'] },
+  { value: 'r32',       label: '16avos',            phases: ['round_of_32'] },
+  { value: 'r16',       label: 'Oitavas',           phases: ['round_of_16'] },
+  { value: 'qf',        label: 'Quartas',           phases: ['quarterfinal'] },
+  { value: 'sf',        label: 'Semis',             phases: ['semifinal'] },
+  { value: 'final',     label: 'Final',             phases: ['third_place','final'] },
 ] as const
 
 const PHASE_LABELS: Record<string, string> = {
@@ -144,10 +145,17 @@ export function NinetyMinClient({
   const zebraThreshold = rules['percentual_zebra'] ?? 15
 
   const filteredMatches = useMemo(() => {
+    if (phaseFilter === 'alterados') {
+      return matches.filter(m => {
+        if (m.score_home === null) return false
+        const r90 = results90.get(m.id)
+        return r90 !== undefined && (r90.h !== m.score_home || r90.a !== m.score_away)
+      })
+    }
     const pf     = PHASE_FILTERS.find(f => f.value === phaseFilter)
     const phases = [...(pf?.phases ?? PHASE_FILTERS[0].phases)] as string[]
     return matches.filter(m => phases.includes(m.phase))
-  }, [matches, phaseFilter])
+  }, [matches, phaseFilter, results90])
 
   // ── Rank oficial (pts_total da tabela participant_scores) ────────────────────
 
@@ -345,19 +353,24 @@ export function NinetyMinClient({
       {activeTab === 'jogos' && (
         <div className="mx-auto max-w-full px-4">
           <div className="mb-4 flex flex-wrap gap-1">
-            {PHASE_FILTERS.map(f => (
-              <button
-                key={f.value}
-                onClick={() => setPhaseFilter(f.value)}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-                  phaseFilter === f.value
-                    ? 'bg-azul-escuro text-white'
-                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-800'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
+            {PHASE_FILTERS.map(f => {
+              const isActive = phaseFilter === f.value
+              const isAltered = f.value === 'alterados'
+              return (
+                <button
+                  key={f.value}
+                  onClick={() => setPhaseFilter(f.value)}
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+                    isActive && isAltered  ? 'bg-amber-500 text-white shadow-sm' :
+                    isActive               ? 'bg-azul-escuro text-white' :
+                    isAltered              ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-300 hover:bg-amber-100' :
+                                            'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-800'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              )
+            })}
           </div>
 
           {filteredMatches.length === 0 ? (
