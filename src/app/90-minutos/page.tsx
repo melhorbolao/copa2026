@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 import { redirect } from 'next/navigation'
 import { createClient, createAuthAdminClient } from '@/lib/supabase/server'
 import { requirePageAccess } from '@/lib/page-visibility'
+import { getActiveParticipantId } from '@/lib/participant'
 import { Navbar } from '@/components/layout/Navbar'
 import { NinetyMinClient } from './NinetyMinClient'
 import type { MatchWith90, BetRaw, Participant } from './NinetyMinClient'
@@ -25,6 +26,8 @@ export default async function NinetyMinPage() {
   await requirePageAccess('90-minutos', profile?.role ?? 'user')
 
   const admin = createAuthAdminClient() as any
+
+  const activeParticipantId = await getActiveParticipantId(supabase, user.id).catch(() => null)
 
   // ── Matches (uma única chamada: LEFT JOIN via nested select) ──────────────
   const { data: matchesRaw } = await supabase
@@ -105,6 +108,7 @@ export default async function NinetyMinPage() {
       <NinetyMinClient
         isAdmin={isAdmin}
         userId={user.id}
+        activeParticipantId={activeParticipantId ?? ''}
         matches={matches}
         bets={bets}
         participants={participants}
