@@ -48,6 +48,7 @@ interface Props {
   bets: BetRaw[]
   participants: Participant[]
   rules: RuleMap
+  premioSpots: number
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -72,6 +73,38 @@ const PHASE_LABELS: Record<string, string> = {
   final:        'Final',
 }
 
+// ── Zone helpers (same thresholds as CompactRanking official) ──────────────────
+
+type Zone = 'premio' | 'corte2' | 'corte1' | 'out' | 'last'
+
+const ZONE_ROW: Record<Zone, string> = {
+  premio: 'bg-green-50',
+  corte2: 'bg-sky-50',
+  corte1: 'bg-amber-50',
+  out:    'bg-white',
+  last:   'bg-red-500',
+}
+const ZONE_TEXT: Record<Zone, string> = {
+  premio: 'text-green-800 font-semibold',
+  corte2: 'text-sky-700 font-medium',
+  corte1: 'text-amber-700',
+  out:    'text-gray-400',
+  last:   'text-white font-bold',
+}
+const ZONE_DOT: Record<Zone, string> = {
+  premio: 'bg-green-300',
+  corte2: 'bg-sky-300',
+  corte1: 'bg-amber-300',
+  out:    'bg-gray-200',
+  last:   'bg-red-400',
+}
+
+function calcCuts(n: number): { cut1: number; cut2: number } {
+  const cut1 = Math.min(Math.ceil((n * 0.5) / 10) * 10, n)
+  const cut2 = Math.min(Math.ceil(cut1 * 0.5), cut1)
+  return { cut1, cut2 }
+}
+
 // ── Utilities ──────────────────────────────────────────────────────────────────
 
 function abbr(name: string, max = 9) {
@@ -89,8 +122,7 @@ type Score = { h: number; a: number }
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export function NinetyMinClient({ isAdmin, userId, matches, bets, participants, rules }: Props) {
-  // 90min results confirmed in DB (updated on successful save)
+export function NinetyMinClient({ isAdmin, userId, matches, bets, participants, rules, premioSpots }: Props) {
   const [results90, setResults90] = useState<Map<string, Score>>(() => {
     const m = new Map<string, Score>()
     for (const match of matches) {
@@ -101,10 +133,8 @@ export function NinetyMinClient({ isAdmin, userId, matches, bets, participants, 
     return m
   })
 
-  // Local simulation state for future matches (not persisted)
   const [simScores, setSimScores] = useState<Map<string, Score>>(new Map())
 
-  // Admin input draft values (for completed matches, before save)
   const [adminInputs, setAdminInputs] = useState<Map<string, { h: string; a: string }>>(() => {
     const m = new Map<string, { h: string; a: string }>()
     for (const match of matches) {
@@ -124,8 +154,6 @@ export function NinetyMinClient({ isAdmin, userId, matches, bets, participants, 
   const [activeTab,   setActiveTab]   = useState<'jogos' | 'ranking'>('jogos')
   const [phaseFilter, setPhaseFilter] = useState<string>('all')
 
-  // ── Derived maps ────────────────────────────────────────────────────────────
-
   const matchMap = useMemo(() => new Map(matches.map(m => [m.id, m])), [matches])
 
   const betsByMatch = useMemo(() => {
@@ -140,15 +168,11 @@ export function NinetyMinClient({ isAdmin, userId, matches, bets, participants, 
 
   const zebraThreshold = rules['percentual_zebra'] ?? 15
 
-  // ── Filtered matches ────────────────────────────────────────────────────────
-
   const filteredMatches = useMemo(() => {
     const pf = PHASE_FILTERS.find(f => f.value === phaseFilter)
     const phases = [...(pf?.phases ?? PHASE_FILTERS[0].phases)] as string[]
     return matches.filter(m => phases.includes(m.phase))
   }, [matches, phaseFilter])
-
-  // ── Ranking (recomputed on every results90 or simScores change) ─────────────
 
   const ranking = useMemo(() => {
     const betsByP = new Map<string, BetRaw[]>()
@@ -157,52 +181,49 @@ export function NinetyMinClient({ isAdmin, userId, matches, bets, participants, 
       betsByP.get(bet.participant_id)!.push(bet)
     }
 
-    return participants
-      .map(p => {
-        let total = 0
-        for (const bet of (betsByP.get(p.id) ?? [])) {
-          const match = matchMap.get(bet.match_id)
-          if (!match) continue
+    const withPts = participants.map(p => {
+      let total = 0
+      for (const bet of (betsByP.get(p.id) ?? [])) {
+        const match = matchMap.get(bet.match_id)
+        if (!match) continue
 
-          let sh: number | null = null
-          let sa: number | null = null
+        let sh: number | null = null
+        let sa: number | null = null
 
-          if (match.score_home !== null) {
-            // Jogo encerrado: usa placar dos 90 minutos (se cadastrado)
-            const r90 = results90.get(match.id)
-            if (!r90) continue
-            sh = r90.h
-            sa = r90.a
-          } else {
-            // Jogo futuro: usa simulação local
-            const sim = simScores.get(match.id)
-            if (!sim) continue
-            sh = sim.h
-            sa = sim.a
-          }
-
-          const matchBets  = betsByMatch.get(match.id) ?? []
-          const isZebra    = detectMatchZebra(matchBets, getMatchResult(sh, sa), zebraThreshold)
-          total += scoreMatchBet(bet.score_home, bet.score_away, sh, sa, isZebra, match.is_brazil, rules)
+        if (match.score_home !== null) {
+          const r90 = results90.get(match.id)
+          if (!r90) continue
+          sh = r90.h; sa = r90.a
+        } else {
+          const sim = simScores.get(match.id)
+          if (!sim) continue
+          sh = sim.h; sa = sim.a
         }
-        return { ...p, pts: total }
-      })
-      .sort((a, b) => b.pts - a.pts)
-      .map((p, i) => ({ ...p, rank: i + 1 }))
-  }, [participants, bets, results90, simScores, matchMap, betsByMatch, rules, zebraThreshold])
 
-  // ── Handlers ────────────────────────────────────────────────────────────────
+        const matchBets = betsByMatch.get(match.id) ?? []
+        const isZebra   = detectMatchZebra(matchBets, getMatchResult(sh, sa), zebraThreshold)
+        total += scoreMatchBet(bet.score_home, bet.score_away, sh, sa, isZebra, match.is_brazil, rules)
+      }
+      return { ...p, pts: total }
+    }).sort((a, b) => b.pts - a.pts)
+
+    // Rank com empate
+    const out: Array<typeof withPts[0] & { rank: number }> = []
+    for (let i = 0; i < withPts.length; i++) {
+      const rank = i === 0 ? 1
+        : withPts[i].pts === withPts[i - 1].pts ? out[i - 1].rank
+        : i + 1
+      out.push({ ...withPts[i], rank })
+    }
+    return out
+  }, [participants, bets, results90, simScores, matchMap, betsByMatch, rules, zebraThreshold])
 
   const handleSimChange = useCallback((matchId: string, side: 'h' | 'a', val: string) => {
     setSimScores(prev => {
       const next = new Map(prev)
       const n    = parseInt(val, 10)
       if (val === '' || isNaN(n) || n < 0) {
-        // Clear this side — if both sides empty, remove entry
-        const cur = next.get(matchId)
-        if (!cur) return next
-        const updated = { ...cur, [side]: 0 }
-        if (val === '') { next.delete(matchId) } else { next.set(matchId, updated) }
+        next.delete(matchId)
         return next
       }
       const cur = next.get(matchId) ?? { h: 0, a: 0 }
@@ -223,7 +244,6 @@ export function NinetyMinClient({ isAdmin, userId, matches, bets, participants, 
   const handleSave90 = useCallback(async (matchId: string) => {
     const input = adminInputs.get(matchId)
     if (!input || input.h === '' || input.a === '') return
-
     const h = parseInt(input.h, 10)
     const a = parseInt(input.a, 10)
     if (isNaN(h) || isNaN(a) || h < 0 || a < 0) return
@@ -241,7 +261,6 @@ export function NinetyMinClient({ isAdmin, userId, matches, bets, participants, 
             updated_at: new Date().toISOString(), updated_by: userId },
           { onConflict: 'match_id' }
         )
-
       if (error) {
         setErrorIds(prev => new Set([...prev, matchId]))
       } else {
@@ -256,14 +275,12 @@ export function NinetyMinClient({ isAdmin, userId, matches, bets, participants, 
     }
   }, [adminInputs, userId])
 
-  // ── Render ──────────────────────────────────────────────────────────────────
-
   return (
-    <main className="min-h-screen bg-azul-dark pb-16">
+    <main className="min-h-screen bg-gray-50 pb-16">
       <DisclaimerBanner />
 
       <div className="mx-auto max-w-5xl px-4 pt-5">
-        <h1 className="mb-5 text-lg font-bold text-ouro">
+        <h1 className="mb-5 text-lg font-black text-gray-900">
           Evolução e Simulação: Universo 90&apos;
         </h1>
 
@@ -275,8 +292,8 @@ export function NinetyMinClient({ isAdmin, userId, matches, bets, participants, 
               onClick={() => setActiveTab(tab)}
               className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
                 activeTab === tab
-                  ? 'bg-ouro text-azul-dark'
-                  : 'bg-white/10 text-white/70 hover:bg-white/20 hover:text-white'
+                  ? 'bg-azul-escuro text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900'
               }`}
             >
               {tab === 'jogos' ? 'Jogos' : 'Classificação'}
@@ -287,7 +304,6 @@ export function NinetyMinClient({ isAdmin, userId, matches, bets, participants, 
         {/* ── Tab: Jogos ── */}
         {activeTab === 'jogos' && (
           <>
-            {/* Phase filter */}
             <div className="mb-4 flex flex-wrap gap-1">
               {PHASE_FILTERS.map(f => (
                 <button
@@ -295,8 +311,8 @@ export function NinetyMinClient({ isAdmin, userId, matches, bets, participants, 
                   onClick={() => setPhaseFilter(f.value)}
                   className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
                     phaseFilter === f.value
-                      ? 'bg-ouro text-azul-dark'
-                      : 'bg-white/10 text-white/50 hover:bg-white/20 hover:text-white'
+                      ? 'bg-azul-escuro text-white'
+                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-800'
                   }`}
                 >
                   {f.label}
@@ -305,7 +321,7 @@ export function NinetyMinClient({ isAdmin, userId, matches, bets, participants, 
             </div>
 
             {filteredMatches.length === 0 ? (
-              <p className="py-16 text-center text-sm text-white/30">
+              <p className="py-16 text-center text-sm text-gray-400">
                 Nenhum jogo nesta fase ainda.
               </p>
             ) : (
@@ -333,7 +349,7 @@ export function NinetyMinClient({ isAdmin, userId, matches, bets, participants, 
 
         {/* ── Tab: Classificação ── */}
         {activeTab === 'ranking' && (
-          <RankingTable ranking={ranking} />
+          <CompactRanking90 ranking={ranking} premioSpots={premioSpots} />
         )}
       </div>
     </main>
@@ -344,10 +360,10 @@ export function NinetyMinClient({ isAdmin, userId, matches, bets, participants, 
 
 function DisclaimerBanner() {
   return (
-    <div className="sticky top-14 z-40 border-b border-amber-500/30 bg-amber-900/80 px-4 py-2.5 backdrop-blur-sm sm:top-0">
-      <p className="mx-auto max-w-5xl text-center text-xs font-medium leading-relaxed text-amber-200 sm:text-sm">
+    <div className="sticky top-14 z-40 border-b border-amber-200 bg-amber-50 px-4 py-2.5 sm:top-0">
+      <p className="mx-auto max-w-5xl text-center text-xs font-medium leading-relaxed text-amber-800 sm:text-sm">
         ⏱️{' '}
-        <strong className="font-bold text-amber-100">
+        <strong className="font-bold text-amber-900">
           Arena 90 Minutos: A Copa sem Acréscimos.
         </strong>{' '}
         Esta é uma página de simulação exclusiva. Todos os jogos finalizados utilizam o placar oficial
@@ -380,27 +396,25 @@ const MatchCard90 = memo(function MatchCard90({
 }: CardProps) {
   const isCompleted = match.score_home !== null
 
-  // Divergente: jogo encerrado, 90min cadastrado, e placar 90min ≠ placar oficial
   const isDivergent = isCompleted && result90 !== null && (
     result90.h !== match.score_home || result90.a !== match.score_away
   )
 
   const { date, time } = fmtMatchDate(match.match_datetime)
 
-  // Conteúdo do score box
   let scoreDisplay: React.ReactNode
   if (result90 !== null) {
     scoreDisplay = (
-      <>{result90.h}<span className="mx-0.5 text-white/40">×</span>{result90.a}</>
+      <>{result90.h}<span className="mx-0.5 text-gray-400">×</span>{result90.a}</>
     )
   } else if (isCompleted) {
-    scoreDisplay = <span className="text-[10px] font-normal text-white/30">Aguardando</span>
+    scoreDisplay = <span className="text-[10px] font-normal text-gray-400">Aguardando</span>
   } else if (sim !== null) {
     scoreDisplay = (
-      <>{sim.h}<span className="mx-0.5 text-white/40">×</span>{sim.a}</>
+      <>{sim.h}<span className="mx-0.5 text-gray-400">×</span>{sim.a}</>
     )
   } else {
-    scoreDisplay = <span className="text-white/25">— × —</span>
+    scoreDisplay = <span className="text-gray-300">— × —</span>
   }
 
   const canSave = adminInput && adminInput.h !== '' && adminInput.a !== '' && !isSaving
@@ -409,91 +423,69 @@ const MatchCard90 = memo(function MatchCard90({
     <div
       className={`relative rounded-xl border p-3 pt-4 transition-colors ${
         isDivergent
-          ? 'border-amber-500/50 bg-amber-900/10'
-          : 'border-white/10 bg-white/5'
+          ? 'border-amber-500/50 bg-amber-50'
+          : 'border-gray-200 bg-white'
       }`}
     >
-      {/* Badge flutuante — absoluto, não altera layout de fluxo */}
       {isDivergent && (
         <span className="absolute -top-2.5 right-3 flex items-center gap-0.5 rounded-full bg-amber-500 px-2 py-0.5 text-[9px] font-bold leading-none text-white shadow">
           ⏱️ Alterado nos acréscimos
         </span>
       )}
 
-      {/* Cabeçalho: data + fase */}
-      <div className="mb-2 flex items-center justify-between text-[10px] text-white/40">
+      <div className="mb-2 flex items-center justify-between text-[10px] text-gray-400">
         <span>{date} {time}</span>
         <span>{PHASE_LABELS[match.phase] ?? match.phase}</span>
       </div>
 
-      {/* Times + placar 90' */}
       <div className="flex items-center gap-2">
         <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
-          <span className="truncate text-xs font-semibold text-white/90">
+          <span className="truncate text-xs font-semibold text-gray-900">
             {abbr(match.team_home)}
           </span>
           <Flag code={match.flag_home} size="sm" />
         </div>
 
-        <div className="flex min-w-[64px] shrink-0 items-center justify-center rounded-md bg-white/10 px-2 py-1 text-sm font-bold text-white">
+        <div className="flex min-w-[64px] shrink-0 items-center justify-center rounded-md bg-gray-100 px-2 py-1 text-sm font-bold text-gray-800">
           {scoreDisplay}
         </div>
 
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <Flag code={match.flag_away} size="sm" />
-          <span className="truncate text-xs font-semibold text-white/90">
+          <span className="truncate text-xs font-semibold text-gray-900">
             {abbr(match.team_away)}
           </span>
         </div>
       </div>
 
-      {/* Subtítulo de divergência — flui normalmente abaixo do score box */}
       {isDivergent && (
-        <p className="mt-1.5 text-center text-[10px] leading-tight text-amber-400/80">
+        <p className="mt-1.5 text-center text-[10px] leading-tight text-amber-600">
           Placar final oficial: {match.score_home} × {match.score_away}
         </p>
       )}
 
-      {/* Simulação local para jogos futuros — todos os usuários */}
       {!isCompleted && (
         <div className="mt-3 flex items-center justify-center gap-2">
-          <ScoreInput
-            value={sim?.h}
-            placeholder="0"
-            onChange={v => onSimChange(match.id, 'h', v)}
-          />
-          <span className="text-xs text-white/40">×</span>
-          <ScoreInput
-            value={sim?.a}
-            placeholder="0"
-            onChange={v => onSimChange(match.id, 'a', v)}
-          />
+          <ScoreInput value={sim?.h} placeholder="0" onChange={v => onSimChange(match.id, 'h', v)} />
+          <span className="text-xs text-gray-400">×</span>
+          <ScoreInput value={sim?.a} placeholder="0" onChange={v => onSimChange(match.id, 'a', v)} />
         </div>
       )}
 
-      {/* Inputs admin para placar dos 90 minutos — apenas em jogos encerrados */}
       {isAdmin && isCompleted && (
         <div className="mt-3 flex items-center justify-center gap-2">
-          <span className="text-[10px] font-semibold text-amber-300/70">90&apos;</span>
-          <AdminScoreInput
-            value={adminInput?.h ?? ''}
-            onChange={v => onAdminInput(match.id, 'h', v)}
-          />
-          <span className="text-xs text-white/40">×</span>
-          <AdminScoreInput
-            value={adminInput?.a ?? ''}
-            onChange={v => onAdminInput(match.id, 'a', v)}
-          />
+          <span className="text-[10px] font-semibold text-amber-600">90&apos;</span>
+          <AdminScoreInput value={adminInput?.h ?? ''} onChange={v => onAdminInput(match.id, 'h', v)} />
+          <span className="text-xs text-gray-400">×</span>
+          <AdminScoreInput value={adminInput?.a ?? ''} onChange={v => onAdminInput(match.id, 'a', v)} />
           <button
             onClick={() => onSave90(match.id)}
             disabled={!canSave}
             title={isError ? 'Erro ao salvar — tente novamente' : undefined}
             className={`rounded px-2.5 py-1 text-[10px] font-bold transition ${
-              isSaved
-                ? 'bg-emerald-500 text-white'
-                : isError
-                  ? 'bg-rose-500 text-white'
-                  : 'bg-ouro text-azul-dark hover:bg-ouro/80 disabled:cursor-not-allowed disabled:opacity-40'
+              isSaved   ? 'bg-emerald-500 text-white' :
+              isError   ? 'bg-rose-500 text-white' :
+              'bg-ouro text-azul-dark hover:bg-ouro/80 disabled:cursor-not-allowed disabled:opacity-40'
             }`}
           >
             {isSaved ? '✓' : isError ? '!' : isSaving ? '…' : 'Salvar'}
@@ -504,9 +496,7 @@ const MatchCard90 = memo(function MatchCard90({
   )
 })
 
-function ScoreInput({
-  value, placeholder, onChange,
-}: { value?: number; placeholder: string; onChange: (v: string) => void }) {
+function ScoreInput({ value, placeholder, onChange }: { value?: number; placeholder: string; onChange: (v: string) => void }) {
   return (
     <input
       type="number"
@@ -515,7 +505,7 @@ function ScoreInput({
       value={value !== undefined ? value : ''}
       placeholder={placeholder}
       onChange={e => onChange(e.target.value)}
-      className="w-10 rounded bg-white/10 text-center text-sm text-white outline-none focus:ring-1 focus:ring-ouro/50"
+      className="w-10 rounded border border-gray-300 bg-white text-center text-sm text-gray-800 outline-none focus:border-gray-500 focus:ring-0"
     />
   )
 }
@@ -529,57 +519,109 @@ function AdminScoreInput({ value, onChange }: { value: string; onChange: (v: str
       value={value}
       placeholder="—"
       onChange={e => onChange(e.target.value)}
-      className="w-10 rounded border border-amber-500/30 bg-white/10 text-center text-sm text-white outline-none focus:border-amber-400/70 focus:ring-0"
+      className="w-10 rounded border border-amber-400 bg-white text-center text-sm text-gray-800 outline-none focus:border-amber-600 focus:ring-0"
     />
   )
 }
 
-// ── RankingTable ───────────────────────────────────────────────────────────────
+// ── CompactRanking90 — mesmo formato da Classificação Resumida oficial ─────────
 
-function RankingTable({
+function CompactRanking90({
   ranking,
+  premioSpots,
 }: {
   ranking: Array<{ id: string; apelido: string; pts: number; rank: number }>
+  premioSpots: number
 }) {
-  if (ranking.length === 0) {
+  const n = ranking.length
+  if (n === 0) {
     return (
-      <p className="py-16 text-center text-sm text-white/30">
+      <p className="py-16 text-center text-sm text-gray-400">
         Nenhum participante encontrado.
       </p>
     )
   }
 
+  const { cut1, cut2 } = calcCuts(n)
+  const premioLine = ranking[Math.min(premioSpots, n) - 1]?.pts ?? Infinity
+  const cut2Line   = cut2 > premioSpots ? (ranking[cut2 - 1]?.pts ?? null) : null
+  const cut1Line   = cut1 > cut2        ? (ranking[cut1 - 1]?.pts ?? null) : null
+  const lastRank   = ranking[n - 1].rank
+  const isUniqueLast = ranking.filter(r => r.rank === lastRank).length === 1
+
+  function zoneOf(r: { rank: number; pts: number }): Zone {
+    if (isUniqueLast && r.rank === lastRank) return 'last'
+    if (r.pts >= premioLine)                 return 'premio'
+    if (cut2Line !== null && r.pts >= cut2Line) return 'corte2'
+    if (cut1Line !== null && r.pts >= cut1Line) return 'corte1'
+    return 'out'
+  }
+
+  const blockSize = Math.ceil(n / 7)
+  const blocks = [0,1,2,3,4,5,6]
+    .map(i => ranking.slice(i * blockSize, (i + 1) * blockSize))
+    .filter(b => b.length > 0)
+
+  const legendItems: { zone: Zone; label: string }[] = [
+    { zone: 'premio', label: `Premiação (top ${premioSpots})` },
+    ...(cut2 > premioSpots ? [{ zone: 'corte2' as Zone, label: `2º corte (top ${cut2})` }] : []),
+    ...(cut1 > cut2        ? [{ zone: 'corte1' as Zone, label: `1º corte (top ${cut1})` }] : []),
+    ...(isUniqueLast ? [{ zone: 'last' as Zone, label: 'Lanterna' }] : []),
+  ]
+
   return (
-    <div className="overflow-hidden rounded-xl border border-white/10">
-      <div className="border-b border-white/10 bg-white/5 px-4 py-2">
-        <p className="text-xs text-white/40">
-          Pontos calculados com base nos placares aos 90 minutos.
-          Jogos sem resultado cadastrado ou sem simulação são ignorados.
+    <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="border-b border-gray-100 px-4 py-2.5">
+        <p className="text-base font-black text-gray-800">Classificação Universo 90&apos;</p>
+        <p className="mt-0.5 text-xs text-gray-400">
+          Pontos calculados com placares aos 90 minutos. Jogos futuros incluídos se simulados.
         </p>
       </div>
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-white/10 bg-white/[0.03]">
-            <th className="w-10 px-3 py-2.5 text-left text-xs font-semibold text-white/40">#</th>
-            <th className="px-3 py-2.5 text-left text-xs font-semibold text-white/40">Participante</th>
-            <th className="px-3 py-2.5 text-right text-xs font-semibold text-white/40">Pts 90&apos;</th>
-          </tr>
-        </thead>
-        <tbody>
-          {ranking.map((r, i) => (
-            <tr
-              key={r.id}
-              className={`border-b border-white/5 ${
-                i % 2 === 0 ? 'bg-transparent' : 'bg-white/[0.02]'
-              }`}
-            >
-              <td className="px-3 py-2 font-mono text-xs text-white/40">{r.rank}</td>
-              <td className="px-3 py-2 font-medium text-white/90">{r.apelido}</td>
-              <td className="px-3 py-2 text-right font-bold text-ouro">{r.pts}</td>
-            </tr>
+
+      <div className="overflow-x-auto">
+        <div
+          className="grid divide-x divide-gray-100"
+          style={{ gridTemplateColumns: `repeat(${blocks.length}, minmax(0, 1fr))`, minWidth: '1200px' }}
+        >
+          {blocks.map((block, bi) => (
+            <div key={bi}>
+              {/* Cabeçalho do bloco */}
+              <div className="grid grid-cols-[1.5rem_1fr_2rem] border-b border-gray-100 bg-gray-50 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-gray-400">
+                <span className="pr-0.5 text-right">#</span>
+                <span className="pl-1">Participante</span>
+                <span className="text-right">PTS</span>
+              </div>
+              {/* Linhas */}
+              {block.map((r, ri) => {
+                const z        = zoneOf(r)
+                const boundary = ri > 0 && zoneOf(block[ri - 1]) !== z
+                return (
+                  <div
+                    key={r.id}
+                    className={`grid grid-cols-[1.5rem_1fr_2rem] px-2 py-[3px] text-[12px] ${ZONE_ROW[z]} ${boundary ? 'border-t border-gray-200' : ''}`}
+                  >
+                    <span className={`pr-0.5 text-right tabular-nums ${ZONE_TEXT[z]}`}>{r.rank}</span>
+                    <span className={`truncate pl-1 ${ZONE_TEXT[z]}`} title={r.apelido}>
+                      {r.apelido}{z === 'last' && ' 🔦'}
+                    </span>
+                    <span className={`text-right tabular-nums font-bold ${ZONE_TEXT[z]}`}>{r.pts}</span>
+                  </div>
+                )
+              })}
+            </div>
           ))}
-        </tbody>
-      </table>
+        </div>
+      </div>
+
+      {/* Legenda */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-gray-100 bg-gray-50 px-4 py-2">
+        {legendItems.map(({ zone: z, label }) => (
+          <span key={z} className="flex items-center gap-1 text-[11px] text-gray-500">
+            <span className={`inline-block h-2.5 w-2.5 rounded-sm ${ZONE_DOT[z]}`} />
+            {label}
+          </span>
+        ))}
+      </div>
     </div>
   )
 }

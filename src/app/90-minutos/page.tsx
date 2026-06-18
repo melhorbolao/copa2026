@@ -80,10 +80,11 @@ export default async function NinetyMinPage() {
     return rows
   }
 
-  const [betsRaw, participantsRaw, rulesRaw] = await Promise.all([
+  const [betsRaw, participantsRaw, rulesRaw, settingsRaw] = await Promise.all([
     fetchAll('bets', 'participant_id, match_id, score_home, score_away'),
     supabase.from('participants').select('id, apelido').order('apelido'),
     supabase.from('scoring_rules').select('key, points'),
+    admin.from('tournament_settings').select('key, value').in('key', ['premio_spots']),
   ])
 
   const bets        = betsRaw as BetRaw[]
@@ -91,6 +92,12 @@ export default async function NinetyMinPage() {
   const rules: Record<string, number> = Object.fromEntries(
     (rulesRaw.data ?? []).map((r: any) => [r.key, r.points])
   )
+
+  let premioSpots = 10
+  for (const row of (settingsRaw.data ?? []) as { key: string; value: string }[]) {
+    const n = parseInt(row.value, 10)
+    if (!isNaN(n) && n > 0 && row.key === 'premio_spots') premioSpots = n
+  }
 
   return (
     <>
@@ -102,6 +109,7 @@ export default async function NinetyMinPage() {
         bets={bets}
         participants={participants}
         rules={rules}
+        premioSpots={premioSpots}
       />
     </>
   )
