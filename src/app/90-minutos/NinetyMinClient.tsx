@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useCallback, memo } from 'react'
+import { useState, useMemo, useCallback, memo, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Flag } from '@/components/ui/Flag'
 import { scoreMatchBet, detectMatchZebra, getMatchResult } from '@/lib/scoring/engine'
@@ -275,12 +275,7 @@ export function NinetyMinClient({
     })
   }, [])
 
-  const handleSave90 = useCallback(async (matchId: string) => {
-    const input = adminInputs.get(matchId)
-    if (!input || input.h === '' || input.a === '') return
-    const h = parseInt(input.h, 10); const a = parseInt(input.a, 10)
-    if (isNaN(h) || isNaN(a) || h < 0 || a < 0) return
-
+  const handleSave90 = useCallback(async (matchId: string, h: number, a: number) => {
     setSavingIds(prev => new Set([...prev, matchId]))
     setErrorIds(prev => { const n = new Set(prev); n.delete(matchId); return n })
     try {
@@ -300,7 +295,7 @@ export function NinetyMinClient({
     } finally {
       setSavingIds(prev => { const n = new Set(prev); n.delete(matchId); return n })
     }
-  }, [adminInputs, userId])
+  }, [userId])
 
   // ── Sth (sortable header) ──────────────────────────────────────────────────
 
@@ -324,8 +319,8 @@ export function NinetyMinClient({
     <main className="min-h-screen bg-gray-50 pb-16">
       <DisclaimerBanner />
 
-      {/* Header + tabs — constrained */}
-      <div className="mx-auto max-w-5xl px-4 pt-5">
+      {/* Header + tabs */}
+      <div className="mx-auto max-w-full px-4 pt-5">
         <h1 className="mb-5 text-lg font-black text-gray-900">
           Evolução e Simulação: Universo 90&apos;
         </h1>
@@ -346,9 +341,9 @@ export function NinetyMinClient({
         </div>
       </div>
 
-      {/* ── Tab: Jogos — constrained ── */}
+      {/* ── Tab: Jogos — full width ── */}
       {activeTab === 'jogos' && (
-        <div className="mx-auto max-w-5xl px-4">
+        <div className="mx-auto max-w-full px-4">
           <div className="mb-4 flex flex-wrap gap-1">
             {PHASE_FILTERS.map(f => (
               <button
@@ -368,7 +363,7 @@ export function NinetyMinClient({
           {filteredMatches.length === 0 ? (
             <p className="py-16 text-center text-sm text-gray-400">Nenhum jogo nesta fase ainda.</p>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
               {filteredMatches.map(match => (
                 <MatchCard90
                   key={match.id}
@@ -693,17 +688,28 @@ interface CardProps {
   adminInput: { h: string; a: string } | null; isSaving: boolean; isSaved: boolean; isError: boolean
   onSimChange: (matchId: string, side: 'h' | 'a', val: string) => void
   onAdminInput: (matchId: string, side: 'h' | 'a', val: string) => void
-  onSave90: (matchId: string) => void
+  onSave90: (matchId: string, h: number, a: number) => void
 }
 
 const MatchCard90 = memo(function MatchCard90({
   match, isAdmin, result90, sim, adminInput, isSaving, isSaved, isError,
   onSimChange, onAdminInput, onSave90,
 }: CardProps) {
-  const isCompleted  = match.score_home !== null
-  const isDivergent  = isCompleted && result90 !== null &&
+  const isCompleted = match.score_home !== null
+  const isDivergent = isCompleted && result90 !== null &&
     (result90.h !== match.score_home || result90.a !== match.score_away)
   const { date, time } = fmtMatchDate(match.match_datetime)
+
+  // Auto-save ao alterar inputs com debounce de 700ms
+  useEffect(() => {
+    if (!isAdmin || !isCompleted) return
+    if (!adminInput || adminInput.h === '' || adminInput.a === '') return
+    const h = parseInt(adminInput.h, 10); const a = parseInt(adminInput.a, 10)
+    if (isNaN(h) || isNaN(a) || h < 0 || a < 0) return
+    const timer = setTimeout(() => onSave90(match.id, h, a), 700)
+    return () => clearTimeout(timer)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adminInput?.h, adminInput?.a])
 
   let scoreDisplay: React.ReactNode
   if (result90 !== null)
@@ -715,71 +721,82 @@ const MatchCard90 = memo(function MatchCard90({
   else
     scoreDisplay = <span className="text-gray-300">— × —</span>
 
-  const canSave = adminInput && adminInput.h !== '' && adminInput.a !== '' && !isSaving
-
   return (
-    <div className={`relative rounded-xl border p-3 pt-4 transition-colors ${
-      isDivergent ? 'border-amber-500/50 bg-amber-50' : 'border-gray-200 bg-white'
+    <div className={`overflow-hidden rounded-xl border-2 transition-all ${
+      isDivergent
+        ? 'border-amber-500 shadow-md shadow-amber-200'
+        : 'border-gray-200 bg-white shadow-sm'
     }`}>
+      {/* Banner de destaque para jogos divergentes */}
       {isDivergent && (
-        <span className="absolute -top-2.5 right-3 flex items-center gap-0.5 rounded-full bg-amber-500 px-2 py-0.5 text-[9px] font-bold leading-none text-white shadow">
-          ⏱️ Alterado nos acréscimos
-        </span>
+        <div className="flex items-center justify-center gap-2 bg-amber-500 px-3 py-2.5">
+          <span className="text-lg leading-none">⏱️</span>
+          <span className="text-sm font-black tracking-wide text-white">Alterado nos acréscimos</span>
+        </div>
       )}
 
-      <div className="mb-2 flex items-center justify-between text-[10px] text-gray-400">
-        <span>{date} {time}</span>
-        <span>{PHASE_LABELS[match.phase] ?? match.phase}</span>
+      <div className={`p-3 ${isDivergent ? 'bg-amber-50' : ''}`}>
+        <div className="mb-2 flex items-center justify-between text-[10px] text-gray-400">
+          <span>{date} {time}</span>
+          <span>{PHASE_LABELS[match.phase] ?? match.phase}</span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
+            <span className="truncate text-xs font-semibold text-gray-900">{abbr(match.team_home)}</span>
+            <Flag code={match.flag_home} size="sm" />
+          </div>
+          <div className="flex min-w-[64px] shrink-0 items-center justify-center rounded-md bg-gray-100 px-2 py-1 text-sm font-bold text-gray-800">
+            {scoreDisplay}
+          </div>
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+            <Flag code={match.flag_away} size="sm" />
+            <span className="truncate text-xs font-semibold text-gray-900">{abbr(match.team_away)}</span>
+          </div>
+        </div>
+
+        {isDivergent && (
+          <p className="mt-2.5 rounded-lg bg-amber-100 px-3 py-2 text-center text-sm font-semibold leading-snug text-amber-800">
+            Placar final oficial:{' '}
+            <span className="font-black text-amber-900">{match.score_home} × {match.score_away}</span>
+          </p>
+        )}
+
+        {!isCompleted && (
+          <div className="mt-3 flex items-center justify-center gap-2">
+            <ScoreInput value={sim?.h} placeholder="0" onChange={v => onSimChange(match.id, 'h', v)} />
+            <span className="text-xs text-gray-400">×</span>
+            <ScoreInput value={sim?.a} placeholder="0" onChange={v => onSimChange(match.id, 'a', v)} />
+          </div>
+        )}
+
+        {isAdmin && isCompleted && (
+          <div className="mt-3 flex items-center justify-center gap-2">
+            {/* Botão = Oficial */}
+            <button
+              onClick={() => {
+                if (match.score_home === null || match.score_away === null) return
+                onAdminInput(match.id, 'h', String(match.score_home))
+                onAdminInput(match.id, 'a', String(match.score_away))
+              }}
+              className="rounded border border-gray-300 bg-white px-2 py-1 text-[10px] font-semibold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition"
+              title="Copiar placar oficial para o Universo 90'"
+            >
+              = Oficial
+            </button>
+            <span className="text-[10px] font-semibold text-amber-600">90&apos;</span>
+            <AdminScoreInput value={adminInput?.h ?? ''} onChange={v => onAdminInput(match.id, 'h', v)} />
+            <span className="text-xs text-gray-400">×</span>
+            <AdminScoreInput value={adminInput?.a ?? ''} onChange={v => onAdminInput(match.id, 'a', v)} />
+            {/* Indicador de status (sem botão Salvar) */}
+            <span className={`w-5 text-center text-sm transition ${
+              isSaved ? 'text-emerald-500' : isError ? 'text-rose-500' : isSaving ? 'text-gray-400' : 'text-transparent'
+            }`}>
+              {isSaved ? '✓' : isError ? '!' : '…'}
+            </span>
+          </div>
+        )}
       </div>
-
-      <div className="flex items-center gap-2">
-        <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
-          <span className="truncate text-xs font-semibold text-gray-900">{abbr(match.team_home)}</span>
-          <Flag code={match.flag_home} size="sm" />
-        </div>
-        <div className="flex min-w-[64px] shrink-0 items-center justify-center rounded-md bg-gray-100 px-2 py-1 text-sm font-bold text-gray-800">
-          {scoreDisplay}
-        </div>
-        <div className="flex min-w-0 flex-1 items-center gap-1.5">
-          <Flag code={match.flag_away} size="sm" />
-          <span className="truncate text-xs font-semibold text-gray-900">{abbr(match.team_away)}</span>
-        </div>
-      </div>
-
-      {isDivergent && (
-        <p className="mt-1.5 text-center text-[10px] leading-tight text-amber-600">
-          Placar final oficial: {match.score_home} × {match.score_away}
-        </p>
-      )}
-
-      {!isCompleted && (
-        <div className="mt-3 flex items-center justify-center gap-2">
-          <ScoreInput value={sim?.h} placeholder="0" onChange={v => onSimChange(match.id, 'h', v)} />
-          <span className="text-xs text-gray-400">×</span>
-          <ScoreInput value={sim?.a} placeholder="0" onChange={v => onSimChange(match.id, 'a', v)} />
-        </div>
-      )}
-
-      {isAdmin && isCompleted && (
-        <div className="mt-3 flex items-center justify-center gap-2">
-          <span className="text-[10px] font-semibold text-amber-600">90&apos;</span>
-          <AdminScoreInput value={adminInput?.h ?? ''} onChange={v => onAdminInput(match.id, 'h', v)} />
-          <span className="text-xs text-gray-400">×</span>
-          <AdminScoreInput value={adminInput?.a ?? ''} onChange={v => onAdminInput(match.id, 'a', v)} />
-          <button
-            onClick={() => onSave90(match.id)}
-            disabled={!canSave}
-            title={isError ? 'Erro ao salvar — tente novamente' : undefined}
-            className={`rounded px-2.5 py-1 text-[10px] font-bold transition ${
-              isSaved ? 'bg-emerald-500 text-white' :
-              isError ? 'bg-rose-500 text-white' :
-              'bg-ouro text-azul-dark hover:bg-ouro/80 disabled:cursor-not-allowed disabled:opacity-40'
-            }`}
-          >
-            {isSaved ? '✓' : isError ? '!' : isSaving ? '…' : 'Salvar'}
-          </button>
-        </div>
-      )}
     </div>
   )
 })
