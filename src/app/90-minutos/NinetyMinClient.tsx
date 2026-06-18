@@ -607,7 +607,7 @@ function CompactRanking90({
   return (
     <div className="mb-6 rounded-2xl border border-gray-200 bg-white shadow-sm">
       <div className="border-b border-gray-100 px-4 py-2.5">
-        <p className="text-base font-black text-gray-800">Classificação Universo 90&apos;</p>
+        <p className="text-base font-black text-gray-800">Classificação Chororô — E se os jogos acabassem aos 90?</p>
       </div>
 
       <div className="overflow-x-auto">
