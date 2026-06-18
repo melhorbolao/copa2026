@@ -724,8 +724,13 @@ const MatchCard90 = memo(function MatchCard90({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adminInput?.h, adminInput?.a])
 
+  // Admins com jogos concluídos veem o placar OFICIAL no centro —
+  // o placar 90' fica exclusivamente nos inputs abaixo.
+  // Demais usuários veem o placar 90' no centro.
   let scoreDisplay: React.ReactNode
-  if (result90 !== null)
+  if (isAdmin && isCompleted)
+    scoreDisplay = <>{match.score_home}<span className="mx-0.5 text-gray-400">×</span>{match.score_away}</>
+  else if (result90 !== null)
     scoreDisplay = <>{result90.h}<span className="mx-0.5 text-gray-400">×</span>{result90.a}</>
   else if (isCompleted)
     scoreDisplay = <span className="text-[10px] font-normal text-gray-400">Aguardando</span>
@@ -768,7 +773,8 @@ const MatchCard90 = memo(function MatchCard90({
           </div>
         </div>
 
-        {isDivergent && (
+        {/* Placar oficial: só para não-admins, pois admins já o veem no centro */}
+        {isDivergent && !isAdmin && (
           <p className="mt-2.5 rounded-lg bg-amber-100 px-3 py-2 text-center text-sm font-semibold leading-snug text-amber-800">
             Placar final oficial:{' '}
             <span className="font-black text-amber-900">{match.score_home} × {match.score_away}</span>
