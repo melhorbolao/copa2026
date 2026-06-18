@@ -7,7 +7,7 @@ import { requirePageAccess } from '@/lib/page-visibility'
 import { getActiveParticipantId } from '@/lib/participant'
 import { Navbar } from '@/components/layout/Navbar'
 import { NinetyMinClient } from './NinetyMinClient'
-import type { MatchWith90, BetRaw, Participant } from './NinetyMinClient'
+import type { MatchWith90, BetRaw, Participant, OfficialScore } from './NinetyMinClient'
 
 export const metadata = { title: 'Universo 90\' — Bolão Copa' }
 
@@ -83,11 +83,15 @@ export default async function NinetyMinPage() {
     return rows
   }
 
-  const [betsRaw, participantsRaw, rulesRaw, settingsRaw] = await Promise.all([
+  const [betsRaw, participantsRaw, rulesRaw, settingsRaw, scoresRaw, panelaRaw] = await Promise.all([
     fetchAll('bets', 'participant_id, match_id, score_home, score_away'),
     supabase.from('participants').select('id, apelido').order('apelido'),
     supabase.from('scoring_rules').select('key, points'),
     admin.from('tournament_settings').select('key, value').in('key', ['premio_spots']),
+    admin.from('participant_scores').select('participant_id, pts_total').then((r: any) => r, () => ({ data: [] })),
+    activeParticipantId
+      ? admin.from('user_panela').select('member_participant_id').eq('owner_participant_id', activeParticipantId).then((r: any) => r, () => ({ data: [] }))
+      : Promise.resolve({ data: [] }),
   ])
 
   const bets        = betsRaw as BetRaw[]
@@ -102,6 +106,12 @@ export default async function NinetyMinPage() {
     if (!isNaN(n) && n > 0 && row.key === 'premio_spots') premioSpots = n
   }
 
+  const officialScores: OfficialScore[] = ((scoresRaw.data ?? []) as { participant_id: string; pts_total: number | null }[])
+    .map(r => ({ participant_id: r.participant_id, pts_total: r.pts_total ?? 0 }))
+
+  const panelaMemberIds: string[] = ((panelaRaw.data ?? []) as { member_participant_id: string }[])
+    .map(r => r.member_participant_id)
+
   return (
     <>
       <Navbar />
@@ -114,6 +124,8 @@ export default async function NinetyMinPage() {
         participants={participants}
         rules={rules}
         premioSpots={premioSpots}
+        officialScores={officialScores}
+        panelaMemberIds={panelaMemberIds}
       />
     </>
   )

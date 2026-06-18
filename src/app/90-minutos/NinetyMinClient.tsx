@@ -19,20 +19,23 @@ export interface MatchWith90 {
 
 export interface BetRaw { participant_id: string; match_id: string; score_home: number; score_away: number }
 export interface Participant { id: string; apelido: string }
+export interface OfficialScore { participant_id: string; pts_total: number }
 
 interface Props {
   isAdmin: boolean; userId: string; activeParticipantId: string
   matches: MatchWith90[]; bets: BetRaw[]; participants: Participant[]
   rules: RuleMap; premioSpots: number
+  officialScores: OfficialScore[]; panelaMemberIds: string[]
 }
 
 type Score        = { h: number; a: number }
-type HighlightMode = 'me' | 'none'
+type HighlightMode = 'me' | 'panela' | 'none'
 type Zone         = 'premio' | 'corte2' | 'corte1' | 'out' | 'last'
 
 interface RankedRow extends Participant {
   pts: number; cravados: number; pontuados: number; rank: number
   diffLider: number; diffPremio: number | null; diffCorte1: number | null; diffCorte2: number | null
+  rankDelta: number | null
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -97,6 +100,7 @@ function fmtMatchDate(dt: string) {
 
 export function NinetyMinClient({
   isAdmin, userId, activeParticipantId, matches, bets, participants, rules, premioSpots,
+  officialScores, panelaMemberIds,
 }: Props) {
 
   const [results90, setResults90] = useState<Map<string, Score>>(() => {
@@ -126,6 +130,8 @@ export function NinetyMinClient({
   const [sortKey,  setSortKey]  = useState<string | null>(null)
   const [sortDir,  setSortDir]  = useState<'asc' | 'desc'>('desc')
 
+  const panelaSet = useMemo(() => new Set(panelaMemberIds), [panelaMemberIds])
+
   const matchMap    = useMemo(() => new Map(matches.map(m => [m.id, m])), [matches])
   const betsByMatch = useMemo(() => {
     const m = new Map<string, Array<{ score_home: number; score_away: number }>>()
@@ -142,6 +148,20 @@ export function NinetyMinClient({
     const phases = [...(pf?.phases ?? PHASE_FILTERS[0].phases)] as string[]
     return matches.filter(m => phases.includes(m.phase))
   }, [matches, phaseFilter])
+
+  // ── Rank oficial (pts_total da tabela participant_scores) ────────────────────
+
+  const officialRankMap = useMemo(() => {
+    const sorted = [...officialScores].sort((a, b) => b.pts_total - a.pts_total)
+    const m = new Map<string, number>()
+    for (let i = 0; i < sorted.length; i++) {
+      const rank = i === 0 ? 1
+        : sorted[i].pts_total === sorted[i - 1].pts_total ? m.get(sorted[i - 1].participant_id)!
+        : i + 1
+      m.set(sorted[i].participant_id, rank)
+    }
+    return m
+  }, [officialScores])
 
   // ── Ranking completo ────────────────────────────────────────────────────────
 
@@ -184,15 +204,17 @@ export function NinetyMinClient({
     const out: RankedRow[] = []
     for (let i = 0; i < withPts.length; i++) {
       const rank = i === 0 ? 1 : withPts[i].pts === withPts[i - 1].pts ? out[i - 1].rank : i + 1
+      const officialRank = officialRankMap.get(withPts[i].id) ?? null
       out.push({ ...withPts[i], rank,
         diffLider:  withPts[i].pts - leaderPts,
         diffPremio: premioPts  !== null ? withPts[i].pts - premioPts  : null,
         diffCorte1: cut1Pts    !== null ? withPts[i].pts - cut1Pts    : null,
         diffCorte2: cut2Pts    !== null ? withPts[i].pts - cut2Pts    : null,
+        rankDelta:  officialRank !== null ? officialRank - rank : null,
       })
     }
     return out
-  }, [participants, bets, results90, simScores, matchMap, betsByMatch, rules, zebraThreshold, premioSpots])
+  }, [participants, bets, results90, simScores, matchMap, betsByMatch, rules, zebraThreshold, premioSpots, officialRankMap])
 
   // Zone helpers
   const { premioLine, cut2Line, cut1Line, lastRank, isUniqueLast } = useMemo(() => {
@@ -408,8 +430,9 @@ export function NinetyMinClient({
           <div className="mb-3 rounded-xl border border-gray-200 bg-white shadow-sm">
             <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
               {([
-                { value: 'me'   as HighlightMode, label: 'Destacar meu nome' },
-                { value: 'none' as HighlightMode, label: 'Sem destaques' },
+                { value: 'me'     as HighlightMode, label: 'Destacar meu nome' },
+                ...(panelaMemberIds.length > 0 ? [{ value: 'panela' as HighlightMode, label: 'Destacar minha panela' }] : []),
+                { value: 'none'   as HighlightMode, label: 'Sem destaques' },
               ]).map(opt => (
                 <button
                   key={opt.value}
@@ -434,6 +457,7 @@ export function NinetyMinClient({
             isUniqueLast={isUniqueLast}
             highlightMode={highlightMode}
             activeParticipantId={activeParticipantId}
+            panelaSet={panelaSet}
           />
 
           {/* Tabela detalhada */}
@@ -446,12 +470,13 @@ export function NinetyMinClient({
 
           <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
             <div className="overflow-x-auto">
-              <table className="w-full text-xs" style={{ minWidth: '700px' }}>
+              <table className="w-full text-xs" style={{ minWidth: '760px' }}>
                 <thead className="sticky top-0 z-10 border-b border-gray-200 bg-gray-50 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
                   <tr>
-                    {sth('#', 'rank', 'Colocação', 'w-8', 'asc', 'text-left')}
+                    {sth('#', 'rank', 'Colocação no Universo 90\'', 'w-8', 'asc', 'text-left')}
                     {sth('Participante', 'apelido', 'Nome do participante', 'w-[160px]', 'asc', 'text-left')}
                     {sth('Pts 90\'', 'pts', 'Pontos no Universo 90\'', 'w-14', 'desc', 'text-right')}
+                    {sth('∆ Pos', 'rankDelta', 'Variação de posição: 90min vs. bolão oficial (↑ positivo = melhor no universo 90\')', 'w-14')}
                     {sth('Cravou', 'cravados', 'Placares exatos acertados nos 90min', 'w-14')}
                     {sth('Pontuou', 'pontuados', 'Jogos com pelo menos 1 ponto nos 90min', 'w-14')}
                     {sth('∆ Líder', 'diffLider', 'Diferença pro líder', 'hidden md:table-cell w-14')}
@@ -463,17 +488,22 @@ export function NinetyMinClient({
                 <tbody>
                   {ranking.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="py-12 text-center text-sm text-gray-400">
+                      <td colSpan={10} className="py-12 text-center text-sm text-gray-400">
                         Nenhum participante cadastrado ainda.
                       </td>
                     </tr>
                   )}
                   {sortedRanked.map(row => {
                     const z = zoneOf(row)
-                    const isActive = row.id === activeParticipantId
-                    const shouldHighlight = z !== 'last' && highlightMode === 'me' && isActive
-                    const fontCls = z === 'last' ? 'font-bold' : ''
-                    const highlightCls = shouldHighlight ? '[&_td]:!text-red-600 [&_td]:!font-bold' : ''
+                    const isActive  = row.id === activeParticipantId
+                    const isPanela  = panelaSet.has(row.id)
+                    const shouldHL  = z !== 'last' && (
+                      (highlightMode === 'me' && isActive) ||
+                      (highlightMode === 'panela' && (isActive || isPanela))
+                    )
+                    const fontCls      = z === 'last' ? 'font-bold' : ''
+                    const highlightCls = shouldHL ? '[&_td]:!text-red-600 [&_td]:!font-bold' : ''
+                    const showMark = highlightMode !== 'none' && (isActive || (highlightMode === 'panela' && isPanela))
                     return (
                       <tr
                         key={row.id}
@@ -486,13 +516,16 @@ export function NinetyMinClient({
                           <div className="truncate">
                             {row.apelido}
                             {z === 'last' && <span className="ml-1 text-[11px]">🔦</span>}
-                            {isActive && highlightMode !== 'none' && (
-                              <span className={`ml-1 text-[10px] ${z === 'last' ? 'text-white' : 'text-verde-600'}`}>◀</span>
+                            {showMark && (
+                              <span className={`ml-1 text-[10px] ${z === 'last' ? 'text-white' : isActive ? 'text-verde-600' : 'text-sky-500'}`}>◀</span>
                             )}
                           </div>
                         </td>
                         <td className={`px-1.5 py-1 text-right font-mono font-bold tabular-nums ${z === 'last' ? 'text-white' : 'text-gray-900'}`}>
                           {row.pts}
+                        </td>
+                        <td className="px-1.5 py-1 text-center">
+                          <RankDeltaCell v={row.rankDelta} />
                         </td>
                         <td className="px-1.5 py-1 text-center">
                           <span className={`tabular-nums ${row.cravados > 0 ? 'text-verde-600 font-semibold' : 'text-gray-600'}`}>
@@ -545,7 +578,7 @@ function DisclaimerBanner() {
 // ── CompactRanking90 — idêntico ao formato oficial ─────────────────────────────
 
 function CompactRanking90({
-  ranking, premioSpots, zoneOf, isUniqueLast, highlightMode, activeParticipantId,
+  ranking, premioSpots, zoneOf, isUniqueLast, highlightMode, activeParticipantId, panelaSet,
 }: {
   ranking: RankedRow[]
   premioSpots: number
@@ -553,6 +586,7 @@ function CompactRanking90({
   isUniqueLast: boolean
   highlightMode: HighlightMode
   activeParticipantId: string
+  panelaSet: Set<string>
 }) {
   const n = ranking.length
   if (n === 0) return null
@@ -580,28 +614,41 @@ function CompactRanking90({
         <div className="grid grid-cols-7 divide-x divide-gray-100" style={{ minWidth: '1200px' }}>
           {blocks.map((block, bi) => (
             <div key={bi}>
-              <div className="grid grid-cols-[1.5rem_1fr_2rem] border-b border-gray-100 bg-gray-50 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-gray-400">
+              <div className="grid grid-cols-[1.5rem_1fr_2rem_2rem] border-b border-gray-100 bg-gray-50 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-gray-400">
                 <span className="pr-0.5 text-right">#</span>
                 <span className="pl-1">Participante</span>
                 <span className="text-right">PTS</span>
+                <span className="text-right" title="Variação de posição vs. bolão oficial (↑ positivo = melhor no universo 90')">∆</span>
               </div>
               {block.map((r, ri) => {
                 const z         = zoneOf(r)
                 const boundary  = ri > 0 && zoneOf(block[ri - 1]) !== z
                 const isActive  = r.id === activeParticipantId
-                const shouldHL  = z !== 'last' && highlightMode === 'me' && isActive
+                const isPanela  = panelaSet.has(r.id)
+                const shouldHL  = z !== 'last' && (
+                  (highlightMode === 'me' && isActive) ||
+                  (highlightMode === 'panela' && (isActive || isPanela))
+                )
                 const textCls   = shouldHL ? 'text-red-600 font-semibold' : ZONE_TEXT[z]
                 const ringCls   = shouldHL ? 'ring-1 ring-inset ring-red-500' : ''
+                const delta     = r.rankDelta
                 return (
                   <div
                     key={r.id}
-                    className={`grid grid-cols-[1.5rem_1fr_2rem] px-2 py-[3px] text-[12px] ${ZONE_ROW[z]} ${boundary ? 'border-t border-gray-200' : ''} ${ringCls}`}
+                    className={`grid grid-cols-[1.5rem_1fr_2rem_2rem] px-2 py-[3px] text-[12px] ${ZONE_ROW[z]} ${boundary ? 'border-t border-gray-200' : ''} ${ringCls}`}
                   >
                     <span className={`pr-0.5 text-right tabular-nums ${textCls}`}>{r.rank}</span>
                     <span className={`truncate pl-1 ${textCls}`} title={r.apelido}>
                       {r.apelido}{z === 'last' && ' 🔦'}
                     </span>
                     <span className={`text-right tabular-nums font-bold ${textCls}`}>{r.pts}</span>
+                    <span className="text-right tabular-nums text-[10px]">
+                      {delta === null ? <span className="text-gray-300">—</span>
+                        : delta === 0 ? <span className="text-gray-400">=</span>
+                        : delta > 0   ? <span className="font-semibold text-verde-600">▲{delta}</span>
+                        :               <span className="font-semibold text-red-500">▼{Math.abs(delta)}</span>
+                      }
+                    </span>
                   </div>
                 )
               })}
@@ -617,6 +664,7 @@ function CompactRanking90({
             {label}
           </span>
         ))}
+        <span className="ml-auto text-[11px] text-gray-400">∆ = posição no Universo 90&apos; vs. bolão oficial</span>
       </div>
     </div>
   )
@@ -629,6 +677,13 @@ const DiffCell = memo(function DiffCell({ v }: { v: number | null }) {
   if (v === 0)   return <span className="tabular-nums font-mono text-amber-500">0</span>
   if (v > 0)    return <span className="tabular-nums font-mono text-verde-600">+{v}</span>
   return <span className="tabular-nums font-mono text-red-500">{v}</span>
+})
+
+const RankDeltaCell = memo(function RankDeltaCell({ v }: { v: number | null }) {
+  if (v === null) return <span className="text-gray-300">—</span>
+  if (v === 0)   return <span className="text-gray-400">=</span>
+  if (v > 0)    return <span className="tabular-nums font-semibold text-verde-600">▲{v}</span>
+  return <span className="tabular-nums font-semibold text-red-500">▼{Math.abs(v)}</span>
 })
 
 // ── MatchCard90 ────────────────────────────────────────────────────────────────
