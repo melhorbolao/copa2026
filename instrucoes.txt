@@ -1,32 +1,27 @@
-ESPECIFICAÇÃO TÉCNICA: BOTÃO "VALIDAR" (UX PLACEBO E AUDITORIA DE RODADA) 
+ESPECIFICAÇÃO TÉCNICA: NOVA PÁGINA "90 MINUTOS" (O UNIVERSO ALTERNATIVO DA COPA)
 
-Objetivo: Melhorar a experiência do usuário (UX) na página de "Meus Palpites". O sistema de auto-save célula a célula deve ser mantido, mas adicionaremos um botão "Validar" que atua como um auditor da rodada e traz conforto psicológico. Devemos garantir que dados digitados instantes antes do clique não sejam perdidos.
+Objetivo: Criar uma nova rota (/src/app/90-minutos/page.tsx) com a mesma mecânica funcional do Simulador, mas utilizando como resultado base dos jogos concluídos estritamente o placar do encerramento do tempo regulamentar (aos 90 minutos cravados), descartando gols nos acréscimos, prorrogação ou pênaltis.
 
-Siga estas diretrizes para a implementação no componente correspondente:
+1. MODELAGEM DE DADOS (NOVA TABELA):
+Para garantir isolamento absoluto e não quebrar a classificação oficial da aplicação, crie a tabela 'match_90min_results':
+- Colunas: match_id (UUID PK, FK matches), score_home_90min (SMALLINT), score_away_90min (SMALLINT), updated_at, updated_by.
+- Habilite RLS: Leitura pública para todos, mas escrita (INSERT/UPDATE) restrita estritamente a usuários com role 'admin' na tabela user_roles.
 
-1. UI: O BOTÃO "VALIDAR"
-- Adicione um botão com o rótulo "Validar" em posição de destaque (ex: sticky bottom ou acima da lista de jogos).
-- O botão não deve interromper o fluxo de auto-save, apenas complementá-lo.
+2. CONTROLE DE ACESSO E INTERFACE:
+- Acesso Geral: Qualquer usuário pode acessar, visualizar e simular placares futuros na memória local da aplicação.
+- Modo Admin: Se o usuário logado for administrador, exiba campos de input numéricos dedicados ao lado do placar de 90 minutos dos jogos já encerrados. Alterar esses campos deve disparar um upsert direto na tabela 'match_90min_results'.
 
-2. PROTEÇÃO ANTI-PERDA DE DADOS (FORÇAR ONBLUR):
-- A primeira linha da função disparada pelo clique do botão (ex: `handleValidarClick`) DEVE remover o foco do elemento ativo atual.
-- Utilize: `if (document.activeElement instanceof HTMLElement) { document.activeElement.blur(); }`
-- Isso garante que, se o usuário clicar no botão enquanto o cursor ainda pisca dentro do input do placar, o evento `onBlur` do input será forçado e o auto-save correspondente será disparado em background com sucesso antes do término da função.
+3. SINALIZAÇÃO VISUAL (UX):
+- Título da página: "Evolução e Simulação: Universo 90'".
+- Banner de Disclaimer: Adicione um cabeçalho fixo de destaque informando: "⏱️ Arena 90 Minutos: A Copa sem Acréscimos. Esta é uma página de simulação exclusiva. Todos os jogos finalizados utilizam o placar oficial registrado rigidamente aos 90:00 do tempo regulamentar."
 
-3. LÓGICA DE AUDITORIA (IN-MEMORY):
-- Após forçar o blur, o script deve analisar a array local de jogos exibida na tela.
-- Calcule utilizando a memória do cliente:
-  * 'totalJogos': Quantidade de partidas listadas na rodada.
-  * 'preenchidos': Quantidade de partidas onde AMBOS os placares (mandante e visitante) não são nulos e são válidos.
-  * 'pendentes': Diferença entre 'totalJogos' e 'preenchidos'.
+4. LÓGICA DE DESTAQUE DE DIVERGÊNCIA:
+- O frontend deve comparar o placar oficial de 90 minutos com o placar final real proveniente da tabela 'matches'.
+- Regra: Se (score_home !== score_home_90min) OU (score_away !== score_away_90min), o jogo é classificado como "Divergente".
+- Estilização do Card Divergente: Aplique uma borda contrastante (ex: amber-500/50), exiba um badge flutuante "⏱️ Alterado nos acréscimos" no topo do card, e adicione um tooltip (ou subtítulo) informando o "Placar final oficial" para referência do usuário.
 
-4. UX: O POP-UP DE FEEDBACK (MODAL/DIALOG):
-- Utilize um Dialog/AlertDialog (Shadcn UI ou equivalente) para exibir o resultado.
-- Cenário A (Incompleto): Se 'pendentes > 0', ícone de alerta e mensagem: "Palpites da [Rodada]: {preenchidos} preenchidos, {pendentes} pendentes."
-- Cenário B (Completo): Se 'pendentes === 0', check verde e mensagem: "Palpites da [Rodada] 100% preenchidos e salvos!".
-
-5. AÇÃO DE ENCERRAMENTO (REFRESH):
-- O botão de confirmação ("OK") do modal deve fechar o pop-up e acionar um refresh da página (`window.location.reload()` ou `router.refresh()`). Como o usuário passará alguns segundos lendo o modal, a requisição de rede do auto-save (disparada pelo blur forçado) terá tempo de sobra para concluir com segurança no banco de dados.
-
-6. VERIFICAÇÃO INDEPENDENTE OBRIGATÓRIA:
-Apresente a função de clique do botão demonstrando a injeção do comando `document.activeElement.blur()` logo no início do bloco, antes da lógica de contagem e renderização do modal.
+5. VERIFICAÇÃO INDEPENDENTE OBRIGATÓRIA:
+Antes de criar os arquivos e realizar o commit, apresente no terminal:
+A) O script SQL exato para criação da tabela 'match_90min_results' e suas políticas de RLS.
+B) A query do frontend (como fará o JOIN entre 'matches' e 'match_90min_results' em uma única chamada para não pesar a rede).
+C) A lógica da árvore do componente do card demonstrando a injeção condicional da classe visual de divergência sem quebrar o layout mobile.

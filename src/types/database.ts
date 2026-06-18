@@ -565,6 +565,32 @@ export type Database = {
         }
         Relationships: []
       }
+      match_90min_results: {
+        Row: {
+          match_id: string
+          score_home_90min: number
+          score_away_90min: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          match_id: string
+          score_home_90min: number
+          score_away_90min: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          match_id?: string
+          score_home_90min?: number
+          score_away_90min?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          { foreignKeyName: 'match_90min_results_match_id_fkey'; columns: ['match_id']; referencedRelation: 'matches'; referencedColumns: ['id'] }
+        ]
+      }
     }
     Views: {
       [_ in never]: never
