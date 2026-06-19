@@ -25,6 +25,7 @@ export interface TableRow {
   eliminated: boolean
   g4Errors: string[] | null
   padrinho: string | null
+  rank: number | null
   stages: StageData[]   // aligned with STAGE_KEYS order
 }
 
@@ -46,7 +47,7 @@ interface Props {
   hasAnyError: boolean
 }
 
-type SortCol = 'nome' | 'pagamento' | 'erros' | number
+type SortCol = 'nome' | 'pagamento' | 'erros' | 'colocacao' | number
 
 function SortIcon({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
   if (!active) return <span className="ml-0.5 text-[9px] text-gray-300">⇅</span>
@@ -121,6 +122,10 @@ export function ParticipantesTable({
           cmp = (a.paid === b.paid ? 0 : a.paid ? -1 : 1)
         } else if (sortCol === 'erros') {
           cmp = (b.g4Errors ? 1 : 0) - (a.g4Errors ? 1 : 0)
+        } else if (sortCol === 'colocacao') {
+          const ra = a.rank ?? Infinity
+          const rb = b.rank ?? Infinity
+          cmp = ra - rb
         } else {
           const pa = a.stages[sortCol as number]?.pct ?? -1
           const pb = b.stages[sortCol as number]?.pct ?? -1
@@ -183,6 +188,9 @@ export function ParticipantesTable({
             <thead className="border-b border-gray-100 bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">
               <tr>
                 <th className="px-3 py-3 w-8">#</th>
+                <th className="px-2 py-3 text-center w-14" title="Colocação atual no bolão">
+                  <Th col="colocacao">Col.</Th>
+                </th>
                 <th className="px-3 py-3">
                   <Th col="nome">Nome</Th>
                 </th>
@@ -209,6 +217,7 @@ export function ParticipantesTable({
             <tbody>
               <tr className="border-b-2 border-gray-200 bg-gray-50/80 text-xs font-semibold text-gray-600">
                 <td className="px-3 py-2" />
+                <td className="px-2 py-2" />
                 <td className="px-3 py-2 whitespace-nowrap text-gray-700">
                   {display.length === totalCount
                     ? `${totalCount} inscritos`
@@ -242,6 +251,9 @@ export function ParticipantesTable({
                   className={`border-b border-gray-100 last:border-0 hover:bg-gray-50 ${r.eliminated ? 'bg-gray-50/70' : ''}`}
                 >
                   <td className="px-3 py-2.5 text-xs text-gray-400">{i + 1}</td>
+                  <td className="px-2 py-2.5 text-center text-xs tabular-nums font-semibold text-gray-700">
+                    {r.rank !== null ? `#${r.rank}` : <span className="text-gray-300">—</span>}
+                  </td>
                   <td className={`px-3 py-2.5 whitespace-nowrap font-medium ${r.eliminated ? 'text-gray-400 line-through decoration-gray-300' : 'text-gray-900'}`}>
                     <span className="inline-flex items-center gap-1.5">
                       {r.apelido}
@@ -302,7 +314,7 @@ export function ParticipantesTable({
               ))}
               {display.length === 0 && (
                 <tr>
-                  <td colSpan={4 + stageMeta.length} className="px-4 py-8 text-center text-sm text-gray-400">
+                  <td colSpan={5 + stageMeta.length} className="px-4 py-8 text-center text-sm text-gray-400">
                     Nenhum participante encontrado.
                   </td>
                 </tr>

@@ -81,6 +81,7 @@ export default async function ControlePage({
     phaseSettings,
     qualified,
     userParticipants,
+    { data: scoresData },
   ] = await Promise.all([
     supabase.from('participants')
       .select('id, apelido, paid')
@@ -93,7 +94,23 @@ export default async function ControlePage({
     getPhaseSettings(),
     getQualifiedSets(),
     fetchAll('user_participants', 'participant_id, users(padrinho)') as Promise<{ participant_id: string; users: { padrinho: string | null } | null }[]>,
+    admin.from('participant_scores').select('participant_id, pts_total') as Promise<{ data: { participant_id: string; pts_total: number | null }[] | null }>,
   ])
+
+  // Calcula rank denso por pts_total (dense ranking, empates compartilham posição)
+  const ptsMap = new Map<string, number>()
+  for (const s of (scoresData ?? [])) {
+    ptsMap.set(s.participant_id, s.pts_total ?? 0)
+  }
+  const rankMap = new Map<string, number>()
+  if (ptsMap.size > 0) {
+    const sorted = [...ptsMap.entries()].sort((a, b) => b[1] - a[1])
+    let rank = 1
+    for (let i = 0; i < sorted.length; i++) {
+      if (i > 0 && sorted[i][1] !== sorted[i - 1][1]) rank = i + 1
+      rankMap.set(sorted[i][0], rank)
+    }
+  }
 
   // Mapa de padrinho por participante (apenas admin)
   const padrinhoByPid = new Map<string, string | null>()
@@ -293,6 +310,7 @@ export default async function ControlePage({
     eliminated: eliminatedSet.has(p.id),
     g4Errors:  g4ErrorMap.get(p.id) ?? null,
     padrinho:  padrinhoByPid.get(p.id) ?? null,
+    rank:      rankMap.get(p.id) ?? null,
     stages: STAGE_KEYS.map(k => {
       const status = cellStatus(p.id, k)
       return {
