@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useProgressTransition } from '@/hooks/useProgressTransition'
 import { updateClassifColVisibility, updateSobeDesceVisible } from './actions'
+import { RecalcButton } from '@/components/admin/RecalcButton'
 
 interface ColDef {
   key: string
@@ -33,25 +34,6 @@ export function ClassificacaoAdminClient({ cols, sobeDesceVisible }: { cols: Col
       setSdPending(false)
       if (res.error) { setSdVisible(!next); setSdError(res.error) }
     })
-  }
-
-  // ── Recalcular Pontos Diários ────────────────────────────────────────────
-  const [dailyStatus, setDailyStatus]   = useState<string | null>(null)
-  const [dailyLoading, setDailyLoading] = useState(false)
-
-  const recalcDailyPoints = async () => {
-    setDailyLoading(true)
-    setDailyStatus(null)
-    try {
-      const res  = await fetch('/api/scoring/recalculate-daily', { method: 'POST' })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? 'Erro desconhecido')
-      setDailyStatus(`✅ ${json.count} registros calculados — histórico atualizado`)
-    } catch (err) {
-      setDailyStatus(`❌ ${err instanceof Error ? err.message : String(err)}`)
-    } finally {
-      setDailyLoading(false)
-    }
   }
 
   // ── Toggle de visibilidade ───────────────────────────────────────────────
@@ -99,29 +81,16 @@ export function ClassificacaoAdminClient({ cols, sobeDesceVisible }: { cols: Col
         </div>
       </div>
 
-      {/* ── Painel Sobe e Desce ─────────────────────────────────────────────── */}
-      <div className="overflow-hidden rounded-xl border border-blue-200 bg-blue-50 shadow-sm">
-        <div className="border-b border-blue-200 bg-blue-100 px-5 py-3">
-          <p className="text-sm font-bold text-blue-900">📈 Sobe e Desce — Histórico de Pontos</p>
-          <p className="mt-0.5 text-xs text-blue-700">
-            Recalcula o histórico diário de pontos de cada participante a partir dos resultados atuais.
+      {/* ── Recalcular ──────────────────────────────────────────────────────── */}
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="px-5 py-4">
+          <p className="text-sm font-semibold text-gray-800 mb-0.5">⚙️ Recalcular pontuações</p>
+          <p className="text-xs text-gray-400 mb-3">
+            Reprocessa palpites, atualiza totais e recalcula o histórico diário usado no gráfico de Evolução.
             Execute após registrar ou corrigir resultados de jogos.
           </p>
+          <RecalcButton />
         </div>
-        <div className="flex flex-wrap items-end gap-3 px-5 py-4">
-          <button
-            onClick={recalcDailyPoints}
-            disabled={dailyLoading}
-            className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-bold text-white transition hover:bg-blue-700 disabled:opacity-50"
-          >
-            {dailyLoading ? 'Calculando...' : '🔄 Recalcular Pontos Diários'}
-          </button>
-        </div>
-        {dailyStatus && (
-          <p className="border-t border-blue-200 px-5 py-2.5 text-xs font-medium text-blue-900">
-            {dailyStatus}
-          </p>
-        )}
       </div>
 
       {/* ── Visibilidade de colunas ─────────────────────────────────────────── */}
