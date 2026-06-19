@@ -467,7 +467,7 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankB
           <div className={`meu-palpite-row flex items-center px-3 py-1.5 border-t border-gray-100${ownIsExact ? ' bg-blue-50/60' : ' bg-gray-50/60'}`}>
             <div className="flex-1">
               <span className="text-[10px] sm:text-sm font-bold text-gray-400 uppercase tracking-wide">Meu palpite</span>
-              {activeParticipantId && rankAfter[activeParticipantId] != null && (() => {
+              {hasResult && activeParticipantId && rankAfter[activeParticipantId] != null && (() => {
                 const before = rankBefore[activeParticipantId] ?? 0
                 const after  = rankAfter[activeParticipantId]  ?? 0
                 const delta  = before - after
