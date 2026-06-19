@@ -26,17 +26,11 @@ function fmtShort(d: string) {
   return `${day}/${m}`
 }
 
-/**
- * Injeta o ponto "Hoje" ao final do histórico do gráfico.
- * Usa participant_scores (ao vivo) para o total atual e as 4 referências de ranking.
- * Só injeta se:
- *  - houver ao menos 1 jogo finalizado ou em andamento hoje
- *  - o último ponto histórico não for já de hoje (proteção contra batch recente)
- */
 function mergeCurrentDayWithHistory(
   chartHistory: ChartPoint[],
   liveScores: LiveScore[],
   selectedId: string,
+  selectedId2: string,
   todayStr: string,
   hasMatchToday: boolean,
 ): ChartPoint[] {
@@ -44,19 +38,22 @@ function mergeCurrentDayWithHistory(
   if (chartHistory[chartHistory.length - 1]?.date === todayStr) return chartHistory
 
   const sorted = [...liveScores].sort((a, b) => b.pts_total - a.pts_total)
-  const selIdx = sorted.findIndex(s => s.participant_id === selectedId)
+  const selIdx  = sorted.findIndex(s => s.participant_id === selectedId)
+  const sel2Idx = selectedId2 ? sorted.findIndex(s => s.participant_id === selectedId2) : -1
 
   return [
     ...chartHistory,
     {
-      dateLabel:    'Hoje',
-      date:         todayStr,
-      selected:     selIdx >= 0 ? sorted[selIdx].pts_total : undefined,
-      selectedRank: selIdx >= 0 ? selIdx + 1 : undefined,
-      leader:       sorted[0]?.pts_total,
-      zona10:       sorted[9]?.pts_total,
-      zona55:       sorted[54]?.pts_total,
-      zona110:      sorted[109]?.pts_total,
+      dateLabel:     'Hoje',
+      date:          todayStr,
+      selected:      selIdx  >= 0 ? sorted[selIdx].pts_total  : undefined,
+      selectedRank:  selIdx  >= 0 ? selIdx  + 1               : undefined,
+      selected2:     sel2Idx >= 0 ? sorted[sel2Idx].pts_total : undefined,
+      selectedRank2: sel2Idx >= 0 ? sel2Idx + 1              : undefined,
+      leader:        sorted[0]?.pts_total,
+      zona10:        sorted[9]?.pts_total,
+      zona55:        sorted[54]?.pts_total,
+      zona110:       sorted[109]?.pts_total,
     },
   ]
 }
@@ -90,9 +87,10 @@ export function EvolucaoClient({
   todayStr: string
   hasMatchToday: boolean
 }) {
-  const [selectedId, setSelectedId] = useState(currentParticipantId)
-  const [viewMode, setViewMode]     = useState<'pontuacao' | 'colocacao'>('pontuacao')
-  const [show, setShow]             = useState<ShowRefs>({
+  const [selectedId,  setSelectedId]  = useState(currentParticipantId)
+  const [selectedId2, setSelectedId2] = useState('')
+  const [viewMode, setViewMode]       = useState<'pontuacao' | 'colocacao'>('pontuacao')
+  const [show, setShow]               = useState<ShowRefs>({
     leader: true, zona10: true, zona55: true, zona110: true,
   })
 
@@ -114,6 +112,12 @@ export function EvolucaoClient({
     opts.push(...others.map(p => ({ value: p.id, label: p.apelido })))
     return opts
   }, [participants, panelaIds, currentParticipantId])
+
+  // Opções para o 2º participante: mesma ordenação + "Sem comparação" no topo
+  const comboOptions2 = useMemo(() => [
+    { value: '', label: '— Sem comparação —' },
+    ...comboOptions,
+  ], [comboOptions])
 
   // Cálculo do chartData em JS a partir de participant_points_by_day + ponto "Hoje" ao vivo
   const chartData = useMemo((): ChartPoint[] => {
@@ -142,28 +146,32 @@ export function EvolucaoClient({
 
     // 3. Para cada data histórica: ponto com selecionado + referências via .sort
     const history: ChartPoint[] = allDates.map(date => {
-      const cum = cumulativeByDate[date]
+      const cum    = cumulativeByDate[date]
       const sorted = Object.entries(cum).sort((a, b) => b[1] - a[1])
-      const selIdx = sorted.findIndex(([pid]) => pid === selectedId)
+      const selIdx  = sorted.findIndex(([pid]) => pid === selectedId)
+      const sel2Idx = selectedId2 ? sorted.findIndex(([pid]) => pid === selectedId2) : -1
 
       return {
-        dateLabel:    fmtShort(date),
+        dateLabel:     fmtShort(date),
         date,
-        selected:     cum[selectedId],
-        selectedRank: selIdx >= 0 ? selIdx + 1 : undefined,
-        leader:       sorted[0]?.[1],
-        zona10:       sorted[9]?.[1],
-        zona55:       sorted[54]?.[1],
-        zona110:      sorted[109]?.[1],
+        selected:      cum[selectedId],
+        selectedRank:  selIdx  >= 0 ? selIdx  + 1 : undefined,
+        selected2:     selectedId2 ? cum[selectedId2] : undefined,
+        selectedRank2: sel2Idx >= 0 ? sel2Idx + 1   : undefined,
+        leader:        sorted[0]?.[1],
+        zona10:        sorted[9]?.[1],
+        zona55:        sorted[54]?.[1],
+        zona110:       sorted[109]?.[1],
       }
     })
 
     // 4. Injeta o ponto "Hoje" ao vivo no final (se houver jogo hoje)
-    return mergeCurrentDayWithHistory(history, liveScores, selectedId, todayStr, hasMatchToday)
-  }, [rawDailyPoints, liveScores, selectedId, todayStr, hasMatchToday, participants])
+    return mergeCurrentDayWithHistory(history, liveScores, selectedId, selectedId2, todayStr, hasMatchToday)
+  }, [rawDailyPoints, liveScores, selectedId, selectedId2, todayStr, hasMatchToday, participants])
 
-  const selectedName = participants.find(p => p.id === selectedId)?.apelido ?? ''
-  const hasData      = chartData.length > 0
+  const selectedName  = participants.find(p => p.id === selectedId)?.apelido ?? ''
+  const selectedName2 = selectedId2 ? (participants.find(p => p.id === selectedId2)?.apelido ?? '') : undefined
+  const hasData       = chartData.length > 0
 
   const toggleRef = (key: keyof ShowRefs) =>
     setShow(s => ({ ...s, [key]: !s[key] }))
@@ -177,7 +185,7 @@ export function EvolucaoClient({
         {/* Card de filtros */}
         <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-4 space-y-4">
 
-          {/* Linha: Participante + toggle de visualização */}
+          {/* Linha: Participante 1 + Participante 2 + toggle de visualização */}
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex-1 min-w-0">
               <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">
@@ -188,6 +196,18 @@ export function EvolucaoClient({
                 onChange={val => { if (!val.startsWith('__')) setSelectedId(val) }}
                 options={comboOptions}
                 placeholder="Buscar participante…"
+              />
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">
+                Comparar com <span className="normal-case font-normal">(opcional)</span>
+              </label>
+              <Combobox
+                value={selectedId2}
+                onChange={val => { if (!val.startsWith('__')) setSelectedId2(val) }}
+                options={comboOptions2}
+                placeholder="— Sem comparação —"
               />
             </div>
 
@@ -278,11 +298,21 @@ export function EvolucaoClient({
                 <h2 className="text-sm font-bold text-gray-800">
                   {viewMode === 'pontuacao' ? '📈 Pontuação Acumulada' : '🏆 Evolução de Colocação'}
                 </h2>
-                <div className="ml-auto flex items-center gap-1.5">
-                  <svg width="16" height="4">
-                    <line x1="0" y1="2" x2="16" y2="2" stroke="#002776" strokeWidth="2.5" />
-                  </svg>
-                  <span className="text-xs font-semibold text-azul-escuro">{selectedName}</span>
+                <div className="ml-auto flex items-center gap-4">
+                  <div className="flex items-center gap-1.5">
+                    <svg width="16" height="4">
+                      <line x1="0" y1="2" x2="16" y2="2" stroke="#002776" strokeWidth="2.5" />
+                    </svg>
+                    <span className="text-xs font-semibold text-azul-escuro">{selectedName}</span>
+                  </div>
+                  {selectedName2 && (
+                    <div className="flex items-center gap-1.5">
+                      <svg width="16" height="4">
+                        <line x1="0" y1="2" x2="16" y2="2" stroke="#ea580c" strokeWidth="2.5" />
+                      </svg>
+                      <span className="text-xs font-semibold" style={{ color: '#ea580c' }}>{selectedName2}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -291,6 +321,7 @@ export function EvolucaoClient({
                 viewMode={viewMode}
                 show={show}
                 selectedName={selectedName}
+                selectedName2={selectedName2}
               />
 
               {viewMode === 'colocacao' && (

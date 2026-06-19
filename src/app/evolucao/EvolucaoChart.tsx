@@ -10,6 +10,8 @@ export interface ChartPoint {
   date: string
   selected?: number
   selectedRank?: number
+  selected2?: number
+  selectedRank2?: number
   leader?: number
   zona10?: number
   zona55?: number
@@ -24,11 +26,12 @@ export interface ShowRefs {
 }
 
 const C = {
-  selected: '#002776',
-  leader:   '#dc2626', // red-600 — líder
-  zona10:   '#16a34a', // green-600  — zona de premiação
-  zona55:   '#0284c7', // sky-600    — 2º corte
-  zona110:  '#d97706', // amber-600  — 1º corte
+  selected:  '#002776',
+  selected2: '#ea580c', // orange-600 — participante 2
+  leader:    '#dc2626', // red-600 — líder
+  zona10:    '#16a34a', // green-600  — zona de premiação
+  zona55:    '#0284c7', // sky-600    — 2º corte
+  zona110:   '#d97706', // amber-600  — 1º corte
 }
 
 function CustomTooltip({ active, payload, label, viewMode, selectedName }: {
@@ -58,12 +61,13 @@ function CustomTooltip({ active, payload, label, viewMode, selectedName }: {
 }
 
 export function EvolucaoChart({
-  data, viewMode, show, selectedName,
+  data, viewMode, show, selectedName, selectedName2,
 }: {
   data: ChartPoint[]
   viewMode: 'pontuacao' | 'colocacao'
   show: ShowRefs
   selectedName: string
+  selectedName2?: string
 }) {
   const isPts = viewMode === 'pontuacao'
 
@@ -100,6 +104,20 @@ export function EvolucaoChart({
           activeDot={{ r: 4, fill: C.selected }}
           connectNulls
         />
+
+        {/* Linha do segundo participante (opcional) */}
+        {selectedName2 && (
+          <Line
+            type="linear"
+            dataKey={isPts ? 'selected2' : 'selectedRank2'}
+            name={selectedName2}
+            stroke={C.selected2}
+            strokeWidth={2.5}
+            dot={false}
+            activeDot={{ r: 4, fill: C.selected2 }}
+            connectNulls
+          />
+        )}
 
         {/* Modo pontuação: linhas dinâmicas de referência */}
         {isPts && show.leader && (
