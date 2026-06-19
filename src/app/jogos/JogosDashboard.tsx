@@ -254,12 +254,13 @@ export function JogosDashboard({
     return out
   }, [participants, livePoints, matchPoints])
 
-  // Points from matches strictly before this one (by match_number) — base histórica para ranking
+  // Points from matches strictly before this one (by position in the sorted matches array)
+  // Using matchIdx ensures "after[i]" === "before[i+1]" with no gaps between adjacent matches.
   const ptsBeforeMatch = useMemo(() => {
     const pts: Record<string, number> = {}
     for (const p of participants) pts[p.id] = 0
-    for (const m of matches) {
-      if (m.match_number >= match.match_number) continue
+    for (let i = 0; i < matchIdx; i++) {
+      const m = matches[i]
       if (m.score_home === null || m.score_away === null) continue
       const isZebra = detectMatchZebra(
         bets.filter(b => b.match_id === m.id),
@@ -272,7 +273,7 @@ export function JogosDashboard({
       }
     }
     return pts
-  }, [matches, bets, participants, rules, threshold, match?.match_number]) // eslint-disable-line
+  }, [matches, matchIdx, bets, participants, rules, threshold]) // eslint-disable-line
 
   // Ranking before: posição imediatamente antes deste jogo (sem este jogo nem os posteriores)
   const rankBefore = useMemo(() => {
