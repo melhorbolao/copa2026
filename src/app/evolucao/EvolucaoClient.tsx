@@ -296,6 +296,28 @@ export function EvolucaoClient({
           </div>
         </div>
 
+        {/* Diagnóstico (temporário) */}
+        {(() => {
+          const lastHist = chartData.filter(d => d.date < todayStr).at(-1)
+          const myLive   = liveScores.find(s => s.participant_id === selectedId)?.pts_total ?? 0
+          const myHist   = lastHist?.selected ?? 0
+          const diff     = myLive - myHist
+          return (
+            <details className="rounded-xl border border-yellow-200 bg-yellow-50 shadow-sm px-4 py-2 text-xs text-yellow-800 cursor-pointer">
+              <summary className="font-semibold">🔍 Diagnóstico (expandir)</summary>
+              <div className="mt-2 space-y-1 font-mono">
+                <p>Linhas históricas: <b>{rawDailyPoints.length}</b></p>
+                <p>Primeiro dia com dados: <b>{rawDailyPoints[0]?.event_date ?? '—'}</b></p>
+                <p>Último dia com dados:   <b>{rawDailyPoints.at(-1)?.event_date ?? '—'}</b></p>
+                <p>Acumulado histórico ({lastHist?.dateLabel ?? '—'}): <b>{myHist} pts</b></p>
+                <p>Pontuação ao vivo (participant_scores): <b>{myLive} pts</b></p>
+                <p>Diferença (não está no histórico): <b style={{ color: diff > 0 ? '#b45309' : '#15803d' }}>{diff > 0 ? `+${diff}` : diff} pts</b></p>
+                <p>Hoje (todayStr): <b>{todayStr}</b></p>
+              </div>
+            </details>
+          )
+        })()}
+
         {/* Gráfico */}
         <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-4">
           {!hasData ? (
