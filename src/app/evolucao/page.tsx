@@ -56,19 +56,37 @@ export default async function EvolucaoPage() {
   const todayStartUTC   = `${todayStr}T06:00:00.000Z`
   const tomorrowStartUTC = new Date(new Date(todayStartUTC).getTime() + 24 * 60 * 60 * 1000).toISOString()
 
+  // participant_points_by_day pode ter >1000 linhas — busca paginada obrigatória
+  // (PostgREST retorna no máximo 1000 por request sem paginação explícita)
+  const rawDailyPoints: {
+    event_date: string; participant_id: string
+    pts_matches: number; pts_groups: number; pts_thirds: number; pts_tournament: number
+  }[] = []
+  {
+    const PAGE = 1000
+    let from = 0
+    for (;;) {
+      const { data } = await admin
+        .from('participant_points_by_day')
+        .select('event_date, participant_id, pts_matches, pts_groups, pts_thirds, pts_tournament')
+        .lt('event_date', todayStr)
+        .order('event_date', { ascending: true })
+        .range(from, from + PAGE - 1)
+      if (!data || data.length === 0) break
+      rawDailyPoints.push(...(data as typeof rawDailyPoints))
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+  }
+
   const [
-    participantsRes, panelaRes, dailyPointsRes, liveScoresRawRes, matchesTodayRes,
+    participantsRes, panelaRes, liveScoresRawRes, matchesTodayRes,
     artillarySettingRes, officialScorerSettingRes, rulesRes, scorerMappingRes, tournamentBetsRes, topScorersRes,
   ] = await Promise.all([
     admin.from('participants').select('id, apelido').order('apelido'),
     admin.from('user_panela')
       .select('member_participant_id')
       .eq('owner_participant_id', participantId),
-    // Apenas histórico: exclui hoje para que o ponto "Hoje" venha exclusivamente do live
-    admin.from('participant_points_by_day')
-      .select('event_date, participant_id, pts_matches, pts_groups, pts_thirds, pts_tournament')
-      .lt('event_date', todayStr)
-      .order('event_date', { ascending: true }),
     // Pontuação ao vivo (total acumulado) de todos os participantes
     admin.from('participant_scores').select('participant_id, pts_total'),
     // Jogos de hoje: verifica se há ao menos um iniciado ou finalizado
@@ -95,15 +113,6 @@ export default async function EvolucaoPage() {
   const panelaIds: string[] = (
     (panelaRes.data ?? []) as { member_participant_id: string }[]
   ).map((r: { member_participant_id: string }) => r.member_participant_id)
-
-  const rawDailyPoints: {
-    event_date: string
-    participant_id: string
-    pts_matches: number
-    pts_groups: number
-    pts_thirds: number
-    pts_tournament: number
-  }[] = dailyPointsRes.data ?? []
 
   // ── Ajuste de artilharia nos live scores ─────────────────────────────────────
   // participant_scores.pts_total inclui artilharia de tournament_bets.points (sempre).
