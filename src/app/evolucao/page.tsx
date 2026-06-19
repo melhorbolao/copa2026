@@ -7,6 +7,7 @@ import { requirePageAccess } from '@/lib/page-visibility'
 import { getServerNow } from '@/lib/production-mode'
 import { Navbar } from '@/components/layout/Navbar'
 import { EvolucaoClient } from './EvolucaoClient'
+import { recalculateDailyPoints } from '@/lib/scoring/daily-points'
 
 export default async function EvolucaoPage() {
   const supabase = await createClient()
@@ -28,6 +29,26 @@ export default async function EvolucaoPage() {
   // meia-noite UTC-6 = 06:00 UTC; subtrai 6h para obter a data correta
   const todayStr = new Date(now.getTime() - 6 * 60 * 60 * 1000)
     .toISOString().split('T')[0]
+
+  // Auto-recalc de pontos diários — garante que participant_points_by_day está
+  // atualizado até D-1, mesmo que o usuário não tenha visitado classificacaoMB.
+  // Compartilha a mesma chave daily_points_last_run para evitar recalcular duas vezes no mesmo dia.
+  {
+    const nowBR = new Intl.DateTimeFormat('fr-CA', { timeZone: 'Etc/GMT+6' }).format(now)
+    const lastRunRow = await admin
+      .from('tournament_settings').select('value').eq('key', 'daily_points_last_run').maybeSingle()
+    if (lastRunRow?.data?.value !== nowBR) {
+      const yesterdayDate = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+      const yesterdayBR = new Intl.DateTimeFormat('fr-CA', { timeZone: 'Etc/GMT+6' }).format(yesterdayDate)
+      try {
+        await recalculateDailyPoints({ upToDate: yesterdayBR })
+        await admin.from('tournament_settings').upsert(
+          { key: 'daily_points_last_run', value: nowBR },
+          { onConflict: 'key' },
+        )
+      } catch { /* tabela ainda não criada — ignora */ }
+    }
+  }
 
   // Janela UTC correspondente ao dia bolão: meia-noite UTC-6 = 06:00 UTC
   const todayStartUTC   = `${todayStr}T06:00:00.000Z`

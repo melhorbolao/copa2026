@@ -127,9 +127,10 @@ export function EvolucaoClient({
     const allDates = Object.keys(dailyMap).sort()
 
     // 2. Acumulado progressivo: { date → { pid → pts_total } }
-    // Inicializa o participante selecionado em 0 para que sua linha apareça
-    // mesmo em dias onde ele zerou (sem entrada na tabela)
-    const running: Record<string, number> = { [selectedId]: 0 }
+    // Inicializa TODOS os participantes em 0 para que as linhas de zona (10º, 55º, 110º)
+    // sejam calculadas sempre sobre o total de 212 participantes, não apenas os que pontuaram.
+    const running: Record<string, number> = {}
+    for (const p of participants) running[p.id] = 0
     const cumulativeByDate: Record<string, Record<string, number>> = {}
     for (const date of allDates) {
       const day = dailyMap[date]
@@ -159,7 +160,7 @@ export function EvolucaoClient({
 
     // 4. Injeta o ponto "Hoje" ao vivo no final (se houver jogo hoje)
     return mergeCurrentDayWithHistory(history, liveScores, selectedId, todayStr, hasMatchToday)
-  }, [rawDailyPoints, liveScores, selectedId, todayStr, hasMatchToday])
+  }, [rawDailyPoints, liveScores, selectedId, todayStr, hasMatchToday, participants])
 
   const selectedName = participants.find(p => p.id === selectedId)?.apelido ?? ''
   const hasData      = chartData.length > 0
