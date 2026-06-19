@@ -472,7 +472,7 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankB
                 const after  = rankAfter[activeParticipantId]  ?? 0
                 const delta  = before - after
                 return (
-                  <span className="flex items-center gap-0.5 text-xs font-mono text-gray-400">
+                  <span className="flex items-center gap-0.5 text-xs sm:text-sm font-mono text-gray-400">
                     <span className="tabular-nums">{before}→{after}</span>
                     {delta > 0 && <span className="text-emerald-500 font-bold">↑{delta}</span>}
                     {delta < 0 && <span className="text-rose-400 font-bold">↓{Math.abs(delta)}</span>}
