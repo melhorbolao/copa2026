@@ -245,7 +245,7 @@ export function JogosDashboard({
     return pts
   }, [match?.score_home, match?.score_away, matchBets, match?.is_brazil, rules, threshold])
 
-  // Points WITHOUT this match (live total minus this match's contribution)
+  // Points WITHOUT this match (live total minus this match's contribution) — usado para "PTS Total" no painel
   const ptsWithoutMatch = useMemo(() => {
     const out: Record<string, number> = {}
     for (const p of participants) {
@@ -254,21 +254,41 @@ export function JogosDashboard({
     return out
   }, [participants, livePoints, matchPoints])
 
-  // Ranking before (live total without this match)
+  // Points from matches strictly before this one (by match_number) — base histórica para ranking
+  const ptsBeforeMatch = useMemo(() => {
+    const pts: Record<string, number> = {}
+    for (const p of participants) pts[p.id] = 0
+    for (const m of matches) {
+      if (m.match_number >= match.match_number) continue
+      if (m.score_home === null || m.score_away === null) continue
+      const isZebra = detectMatchZebra(
+        bets.filter(b => b.match_id === m.id),
+        getMatchResult(m.score_home, m.score_away),
+        threshold,
+      )
+      for (const b of bets.filter(bx => bx.match_id === m.id)) {
+        pts[b.participant_id] = (pts[b.participant_id] ?? 0) +
+          scoreMatchBet(b.score_home, b.score_away, m.score_home, m.score_away, isZebra, m.is_brazil, rules)
+      }
+    }
+    return pts
+  }, [matches, bets, participants, rules, threshold, match?.match_number]) // eslint-disable-line
+
+  // Ranking before: posição imediatamente antes deste jogo (sem este jogo nem os posteriores)
   const rankBefore = useMemo(() => {
-    const sorted = [...participants].sort((a, b) => (ptsWithoutMatch[b.id] ?? 0) - (ptsWithoutMatch[a.id] ?? 0))
+    const sorted = [...participants].sort((a, b) => (ptsBeforeMatch[b.id] ?? 0) - (ptsBeforeMatch[a.id] ?? 0))
     const out: Record<string, number> = {}
     sorted.forEach((p, i) => {
-      out[p.id] = i > 0 && (ptsWithoutMatch[p.id] ?? 0) === (ptsWithoutMatch[sorted[i - 1].id] ?? 0)
+      out[p.id] = i > 0 && (ptsBeforeMatch[p.id] ?? 0) === (ptsBeforeMatch[sorted[i - 1].id] ?? 0)
         ? out[sorted[i - 1].id]
         : i + 1
     })
     return out
-  }, [participants, ptsWithoutMatch])
+  }, [participants, ptsBeforeMatch])
 
-  // Ranking after (stored without match + new match points)
+  // Ranking after: posição imediatamente após este jogo (sem considerar jogos posteriores)
   const rankAfter = useMemo(() => {
-    const ptsAfter = (p: { id: string }) => (ptsWithoutMatch[p.id] ?? 0) + (matchPoints[p.id] ?? 0)
+    const ptsAfter = (p: { id: string }) => (ptsBeforeMatch[p.id] ?? 0) + (matchPoints[p.id] ?? 0)
     const sorted = [...participants].sort((a, b) => ptsAfter(b) - ptsAfter(a))
     const out: Record<string, number> = {}
     sorted.forEach((p, i) => {
@@ -277,7 +297,7 @@ export function JogosDashboard({
         : i + 1
     })
     return out
-  }, [participants, ptsWithoutMatch, matchPoints])
+  }, [participants, ptsBeforeMatch, matchPoints])
 
   // "Quase" — who scores if home gets +1 or away gets +1
   const quase = useMemo(() => {
