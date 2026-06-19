@@ -101,33 +101,45 @@ export async function recalculateDailyPoints(options?: { upToDate?: string }): P
     getRow(info.date, b.participant_id as string).pts_matches += pts
   }
 
-  // Group bets (attributed to last match date of that group)
+  // Quando upToDate é fornecido, pontos atribuídos a datas futuras (ex: última partida do grupo
+  // que ainda não ocorreu, ou data da final) são "antecipados" para upToDate em vez de serem
+  // descartados. Isso garante que o acumulado histórico até upToDate coincida com participant_scores.
+  // Quando a data natural chegar (<= upToDate), o ponto volta à posição correta naturalmente.
+  function cap(date: string): string {
+    return upToDate && date > upToDate ? upToDate : date
+  }
+
+  // Group bets (attributed to last match date of that group, capped at upToDate)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const g of (groupBets ?? []) as any[]) {
     const pts = (g.points ?? 0) as number
     if (!pts) continue
-    const date = groupLastDate.get(g.group_name as string)
-    if (!date) continue
-    getRow(date, g.participant_id as string).pts_groups += pts
+    const naturalDate = groupLastDate.get(g.group_name as string)
+    if (!naturalDate) continue
+    getRow(cap(naturalDate), g.participant_id as string).pts_groups += pts
   }
 
-  // Third-place bets (same date attribution as group bets)
+  // Third-place bets (same date attribution as group bets, capped at upToDate)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const t of (thirdBets ?? []) as any[]) {
     const pts = (t.points ?? 0) as number
     if (!pts) continue
-    const date = groupLastDate.get(t.group_name as string)
-    if (!date) continue
-    getRow(date, t.participant_id as string).pts_thirds += pts
+    const naturalDate = groupLastDate.get(t.group_name as string)
+    if (!naturalDate) continue
+    getRow(cap(naturalDate), t.participant_id as string).pts_thirds += pts
   }
 
-  // Tournament bets (G4 + artilheiro) — attributed to date of the final
-  if (finalDate) {
+  // Tournament bets (G4 + artilheiro) — attributed to date of the final, capped at upToDate
+  // Se a final ainda não ocorreu (finalDate > upToDate ou sem final cadastrada), usa upToDate.
+  const effectiveFinalDate = finalDate
+    ? cap(finalDate)
+    : upToDate  // sem final no calendário: atribui a upToDate
+  if (effectiveFinalDate) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for (const tb of (tournamentBets ?? []) as any[]) {
       const pts = (tb.points ?? 0) as number
       if (!pts) continue
-      getRow(finalDate, tb.participant_id as string).pts_tournament += pts
+      getRow(effectiveFinalDate, tb.participant_id as string).pts_tournament += pts
     }
   }
 
