@@ -128,6 +128,20 @@ export function EvolucaoClient({
       ;(dailyMap[r.event_date] ??= {})[r.participant_id] = pts
     }
 
+    // Preenche datas sem pontuação entre a primeira data com dados e ontem (todayStr exclusive).
+    // Garante que a linha do gráfico não "salte" dias onde nenhum palpite foi pontuado —
+    // dias sem dados ficam flat (acumulado inalterado) em vez de desaparecer do eixo X.
+    const rawDateKeys = Object.keys(dailyMap)
+    if (rawDateKeys.length > 0) {
+      const stop = new Date(todayStr + 'T12:00:00Z')
+      let cursor  = new Date(rawDateKeys.sort()[0] + 'T12:00:00Z')
+      while (cursor < stop) {
+        const d = cursor.toISOString().split('T')[0]
+        if (!dailyMap[d]) dailyMap[d] = {}
+        cursor = new Date(cursor.getTime() + 24 * 60 * 60 * 1000)
+      }
+    }
+
     const allDates = Object.keys(dailyMap).sort()
 
     // 2. Acumulado progressivo: { date → { pid → pts_total } }
