@@ -23,6 +23,7 @@ interface Props {
   participants: Participant[]
   isZebra: boolean
   rules: Record<string, number>
+  rankBefore: Record<string, number>
   rankAfter: Record<string, number>
   hasAnyScore: boolean
   activeParticipantId?: string | null
@@ -193,7 +194,7 @@ function ExportableBetStats({
 
 // ── Componente principal ───────────────────────────────────────────────────────
 
-export function BetStats({ match, matchBets, participants, isZebra, rules, rankAfter, hasAnyScore, activeParticipantId, teamAbbrs = {} }: Props) {
+export function BetStats({ match, matchBets, participants, isZebra, rules, rankBefore, rankAfter, hasAnyScore, activeParticipantId, teamAbbrs = {} }: Props) {
   const hasResult      = match.score_home !== null && match.score_away !== null
   const zebraThreshold = rules['percentual_zebra'] ?? 15
 
@@ -466,11 +467,18 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankA
           <div className={`meu-palpite-row flex items-center px-3 py-1.5 border-t border-gray-100${ownIsExact ? ' bg-blue-50/60' : ' bg-gray-50/60'}`}>
             <div className="flex-1">
               <span className="text-[10px] sm:text-sm font-bold text-gray-400 uppercase tracking-wide">Meu palpite</span>
-              {activeParticipantId && rankAfter[activeParticipantId] != null && (
-                <span className="block text-xs font-mono text-gray-400">
-                  #{rankAfter[activeParticipantId]}/{participants.length}
-                </span>
-              )}
+              {activeParticipantId && rankAfter[activeParticipantId] != null && (() => {
+                const before = rankBefore[activeParticipantId] ?? 0
+                const after  = rankAfter[activeParticipantId]  ?? 0
+                const delta  = before - after
+                return (
+                  <span className="flex items-center gap-0.5 text-xs font-mono text-gray-400">
+                    <span className="tabular-nums">{before}→{after}</span>
+                    {delta > 0 && <span className="text-emerald-500 font-bold">↑{delta}</span>}
+                    {delta < 0 && <span className="text-rose-400 font-bold">↓{Math.abs(delta)}</span>}
+                  </span>
+                )
+              })()}
             </div>
             <span className={`${H_W} flex justify-center`}>{ownResult === 'H' ? scoreEl : null}</span>
             <span className={`${D_W} flex justify-center`}>{ownResult === 'D' ? scoreEl : null}</span>
