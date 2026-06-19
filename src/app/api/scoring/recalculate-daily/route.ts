@@ -37,9 +37,13 @@ export async function POST(req: NextRequest) {
     // Registra data do último recalc para evitar chamadas redundantes no mesmo dia
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAuthAdminClient() as any
-    await admin
-      .from('tournament_settings')
-      .upsert({ key: 'daily_points_last_run', value: todayBR }, { onConflict: 'key' })
+    await admin.from('tournament_settings').upsert(
+      [
+        { key: 'daily_points_last_run',   value: todayBR },
+        { key: 'evolucao_daily_last_run', value: todayBR },
+      ],
+      { onConflict: 'key' },
+    )
 
     return NextResponse.json({ ...result, lastRun: todayBR })
   } catch (err) {

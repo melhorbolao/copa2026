@@ -31,19 +31,21 @@ export default async function EvolucaoPage() {
     .toISOString().split('T')[0]
 
   // Auto-recalc de pontos diários — garante que participant_points_by_day está
-  // atualizado até D-1, mesmo que o usuário não tenha visitado classificacaoMB.
-  // Compartilha a mesma chave daily_points_last_run para evitar recalcular duas vezes no mesmo dia.
+  // atualizado até D-1. Usa chave própria (evolucao_daily_last_run) independente
+  // de classificacaoMB para não ser afetado por recalcs anteriores nesse dia.
+  // O scoring de partidas (/api/scoring/recalculate) reseta essa chave para 'stale',
+  // forçando um novo recalc na próxima visita mesmo que já tenha rodado hoje.
   {
     const nowBR = new Intl.DateTimeFormat('fr-CA', { timeZone: 'Etc/GMT+6' }).format(now)
     const lastRunRow = await admin
-      .from('tournament_settings').select('value').eq('key', 'daily_points_last_run').maybeSingle()
+      .from('tournament_settings').select('value').eq('key', 'evolucao_daily_last_run').maybeSingle()
     if (lastRunRow?.data?.value !== nowBR) {
       const yesterdayDate = new Date(now.getTime() - 24 * 60 * 60 * 1000)
       const yesterdayBR = new Intl.DateTimeFormat('fr-CA', { timeZone: 'Etc/GMT+6' }).format(yesterdayDate)
       try {
         await recalculateDailyPoints({ upToDate: yesterdayBR })
         await admin.from('tournament_settings').upsert(
-          { key: 'daily_points_last_run', value: nowBR },
+          { key: 'evolucao_daily_last_run', value: nowBR },
           { onConflict: 'key' },
         )
       } catch { /* tabela ainda não criada — ignora */ }
