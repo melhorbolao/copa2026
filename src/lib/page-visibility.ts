@@ -29,6 +29,7 @@ const DEFAULT_PAGES: PageVisibilityRow[] = [
   { id: '__default_iaMb',        page_name: 'ia-no-mb',    label: 'IA no MB',          show_for_admin: true, show_for_users: true,  sort_order: 78 },
   { id: '__default_evolucao',    page_name: 'evolucao',    label: 'Evolução',           show_for_admin: true, show_for_users: true,  sort_order: 80 },
   { id: '__default_90minutos',  page_name: '90-minutos',  label: 'Universo 90\'',      show_for_admin: true, show_for_users: true,  sort_order: 82 },
+  { id: '__default_chatbot',    page_name: 'chatbot',     label: 'Assistente MB',      show_for_admin: true, show_for_users: false, sort_order: 88 },
 ]
 
 // Memoized per request — deduplicates calls from Sidebar, Navbar, and page components

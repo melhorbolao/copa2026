@@ -10,9 +10,12 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.85",
+    "@ai-sdk/react": "^3.0.210",
     "@supabase/ssr": "^0.10.0",
     "@supabase/supabase-js": "^2.49.4",
     "@tanstack/react-virtual": "^3.13.24",
+    "ai": "^6.0.208",
     "autoprefixer": "^10.4.27",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
@@ -28,7 +31,8 @@
     "recharts": "^3.8.1",
     "remark-gfm": "^4.0.1",
     "resend": "^6.10.0",
-    "tailwind-merge": "^2.6.0"
+    "tailwind-merge": "^2.6.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^20",
