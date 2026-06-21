@@ -347,7 +347,7 @@ function fmtMatchDate(dt: string) {
 // ── SimScoreInput ──────────────────────────────────────────────────────────────
 
 const SimScoreInput = memo(function SimScoreInput({
-  match, canEdit, possibleZebras, isActualZebra, isActualZebraBet, simScore, onSaved,
+  match, canEdit, possibleZebras, isActualZebra, isActualZebraBet, simScore, officialScore, onSaved,
 }: {
   match: MatchFull
   canEdit: boolean
@@ -355,21 +355,25 @@ const SimScoreInput = memo(function SimScoreInput({
   isActualZebra?: boolean
   isActualZebraBet?: boolean
   simScore?: { score_home: number; score_away: number }
+  officialScore?: { score_home: number; score_away: number }
   onSaved: (sh: number | null, sa: number | null) => void
 }) {
-  const [home, setHome] = useState(simScore?.score_home?.toString() ?? '')
-  const [away, setAway] = useState(simScore?.score_away?.toString() ?? '')
+  const displayScore = simScore ?? officialScore
+  const [home, setHome] = useState(displayScore?.score_home?.toString() ?? '')
+  const [away, setAway] = useState(displayScore?.score_away?.toString() ?? '')
   const homeRef  = useRef(home)
   const awayRef  = useRef(away)
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const [, startTransition] = useTransition()
 
   useEffect(() => {
-    const h = simScore?.score_home?.toString() ?? ''
-    const a = simScore?.score_away?.toString() ?? ''
+    const display = simScore ?? officialScore
+    const h = display?.score_home?.toString() ?? ''
+    const a = display?.score_away?.toString() ?? ''
     setHome(h); homeRef.current = h
     setAway(a); awayRef.current = a
-  }, [simScore?.score_home, simScore?.score_away])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [simScore?.score_home, simScore?.score_away, officialScore?.score_home, officialScore?.score_away])
 
   const triggerSave = useCallback((h: string, a: string) => {
     clearTimeout(timerRef.current)
@@ -415,46 +419,62 @@ const SimScoreInput = memo(function SimScoreInput({
   const currentH = parseInt(home, 10)
   const currentA = parseInt(away, 10)
   const currentResult = (!isNaN(currentH) && !isNaN(currentA)) ? getMatchResult(currentH, currentA) : null
+  const differsFromOfficial = officialScore !== undefined &&
+    !isNaN(currentH) && !isNaN(currentA) &&
+    (currentH !== officialScore.score_home || currentA !== officialScore.score_away)
+
+  const inputHomeClass = `w-7 rounded border text-center text-xs font-bold py-0.5 focus:outline-none ${
+    possibleZebras?.H === 'apostada' || (isActualZebra && isActualZebraBet && currentResult === 'H')
+      ? 'border-gray-700 bg-gray-900 text-white placeholder-gray-500 focus:border-gray-600'
+      : possibleZebras?.H === 'sem_aposta' || (isActualZebra && !isActualZebraBet && currentResult === 'H')
+        ? 'border-gray-500 bg-gray-500 text-white placeholder-gray-300 focus:border-gray-400'
+        : differsFromOfficial
+          ? 'border-red-400 bg-red-50 text-red-700 placeholder-red-300 focus:border-red-500'
+          : 'border-amber-200 bg-amber-50 focus:border-amber-400'
+  }`
+  const inputAwayClass = `w-7 rounded border text-center text-xs font-bold py-0.5 focus:outline-none ${
+    possibleZebras?.A === 'apostada' || (isActualZebra && isActualZebraBet && currentResult === 'A')
+      ? 'border-gray-700 bg-gray-900 text-white placeholder-gray-500 focus:border-gray-600'
+      : possibleZebras?.A === 'sem_aposta' || (isActualZebra && !isActualZebraBet && currentResult === 'A')
+        ? 'border-gray-500 bg-gray-500 text-white placeholder-gray-300 focus:border-gray-400'
+        : differsFromOfficial
+          ? 'border-red-400 bg-red-50 text-red-700 placeholder-red-300 focus:border-red-500'
+          : 'border-amber-200 bg-amber-50 focus:border-amber-400'
+  }`
+
+  const clearSim = () => {
+    setHome(''); homeRef.current = ''
+    setAway(''); awayRef.current = ''
+    clearTimeout(timerRef.current)
+    onSaved(null, null)
+  }
 
   return (
     <div className="flex items-center justify-center gap-0.5">
       <input type="text" inputMode="numeric" pattern="[0-9]*" value={home}
         onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0,2); setHome(v); homeRef.current = v; triggerSave(v, awayRef.current) }}
         placeholder="–"
-        className={`w-7 rounded border text-center text-xs font-bold py-0.5 focus:outline-none ${
-          possibleZebras?.H === 'apostada' || (isActualZebra && isActualZebraBet && currentResult === 'H')
-            ? 'border-gray-700 bg-gray-900 text-white placeholder-gray-500 focus:border-gray-600'
-            : possibleZebras?.H === 'sem_aposta' || (isActualZebra && !isActualZebraBet && currentResult === 'H')
-              ? 'border-gray-500 bg-gray-500 text-white placeholder-gray-300 focus:border-gray-400'
-              : 'border-amber-200 bg-amber-50 focus:border-amber-400'
-        }`}
+        className={inputHomeClass}
       />
       <span className={`text-[9px] font-bold ${
         possibleZebras?.D === 'apostada' || (isActualZebra && isActualZebraBet && currentResult === 'D') ? 'rounded bg-gray-900 text-white px-0.5'
         : possibleZebras?.D === 'sem_aposta' || (isActualZebra && !isActualZebraBet && currentResult === 'D') ? 'rounded bg-gray-500 text-white px-0.5'
+        : differsFromOfficial ? 'text-red-400'
         : 'text-gray-300'
       }`}>×</span>
       <input type="text" inputMode="numeric" pattern="[0-9]*" value={away}
         onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0,2); setAway(v); awayRef.current = v; triggerSave(homeRef.current, v) }}
         placeholder="–"
-        className={`w-7 rounded border text-center text-xs font-bold py-0.5 focus:outline-none ${
-          possibleZebras?.A === 'apostada' || (isActualZebra && isActualZebraBet && currentResult === 'A')
-            ? 'border-gray-700 bg-gray-900 text-white placeholder-gray-500 focus:border-gray-600'
-            : possibleZebras?.A === 'sem_aposta' || (isActualZebra && !isActualZebraBet && currentResult === 'A')
-              ? 'border-gray-500 bg-gray-500 text-white placeholder-gray-300 focus:border-gray-400'
-              : 'border-amber-200 bg-amber-50 focus:border-amber-400'
-        }`}
+        className={inputAwayClass}
       />
       {hasSim && (
-        <button
-          onClick={() => {
-            setHome(''); homeRef.current = ''
-            setAway(''); awayRef.current = ''
-            clearTimeout(timerRef.current)
-            onSaved(null, null)
-          }}
-          className="text-[9px] text-gray-400 hover:text-red-400 leading-none ml-0.5"
-        >×</button>
+        officialScore !== undefined ? (
+          <button onClick={clearSim} className="text-[8px] text-red-500 hover:text-red-700 leading-none ml-0.5 font-semibold underline whitespace-nowrap">
+            usar oficial
+          </button>
+        ) : (
+          <button onClick={clearSim} className="text-[9px] text-gray-400 hover:text-red-400 leading-none ml-0.5">×</button>
+        )
       )}
     </div>
   )
@@ -789,8 +809,9 @@ export function SimuladorClient({
       let changed = false
       const next = new Map(prev)
       for (const m of matches) {
-        const sh = m.score_home ?? simMap.get(m.id)?.score_home ?? null
-        const sa = m.score_away ?? simMap.get(m.id)?.score_away ?? null
+        const simForM = simMap.get(m.id)
+        const sh = simForM !== undefined ? simForM.score_home : (m.score_home ?? null)
+        const sa = simForM !== undefined ? simForM.score_away : (m.score_away ?? null)
         if (sh === null || sa === null) continue
         const allBetsForMatch: Array<{ score_home: number; score_away: number }> = []
         for (const [key, bet] of prev) {
@@ -832,7 +853,6 @@ export function SimuladorClient({
     const matchStart = new Date(match.match_datetime).getTime()
     // Dentro da janela de 4h após o início: sempre editável (mesmo com placar oficial)
     if (now >= matchStart && now < matchStart + 4 * 3600_000) return true
-    if (match.score_home !== null) return false
     if (lockedSet.has(match.id)) return false
     return true
   }, [lockedSet])
@@ -2257,8 +2277,9 @@ export function SimuladorClient({
                 const abbrHome = teamAbbrs[teamHome] ?? teamHome.slice(0, 3).toUpperCase()
                 const abbrAway = teamAbbrs[teamAway] ?? teamAway.slice(0, 3).toUpperCase()
                 const { date: mDate, time: mTime } = fmtMatchDate(match.match_datetime)
-                const effH           = match.score_home ?? simMap.get(match.id)?.score_home ?? null
-                const effA           = match.score_away ?? simMap.get(match.id)?.score_away ?? null
+                const simForRow      = simMap.get(match.id)
+                const effH           = simForRow !== undefined ? simForRow.score_home : (match.score_home ?? null)
+                const effA           = simForRow !== undefined ? simForRow.score_away : (match.score_away ?? null)
                 const possibleZebras  = matchZebraMap.possible.get(match.id)
                 const isActualZebra  = matchZebraMap.actual.get(match.id) ?? false
                 const isActualZebraBet = matchZebraMap.actualBet.get(match.id) ?? false
@@ -2320,6 +2341,9 @@ export function SimuladorClient({
                         isActualZebra={isActualZebra}
                         isActualZebraBet={isActualZebraBet}
                         simScore={simMap.get(match.id)}
+                        officialScore={match.score_home !== null && match.score_away !== null
+                          ? { score_home: match.score_home, score_away: match.score_away }
+                          : undefined}
                         onSaved={(sh, sa) => {
                           if (sh === null) {
                             setSimMap(prev => { const next = new Map(prev); next.delete(match.id); return next })
