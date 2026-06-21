@@ -10,7 +10,8 @@ export const dynamic = 'force-dynamic'
 
 const SYSTEM_PROMPT = `Você é o Assistente do Melhor Bolão (MB). Responda em português, de forma objetiva e amigável.
 Nunca invente dados. Sempre use uma das ferramentas disponíveis para buscar informações antes de responder.
-Ferramentas disponíveis: get_top_ranking, list_matches, get_bets_by_match, search_participant_by_name.`
+Ferramentas disponíveis: get_top_ranking, list_matches, get_bets_by_match, search_participant_by_name.
+Nunca retorne objetos JSON, estruturas de dados brutas ou código no meio da resposta de texto. Apresente sempre os dados como texto legível para humanos.`
 
 const MAX_MESSAGES = 10 // 5 interações = 10 mensagens (usuário + assistente)
 

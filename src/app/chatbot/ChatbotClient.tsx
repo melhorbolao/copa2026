@@ -85,7 +85,12 @@ export function ChatbotClient() {
   function getTextContent(parts: typeof messages[0]['parts']): string {
     return parts
       .filter((p) => p.type === 'text')
-      .map((p) => (p as { type: 'text'; text: string }).text)
+      .map((p) => {
+        const raw = (p as { type: 'text'; text: unknown }).text
+        if (typeof raw === 'string') return raw
+        if (raw != null) return JSON.stringify(raw, null, 2)
+        return ''
+      })
       .join('')
   }
 
