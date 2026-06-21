@@ -192,6 +192,7 @@ const abbr = (name: string, max = 7) =>
 interface EventStats { pontuaram: number; cravaram: number; media: number }
 
 function matchEventStats(matchId: string, sh: number | null, sa: number | null, parts: Participant[], betMap: BetMap): EventStats {
+  if (sh === null || sa === null) return { pontuaram: 0, cravaram: 0, media: 0 }
   let pontuaram = 0, cravaram = 0, total = 0
   for (const p of parts) {
     const bet = betMap.get(`${p.id}:${matchId}`)
@@ -802,6 +803,7 @@ export function TabelaMBClient({
     for (const p of participants) {
       let sum = 0
       for (const m of matches) {
+        if (m.score_home === null || m.score_away === null) continue
         const e = betMap.get(`${p.id}:${m.id}`)
         if (e) {
           const pts = e.livePoints !== undefined ? e.livePoints : e.storedPoints
@@ -823,6 +825,8 @@ export function TabelaMBClient({
     }
     return totals
   }, [participants, matches, betMap, groupBetMap, thirdBetMap, officialThirds, allGroupsComplete, rules, tournamentBetMap, knockoutResults, isZebraChampion, scorerMapping])
+
+  const matchById = useMemo(() => new Map<string, MatchFull>(matches.map(m => [m.id, m])), [matches])
 
   const leaderId = useMemo(() => {
     let best = -Infinity, bestId = ''
@@ -963,7 +967,11 @@ export function TabelaMBClient({
   const getMatchPts = (pid: string, mid: string) => {
     const e = betMap.get(`${pid}:${mid}`)
     if (!e) return null
-    return e.livePoints !== undefined ? e.livePoints : e.storedPoints
+    if (e.livePoints !== undefined) return e.livePoints
+    // Nunca exibir storedPoints de uma partida sem placar oficial registrado
+    const m = matchById.get(mid)
+    if (!m || m.score_home === null || m.score_away === null) return null
+    return e.storedPoints
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────

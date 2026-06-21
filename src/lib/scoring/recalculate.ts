@@ -44,7 +44,11 @@ async function _updateMatchBetPoints(matchId: string, admin: AdminClient, rules:
     .eq('id', matchId)
     .single()
 
-  if (!match || match.score_home === null || match.score_away === null) return []
+  if (!match || match.score_home === null || match.score_away === null) {
+    // Placar removido — limpa pontos residuais para não contaminar a TabelaMB
+    await (admin as any).from('bets').update({ points: null }).eq('match_id', matchId)
+    return []
+  }
 
   const { data: bets } = await admin
     .from('bets')
