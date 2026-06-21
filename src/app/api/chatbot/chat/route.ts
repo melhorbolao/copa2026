@@ -1,5 +1,5 @@
 import { streamText, convertToModelMessages, stepCountIs } from 'ai'
-import { google } from '@ai-sdk/google'
+import { groq } from '@ai-sdk/groq'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
 
   try {
   const result = streamText({
-    model: google('gemini-1.5-flash'),
+    model: groq('llama-3.1-8b-instant'),
     system: SYSTEM_PROMPT,
     messages: modelMessages,
     stopWhen: stepCountIs(2),
