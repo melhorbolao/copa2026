@@ -171,7 +171,9 @@ export function ChatbotClient() {
         {error && (
           <div className="text-center">
             <p className="text-xs text-red-400 bg-red-900/20 rounded-lg px-3 py-2 inline-block">
-              Erro ao processar sua mensagem. Tente novamente.
+              {error.message && error.message !== 'An error occurred.'
+                ? error.message
+                : 'Erro ao processar sua mensagem. Tente novamente.'}
             </p>
           </div>
         )}

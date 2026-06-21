@@ -106,7 +106,13 @@ export async function POST(req: NextRequest) {
     },
   })
 
-  return result.toUIMessageStreamResponse()
+  return result.toUIMessageStreamResponse({
+    onError: (err) => {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('[chatbot/chat stream error]', msg)
+      return msg
+    },
+  })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error('[chatbot/chat]', msg)
