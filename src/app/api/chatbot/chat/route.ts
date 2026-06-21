@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     model: google('gemini-2.0-flash'),
     system: SYSTEM_PROMPT,
     messages: modelMessages,
-    stopWhen: stepCountIs(3),
+    stopWhen: stepCountIs(2),
     tools: {
       get_top_ranking: {
         description: 'Retorna os N primeiros colocados da classificação geral (máximo 10).',
