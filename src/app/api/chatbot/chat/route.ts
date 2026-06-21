@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
   const recentMessages = allMessages.slice(-MAX_MESSAGES)
   const modelMessages = await convertToModelMessages(recentMessages)
 
+  try {
   const result = streamText({
     model: anthropic('claude-haiku-4-5-20251001'),
     system: SYSTEM_PROMPT,
@@ -106,4 +107,9 @@ export async function POST(req: NextRequest) {
   })
 
   return result.toUIMessageStreamResponse()
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[chatbot/chat]', msg)
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
 }
