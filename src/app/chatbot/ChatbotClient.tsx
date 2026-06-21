@@ -56,6 +56,10 @@ export function ChatbotClient() {
   const loadingLabel = hasActiveToolCall ? 'Consultando banco de dados...' : 'Pensando...'
 
   useEffect(() => {
+    if (error) console.error('[Assistente MB] erro:', error)
+  }, [error])
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isLoading])
 
