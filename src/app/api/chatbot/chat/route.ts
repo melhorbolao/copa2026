@@ -1,5 +1,5 @@
 import { streamText, convertToModelMessages, stepCountIs } from 'ai'
-import { anthropic } from '@ai-sdk/anthropic'
+import { google } from '@ai-sdk/google'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
 
   try {
   const result = streamText({
-    model: anthropic('claude-haiku-4-5-20251001'),
+    model: google('gemini-2.0-flash'),
     system: SYSTEM_PROMPT,
     messages: modelMessages,
     stopWhen: stepCountIs(3),
