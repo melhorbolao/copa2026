@@ -137,16 +137,14 @@ interface ParticipantScores {
 }
 
 /**
- * Calcula o conjunto de participantes qualificados para cada corte.
- * Retorna `null` para um corte ainda não aplicável (sem dados suficientes).
- *
- * Regra de empates (item 30): todos os empatados na linha de corte passam.
- * Regra do 1º corte: arredonda para cima ao próximo múltiplo de 10.
- * Regra do 2º corte: 50% dos habilitados pelo 1º (sem arredondamento explícito).
+ * Sempre calcula os cortes dinamicamente a partir das pontuações atuais,
+ * ignorando qualquer lista congelada. Use para executar um novo corte ou
+ * exibir uma prévia do resultado antes de confirmar.
  */
-export async function getQualifiedSets(): Promise<{
+export async function calculateQualifiedSetsRaw(): Promise<{
   cutoff1: Set<string>
   cutoff2: Set<string>
+  totalParticipants: number
 }> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAuthAdminClient() as any
@@ -190,7 +188,7 @@ export async function getQualifiedSets(): Promise<{
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const allIds: string[] = (participants ?? []).map((p: any) => p.id as string)
-  if (allIds.length === 0) return { cutoff1: new Set(), cutoff2: new Set() }
+  if (allIds.length === 0) return { cutoff1: new Set(), cutoff2: new Set(), totalParticipants: 0 }
 
   const scores = new Map<string, ParticipantScores>()
   for (const pid of allIds) {
@@ -234,7 +232,55 @@ export async function getQualifiedSets(): Promise<{
     Math.ceil(cutoff1List.length / 2),       // 50% dos habilitados
   )
 
-  return { cutoff1, cutoff2 }
+  return { cutoff1, cutoff2, totalParticipants: allIds.length }
+}
+
+/**
+ * Calcula o conjunto de participantes qualificados para cada corte.
+ * Se existirem listas congeladas (salvas pelo admin via "Executar Corte"),
+ * usa-as em vez do cálculo dinâmico — garantindo que o resultado do corte
+ * não mude após execução, mesmo que pontuações sejam recalculadas.
+ *
+ * Regra de empates (item 30): todos os empatados na linha de corte passam.
+ * Regra do 1º corte: arredonda para cima ao próximo múltiplo de 10.
+ * Regra do 2º corte: 50% dos habilitados pelo 1º (sem arredondamento explícito).
+ */
+export async function getQualifiedSets(): Promise<{
+  cutoff1: Set<string>
+  cutoff2: Set<string>
+}> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAuthAdminClient() as any
+
+  const { data: frozenRows } = await admin
+    .from('tournament_settings')
+    .select('key, value')
+    .in('key', ['corte1_participantes', 'corte2_participantes'])
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const frozenMap: Record<string, string> = Object.fromEntries(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (frozenRows ?? []).map((r: any) => [r.key as string, r.value as string]),
+  )
+
+  const parseFrozen = (raw: string | undefined): Set<string> | null => {
+    if (!raw) return null
+    try {
+      const arr = JSON.parse(raw) as string[]
+      return arr.length > 0 ? new Set(arr) : null
+    } catch { return null }
+  }
+
+  const frozenCutoff1 = parseFrozen(frozenMap['corte1_participantes'])
+  const frozenCutoff2 = parseFrozen(frozenMap['corte2_participantes'])
+
+  if (frozenCutoff1 && frozenCutoff2) return { cutoff1: frozenCutoff1, cutoff2: frozenCutoff2 }
+
+  const { cutoff1: dyn1, cutoff2: dyn2 } = await calculateQualifiedSetsRaw()
+  return {
+    cutoff1: frozenCutoff1 ?? dyn1,
+    cutoff2: frozenCutoff2 ?? dyn2,
+  }
 }
 
 /**

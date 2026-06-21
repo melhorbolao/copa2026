@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient, createAuthAdminClient } from '@/lib/supabase/server'
+import { calculateQualifiedSetsRaw, getQualifiedSets } from '@/lib/phase-availability'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -84,6 +85,97 @@ export async function setRoundAvailable(roundKey: string, available: boolean): P
   revalidatePath('/palpites')
   revalidatePath('/participantes')
   revalidatePath('/admin/gestao')
+}
+
+// ── Cortes de participantes ────────────────────────────────────
+
+const CORTE_REVALIDATE_PATHS = ['/palpites', '/participantes', '/admin/gestao']
+
+function revalidateAll(paths: string[]) {
+  for (const p of paths) revalidatePath(p)
+}
+
+/**
+ * Congela o 1º corte com base na pontuação atual e libera a fase dos 16 avos
+ * para preenchimento apenas pelos classificados.
+ */
+export async function executarCorte1(): Promise<{ classified: number; total: number }> {
+  await requireAdmin()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAuthAdminClient() as any
+
+  const { cutoff1, totalParticipants } = await calculateQualifiedSetsRaw()
+  const classifiedIds = [...cutoff1]
+  const now = new Date().toISOString()
+
+  await Promise.all([
+    admin.from('tournament_settings').upsert(
+      { key: 'corte1_participantes', value: JSON.stringify(classifiedIds) },
+      { onConflict: 'key' },
+    ),
+    admin.from('tournament_settings').upsert(
+      { key: 'corte1_executado_em', value: now },
+      { onConflict: 'key' },
+    ),
+  ])
+  await toggleRoundKeyInSetting('available_rounds', 'round_of_32', true)
+
+  revalidateAll(CORTE_REVALIDATE_PATHS)
+  return { classified: classifiedIds.length, total: totalParticipants }
+}
+
+/**
+ * Congela o 2º corte com base na pontuação acumulada até as oitavas
+ * (usando o cutoff1 já congelado, se existir) e libera as quartas de final.
+ */
+export async function executarCorte2(): Promise<{ classified: number; total: number }> {
+  await requireAdmin()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAuthAdminClient() as any
+
+  // Usa cutoff1 congelado se disponível; senão recalcula tudo
+  const { cutoff1, cutoff2 } = await getQualifiedSets()
+  const classifiedIds = [...cutoff2]
+  const now = new Date().toISOString()
+
+  await Promise.all([
+    admin.from('tournament_settings').upsert(
+      { key: 'corte2_participantes', value: JSON.stringify(classifiedIds) },
+      { onConflict: 'key' },
+    ),
+    admin.from('tournament_settings').upsert(
+      { key: 'corte2_executado_em', value: now },
+      { onConflict: 'key' },
+    ),
+  ])
+  await toggleRoundKeyInSetting('available_rounds', 'quarterfinal', true)
+
+  revalidateAll(CORTE_REVALIDATE_PATHS)
+  return { classified: classifiedIds.length, total: cutoff1.size }
+}
+
+/** Remove a lista congelada do 1º corte (volta ao cálculo dinâmico). */
+export async function desfazerCorte1(): Promise<void> {
+  await requireAdmin()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAuthAdminClient() as any
+  await Promise.all([
+    admin.from('tournament_settings').delete().eq('key', 'corte1_participantes'),
+    admin.from('tournament_settings').delete().eq('key', 'corte1_executado_em'),
+  ])
+  revalidateAll(CORTE_REVALIDATE_PATHS)
+}
+
+/** Remove a lista congelada do 2º corte (volta ao cálculo dinâmico). */
+export async function desfazerCorte2(): Promise<void> {
+  await requireAdmin()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAuthAdminClient() as any
+  await Promise.all([
+    admin.from('tournament_settings').delete().eq('key', 'corte2_participantes'),
+    admin.from('tournament_settings').delete().eq('key', 'corte2_executado_em'),
+  ])
+  revalidateAll(CORTE_REVALIDATE_PATHS)
 }
 
 // ── Gestão de dados ────────────────────────────────────────────

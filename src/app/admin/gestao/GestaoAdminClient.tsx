@@ -2,9 +2,10 @@
 
 import { useState, useRef } from 'react'
 import { useProgressTransition } from '@/hooks/useProgressTransition'
-import { setProductionMode, setRoundReleased, setRoundAvailable, clearAllBets, clearAllResults, setSobeDesceVisible } from './actions'
+import { setProductionMode, setRoundReleased, setRoundAvailable, clearAllBets, clearAllResults, setSobeDesceVisible, executarCorte1, executarCorte2, desfazerCorte1, desfazerCorte2 } from './actions'
 import { RecalcButton } from '@/components/admin/RecalcButton'
 import type { RoundInfo } from '@/lib/production-mode'
+import type { CorteInfo } from './page'
 
 interface Props {
   productionMode: boolean
@@ -12,12 +13,14 @@ interface Props {
   fillableRoundKeys: string[]
   availableRounds: RoundInfo[]
   sobeDesceVisible: boolean
+  corte1: CorteInfo
+  corte2: CorteInfo
 }
 
 type Msg = { type: 'ok' | 'error'; text: string }
 type ConflictState = { conflicts: string[]; file: File }
 
-export function GestaoAdminClient({ productionMode: initProdMode, releasedRounds: initReleased, fillableRoundKeys, availableRounds, sobeDesceVisible: initSobeDesce }: Props) {
+export function GestaoAdminClient({ productionMode: initProdMode, releasedRounds: initReleased, fillableRoundKeys, availableRounds, sobeDesceVisible: initSobeDesce, corte1: initCorte1, corte2: initCorte2 }: Props) {
   const [productionMode, setMode]       = useState(initProdMode)
   const [releasedRounds, setReleased]   = useState<Set<string>>(new Set(initReleased))
   const [fillableRounds, setFillable]   = useState<Set<string>>(new Set(fillableRoundKeys))
@@ -27,6 +30,12 @@ export function GestaoAdminClient({ productionMode: initProdMode, releasedRounds
   const [fillPending, startFillTransition]    = useProgressTransition()
   const [sdPending, startSdTransition]        = useProgressTransition()
   const [auditing, setAuditing]               = useState(false)
+
+  // ── Cortes ────────────────────────────────────────────────────
+  type CorteResult = { classified: number; total: number }
+  type CorteState = { info: CorteInfo; pending: boolean; confirm: boolean; result: CorteResult | null; error: string | null }
+  const [corte1State, setCorte1State] = useState<CorteState>({ info: initCorte1, pending: false, confirm: false, result: null, error: null })
+  const [corte2State, setCorte2State] = useState<CorteState>({ info: initCorte2, pending: false, confirm: false, result: null, error: null })
 
   // ── Clear bets ────────────────────────────────────────────────
   const [confirmBets, setConfirmBets]   = useState(false)
@@ -44,6 +53,61 @@ export function GestaoAdminClient({ productionMode: initProdMode, releasedRounds
   const [importMsg, setImportMsg]       = useState<Msg | null>(null)
   const [conflict, setConflict]         = useState<ConflictState | null>(null)
   const [execResolution, setExecResolution] = useState<'overwrite' | 'skip' | null>(null)
+
+  // ── Handlers de corte ─────────────────────────────────────────
+
+  const handleExecutarCorte1 = async () => {
+    setCorte1State(s => ({ ...s, pending: true, confirm: false, error: null }))
+    try {
+      const result = await executarCorte1()
+      setCorte1State(s => ({
+        ...s,
+        pending: false,
+        result,
+        info: { executadoEm: new Date().toISOString(), classificados: result.classified },
+      }))
+    } catch (e) {
+      setCorte1State(s => ({ ...s, pending: false, error: e instanceof Error ? e.message : 'Erro desconhecido' }))
+    }
+  }
+
+  const handleDesfazerCorte1 = async () => {
+    setCorte1State(s => ({ ...s, pending: true, error: null }))
+    try {
+      await desfazerCorte1()
+      setCorte1State(s => ({ ...s, pending: false, info: { executadoEm: null, classificados: 0 }, result: null }))
+    } catch (e) {
+      setCorte1State(s => ({ ...s, pending: false, error: e instanceof Error ? e.message : 'Erro desconhecido' }))
+    }
+  }
+
+  const handleExecutarCorte2 = async () => {
+    setCorte2State(s => ({ ...s, pending: true, confirm: false, error: null }))
+    try {
+      const result = await executarCorte2()
+      setCorte2State(s => ({
+        ...s,
+        pending: false,
+        result,
+        info: { executadoEm: new Date().toISOString(), classificados: result.classified },
+      }))
+    } catch (e) {
+      setCorte2State(s => ({ ...s, pending: false, error: e instanceof Error ? e.message : 'Erro desconhecido' }))
+    }
+  }
+
+  const handleDesfazerCorte2 = async () => {
+    setCorte2State(s => ({ ...s, pending: true, error: null }))
+    try {
+      await desfazerCorte2()
+      setCorte2State(s => ({ ...s, pending: false, info: { executadoEm: null, classificados: 0 }, result: null }))
+    } catch (e) {
+      setCorte2State(s => ({ ...s, pending: false, error: e instanceof Error ? e.message : 'Erro desconhecido' }))
+    }
+  }
+
+  const formatCorteTs = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', timeZone:'America/Sao_Paulo' }) : null
 
   // ── Mode toggle ───────────────────────────────────────────────
 
@@ -327,6 +391,174 @@ export function GestaoAdminClient({ productionMode: initProdMode, releasedRounds
           ou atualizar o de-para de artilheiros.
         </p>
         <RecalcButton />
+      </section>
+
+      <hr className="border-gray-100" />
+
+      {/* ── CORTES ── */}
+      <section>
+        <h3 className="text-sm font-semibold text-gray-900 mb-1">Cortes de Participantes</h3>
+        <p className="mb-4 text-xs text-gray-500">
+          Ao executar um corte, o sistema calcula a classificação naquele instante, congela a lista de habilitados
+          e libera a fase correspondente em &quot;Meus Palpites&quot;. O resultado não muda com recálculos posteriores.
+          Use &quot;Desfazer&quot; apenas para corrigir um corte executado por engano.
+        </p>
+
+        <div className="flex flex-col gap-4">
+          {/* Corte 1 */}
+          {(() => {
+            const { info, pending, confirm, result, error } = corte1State
+            const ts = formatCorteTs(info.executadoEm)
+            const executed = !!info.executadoEm
+            return (
+              <div className={`rounded-xl border p-4 ${executed ? 'border-azul-escuro/30 bg-blue-50' : 'border-gray-200 bg-white'}`}>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-bold text-gray-800">
+                      Corte 1 — 16 avos de final
+                    </p>
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      Top 50% após fase de grupos (arredondado para cima ao múltiplo de 10). Empates na linha: todos passam.
+                    </p>
+                    {executed && (
+                      <p className="mt-1.5 text-xs font-semibold text-blue-700">
+                        Executado em {ts} · {info.classificados} classificados
+                      </p>
+                    )}
+                    {result && (
+                      <p className="mt-1 text-xs font-semibold text-green-700">
+                        {result.classified} classificados · {result.total - result.classified} eliminados (de {result.total})
+                      </p>
+                    )}
+                    {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+                  </div>
+                  <div className="flex shrink-0 flex-col gap-2">
+                    {!executed ? (
+                      confirm ? (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleExecutarCorte1}
+                            disabled={pending}
+                            className="rounded border border-azul-escuro bg-azul-escuro px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50 transition"
+                          >
+                            {pending ? 'Executando…' : 'Confirmar'}
+                          </button>
+                          <button
+                            onClick={() => setCorte1State(s => ({ ...s, confirm: false }))}
+                            disabled={pending}
+                            className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setCorte1State(s => ({ ...s, confirm: true }))}
+                          disabled={pending}
+                          className="rounded border border-azul-escuro bg-azul-escuro px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50 transition"
+                        >
+                          Executar Corte 1
+                        </button>
+                      )
+                    ) : (
+                      <button
+                        onClick={handleDesfazerCorte1}
+                        disabled={pending}
+                        className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition"
+                      >
+                        {pending ? 'Desfazendo…' : 'Desfazer Corte 1'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {!executed && confirm && (
+                  <p className="mt-2 text-xs text-amber-700 font-medium">
+                    Isso congelará a classificação atual e liberará os 16 avos apenas para os habilitados. Confirmar?
+                  </p>
+                )}
+              </div>
+            )
+          })()}
+
+          {/* Corte 2 */}
+          {(() => {
+            const { info, pending, confirm, result, error } = corte2State
+            const ts = formatCorteTs(info.executadoEm)
+            const executed = !!info.executadoEm
+            const corte1Executado = !!corte1State.info.executadoEm
+            return (
+              <div className={`rounded-xl border p-4 ${executed ? 'border-azul-escuro/30 bg-blue-50' : !corte1Executado ? 'border-gray-100 bg-gray-50 opacity-60' : 'border-gray-200 bg-white'}`}>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-bold text-gray-800">
+                      Corte 2 — Quartas de final
+                    </p>
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      Top 50% dos habilitados pelo Corte 1, usando pontos acumulados até as oitavas.
+                    </p>
+                    {!corte1Executado && (
+                      <p className="mt-1.5 text-xs text-gray-400">Execute o Corte 1 primeiro.</p>
+                    )}
+                    {executed && (
+                      <p className="mt-1.5 text-xs font-semibold text-blue-700">
+                        Executado em {ts} · {info.classificados} classificados
+                      </p>
+                    )}
+                    {result && (
+                      <p className="mt-1 text-xs font-semibold text-green-700">
+                        {result.classified} classificados · {result.total - result.classified} eliminados (de {result.total})
+                      </p>
+                    )}
+                    {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+                  </div>
+                  <div className="flex shrink-0 flex-col gap-2">
+                    {!executed ? (
+                      confirm ? (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleExecutarCorte2}
+                            disabled={pending || !corte1Executado}
+                            className="rounded border border-azul-escuro bg-azul-escuro px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50 transition"
+                          >
+                            {pending ? 'Executando…' : 'Confirmar'}
+                          </button>
+                          <button
+                            onClick={() => setCorte2State(s => ({ ...s, confirm: false }))}
+                            disabled={pending}
+                            className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setCorte2State(s => ({ ...s, confirm: true }))}
+                          disabled={pending || !corte1Executado}
+                          className="rounded border border-azul-escuro bg-azul-escuro px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50 transition"
+                        >
+                          Executar Corte 2
+                        </button>
+                      )
+                    ) : (
+                      <button
+                        onClick={handleDesfazerCorte2}
+                        disabled={pending}
+                        className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition"
+                      >
+                        {pending ? 'Desfazendo…' : 'Desfazer Corte 2'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {!executed && confirm && (
+                  <p className="mt-2 text-xs text-amber-700 font-medium">
+                    Isso congelará a classificação atual e liberará as quartas apenas para os habilitados. Confirmar?
+                  </p>
+                )}
+              </div>
+            )
+          })()}
+        </div>
       </section>
 
       <hr className="border-gray-100" />
