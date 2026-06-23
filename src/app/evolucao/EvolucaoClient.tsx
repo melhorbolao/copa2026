@@ -26,6 +26,20 @@ function fmtShort(d: string) {
   return `${day}/${m}`
 }
 
+// Standard competition ranking (1224): empatados recebem a posição do primeiro do grupo.
+// Espelha a lógica de classificacaoMB: rank = i+1 se pts != anterior, senão herda rank anterior.
+function competitionRank(sorted: [string, number][], idx: number): number | undefined {
+  if (idx < 0) return undefined
+  const score = sorted[idx][1]
+  return sorted.findIndex(([, s]) => s === score) + 1
+}
+
+function competitionRankLive(sorted: LiveScore[], idx: number): number | undefined {
+  if (idx < 0) return undefined
+  const score = sorted[idx].pts_total
+  return sorted.findIndex(s => s.pts_total === score) + 1
+}
+
 function mergeCurrentDayWithHistory(
   chartHistory: ChartPoint[],
   liveScores: LiveScore[],
@@ -47,9 +61,9 @@ function mergeCurrentDayWithHistory(
       dateLabel:     'Hoje',
       date:          todayStr,
       selected:      selIdx  >= 0 ? sorted[selIdx].pts_total  : undefined,
-      selectedRank:  selIdx  >= 0 ? selIdx  + 1               : undefined,
+      selectedRank:  competitionRankLive(sorted, selIdx),
       selected2:     sel2Idx >= 0 ? sorted[sel2Idx].pts_total : undefined,
-      selectedRank2: sel2Idx >= 0 ? sel2Idx + 1              : undefined,
+      selectedRank2: competitionRankLive(sorted, sel2Idx),
       leader:        sorted[0]?.pts_total,
       zona10:        sorted[9]?.pts_total,
       zona55:        sorted[54]?.pts_total,
@@ -169,9 +183,9 @@ export function EvolucaoClient({
         dateLabel:     fmtShort(date),
         date,
         selected:      cum[selectedId],
-        selectedRank:  selIdx  >= 0 ? selIdx  + 1 : undefined,
+        selectedRank:  competitionRank(sorted, selIdx),
         selected2:     selectedId2 ? cum[selectedId2] : undefined,
-        selectedRank2: sel2Idx >= 0 ? sel2Idx + 1   : undefined,
+        selectedRank2: competitionRank(sorted, sel2Idx),
         leader:        sorted[0]?.[1],
         zona10:        sorted[9]?.[1],
         zona55:        sorted[54]?.[1],
