@@ -164,6 +164,21 @@ export default async function EvolucaoPage() {
       + (currentArtilhariaSet.has(ls.participant_id) ? artilheiroPts : 0),
   }))
 
+  // Ajusta os pontos históricos de torneio para refletir o mesmo artilheiro que classificacaoMB.
+  // daily-points.ts usa tournament_bets.points (calculado com official_top_scorer setting),
+  // mas classificacaoMB computa artilheiro ao vivo via top_scorers quando artillaryPointsActive.
+  // Sem este ajuste, participantes com artilheiro ao vivo não aparecem no histórico correto,
+  // fazendo quem não tem artilheiro parecer em posição melhor do que realmente está.
+  const adjustedRawDailyPoints = (storedArtilhariaSet.size === currentArtilhariaSet.size &&
+    [...storedArtilhariaSet].every(id => currentArtilhariaSet.has(id)))
+    ? rawDailyPoints
+    : rawDailyPoints.map(r => {
+        const stored  = storedArtilhariaSet.has(r.participant_id)  ? artilheiroPts : 0
+        const current = currentArtilhariaSet.has(r.participant_id) ? artilheiroPts : 0
+        if (stored === current) return r
+        return { ...r, pts_tournament: r.pts_tournament - stored + current }
+      })
+
   // Ao menos 1 jogo finalizado (score_home != null) ou já iniciado (match_datetime <= now)
   const hasMatchToday: boolean = (matchesTodayRes.data ?? []).some(
     (m: { match_datetime: string; score_home: number | null }) =>
@@ -177,7 +192,7 @@ export default async function EvolucaoPage() {
         participants={participants}
         panelaIds={panelaIds}
         currentParticipantId={participantId}
-        rawDailyPoints={rawDailyPoints}
+        rawDailyPoints={adjustedRawDailyPoints}
         liveScores={liveScores}
         todayStr={todayStr}
         hasMatchToday={hasMatchToday}
