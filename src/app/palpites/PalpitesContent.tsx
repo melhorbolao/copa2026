@@ -591,17 +591,27 @@ function ValidarButton({
   etapaLabel: string
 }) {
   const router = useRouter()
+  const { getQueue } = useBetSaveQueue()
   const [open, setOpen] = useState(false)
   const [stats, setStats] = useState<{ total: number; preenchidos: number; pendentes: number } | null>(null)
 
   const handleValidarClick = () => {
-    // Proteção anti-perda: força blur para disparar auto-save de input em foco
+    // Força blur no elemento ativo: o onBlur do MatchBetRow cancela o timer de 400 ms
+    // e enfileira o valor imediatamente, antes de lermos a fila abaixo.
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur()
     }
 
+    // Considera tanto palpites já salvos (betMap) quanto os ainda na fila local
+    // (digitados mas ainda não enviados ao servidor). Sem isso, a última célula
+    // preenchida aparece como pendente se o usuário não tiver saído do campo.
+    const queue = getQueue()
     const total = visibleMatchIds.length
-    const preenchidos = visibleMatchIds.filter(id => betMap[id] !== undefined).length
+    const preenchidos = visibleMatchIds.filter(id => {
+      if (betMap[id] !== undefined) return true
+      const q = queue.get(id)
+      return q !== undefined && !('delete' in q)
+    }).length
     const pendentes = total - preenchidos
 
     setStats({ total, preenchidos, pendentes })

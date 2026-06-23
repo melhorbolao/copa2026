@@ -90,6 +90,27 @@ function MatchBetRowImpl({ match, bet, slotLabelHome, slotLabelAway }: Props) {
     triggerSave(homeRef.current, val)
   }
 
+  // Quando o input perde foco, cancela o timer de 400 ms e enfileira imediatamente.
+  // Garante que a célula em foco seja salva antes de qualquer verificação (ex: Validar).
+  const handleInputBlur = () => {
+    clearTimeout(timerRef.current)
+    const h = homeRef.current
+    const a = awayRef.current
+    if (h === '' && a === '' && bet !== null) {
+      enqueueDelete(match.id)
+      return
+    }
+    const hNum = parseInt(h, 10)
+    const aNum = parseInt(a, 10)
+    if (!isNaN(hNum) && !isNaN(aNum) && hNum >= 0 && aNum >= 0) {
+      if (hNum >= 10 || aNum >= 10) {
+        setConfirmScore({ h: hNum, a: aNum })
+      } else {
+        enqueueSave(match.id, hNum, aNum)
+      }
+    }
+  }
+
   return (
     <tr
       // Virtualização nativa: browsers modernos pulam layout/paint de linhas
@@ -142,6 +163,7 @@ function MatchBetRowImpl({ match, bet, slotLabelHome, slotLabelAway }: Props) {
               type="text" inputMode="numeric" pattern="[0-9]*"
               value={home}
               onChange={e => handleHomeChange(e.target.value.replace(/\D/g, '').slice(0, 2))}
+              onBlur={handleInputBlur}
               placeholder="–"
               className="w-8 rounded border border-gray-200 py-1 text-center text-sm font-bold focus:border-verde-400 focus:outline-none sm:w-10"
             />
@@ -150,6 +172,7 @@ function MatchBetRowImpl({ match, bet, slotLabelHome, slotLabelAway }: Props) {
               type="text" inputMode="numeric" pattern="[0-9]*"
               value={away}
               onChange={e => handleAwayChange(e.target.value.replace(/\D/g, '').slice(0, 2))}
+              onBlur={handleInputBlur}
               placeholder="–"
               className="w-8 rounded border border-gray-200 py-1 text-center text-sm font-bold focus:border-verde-400 focus:outline-none sm:w-10"
             />

@@ -6,12 +6,13 @@ import { saveBetsBatch, type BatchBetItem } from './actions'
 
 const DEBOUNCE_MS = 1500
 
-type Queued = { score_home: number; score_away: number } | { delete: true }
+export type Queued = { score_home: number; score_away: number } | { delete: true }
 
 interface Ctx {
   enqueueSave:   (matchId: string, scoreHome: number, scoreAway: number) => void
   enqueueDelete: (matchId: string) => void
   flushNow:      () => Promise<void>
+  getQueue:      () => ReadonlyMap<string, Queued>
   status:        'idle' | 'saving' | 'saved' | 'error'
   pendingCount:  number
 }
@@ -20,6 +21,7 @@ const Ctx = createContext<Ctx>({
   enqueueSave:   () => {},
   enqueueDelete: () => {},
   flushNow:      async () => {},
+  getQueue:      () => new Map(),
   status:        'idle',
   pendingCount:  0,
 })
@@ -100,6 +102,8 @@ export function BetSaveQueueProvider({ children }: { children: React.ReactNode }
     await flush()
   }
 
+  const getQueue = () => queueRef.current as ReadonlyMap<string, Queued>
+
   // Garantia anti-perda: se o usuário fechar a aba ou navegar com itens
   // pendentes, dispara um save sincrônico via sendBeacon-like (ou flush async).
   useEffect(() => {
@@ -114,7 +118,7 @@ export function BetSaveQueueProvider({ children }: { children: React.ReactNode }
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
 
   return (
-    <Ctx.Provider value={{ enqueueSave, enqueueDelete, flushNow, status, pendingCount }}>
+    <Ctx.Provider value={{ enqueueSave, enqueueDelete, flushNow, getQueue, status, pendingCount }}>
       {children}
     </Ctx.Provider>
   )
