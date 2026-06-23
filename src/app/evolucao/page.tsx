@@ -8,6 +8,7 @@ import { getServerNow } from '@/lib/production-mode'
 import { Navbar } from '@/components/layout/Navbar'
 import { EvolucaoClient } from './EvolucaoClient'
 import { recalculateDailyPoints } from '@/lib/scoring/daily-points'
+import { scoreTournamentBet } from '@/lib/scoring/engine'
 
 export default async function EvolucaoPage() {
   const supabase = await createClient()
@@ -81,7 +82,7 @@ export default async function EvolucaoPage() {
 
   const [
     participantsRes, panelaRes, liveScoresRawRes, matchesTodayRes,
-    artillarySettingRes, officialScorerSettingRes, rulesRes, scorerMappingRes, tournamentBetsRes, topScorersRes,
+    artillarySettingRes, rulesRes, scorerMappingRes, tournamentBetsRes, topScorersRes, knockoutMatchesRes,
   ] = await Promise.all([
     admin.from('participants').select('id, apelido').order('apelido'),
     admin.from('user_panela')
@@ -94,19 +95,25 @@ export default async function EvolucaoPage() {
       .select('match_datetime, score_home')
       .gte('match_datetime', todayStartUTC)
       .lt('match_datetime', tomorrowStartUTC),
-    // Configurações de artilharia (para alinhar live scores com a classificação)
+    // Flag de artilharia
     admin.from('tournament_settings').select('value').eq('key', 'artillary_points_active').maybeSingle()
-      .then((r: { data: { value: string } | null }) => r, () => ({ data: null })),
-    admin.from('tournament_settings').select('value').eq('key', 'official_top_scorer').maybeSingle()
       .then((r: { data: { value: string } | null }) => r, () => ({ data: null })),
     admin.from('scoring_rules').select('key, points')
       .then((r: { data: { key: string; points: number }[] | null }) => r, () => ({ data: [] })),
     admin.from('top_scorer_mapping').select('raw_name, standardized_name')
       .then((r: { data: { raw_name: string; standardized_name: string }[] | null }) => r, () => ({ data: [] })),
-    admin.from('tournament_bets').select('participant_id, top_scorer')
-      .then((r: { data: { participant_id: string; top_scorer: string | null }[] | null }) => r, () => ({ data: [] })),
+    // Palpites de torneio completos + pontos armazenados (para ajuste G4)
+    admin.from('tournament_bets')
+      .select('participant_id, champion, runner_up, semi1, semi2, top_scorer, points')
+      .then((r: { data: { participant_id: string; champion: string | null; runner_up: string | null; semi1: string | null; semi2: string | null; top_scorer: string | null; points: number | null }[] | null }) => r, () => ({ data: [] })),
     admin.from('top_scorers').select('player_name, goals_count').order('goals_count', { ascending: false })
       .then((r: { data: { player_name: string; goals_count: number }[] | null }) => r, () => ({ data: [] })),
+    // Resultados do mata-mata (para calcular ptsG4 ao vivo)
+    admin.from('matches')
+      .select('phase, team_home, team_away, score_home, score_away, penalty_winner')
+      .in('phase', ['quarterfinal', 'semifinal', 'third_place', 'final'])
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .then((r: any) => r, () => ({ data: [] })),
   ])
 
   const participants: { id: string; apelido: string }[] = participantsRes.data ?? []
@@ -114,70 +121,109 @@ export default async function EvolucaoPage() {
     (panelaRes.data ?? []) as { member_participant_id: string }[]
   ).map((r: { member_participant_id: string }) => r.member_participant_id)
 
-  // ── Ajuste de artilharia nos live scores ─────────────────────────────────────
-  // participant_scores.pts_total inclui artilharia de tournament_bets.points (sempre).
-  // classificacaoMB calcula ptsG4 ao vivo e zera artilharia quando o flag está off.
-  // Aqui replicamos essa lógica para que o ponto "Hoje" do gráfico seja consistente.
+  // ── Ajuste G4 nos live scores (espelha classificacaoMB) ──────────────────────
+  // participant_scores.pts_total usa tournament_bets.points (armazenado, pode estar desatualizado).
+  // classificacaoMB recalcula ptsG4 ao vivo com scoreTournamentBet. Replicamos aqui.
   const artillaryActive = artillarySettingRes?.data?.value === 'true'
-  const artilheiroPts = ((rulesRes.data ?? []) as { key: string; points: number }[])
-    .find(r => r.key === 'artilheiro')?.points ?? 18
-
+  const rules: Record<string, number> = Object.fromEntries(
+    ((rulesRes.data ?? []) as { key: string; points: number }[]).map(r => [r.key, r.points])
+  )
   const scorerMapping: Record<string, string> = Object.fromEntries(
     ((scorerMappingRes.data ?? []) as { raw_name: string; standardized_name: string }[])
       .map(m => [m.raw_name.toLowerCase().trim(), m.standardized_name])
   )
 
-  // Artilheiros ARMAZENADOS em tournament_bets.points: baseados em official_top_scorer setting
-  let storedOfficialScorers: string[] = []
-  if (officialScorerSettingRes?.data?.value) {
-    try { storedOfficialScorers = JSON.parse(officialScorerSettingRes.data.value) }
-    catch { storedOfficialScorers = [officialScorerSettingRes.data.value] }
+  // Resultados do mata-mata
+  function koWinner(m: {
+    team_home: string; team_away: string
+    score_home: number | null; score_away: number | null; penalty_winner: string | null
+  }): string | null {
+    if (m.score_home == null || m.score_away == null) return null
+    if (m.score_home > m.score_away) return m.team_home
+    if (m.score_away > m.score_home) return m.team_away
+    if (m.penalty_winner === 'H') return m.team_home
+    if (m.penalty_winner === 'A') return m.team_away
+    return null
+  }
+  function koLoser(m: Parameters<typeof koWinner>[0]): string | null {
+    const w = koWinner(m); if (!w) return null
+    return w === m.team_home ? m.team_away : m.team_home
   }
 
-  // Artilheiros CORRETOS para a classificação atual (espelha classificacaoMB)
-  let currentOfficialScorers: string[] = []
+  const koMatches = (knockoutMatchesRes.data ?? []) as {
+    phase: string; team_home: string; team_away: string
+    score_home: number | null; score_away: number | null; penalty_winner: string | null
+  }[]
+  const koDone = koMatches.filter(m => m.score_home !== null)
+  const qfDone  = koDone.filter(m => m.phase === 'quarterfinal')
+  const sfDone  = koDone.filter(m => m.phase === 'semifinal')
+  const finDone = koDone.filter(m => m.phase === 'final')
+  const tpDone  = koDone.filter(m => m.phase === 'third_place')
+
+  const semifinalists = qfDone.map(koWinner).filter(Boolean) as string[]
+  const finalists     = sfDone.map(koWinner).filter(Boolean) as string[]
+  const champion      = finDone.length > 0 ? koWinner(finDone[0]) : null
+  const runnerUp      = finDone.length > 0 ? koLoser(finDone[0])  : null
+  const third         = tpDone.length > 0  ? koWinner(tpDone[0])  : null
+  const fourth        = tpDone.length > 0  ? koLoser(tpDone[0])   : null
+
+  // Artilheiros corretos (ao vivo, mesma lógica de classificacaoMB)
+  let officialScorers: string[] = []
   if (artillaryActive) {
     const topScorersData = (topScorersRes?.data ?? []) as { player_name: string; goals_count: number }[]
-    if (topScorersData.length > 0) {
+    if (topScorersData.length > 0 && topScorersData[0].goals_count > 0) {
       const maxGoals = topScorersData[0].goals_count
-      if (maxGoals > 0) {
-        currentOfficialScorers = topScorersData.filter(s => s.goals_count === maxGoals).map(s => s.player_name)
-      }
+      officialScorers = topScorersData.filter(s => s.goals_count === maxGoals).map(s => s.player_name)
     }
   }
 
-  const storedArtilhariaSet  = new Set<string>()
-  const currentArtilhariaSet = new Set<string>()
-  const tourBets = (tournamentBetsRes.data ?? []) as { participant_id: string; top_scorer: string | null }[]
-  for (const tb of tourBets) {
-    if (!tb.top_scorer) continue
-    const norm = (scorerMapping[tb.top_scorer.toLowerCase().trim()] ?? tb.top_scorer).trim().toLowerCase()
-    if (storedOfficialScorers.some(s => s.trim().toLowerCase() === norm))  storedArtilhariaSet.add(tb.participant_id)
-    if (currentOfficialScorers.some(s => s.trim().toLowerCase() === norm)) currentArtilhariaSet.add(tb.participant_id)
+  const tournamentResults = { semifinalists, finalists, champion, runnerUp, third, fourth, officialScorers }
+
+  // Zebra do campeão
+  const fullTourBets = (tournamentBetsRes.data ?? []) as {
+    participant_id: string; champion: string | null; runner_up: string | null
+    semi1: string | null; semi2: string | null; top_scorer: string | null; points: number | null
+  }[]
+  const zebraThreshold = rules['percentual_zebra'] ?? 15
+  const chamBetsWithPick = fullTourBets.filter(b => b.champion && b.champion === champion)
+  const chamBetsTotal    = fullTourBets.filter(b => b.champion).length
+  const isZebraChampion  = chamBetsTotal > 0 && champion !== null
+    && (chamBetsWithPick.length / chamBetsTotal) * 100 <= zebraThreshold
+
+  // Pontos G4 ao vivo (liveG4) e armazenados (storedG4) por participante
+  const liveG4PtsMap:   Record<string, number> = {}
+  const storedG4PtsMap: Record<string, number> = {}
+  for (const tb of fullTourBets) {
+    liveG4PtsMap[tb.participant_id] = scoreTournamentBet(
+      {
+        champion:   tb.champion   ?? '',
+        runner_up:  tb.runner_up  ?? '',
+        semi1:      tb.semi1      ?? '',
+        semi2:      tb.semi2      ?? '',
+        top_scorer: artillaryActive ? (tb.top_scorer ?? '') : '',
+      },
+      tournamentResults,
+      rules,
+      isZebraChampion,
+      scorerMapping,
+    )
+    storedG4PtsMap[tb.participant_id] = tb.points ?? 0
   }
 
   const rawLiveScores = (liveScoresRawRes.data ?? []) as { participant_id: string; pts_total: number }[]
   const liveScores: { participant_id: string; pts_total: number }[] = rawLiveScores.map(ls => ({
     participant_id: ls.participant_id,
     pts_total: ls.pts_total
-      - (storedArtilhariaSet.has(ls.participant_id)  ? artilheiroPts : 0)
-      + (currentArtilhariaSet.has(ls.participant_id) ? artilheiroPts : 0),
+      - (storedG4PtsMap[ls.participant_id] ?? 0)
+      + (liveG4PtsMap[ls.participant_id]   ?? 0),
   }))
 
-  // Ajusta os pontos históricos de torneio para refletir o mesmo artilheiro que classificacaoMB.
-  // daily-points.ts usa tournament_bets.points (calculado com official_top_scorer setting),
-  // mas classificacaoMB computa artilheiro ao vivo via top_scorers quando artillaryPointsActive.
-  // Sem este ajuste, participantes com artilheiro ao vivo não aparecem no histórico correto,
-  // fazendo quem não tem artilheiro parecer em posição melhor do que realmente está.
-  const adjustedRawDailyPoints = (storedArtilhariaSet.size === currentArtilhariaSet.size &&
-    [...storedArtilhariaSet].every(id => currentArtilhariaSet.has(id)))
-    ? rawDailyPoints
-    : rawDailyPoints.map(r => {
-        const stored  = storedArtilhariaSet.has(r.participant_id)  ? artilheiroPts : 0
-        const current = currentArtilhariaSet.has(r.participant_id) ? artilheiroPts : 0
-        if (stored === current) return r
-        return { ...r, pts_tournament: r.pts_tournament - stored + current }
-      })
+  const adjustedRawDailyPoints = rawDailyPoints.map(r => {
+    const stored = storedG4PtsMap[r.participant_id] ?? 0
+    const live   = liveG4PtsMap[r.participant_id]   ?? 0
+    if (stored === live) return r
+    return { ...r, pts_tournament: r.pts_tournament - stored + live }
+  })
 
   // Ao menos 1 jogo finalizado (score_home != null) ou já iniciado (match_datetime <= now)
   const hasMatchToday: boolean = (matchesTodayRes.data ?? []).some(
