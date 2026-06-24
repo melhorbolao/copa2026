@@ -88,8 +88,8 @@ export default async function EvolucaoPage() {
     admin.from('user_panela')
       .select('member_participant_id')
       .eq('owner_participant_id', participantId),
-    // Pontuação ao vivo (total acumulado) de todos os participantes
-    admin.from('participant_scores').select('participant_id, pts_total'),
+    // Pontuação ao vivo — inclui pts_tournament para ajuste G4 (sempre em sync com pts_total)
+    admin.from('participant_scores').select('participant_id, pts_total, pts_tournament'),
     // Jogos de hoje: verifica se há ao menos um iniciado ou finalizado
     admin.from('matches')
       .select('match_datetime, score_home')
@@ -190,9 +190,8 @@ export default async function EvolucaoPage() {
   const isZebraChampion  = chamBetsTotal > 0 && champion !== null
     && (chamBetsWithPick.length / chamBetsTotal) * 100 <= zebraThreshold
 
-  // Pontos G4 ao vivo (liveG4) e armazenados (storedG4) por participante
-  const liveG4PtsMap:   Record<string, number> = {}
-  const storedG4PtsMap: Record<string, number> = {}
+  // Pontos G4 ao vivo por participante
+  const liveG4PtsMap: Record<string, number> = {}
   for (const tb of fullTourBets) {
     liveG4PtsMap[tb.participant_id] = scoreTournamentBet(
       {
@@ -207,22 +206,25 @@ export default async function EvolucaoPage() {
       isZebraChampion,
       scorerMapping,
     )
-    storedG4PtsMap[tb.participant_id] = tb.points ?? 0
   }
 
-  const rawLiveScores = (liveScoresRawRes.data ?? []) as { participant_id: string; pts_total: number }[]
+  // Live scores: ajusta pts_total usando pts_tournament de participant_scores como base.
+  // participant_scores.pts_tournament é SEMPRE sincronizado com pts_total pelo
+  // refreshParticipantTotals — diferente de tournament_bets.points que pode divergir.
+  const rawLiveScores = (liveScoresRawRes.data ?? []) as { participant_id: string; pts_total: number; pts_tournament: number }[]
   const liveScores: { participant_id: string; pts_total: number }[] = rawLiveScores.map(ls => ({
     participant_id: ls.participant_id,
-    pts_total: ls.pts_total
-      - (storedG4PtsMap[ls.participant_id] ?? 0)
-      + (liveG4PtsMap[ls.participant_id]   ?? 0),
+    pts_total: ls.pts_total - (ls.pts_tournament ?? 0) + (liveG4PtsMap[ls.participant_id] ?? 0),
   }))
 
+  // Histórico: substitui pts_tournament de cada linha pelo valor ao vivo.
+  // Usa o próprio r.pts_tournament como referência (não tournament_bets.points),
+  // pois participant_points_by_day pode ter sido construído com um valor diferente.
   const adjustedRawDailyPoints = rawDailyPoints.map(r => {
-    const stored = storedG4PtsMap[r.participant_id] ?? 0
-    const live   = liveG4PtsMap[r.participant_id]   ?? 0
-    if (stored === live) return r
-    return { ...r, pts_tournament: r.pts_tournament - stored + live }
+    if (r.pts_tournament === 0) return r
+    const live = liveG4PtsMap[r.participant_id] ?? 0
+    if (r.pts_tournament === live) return r
+    return { ...r, pts_tournament: live }
   })
 
   // Ao menos 1 jogo finalizado (score_home != null) ou já iniciado (match_datetime <= now)
