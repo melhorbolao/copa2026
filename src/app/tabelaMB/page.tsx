@@ -48,7 +48,7 @@ export default async function ClassificacaoPage() {
     getServerNow(),
   ])
 
-  const [matchesRes, participantsRes, betsRes, rulesRes, groupBetsRes, thirdBetsRes, totalsRes, tournamentBetsRes] = await Promise.all([
+  const [matchesRes, participantsRes, betsRes, rulesRes, groupBetsRes, thirdBetsRes, totalsRes, tournamentBetsRes, thirdScoringRes] = await Promise.all([
     supabase.from('matches')
       .select('id, match_number, phase, group_name, round, team_home, team_away, flag_home, flag_away, match_datetime, city, score_home, score_away, penalty_winner, is_brazil, betting_deadline')
       .order('match_number', { ascending: true }),
@@ -61,6 +61,7 @@ export default async function ClassificacaoPage() {
     fetchAll('third_place_bets', 'participant_id, group_name, team'),
     admin.from('participant_scores').select('participant_id, pts_total'),
     admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer, points'),
+    admin.from('third_place_scoring').select('group_name, enabled'),
   ])
 
   // ── Production mode filtering (server-side, before data reaches the client) ──
@@ -115,6 +116,11 @@ export default async function ClassificacaoPage() {
     }
   } catch { /* tabelas ainda não criadas */ }
 
+  const thirdScoring: Record<string, boolean> = Object.fromEntries(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((thirdScoringRes.data ?? []) as any[]).map((r: any) => [r.group_name, r.enabled])
+  )
+
   // Query separada para evitar crash se a tabela teams ainda não existir
   let teamAbbrs: Record<string, string> = {}
   try {
@@ -147,6 +153,7 @@ export default async function ClassificacaoPage() {
         scorerMapping={scorerMapping}
         lockedMatchIds={deadlineLockedIds}
         bonusIsLocked={bonusIsLocked}
+        thirdScoring={thirdScoring}
       />
     </>
   )

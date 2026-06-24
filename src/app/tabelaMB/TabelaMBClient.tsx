@@ -91,6 +91,8 @@ interface Props {
   lockedMatchIds?: string[]
   /** Verdadeiro quando o prazo do bônus (R1) ainda não passou */
   bonusIsLocked?: boolean
+  /** Quais grupos têm pontuação de terceiros habilitada pelo admin */
+  thirdScoring?: Record<string, boolean>
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -475,7 +477,7 @@ export function TabelaMBClient({
   initialMatches, participants, initialBets, initialGroupBets, initialThirdBets,
   initialTournamentBets, participantTotals, rules, isAdmin, activeParticipantId,
   teamAbbrs, officialTopScorers, scorerMapping, productionMode = false,
-  lockedMatchIds, bonusIsLocked = false,
+  lockedMatchIds, bonusIsLocked = false, thirdScoring = {},
 }: Props) {
   const [matches, setMatches] = useState<MatchFull[]>(initialMatches)
   const [betMap,  setBetMap]  = useState<BetMap>(() => buildBetMap(initialBets))
@@ -719,7 +721,14 @@ export function TabelaMBClient({
 
   const offFirstMap  = useMemo(() => new Map(GROUP_ORDER.map(g => [g, completeGroupsSet.has(g) ? (officialStandings.find(s => s.group === g)?.teams[0]?.team ?? '') : ''])), [officialStandings, completeGroupsSet])
   const offSecondMap = useMemo(() => new Map(GROUP_ORDER.map(g => [g, completeGroupsSet.has(g) ? (officialStandings.find(s => s.group === g)?.teams[1]?.team ?? '') : ''])), [officialStandings, completeGroupsSet])
-  const offThirdMap  = useMemo(() => new Map(GROUP_ORDER.map(g => [g, allGroupsComplete ? (officialThirds.find(t => t.group === g && t.advances)?.team ?? '') : ''])), [officialThirds, allGroupsComplete])
+  const offThirdMap  = useMemo(() => new Map(GROUP_ORDER.map(g => {
+    if (!thirdScoring[g]) return [g, ''] as [string, string]
+    if (!completeGroupsSet.has(g)) return [g, ''] as [string, string]
+    const team = allGroupsComplete
+      ? (officialThirds.find(t => t.group === g && t.advances)?.team ?? '')
+      : (officialThirds.find(t => t.group === g)?.team ?? '')
+    return [g, team] as [string, string]
+  })), [officialThirds, thirdScoring, completeGroupsSet, allGroupsComplete])
 
   const teamFlagMap = useMemo(() => {
     const m = new Map<string, string>()
@@ -814,8 +823,10 @@ export function TabelaMBClient({
         const gb = groupBetMap.get(`${p.id}:${g}`)
         if (gb?.points) sum += gb.points
         const tb = thirdBetMap.get(`${p.id}:${g}`)
-        if (tb?.team) {
-          const actualThird = allGroupsComplete ? (officialThirds.find(t => t.group === g && t.advances)?.team ?? '') : ''
+        if (tb?.team && thirdScoring[g] && completeGroupsSet.has(g)) {
+          const actualThird = allGroupsComplete
+            ? (officialThirds.find(t => t.group === g && t.advances)?.team ?? '')
+            : (officialThirds.find(t => t.group === g)?.team ?? '')
           if (actualThird && tb.team === actualThird) sum += thirdPts
         }
       })
@@ -824,7 +835,7 @@ export function TabelaMBClient({
       totals[p.id] = sum
     }
     return totals
-  }, [participants, matches, betMap, groupBetMap, thirdBetMap, officialThirds, allGroupsComplete, rules, tournamentBetMap, knockoutResults, isZebraChampion, scorerMapping])
+  }, [participants, matches, betMap, groupBetMap, thirdBetMap, officialThirds, allGroupsComplete, completeGroupsSet, thirdScoring, rules, tournamentBetMap, knockoutResults, isZebraChampion, scorerMapping])
 
   const matchById = useMemo(() => new Map<string, MatchFull>(matches.map(m => [m.id, m])), [matches])
 
