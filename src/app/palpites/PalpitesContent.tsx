@@ -596,26 +596,29 @@ function ValidarButton({
   const [stats, setStats] = useState<{ total: number; preenchidos: number; pendentes: number } | null>(null)
 
   const handleValidarClick = () => {
-    // Força blur no elemento ativo: o onBlur do MatchBetRow cancela o timer de 400 ms
-    // e enfileira o valor imediatamente, antes de lermos a fila abaixo.
+    // Força blur no elemento ativo para que o onBlur do MatchBetRow cancele o
+    // timer de 400 ms e enfileire o valor imediatamente.
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur()
     }
 
-    // Considera tanto palpites já salvos (betMap) quanto os ainda na fila local
-    // (digitados mas ainda não enviados ao servidor). Sem isso, a última célula
-    // preenchida aparece como pendente se o usuário não tiver saído do campo.
-    const queue = getQueue()
-    const total = visibleMatchIds.length
-    const preenchidos = visibleMatchIds.filter(id => {
-      if (betMap[id] !== undefined) return true
-      const q = queue.get(id)
-      return q !== undefined && !('delete' in q)
-    }).length
-    const pendentes = total - preenchidos
+    // Lê a fila após ceder ao event loop: em alguns browsers (iOS Safari) o blur
+    // programático dispara o evento de forma assíncrona, então o handler onBlur
+    // (que chama enqueueSave) ainda não rodou quando chegamos aqui. setTimeout(0)
+    // garante que o handler tenha concluído antes de lermos o estado da fila.
+    setTimeout(() => {
+      const queue = getQueue()
+      const total = visibleMatchIds.length
+      const preenchidos = visibleMatchIds.filter(id => {
+        if (betMap[id] !== undefined) return true
+        const q = queue.get(id)
+        return q !== undefined && !('delete' in q)
+      }).length
+      const pendentes = total - preenchidos
 
-    setStats({ total, preenchidos, pendentes })
-    setOpen(true)
+      setStats({ total, preenchidos, pendentes })
+      setOpen(true)
+    }, 0)
   }
 
   const handleOk = () => {
