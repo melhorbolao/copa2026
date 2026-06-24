@@ -94,13 +94,20 @@ export default async function ControlePage({
     getPhaseSettings(),
     getQualifiedSets(),
     fetchAll('user_participants', 'participant_id, users(padrinho)') as Promise<{ participant_id: string; users: { padrinho: string | null } | null }[]>,
-    admin.from('mv_general_ranking').select('participant_id, posicao') as Promise<{ data: { participant_id: string; posicao: number | null }[] | null }>,
+    admin.from('mv_general_ranking').select('participant_id, pts_total') as Promise<{ data: { participant_id: string; pts_total: number | null }[] | null }>,
   ])
 
-  // Usa posicao da mv_general_ranking (desempate por pts_total + cravadas, igual à classificacaoMB)
+  // Calcula posição usando o mesmo algoritmo da ClassificacaoMBClient:
+  // rank padrão (com saltos em empates), ordenado apenas por pts_total (sem tiebreaker de cravadas)
+  const rankingSorted = [...(rankingData ?? [])].sort((a, b) => (b.pts_total ?? 0) - (a.pts_total ?? 0))
   const rankMap = new Map<string, number>()
-  for (const r of (rankingData ?? [])) {
-    if (r.posicao !== null) rankMap.set(r.participant_id, r.posicao)
+  for (let i = 0; i < rankingSorted.length; i++) {
+    const r = rankingSorted[i]
+    const rank = i === 0 ? 1
+      : (r.pts_total ?? 0) === (rankingSorted[i - 1].pts_total ?? 0)
+        ? rankMap.get(rankingSorted[i - 1].participant_id)!
+        : i + 1
+    rankMap.set(r.participant_id, rank)
   }
 
   // Mapa de padrinho por participante (apenas admin)
