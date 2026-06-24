@@ -162,11 +162,28 @@ async function _updateThirdBetPoints(admin: AdminClient, rules: RuleMap): Promis
   const { data: scoringConfig } = await (admin as any)
     .from('third_place_scoring')
     .select('group_name, enabled')
-  const scoringEnabled = new Set<string>(
+  let scoringEnabled = new Set<string>(
     ((scoringConfig ?? []) as { group_name: string; enabled: boolean }[])
       .filter(r => r.enabled)
       .map(r => r.group_name),
   )
+
+  // Se nenhum grupo está habilitado mas TODOS os jogos de grupo já têm placar,
+  // auto-habilita todos os grupos (cobre o caso da migração inicial que cria
+  // todos com enabled=false quando a fase de grupos já estava concluída).
+  if (scoringEnabled.size === 0 && groupMatches.every(m => m.score_home !== null)) {
+    try {
+      await autoEnableAllThirdScoring()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: newConfig } = await (admin as any)
+        .from('third_place_scoring').select('group_name, enabled')
+      scoringEnabled = new Set<string>(
+        ((newConfig ?? []) as { group_name: string; enabled: boolean }[])
+          .filter(r => r.enabled)
+          .map(r => r.group_name),
+      )
+    } catch { /* tabela ainda não criada — ignora */ }
+  }
 
   if (scoringEnabled.size === 0) {
     // Nenhum grupo habilitado: zera todos os pontos residuais
