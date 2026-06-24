@@ -88,8 +88,8 @@ export default async function EvolucaoPage() {
     admin.from('user_panela')
       .select('member_participant_id')
       .eq('owner_participant_id', participantId),
-    // Pontuação ao vivo — inclui pts_tournament para ajuste G4 (sempre em sync com pts_total)
-    admin.from('participant_scores').select('participant_id, pts_total, pts_tournament'),
+    // Componentes individuais para calcular total sem depender de pts_tournament (pode estar stale)
+    admin.from('participant_scores').select('participant_id, pts_matches, pts_groups, pts_thirds'),
     // Jogos de hoje: verifica se há ao menos um iniciado ou finalizado
     admin.from('matches')
       .select('match_datetime, score_home')
@@ -121,9 +121,7 @@ export default async function EvolucaoPage() {
     (panelaRes.data ?? []) as { member_participant_id: string }[]
   ).map((r: { member_participant_id: string }) => r.member_participant_id)
 
-  // ── Ajuste G4 nos live scores (espelha classificacaoMB) ──────────────────────
-  // participant_scores.pts_total usa tournament_bets.points (armazenado, pode estar desatualizado).
-  // classificacaoMB recalcula ptsG4 ao vivo com scoreTournamentBet. Replicamos aqui.
+  // ── Live G4 ao vivo (espelha classificacaoMB) ────────────────────────────────
   const artillaryActive = artillarySettingRes?.data?.value === 'true'
   const rules: Record<string, number> = Object.fromEntries(
     ((rulesRes.data ?? []) as { key: string; points: number }[]).map(r => [r.key, r.points])
@@ -208,13 +206,13 @@ export default async function EvolucaoPage() {
     )
   }
 
-  // Live scores: ajusta pts_total usando pts_tournament de participant_scores como base.
-  // participant_scores.pts_tournament é SEMPRE sincronizado com pts_total pelo
-  // refreshParticipantTotals — diferente de tournament_bets.points que pode divergir.
-  const rawLiveScores = (liveScoresRawRes.data ?? []) as { participant_id: string; pts_total: number; pts_tournament: number }[]
+  // Live scores: soma componentes individuais (matches+groups+thirds) com G4 ao vivo.
+  // Evita depender de pts_tournament (pode ficar stale entre recalcs) ou pts_total (inflado
+  // se pts_tournament foi zerado sem recalcular o total).
+  const rawLiveScores = (liveScoresRawRes.data ?? []) as { participant_id: string; pts_matches: number; pts_groups: number; pts_thirds: number }[]
   const liveScores: { participant_id: string; pts_total: number }[] = rawLiveScores.map(ls => ({
     participant_id: ls.participant_id,
-    pts_total: ls.pts_total - (ls.pts_tournament ?? 0) + (liveG4PtsMap[ls.participant_id] ?? 0),
+    pts_total: (ls.pts_matches ?? 0) + (ls.pts_groups ?? 0) + (ls.pts_thirds ?? 0) + (liveG4PtsMap[ls.participant_id] ?? 0),
   }))
 
   // Histórico: substitui pts_tournament de cada linha pelo valor ao vivo.
