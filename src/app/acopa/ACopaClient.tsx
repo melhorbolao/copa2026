@@ -6,7 +6,7 @@ import { MatchScoreRow } from './MatchScoreRow'
 import { OfficialGroupCard } from './OfficialGroupCard'
 import { OfficialBracketView } from './OfficialBracketView'
 import { ThirdsTable } from '@/app/tabela/ThirdsTable'
-import { saveOfficialTopScorer } from './actions'
+import { saveOfficialTopScorer, toggleThirdPlaceScoring } from './actions'
 import { isDeadlinePassed } from '@/utils/date'
 import {
   calcGroupStandings,
@@ -47,6 +47,7 @@ interface Props {
   initialOfficialTopScorer: string | null
   standardizedNames: string[]
   r1Deadline: string
+  initialThirdScoring: Record<string, boolean>
 }
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -173,11 +174,12 @@ function computeCanEdit(match: MatchFull, isAdmin: boolean): boolean {
 
 // ── Componente principal ──────────────────────────────────────────────────────
 
-export function ACopaClient({ initialMatches, isAdmin, initialOfficialTopScorer, standardizedNames, r1Deadline }: Props) {
+export function ACopaClient({ initialMatches, isAdmin, initialOfficialTopScorer, standardizedNames, r1Deadline, initialThirdScoring }: Props) {
   const [matches, setMatches]          = useState<MatchFull[]>(initialMatches as MatchFull[])
   const [groupFilter, setGroup]        = useState('')
   const [stageFilter, setStage]        = useState('')
   const [now, setNow]                  = useState(Date.now())
+  const [thirdScoring, setThirdScoring] = useState<Record<string, boolean>>(initialThirdScoring)
 
   // Artilheiros oficiais — armazenados como JSON array no banco
   const parseNames = (raw: string | null): string[] => {
@@ -459,7 +461,17 @@ export function ACopaClient({ initialMatches, isAdmin, initialOfficialTopScorer,
       {/* ── Melhores Terceiros — só na fase de grupos ────────────────────────── */}
       {hasAnyScore && isGroupStage && thirds.length > 0 && (
         <div className="mb-8">
-          <ThirdsTable thirds={thirds} annexCOption={annexCOption} />
+          <ThirdsTable
+            thirds={thirds}
+            annexCOption={annexCOption}
+            isAdmin={isAdmin}
+            thirdScoring={thirdScoring}
+            onToggle={async (group, enabled) => {
+              setThirdScoring(prev => ({ ...prev, [group]: enabled }))
+              const result = await toggleThirdPlaceScoring(group, enabled)
+              if (result.error) setThirdScoring(prev => ({ ...prev, [group]: !enabled }))
+            }}
+          />
         </div>
       )}
 

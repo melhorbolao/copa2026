@@ -156,21 +156,64 @@ async function _updateThirdBetPoints(admin: AdminClient, rules: RuleMap): Promis
     .eq('phase', 'group')
 
   if (!groupMatches?.length) return []
-  if (!groupMatches.every(m => m.score_home !== null && m.score_away !== null)) return []
 
-  const slimMatches: MatchSlim[] = groupMatches.map(m => ({
-    id: m.id, group_name: m.group_name, phase: m.phase,
-    team_home: m.team_home, team_away: m.team_away,
-    flag_home: m.flag_home, flag_away: m.flag_away,
-  }))
-  const betMap = new Map<string, BetSlim>(
-    groupMatches.map(m => [
-      m.id,
-      { match_id: m.id, score_home: m.score_home!, score_away: m.score_away! },
-    ])
+  // Carrega quais grupos estão habilitados para pontuação
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: scoringConfig } = await (admin as any)
+    .from('third_place_scoring')
+    .select('group_name, enabled')
+  const scoringEnabled = new Set<string>(
+    ((scoringConfig ?? []) as { group_name: string; enabled: boolean }[])
+      .filter(r => r.enabled)
+      .map(r => r.group_name),
   )
-  const standings = calcGroupStandings(slimMatches, betMap)
-  const thirds    = rankThirds(standings)
+
+  if (scoringEnabled.size === 0) {
+    // Nenhum grupo habilitado: zera todos os pontos residuais
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: thirdBets } = await (admin as any)
+      .from('third_place_bets')
+      .select('id, participant_id, group_name, team')
+    if (!thirdBets?.length) return []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (admin as any).from('third_place_bets').upsert(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (thirdBets as any[]).map((bet: any) => ({
+        id: bet.id, participant_id: bet.participant_id,
+        group_name: bet.group_name, team: bet.team, points: 0,
+      })),
+      { onConflict: 'id' },
+    )
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return [...new Set((thirdBets as any[]).map((b: any) => b.participant_id as string))]
+  }
+
+  // Agrupa partidas por grupo e determina o 3º real de cada grupo habilitado
+  const matchesByGroup = new Map<string, typeof groupMatches>()
+  for (const m of groupMatches) {
+    if (!m.group_name) continue
+    if (!matchesByGroup.has(m.group_name)) matchesByGroup.set(m.group_name, [])
+    matchesByGroup.get(m.group_name)!.push(m)
+  }
+
+  // Para cada grupo habilitado e completo, calcula o time 3º colocado real
+  const actualThirdByGroup = new Map<string, string>()
+  for (const group of scoringEnabled) {
+    const gms = matchesByGroup.get(group)
+    if (!gms || !gms.every(m => m.score_home !== null && m.score_away !== null)) continue
+
+    const slim: MatchSlim[] = gms.map(m => ({
+      id: m.id, group_name: m.group_name, phase: m.phase,
+      team_home: m.team_home, team_away: m.team_away,
+      flag_home: m.flag_home, flag_away: m.flag_away,
+    }))
+    const bm = new Map<string, BetSlim>(
+      gms.map(m => [m.id, { match_id: m.id, score_home: m.score_home!, score_away: m.score_away! }])
+    )
+    const standings = calcGroupStandings(slim, bm)
+    const gs = standings.find(s => s.group === group)
+    if (gs && gs.teams.length >= 3) actualThirdByGroup.set(group, gs.teams[2].team)
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: thirdBets } = await (admin as any)
@@ -185,8 +228,8 @@ async function _updateThirdBetPoints(admin: AdminClient, rules: RuleMap): Promis
   await (admin as any).from('third_place_bets').upsert(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (thirdBets as any[]).map((bet: any) => {
-      const actual = thirds.find(t => t.group === bet.group_name)
-      const pts    = (actual?.advances && actual.team === bet.team) ? thirdPts : 0
+      const actualThird = actualThirdByGroup.get(bet.group_name)
+      const pts = (actualThird && actualThird === bet.team) ? thirdPts : 0
       return {
         id:             bet.id,
         participant_id: bet.participant_id,
@@ -326,6 +369,19 @@ export async function recalculateThirdBets(): Promise<void> {
   await refreshParticipantTotals(ids)
 }
 
+/** Habilita todos os grupos em third_place_scoring. Chamado automaticamente
+ *  quando todos os jogos da fase de grupos têm placar. */
+export async function autoEnableAllThirdScoring(): Promise<void> {
+  const admin = createAuthAdminClient()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (admin as any).from('third_place_scoring').upsert(
+    ['A','B','C','D','E','F','G','H','I','J','K','L'].map(g => ({
+      group_name: g, enabled: true, updated_at: new Date().toISOString(),
+    })),
+    { onConflict: 'group_name' },
+  )
+}
+
 // ── Tournament bets ───────────────────────────────────────────────────────────
 
 export async function recalculateTournamentBets(): Promise<void> {
@@ -406,6 +462,17 @@ export async function recalculateAfterMatchScore(matchId: string): Promise<void>
 
   if (match.phase === 'group' && match.group_name) {
     ;(await _updateGroupBetPoints(match.group_name, admin, rules)).forEach(id => allIds.add(id))
+
+    // Quando todos os grupos terminam, habilita pontuação de terceiros automaticamente
+    const { data: allGroupMatches } = await admin
+      .from('matches')
+      .select('score_home, score_away')
+      .eq('phase', 'group')
+    const allGroupsComplete =
+      (allGroupMatches?.length ?? 0) > 0 &&
+      allGroupMatches!.every(m => m.score_home !== null && m.score_away !== null)
+    if (allGroupsComplete) await autoEnableAllThirdScoring()
+
     ;(await _updateThirdBetPoints(admin, rules)).forEach(id => allIds.add(id))
   }
 
@@ -458,7 +525,15 @@ export async function recalculateAll(): Promise<void> {
   const groupResults = await Promise.all(groups.map(g => _updateGroupBetPoints(g, admin, rules)))
   groupResults.flat().forEach(id => allIds.add(id))
 
-  // 3. Third-place bets (fires only when all group matches are scored internally)
+  // 3. Third-place bets — auto-enable se todos os jogos de grupo estão pontuados
+  const { data: allGroupMatches } = await admin
+    .from('matches')
+    .select('score_home, score_away')
+    .eq('phase', 'group')
+  const allGroupsComplete =
+    (allGroupMatches?.length ?? 0) > 0 &&
+    allGroupMatches!.every(m => m.score_home !== null && m.score_away !== null)
+  if (allGroupsComplete) await autoEnableAllThirdScoring()
   const thirdIds = await _updateThirdBetPoints(admin, rules)
   thirdIds.forEach(id => allIds.add(id))
 

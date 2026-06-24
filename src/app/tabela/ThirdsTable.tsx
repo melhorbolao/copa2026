@@ -1,12 +1,27 @@
+'use client'
+
+import { useState } from 'react'
 import { Flag } from '@/components/ui/Flag'
 import type { ThirdTeam } from '@/lib/bracket/engine'
 
 interface Props {
   thirds: ThirdTeam[]
   annexCOption?: number | null
+  isAdmin?: boolean
+  thirdScoring?: Record<string, boolean>
+  onToggle?: (group: string, enabled: boolean) => Promise<void>
 }
 
-export function ThirdsTable({ thirds, annexCOption }: Props) {
+export function ThirdsTable({ thirds, annexCOption, isAdmin = false, thirdScoring = {}, onToggle }: Props) {
+  const [pending, setPending] = useState<string | null>(null)
+
+  const handleToggle = async (group: string, enabled: boolean) => {
+    if (!onToggle || pending) return
+    setPending(group)
+    await onToggle(group, enabled)
+    setPending(null)
+  }
+
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200 shadow-sm">
       <div
@@ -35,6 +50,9 @@ export function ThirdsTable({ thirds, annexCOption }: Props) {
             <th className="w-7 px-1 py-2 text-center font-medium">GP</th>
             <th className="w-7 px-1 py-2 text-center font-medium">GC</th>
             <th className="w-7 px-1 py-2 text-center font-medium">SG</th>
+            {isAdmin && (
+              <th className="w-20 px-2 py-2 text-center font-medium">Pontuar</th>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -88,6 +106,18 @@ export function ThirdsTable({ thirds, annexCOption }: Props) {
               <td className={`px-1 py-2 text-center font-medium ${t.gd > 0 ? 'text-verde-600' : t.gd < 0 ? 'text-red-500' : 'text-gray-500'}`}>
                 {t.gd > 0 ? `+${t.gd}` : t.gd}
               </td>
+              {isAdmin && (
+                <td className="px-2 py-2 text-center">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 cursor-pointer accent-amber-500 disabled:cursor-wait"
+                    checked={thirdScoring[t.group] ?? false}
+                    disabled={pending === t.group}
+                    onChange={e => handleToggle(t.group, e.target.checked)}
+                    title={thirdScoring[t.group] ? 'Clique para remover pontuação' : 'Clique para pontuar'}
+                  />
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

@@ -26,13 +26,14 @@ export default async function ACopaPage() {
   const isAdmin = profile?.is_admin ?? false
   await requirePageAccess('acopa', profile?.role ?? 'user')
 
-  const [{ data: rawMatches }, settingRow, mappings] = await Promise.all([
+  const [{ data: rawMatches }, settingRow, mappings, scoringRows] = await Promise.all([
     supabase
       .from('matches')
       .select('id, match_number, phase, group_name, round, team_home, team_away, flag_home, flag_away, match_datetime, city, betting_deadline, score_home, score_away, penalty_winner, is_brazil')
       .order('match_datetime', { ascending: true }),
     supabase.from('tournament_settings').select('value').eq('key', 'official_top_scorer').maybeSingle().then(r => r.data, () => null),
     supabase.from('top_scorer_mapping').select('standardized_name').then(r => r.data ?? [], () => []),
+    supabase.from('third_place_scoring').select('group_name, enabled').then(r => r.data ?? [], () => []),
   ])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -41,6 +42,9 @@ export default async function ACopaPage() {
   const standardizedNames = [...new Set(
     (mappings as { standardized_name: string }[]).map(m => m.standardized_name).filter(Boolean)
   )].sort() as string[]
+  const initialThirdScoring = Object.fromEntries(
+    (scoringRows as { group_name: string; enabled: boolean }[]).map(r => [r.group_name, r.enabled])
+  ) as Record<string, boolean>
 
   // Prazo R1 para o toggle texto↔dropdown no campo de artilheiro
   const r1Deadline = (matches as { phase: string; round: number; betting_deadline: string }[])
@@ -66,6 +70,7 @@ export default async function ACopaPage() {
           initialOfficialTopScorer={officialTopScorer}
           standardizedNames={standardizedNames}
           r1Deadline={r1Deadline}
+          initialThirdScoring={initialThirdScoring}
         />
       </div>
     </>

@@ -591,6 +591,24 @@ export type Database = {
           { foreignKeyName: 'match_90min_results_match_id_fkey'; columns: ['match_id']; referencedRelation: 'matches'; referencedColumns: ['id'] }
         ]
       }
+      third_place_scoring: {
+        Row: {
+          group_name: string
+          enabled: boolean
+          updated_at: string
+        }
+        Insert: {
+          group_name: string
+          enabled?: boolean
+          updated_at?: string
+        }
+        Update: {
+          group_name?: string
+          enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

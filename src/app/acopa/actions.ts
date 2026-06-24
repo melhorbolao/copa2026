@@ -2,7 +2,7 @@
 
 import { revalidateTag } from 'next/cache'
 import { createClient, createAdminClient, createAuthAdminClient } from '@/lib/supabase/server'
-import { recalculateAfterMatchScore, recalculateTournamentBets } from '@/lib/scoring/recalculate'
+import { recalculateAfterMatchScore, recalculateTournamentBets, recalculateThirdBets } from '@/lib/scoring/recalculate'
 
 export async function saveOfficialTopScorer(name: string): Promise<{ error?: string }> {
   try {
@@ -117,6 +117,32 @@ export async function savePenaltyWinner(
       .eq('id', matchId)
 
     if (error) return { error: error.message }
+    return {}
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Erro inesperado' }
+  }
+}
+
+export async function toggleThirdPlaceScoring(
+  groupName: string,
+  enabled: boolean,
+): Promise<{ error?: string }> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'Não autenticado' }
+    const { data: profile } = await supabase.from('users').select('is_admin').eq('id', user.id).single()
+    if (!profile?.is_admin) return { error: 'Sem permissão' }
+
+    const admin = createAuthAdminClient()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (admin as any).from('third_place_scoring').upsert(
+      { group_name: groupName, enabled, updated_at: new Date().toISOString() },
+      { onConflict: 'group_name' },
+    )
+    if (error) return { error: error.message }
+
+    recalculateThirdBets().catch(e => console.error('[scoring/thirds]', e))
     return {}
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Erro inesperado' }
