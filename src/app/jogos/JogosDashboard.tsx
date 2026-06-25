@@ -22,6 +22,7 @@ export type MatchFull = {
 export type BetRaw    = { participant_id: string; match_id: string; score_home: number; score_away: number; points: number | null }
 export type Participant = { id: string; apelido: string }
 export type GroupBetSlim = { participant_id: string; group_name: string; points: number | null }
+export type ThirdPlaceBetSlim = { participant_id: string; group_name: string; points: number | null }
 export type AttendanceRow = { id: string; match_id: string; user_id: string; participant_ids: string[] | null }
 export type PhotoRow = { id: string; match_id: string; user_id: string; storage_path: string; participant_ids: string[] | null; caption: string | null; created_at: string; url: string | null }
 
@@ -59,13 +60,14 @@ interface Props {
   attendance: AttendanceRow[]
   photos: PhotoRow[]
   groupBets: GroupBetSlim[]
+  thirdPlaceBets: ThirdPlaceBetSlim[]
 }
 
 export function JogosDashboard({
   initialMatchId, matches: initialMatches, participants, bets: initialBets,
   rules, teamAbbrs, storedTotals, isAdmin, userId, userName,
   activeParticipantId, userToParticipants, attendance: initialAttendance, photos: initialPhotos,
-  groupBets,
+  groupBets, thirdPlaceBets,
 }: Props) {
   const router       = useRouter()
   const searchParams = useSearchParams()
@@ -209,16 +211,21 @@ export function JogosDashboard({
     return map
   }, [matches])
 
-  // Group bet points per group per participant (only when points are computed, i.e. non-null)
+  // Group bet + third-place bet points per group per participant (only when computed, i.e. non-null)
   const groupBetPointsByGroup = useMemo(() => {
     const map: Record<string, Record<string, number>> = {}
     for (const gb of groupBets) {
       if (gb.points === null) continue
       if (!map[gb.group_name]) map[gb.group_name] = {}
-      map[gb.group_name][gb.participant_id] = gb.points
+      map[gb.group_name][gb.participant_id] = (map[gb.group_name][gb.participant_id] ?? 0) + gb.points
+    }
+    for (const tb of thirdPlaceBets) {
+      if (tb.points === null) continue
+      if (!map[tb.group_name]) map[tb.group_name] = {}
+      map[tb.group_name][tb.participant_id] = (map[tb.group_name][tb.participant_id] ?? 0) + tb.points
     }
     return map
-  }, [groupBets])
+  }, [groupBets, thirdPlaceBets])
 
   // Zebra detection for header
   const headerZebra = useMemo(() => {
