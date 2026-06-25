@@ -197,20 +197,6 @@ export function JogosDashboard({
     [bets, match?.id],
   )
 
-  // Pontos não vinculados a jogos (grupos, torneio, artilheiro):
-  // storedTotals já contém tudo; subtraímos só os pts de jogos já calculados
-  // para obter a base fixa que soma a todo cálculo live de jogos.
-  const nonMatchBase = useMemo(() => {
-    const base: Record<string, number> = {}
-    for (const p of participants) {
-      const storedMatchPts = bets
-        .filter(b => b.participant_id === p.id && b.points !== null)
-        .reduce((sum, b) => sum + (b.points ?? 0), 0)
-      base[p.id] = (storedTotals[p.id] ?? 0) - storedMatchPts
-    }
-    return base
-  }, [participants, bets, storedTotals])
-
   // Zebra detection for header
   const headerZebra = useMemo(() => {
     if (!match?.score_home === null || match?.score_away === null) return false
@@ -229,24 +215,23 @@ export function JogosDashboard({
     }
   }, [matchBets, threshold])
 
-  // Per-participant points for ALL matches (live computation) + base não-jogo
+  // Total live: parte de storedTotals (inclui grupos, torneio, artilheiro) e soma apenas o delta
+  // de jogos ainda não recalculados no servidor (bets.points === null mas match já tem placar).
   const livePoints = useMemo(() => {
     const pts: Record<string, number> = {}
-    for (const p of participants) pts[p.id] = nonMatchBase[p.id] ?? 0
+    for (const p of participants) pts[p.id] = storedTotals[p.id] ?? 0
     for (const m of matches) {
       if (m.score_home === null || m.score_away === null) continue
-      const isZebra = detectMatchZebra(
-        bets.filter(b => b.match_id === m.id),
-        getMatchResult(m.score_home, m.score_away),
-        threshold,
-      )
-      for (const b of bets.filter(bx => bx.match_id === m.id)) {
+      const mBets = bets.filter(b => b.match_id === m.id)
+      if (!mBets.some(b => b.points === null)) continue  // tudo recalculado, já em storedTotals
+      const isZebra = detectMatchZebra(mBets, getMatchResult(m.score_home, m.score_away), threshold)
+      for (const b of mBets.filter(bx => bx.points === null)) {
         pts[b.participant_id] = (pts[b.participant_id] ?? 0) +
           scoreMatchBet(b.score_home, b.score_away, m.score_home, m.score_away, isZebra, m.is_brazil, rules)
       }
     }
     return pts
-  }, [matches, bets, participants, rules, threshold, nonMatchBase])
+  }, [matches, bets, participants, rules, threshold, storedTotals])
 
   // Points contributed by this match only (live)
   const matchPoints = useMemo(() => {
@@ -268,26 +253,19 @@ export function JogosDashboard({
     return out
   }, [participants, livePoints, matchPoints])
 
-  // Points from matches strictly before this one (by position in the sorted matches array)
-  // Using matchIdx ensures "after[i]" === "before[i+1]" with no gaps between adjacent matches.
+  // Pontos estritamente antes deste jogo: parte de storedTotals e subtrai os pts armazenados
+  // do jogo atual e de todos os jogos seguintes (que já estão em storedTotals).
   const ptsBeforeMatch = useMemo(() => {
     const pts: Record<string, number> = {}
-    for (const p of participants) pts[p.id] = nonMatchBase[p.id] ?? 0
-    for (let i = 0; i < matchIdx; i++) {
+    for (const p of participants) pts[p.id] = storedTotals[p.id] ?? 0
+    for (let i = matchIdx; i < matches.length; i++) {
       const m = matches[i]
-      if (m.score_home === null || m.score_away === null) continue
-      const isZebra = detectMatchZebra(
-        bets.filter(b => b.match_id === m.id),
-        getMatchResult(m.score_home, m.score_away),
-        threshold,
-      )
-      for (const b of bets.filter(bx => bx.match_id === m.id)) {
-        pts[b.participant_id] = (pts[b.participant_id] ?? 0) +
-          scoreMatchBet(b.score_home, b.score_away, m.score_home, m.score_away, isZebra, m.is_brazil, rules)
+      for (const b of bets.filter(bx => bx.match_id === m.id && bx.points !== null)) {
+        pts[b.participant_id] = (pts[b.participant_id] ?? 0) - (b.points ?? 0)
       }
     }
     return pts
-  }, [matches, matchIdx, bets, participants, rules, threshold, nonMatchBase]) // eslint-disable-line
+  }, [matches, matchIdx, bets, participants, storedTotals]) // eslint-disable-line
 
   // Ranking before: posição imediatamente antes deste jogo (sem este jogo nem os posteriores)
   const rankBefore = useMemo(() => {
