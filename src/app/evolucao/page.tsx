@@ -8,7 +8,7 @@ import { getServerNow } from '@/lib/production-mode'
 import { Navbar } from '@/components/layout/Navbar'
 import { EvolucaoClient } from './EvolucaoClient'
 import { recalculateDailyPoints } from '@/lib/scoring/daily-points'
-import { scoreTournamentBet } from '@/lib/scoring/engine'
+import { scoreTournamentBet, scoreMatchBet, detectMatchZebra, getMatchResult } from '@/lib/scoring/engine'
 
 export default async function EvolucaoPage() {
   const supabase = await createClient()
@@ -80,16 +80,35 @@ export default async function EvolucaoPage() {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function fetchAll(table: string, select: string): Promise<any[]> {
+    const PAGE = 1000
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: any[] = []
+    let from = 0
+    for (;;) {
+      const { data, error } = await admin.from(table).select(select).range(from, from + PAGE - 1)
+      if (error || !data || data.length === 0) break
+      rows.push(...data)
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+    return rows
+  }
+
   const [
-    participantsRes, panelaRes, liveScoresRawRes, matchesTodayRes,
+    participantsRes, panelaRes, allMatchesRes, matchesTodayRes,
     artillarySettingRes, rulesRes, scorerMappingRes, tournamentBetsRes, topScorersRes, knockoutMatchesRes,
+    ptsThirdsRes,
+    allBetsRaw, groupBetsRaw,
   ] = await Promise.all([
     admin.from('participants').select('id, apelido').order('apelido'),
     admin.from('user_panela')
       .select('member_participant_id')
       .eq('owner_participant_id', participantId),
-    // Componentes individuais para calcular total sem depender de pts_tournament (pode estar stale)
-    admin.from('participant_scores').select('participant_id, pts_matches, pts_groups, pts_thirds'),
+    // Todos os jogos (para calcular ptsMatches ao vivo)
+    admin.from('matches')
+      .select('id, phase, team_home, team_away, score_home, score_away, penalty_winner, is_brazil, match_datetime'),
     // Jogos de hoje: verifica se há ao menos um iniciado ou finalizado
     admin.from('matches')
       .select('match_datetime, score_home')
@@ -102,7 +121,7 @@ export default async function EvolucaoPage() {
       .then((r: { data: { key: string; points: number }[] | null }) => r, () => ({ data: [] })),
     admin.from('top_scorer_mapping').select('raw_name, standardized_name')
       .then((r: { data: { raw_name: string; standardized_name: string }[] | null }) => r, () => ({ data: [] })),
-    // Palpites de torneio completos + pontos armazenados (para ajuste G4)
+    // Palpites de torneio completos (para G4 ao vivo)
     admin.from('tournament_bets')
       .select('participant_id, champion, runner_up, semi1, semi2, top_scorer, points')
       .then((r: { data: { participant_id: string; champion: string | null; runner_up: string | null; semi1: string | null; semi2: string | null; top_scorer: string | null; points: number | null }[] | null }) => r, () => ({ data: [] })),
@@ -114,6 +133,11 @@ export default async function EvolucaoPage() {
       .in('phase', ['quarterfinal', 'semifinal', 'third_place', 'final'])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .then((r: any) => r, () => ({ data: [] })),
+    // pts_thirds armazenado (igual a sum(third_place_bets.points))
+    admin.from('participant_scores').select('participant_id, pts_thirds'),
+    // Todos os palpites e group_bets (paginados) — para calcular ptsMatches e ptsGroups ao vivo
+    fetchAll('bets', 'participant_id, match_id, score_home, score_away'),
+    fetchAll('group_bets', 'participant_id, points'),
   ])
 
   const participants: { id: string; apelido: string }[] = participantsRes.data ?? []
@@ -206,13 +230,58 @@ export default async function EvolucaoPage() {
     )
   }
 
-  // Live scores: soma componentes individuais (matches+groups+thirds) com G4 ao vivo.
-  // Evita depender de pts_tournament (pode ficar stale entre recalcs) ou pts_total (inflado
-  // se pts_tournament foi zerado sem recalcular o total).
-  const rawLiveScores = (liveScoresRawRes.data ?? []) as { participant_id: string; pts_matches: number; pts_groups: number; pts_thirds: number }[]
-  const liveScores: { participant_id: string; pts_total: number }[] = rawLiveScores.map(ls => ({
-    participant_id: ls.participant_id,
-    pts_total: (ls.pts_matches ?? 0) + (ls.pts_groups ?? 0) + (ls.pts_thirds ?? 0) + (liveG4PtsMap[ls.participant_id] ?? 0),
+  // ── Live scores: mesma fórmula da classificacaoMB ───────────────────────────
+  // ptsMatches ao vivo (não usa participant_scores.pts_matches que pode estar stale)
+  const allMatchesList = (allMatchesRes.data ?? []) as {
+    id: string; phase: string; team_home: string; team_away: string
+    score_home: number | null; score_away: number | null
+    penalty_winner: string | null; is_brazil: boolean; match_datetime: string
+  }[]
+  const scoredMatches = allMatchesList.filter(m => m.score_home !== null && m.score_away !== null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const scoredById = new Map<string, any>(scoredMatches.map(m => [m.id, m]))
+
+  const betsByMatch: Record<string, Array<{ score_home: number; score_away: number }>> = {}
+  for (const b of allBetsRaw) {
+    ;(betsByMatch[b.match_id] ??= []).push({ score_home: b.score_home, score_away: b.score_away })
+  }
+  const isZebraMatch: Record<string, boolean> = {}
+  for (const m of scoredMatches) {
+    const actual = getMatchResult(m.score_home!, m.score_away!)
+    isZebraMatch[m.id] = detectMatchZebra(betsByMatch[m.id] ?? [], actual, zebraThreshold)
+  }
+
+  const ptsMatchesMap: Record<string, number> = {}
+  for (const b of allBetsRaw) {
+    const m = scoredById.get(b.match_id)
+    if (!m) continue
+    const pts = scoreMatchBet(
+      b.score_home, b.score_away,
+      m.score_home, m.score_away,
+      isZebraMatch[b.match_id] ?? false,
+      m.is_brazil ?? false,
+      rules,
+    )
+    ptsMatchesMap[b.participant_id] = (ptsMatchesMap[b.participant_id] ?? 0) + pts
+  }
+
+  const ptsGroupsMap: Record<string, number> = {}
+  for (const b of groupBetsRaw) {
+    if (b.points != null) ptsGroupsMap[b.participant_id] = (ptsGroupsMap[b.participant_id] ?? 0) + b.points
+  }
+
+  const ptsThirdsMap: Record<string, number> = Object.fromEntries(
+    ((ptsThirdsRes.data ?? []) as { participant_id: string; pts_thirds: number }[])
+      .map(s => [s.participant_id, s.pts_thirds ?? 0])
+  )
+
+  const liveScores: { participant_id: string; pts_total: number }[] = participants.map(p => ({
+    participant_id: p.id,
+    pts_total:
+      (ptsMatchesMap[p.id]  ?? 0) +
+      (ptsGroupsMap[p.id]   ?? 0) +
+      (ptsThirdsMap[p.id]   ?? 0) +
+      (liveG4PtsMap[p.id]   ?? 0),
   }))
 
   // Histórico: substitui pts_tournament de cada linha pelo valor ao vivo.
