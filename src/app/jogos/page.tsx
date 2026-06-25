@@ -53,13 +53,13 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
 
   // PostgREST aplica max-rows=1000 mesmo com service_role.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async function fetchAllBets(): Promise<any[]> {
+  async function fetchAll(table: string, select: string): Promise<any[]> {
     const PAGE = 1000
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rows: any[] = []
     let from = 0
     for (;;) {
-      const { data, error } = await admin.from('bets').select('participant_id, match_id, score_home, score_away, points').range(from, from + PAGE - 1)
+      const { data, error } = await admin.from(table).select(select).range(from, from + PAGE - 1)
       if (error || !data || data.length === 0) break
       rows.push(...data)
       if (data.length < PAGE) break
@@ -71,20 +71,20 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
   const [
     matchesRes, participantsRes, betsRes, rulesRes, teamAbbrRes,
     attendanceRes, photosRes, userParticipantsRes,
-    groupBetsRes, tournamentBetsPicksRes, scoresRes,
+    groupBetsRaw, tournamentBetsPicksRes, scoresRes,
   ] = await Promise.all([
     supabase.from('matches')
       .select('id, match_number, phase, round, group_name, team_home, team_away, flag_home, flag_away, match_datetime, city, betting_deadline, score_home, score_away, penalty_winner, is_brazil')
       .order('match_datetime', { ascending: true }),
     supabase.from('participants').select('id, apelido').order('apelido', { ascending: true }),
-    fetchAllBets(),
+    fetchAll('bets', 'participant_id, match_id, score_home, score_away, points'),
     supabase.from('scoring_rules').select('key, points'),
     admin.from('teams').select('name, abbr_br'),
     admin.from('stadium_attendance').select('id, match_id, user_id, participant_ids'),
     admin.from('stadium_photos').select('id, match_id, user_id, storage_path, participant_ids, caption, created_at').order('created_at', { ascending: false }),
     supabase.from('user_participants').select('user_id, participant_id'),
     // Dados extras para calcular storedTotals com a mesma fórmula da classificacaoMB
-    admin.from('group_bets').select('participant_id, points'),
+    fetchAll('group_bets', 'participant_id, points'),
     admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer'),
     admin.from('participant_scores').select('participant_id, pts_thirds'),
   ])
@@ -136,7 +136,7 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const allMatchesList = (matchesRes.data ?? []) as any[]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const allBetsRaw = betsRes as any[]
+  const allBetsRaw = betsRes as any[] // fetchAll retorna array diretamente
 
   const scoredMatches = allMatchesList.filter(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -171,8 +171,7 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
   }
 
   const ptsGroupsMap: Record<string, number> = {}
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const b of (groupBetsRes.data ?? []) as any[]) {
+  for (const b of groupBetsRaw) {
     if (b.points != null) ptsGroupsMap[b.participant_id] = (ptsGroupsMap[b.participant_id] ?? 0) + b.points
   }
 
@@ -247,8 +246,7 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
   )
   const serverNow = await getServerNow()
   const safeBets = filterBetsByDeadline(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    betsRes as any[],
+    allBetsRaw,
     deadlineByMatch,
     serverNow,
     isTestModeAdmin,

@@ -25,6 +25,22 @@ export default async function MinhaPanelaPage() {
   const admin = createAuthAdminClient() as any
   const now = await getServerNow()
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function fetchAll(table: string, select: string): Promise<any[]> {
+    const PAGE = 1000
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: any[] = []
+    let from = 0
+    for (;;) {
+      const { data, error } = await admin.from(table).select(select).range(from, from + PAGE - 1)
+      if (error || !data || data.length === 0) break
+      rows.push(...data)
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+    return rows
+  }
+
   // ── Fetch paralelo: dados base ─────────────────────────────────────────────
   const [
     allParticipantsRes,
@@ -32,8 +48,9 @@ export default async function MinhaPanelaPage() {
     snapshotRes,
     matchesRes,
     rulesRes,
-    groupBetsRes,
-    thirdBetsRes,
+    allBetsRaw,
+    groupBetsRaw,
+    thirdBetsRaw,
     tournamentBetsRes,
   ] = await Promise.all([
     admin.from('participants').select('id, apelido').order('apelido'),
@@ -48,8 +65,9 @@ export default async function MinhaPanelaPage() {
       .select('id, team_home, team_away, flag_home, flag_away, match_datetime, betting_deadline, score_home, score_away, is_brazil')
       .order('match_datetime', { ascending: true }),
     supabase.from('scoring_rules').select('key, points'),
-    admin.from('group_bets').select('participant_id, points').range(0, 9999),
-    admin.from('third_place_bets').select('participant_id, points').range(0, 9999),
+    fetchAll('bets', 'participant_id, match_id, score_home, score_away'),
+    fetchAll('group_bets', 'participant_id, points'),
+    fetchAll('third_place_bets', 'participant_id, points'),
     admin.from('tournament_bets').select('participant_id, points'),
   ])
 
@@ -65,24 +83,6 @@ export default async function MinhaPanelaPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rules: Record<string, number> = Object.fromEntries((rulesRes.data ?? []).map((r: any) => [r.key, r.points]))
   const zebraThreshold = rules['percentual_zebra'] ?? 15
-
-  // ── Fetch todos os palpites (paginado) ─────────────────────────────────────
-  // PostgREST aplica max-rows=1000 mesmo com service_role.
-  const PAGE = 1000
-  let allBetsRaw: { participant_id: string; match_id: string; score_home: number; score_away: number }[] = []
-  {
-    let from = 0
-    for (;;) {
-      const { data, error } = await admin
-        .from('bets')
-        .select('participant_id, match_id, score_home, score_away')
-        .range(from, from + PAGE - 1)
-      if (error || !data || data.length === 0) break
-      allBetsRaw.push(...data)
-      if (data.length < PAGE) break
-      from += PAGE
-    }
-  }
 
   // ── Pontuação ao vivo (independe de participant_scores) ────────────────────
   const scoredMatches = allMatches.filter(
@@ -121,13 +121,11 @@ export default async function MinhaPanelaPage() {
 
   // Pontos de grupos / 3os / torneio (somados das colunas já calculadas no DB)
   const ptsGroupsMap: Record<string, number> = {}
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const b of (groupBetsRes.data ?? []) as any[]) {
+  for (const b of groupBetsRaw) {
     if (b.points != null) ptsGroupsMap[b.participant_id] = (ptsGroupsMap[b.participant_id] ?? 0) + b.points
   }
   const ptsThirdsMap: Record<string, number> = {}
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const b of (thirdBetsRes.data ?? []) as any[]) {
+  for (const b of thirdBetsRaw) {
     if (b.points != null) ptsThirdsMap[b.participant_id] = (ptsThirdsMap[b.participant_id] ?? 0) + b.points
   }
   const ptsG4Map: Record<string, number> = {}
