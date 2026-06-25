@@ -233,13 +233,22 @@ export function JogosDashboard({
     return pts
   }, [matches, bets, participants, rules, threshold, storedTotals])
 
-  // Points contributed by this match only (live)
+  // Points contributed by this match only.
+  // Usa bets.points armazenados quando disponíveis (evita divergência na detecção de zebra
+  // entre safeBets filtrado e o conjunto completo usado pelo servidor). Só computa ao vivo
+  // quando o jogo ainda não foi recalculado (bets.points === null).
   const matchPoints = useMemo(() => {
     const pts: Record<string, number> = {}
     if (match?.score_home === null || match?.score_away === null) return pts
-    const isZebra = detectMatchZebra(matchBets, getMatchResult(match.score_home!, match.score_away!), threshold)
     for (const b of matchBets) {
-      pts[b.participant_id] = scoreMatchBet(b.score_home, b.score_away, match.score_home!, match.score_away!, isZebra, match.is_brazil, rules)
+      if (b.points !== null) pts[b.participant_id] = b.points
+    }
+    const unrecalculated = matchBets.filter(b => b.points === null)
+    if (unrecalculated.length > 0) {
+      const isZebra = detectMatchZebra(matchBets, getMatchResult(match.score_home!, match.score_away!), threshold)
+      for (const b of unrecalculated) {
+        pts[b.participant_id] = scoreMatchBet(b.score_home, b.score_away, match.score_home!, match.score_away!, isZebra, match.is_brazil, rules)
+      }
     }
     return pts
   }, [match?.score_home, match?.score_away, matchBets, match?.is_brazil, rules, threshold])
