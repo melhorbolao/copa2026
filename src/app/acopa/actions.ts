@@ -123,6 +123,20 @@ export async function savePenaltyWinner(
   }
 }
 
+export async function recalculateThirdBetsAction(): Promise<{ error?: string }> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'Não autenticado' }
+    const { data: profile } = await supabase.from('users').select('is_admin').eq('id', user.id).single()
+    if (!profile?.is_admin) return { error: 'Sem permissão' }
+    await recalculateThirdBets()
+    return {}
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Erro inesperado' }
+  }
+}
+
 export async function toggleThirdPlaceScoring(
   groupName: string,
   enabled: boolean,
