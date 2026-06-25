@@ -47,7 +47,7 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
 
   const [
     matchesRes, participantsRes, betsRes, rulesRes, scoresRes, teamAbbrRes,
-    attendanceRes, photosRes, userParticipantsRes, groupBetsRes, thirdPlaceBetsRes,
+    attendanceRes, photosRes, userParticipantsRes,
   ] = await Promise.all([
     supabase.from('matches')
       .select('id, match_number, phase, round, group_name, team_home, team_away, flag_home, flag_away, match_datetime, city, betting_deadline, score_home, score_away, penalty_winner, is_brazil')
@@ -60,8 +60,6 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
     admin.from('stadium_attendance').select('id, match_id, user_id, participant_ids'),
     admin.from('stadium_photos').select('id, match_id, user_id, storage_path, participant_ids, caption, created_at').order('created_at', { ascending: false }),
     supabase.from('user_participants').select('user_id, participant_id'),
-    admin.from('group_bets').select('participant_id, group_name, points'),
-    admin.from('third_place_bets').select('participant_id, group_name, points'),
   ])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -118,8 +116,6 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
           userToParticipants={userToParticipants}
           attendance={(attendanceRes.data ?? []) as any[]}
           photos={photos as any[]}
-          groupBets={(groupBetsRes.data ?? []) as any[]}
-          thirdPlaceBets={(thirdPlaceBetsRes.data ?? []) as any[]}
         />
       </Suspense>
     </>
