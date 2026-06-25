@@ -142,7 +142,7 @@ export async function toggleThirdPlaceScoring(
     )
     if (error) return { error: error.message }
 
-    recalculateThirdBets().catch(e => console.error('[scoring/thirds]', e))
+    await recalculateThirdBets()
     return {}
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Erro inesperado' }

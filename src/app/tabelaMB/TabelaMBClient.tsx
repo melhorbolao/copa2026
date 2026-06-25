@@ -724,11 +724,9 @@ export function TabelaMBClient({
   const offThirdMap  = useMemo(() => new Map(GROUP_ORDER.map(g => {
     if (!thirdScoring[g]) return [g, ''] as [string, string]
     if (!completeGroupsSet.has(g)) return [g, ''] as [string, string]
-    const team = allGroupsComplete
-      ? (officialThirds.find(t => t.group === g && t.advances)?.team ?? '')
-      : (officialThirds.find(t => t.group === g)?.team ?? '')
+    const team = officialThirds.find(t => t.group === g)?.team ?? ''
     return [g, team] as [string, string]
-  })), [officialThirds, thirdScoring, completeGroupsSet, allGroupsComplete])
+  })), [officialThirds, thirdScoring, completeGroupsSet])
 
   const teamFlagMap = useMemo(() => {
     const m = new Map<string, string>()
@@ -824,9 +822,7 @@ export function TabelaMBClient({
         if (gb?.points) sum += gb.points
         const tb = thirdBetMap.get(`${p.id}:${g}`)
         if (tb?.team && thirdScoring[g] && completeGroupsSet.has(g)) {
-          const actualThird = allGroupsComplete
-            ? (officialThirds.find(t => t.group === g && t.advances)?.team ?? '')
-            : (officialThirds.find(t => t.group === g)?.team ?? '')
+          const actualThird = officialThirds.find(t => t.group === g)?.team ?? ''
           if (actualThird && tb.team === actualThird) sum += thirdPts
         }
       })
