@@ -21,6 +21,7 @@ export type MatchFull = {
 }
 export type BetRaw    = { participant_id: string; match_id: string; score_home: number; score_away: number; points: number | null }
 export type Participant = { id: string; apelido: string }
+export type GroupBetSlim = { participant_id: string; group_name: string; points: number | null }
 export type AttendanceRow = { id: string; match_id: string; user_id: string; participant_ids: string[] | null }
 export type PhotoRow = { id: string; match_id: string; user_id: string; storage_path: string; participant_ids: string[] | null; caption: string | null; created_at: string; url: string | null }
 
@@ -57,12 +58,14 @@ interface Props {
   userToParticipants: Record<string, string[]>
   attendance: AttendanceRow[]
   photos: PhotoRow[]
+  groupBets: GroupBetSlim[]
 }
 
 export function JogosDashboard({
   initialMatchId, matches: initialMatches, participants, bets: initialBets,
   rules, teamAbbrs, storedTotals, isAdmin, userId, userName,
   activeParticipantId, userToParticipants, attendance: initialAttendance, photos: initialPhotos,
+  groupBets,
 }: Props) {
   const router       = useRouter()
   const searchParams = useSearchParams()
@@ -197,6 +200,26 @@ export function JogosDashboard({
     [bets, match?.id],
   )
 
+  // Last match id per group (matches sorted by datetime ascending, so last one wins)
+  const groupLastMatchId = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const m of matches) {
+      if (m.phase === 'group' && m.group_name) map[m.group_name] = m.id
+    }
+    return map
+  }, [matches])
+
+  // Group bet points per group per participant (only when points are computed, i.e. non-null)
+  const groupBetPointsByGroup = useMemo(() => {
+    const map: Record<string, Record<string, number>> = {}
+    for (const gb of groupBets) {
+      if (gb.points === null) continue
+      if (!map[gb.group_name]) map[gb.group_name] = {}
+      map[gb.group_name][gb.participant_id] = gb.points
+    }
+    return map
+  }, [groupBets])
+
   // Zebra detection for header
   const headerZebra = useMemo(() => {
     if (!match?.score_home === null || match?.score_away === null) return false
@@ -230,9 +253,16 @@ export function JogosDashboard({
         pts[b.participant_id] = (pts[b.participant_id] ?? 0) +
           scoreMatchBet(b.score_home, b.score_away, m.score_home, m.score_away, isZebra, m.is_brazil, rules)
       }
+      // Pontos de palpites de classificados do grupo atribuídos ao último jogo do grupo
+      if (m.phase === 'group' && m.group_name && groupLastMatchId[m.group_name] === m.id) {
+        const groupPts = groupBetPointsByGroup[m.group_name] ?? {}
+        for (const [pid, gpts] of Object.entries(groupPts)) {
+          pts[pid] = (pts[pid] ?? 0) + gpts
+        }
+      }
     }
     return pts
-  }, [matches, bets, participants, rules, threshold])
+  }, [matches, bets, participants, rules, threshold, groupLastMatchId, groupBetPointsByGroup])
 
   // Points contributed by this match only (live)
   const matchPoints = useMemo(() => {
@@ -242,8 +272,15 @@ export function JogosDashboard({
     for (const b of matchBets) {
       pts[b.participant_id] = scoreMatchBet(b.score_home, b.score_away, match.score_home!, match.score_away!, isZebra, match.is_brazil, rules)
     }
+    // Se este é o último jogo do grupo, incluir os pontos de palpites de classificados
+    if (match.phase === 'group' && match.group_name && groupLastMatchId[match.group_name] === match.id) {
+      const groupPts = groupBetPointsByGroup[match.group_name] ?? {}
+      for (const [pid, gpts] of Object.entries(groupPts)) {
+        pts[pid] = (pts[pid] ?? 0) + gpts
+      }
+    }
     return pts
-  }, [match?.score_home, match?.score_away, matchBets, match?.is_brazil, rules, threshold])
+  }, [match?.score_home, match?.score_away, match?.id, match?.phase, match?.group_name, matchBets, match?.is_brazil, rules, threshold, groupLastMatchId, groupBetPointsByGroup])
 
   // Points WITHOUT this match (live total minus this match's contribution) — usado para "PTS Total" no painel
   const ptsWithoutMatch = useMemo(() => {
@@ -271,9 +308,16 @@ export function JogosDashboard({
         pts[b.participant_id] = (pts[b.participant_id] ?? 0) +
           scoreMatchBet(b.score_home, b.score_away, m.score_home, m.score_away, isZebra, m.is_brazil, rules)
       }
+      // Pontos de palpites de classificados do grupo atribuídos ao último jogo do grupo
+      if (m.phase === 'group' && m.group_name && groupLastMatchId[m.group_name] === m.id) {
+        const groupPts = groupBetPointsByGroup[m.group_name] ?? {}
+        for (const [pid, gpts] of Object.entries(groupPts)) {
+          pts[pid] = (pts[pid] ?? 0) + gpts
+        }
+      }
     }
     return pts
-  }, [matches, matchIdx, bets, participants, rules, threshold]) // eslint-disable-line
+  }, [matches, matchIdx, bets, participants, rules, threshold, groupLastMatchId, groupBetPointsByGroup]) // eslint-disable-line
 
   // Ranking before: posição imediatamente antes deste jogo (sem este jogo nem os posteriores)
   const rankBefore = useMemo(() => {
