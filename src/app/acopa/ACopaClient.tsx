@@ -6,7 +6,7 @@ import { MatchScoreRow } from './MatchScoreRow'
 import { OfficialGroupCard } from './OfficialGroupCard'
 import { OfficialBracketView } from './OfficialBracketView'
 import { ThirdsTable } from '@/app/tabela/ThirdsTable'
-import { saveOfficialTopScorer, toggleThirdPlaceScoring, recalculateThirdBetsAction } from './actions'
+import { saveOfficialTopScorer, toggleThirdPlaceScoring } from './actions'
 import { isDeadlinePassed } from '@/utils/date'
 import {
   calcGroupStandings,
@@ -180,8 +180,6 @@ export function ACopaClient({ initialMatches, isAdmin, initialOfficialTopScorer,
   const [stageFilter, setStage]        = useState('')
   const [now, setNow]                  = useState(Date.now())
   const [thirdScoring, setThirdScoring] = useState<Record<string, boolean>>(initialThirdScoring)
-  const [thirdsRecalculating, setThirdsRecalculating] = useState(false)
-  const [thirdsRecalcMsg, setThirdsRecalcMsg] = useState('')
 
   // Artilheiros oficiais — armazenados como JSON array no banco
   const parseNames = (raw: string | null): string[] => {
@@ -474,29 +472,6 @@ export function ACopaClient({ initialMatches, isAdmin, initialOfficialTopScorer,
               if (result.error) setThirdScoring(prev => ({ ...prev, [group]: !enabled }))
             }}
           />
-          {isAdmin && (
-            <div className="mt-3 flex items-center gap-3">
-              <button
-                onClick={async () => {
-                  setThirdsRecalculating(true)
-                  setThirdsRecalcMsg('')
-                  const result = await recalculateThirdBetsAction()
-                  setThirdsRecalculating(false)
-                  setThirdsRecalcMsg(result.error ? `Erro: ${result.error}` : 'Pontos de 3º recalculados!')
-                  if (!result.error) setTimeout(() => setThirdsRecalcMsg(''), 4000)
-                }}
-                disabled={thirdsRecalculating}
-                className="rounded-lg bg-amber-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
-              >
-                {thirdsRecalculating ? 'Recalculando...' : 'Recalcular pontos de 3°'}
-              </button>
-              {thirdsRecalcMsg && (
-                <span className={`text-sm font-medium ${thirdsRecalcMsg.startsWith('Erro') ? 'text-red-600' : 'text-green-600'}`}>
-                  {thirdsRecalcMsg}
-                </span>
-              )}
-            </div>
-          )}
         </div>
       )}
 
