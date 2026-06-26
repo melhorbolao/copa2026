@@ -39,6 +39,7 @@ interface Props {
   initialPidA: string
   initialPidB: string
   snapshots: Snapshot[]
+  liveG4Thirds: Record<string, { ptsThirds: number; ptsG4: number }>
   isAdmin: boolean
 }
 
@@ -49,7 +50,7 @@ export function ComparadorClient(props: Props) {
     participants, matches,
     betsByParticipant, groupBetsByParticipant, thirdBetsByParticipant, tBetByParticipant,
     scoresByParticipant, colPopMap, rulesMap, zebraThreshold, currentParticipantId,
-    initialPidA, initialPidB, snapshots, isAdmin,
+    initialPidA, initialPidB, snapshots, liveG4Thirds, isAdmin,
   } = props
 
   const router     = useRouter()
@@ -151,21 +152,24 @@ export function ComparadorClient(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pidA, pidB, thirdBetsByParticipant])
 
-  // Pontos de jogos: usa breakdown (calculado ao vivo) para não depender de participant_scores
-  // estar atualizado. Grupos/terceiros/torneio ainda vêm do banco pois o comparador não os computa.
+  // Pontos ao vivo: ptsMatches e ptsGroups calculados ao vivo (breakdown/banco),
+  // ptsThirds e ptsTournament vêm do cálculo ao vivo do servidor (liveG4Thirds),
+  // garantindo alinhamento total com a ClassificacaoMB.
+  const liveA = liveG4Thirds[pidA]
+  const liveB = liveG4Thirds[pidB]
   const effectiveScoreA: Score = {
     ptsMatches:    breakdown.ptsMatchesA,
-    ptsGroups:     scoreA?.ptsGroups     ?? 0,
-    ptsThirds:     scoreA?.ptsThirds     ?? 0,
-    ptsTournament: scoreA?.ptsTournament ?? 0,
-    ptsTotal:      breakdown.ptsMatchesA + (scoreA?.ptsGroups ?? 0) + (scoreA?.ptsThirds ?? 0) + (scoreA?.ptsTournament ?? 0),
+    ptsGroups:     scoreA?.ptsGroups ?? 0,
+    ptsThirds:     liveA?.ptsThirds  ?? (scoreA?.ptsThirds     ?? 0),
+    ptsTournament: liveA?.ptsG4      ?? (scoreA?.ptsTournament ?? 0),
+    ptsTotal:      breakdown.ptsMatchesA + (scoreA?.ptsGroups ?? 0) + (liveA?.ptsThirds ?? scoreA?.ptsThirds ?? 0) + (liveA?.ptsG4 ?? scoreA?.ptsTournament ?? 0),
   }
   const effectiveScoreB: Score = {
     ptsMatches:    breakdown.ptsMatchesB,
-    ptsGroups:     scoreB?.ptsGroups     ?? 0,
-    ptsThirds:     scoreB?.ptsThirds     ?? 0,
-    ptsTournament: scoreB?.ptsTournament ?? 0,
-    ptsTotal:      breakdown.ptsMatchesB + (scoreB?.ptsGroups ?? 0) + (scoreB?.ptsThirds ?? 0) + (scoreB?.ptsTournament ?? 0),
+    ptsGroups:     scoreB?.ptsGroups ?? 0,
+    ptsThirds:     liveB?.ptsThirds  ?? (scoreB?.ptsThirds     ?? 0),
+    ptsTournament: liveB?.ptsG4      ?? (scoreB?.ptsTournament ?? 0),
+    ptsTotal:      breakdown.ptsMatchesB + (scoreB?.ptsGroups ?? 0) + (liveB?.ptsThirds ?? scoreB?.ptsThirds ?? 0) + (liveB?.ptsG4 ?? scoreB?.ptsTournament ?? 0),
   }
 
   // Total across all categories

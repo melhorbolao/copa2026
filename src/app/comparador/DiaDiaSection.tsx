@@ -207,8 +207,8 @@ export function DiaDiaSection({
                 <th className="px-3 py-2 text-left">Data</th>
                 <th className="px-3 py-2 text-center" style={{ color: '#002776' }}>Pts dia {shortA}</th>
                 <th className="px-3 py-2 text-center text-red-500">Pts dia {shortB}</th>
-                <th className="hidden sm:table-cell px-3 py-2 text-center" style={{ color: '#002776' }}>Acum. {shortA}</th>
-                <th className="hidden sm:table-cell px-3 py-2 text-center text-red-500">Acum. {shortB}</th>
+                <th className="px-3 py-2 text-center" style={{ color: '#002776' }}>Acum. {shortA}</th>
+                <th className="px-3 py-2 text-center text-red-500">Acum. {shortB}</th>
                 <th className="px-3 py-2 text-center">Δ</th>
               </tr>
             </thead>
@@ -224,10 +224,10 @@ export function DiaDiaSection({
                   <td className="px-3 py-2 text-center font-bold text-red-500">
                     {row.dayB !== null ? (row.dayB > 0 ? `+${row.dayB}` : row.dayB) : '—'}
                   </td>
-                  <td className="hidden sm:table-cell px-3 py-2 text-center text-gray-600">
+                  <td className="px-3 py-2 text-center text-gray-600">
                     {row.accumA ?? '—'}
                   </td>
-                  <td className="hidden sm:table-cell px-3 py-2 text-center text-gray-600">
+                  <td className="px-3 py-2 text-center text-gray-600">
                     {row.accumB ?? '—'}
                   </td>
                   <td className="px-3 py-2 text-center">
