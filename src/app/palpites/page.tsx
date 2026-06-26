@@ -85,6 +85,7 @@ async function PalpitesData({ participantId }: { participantId: string }) {
     { data: groupBets },
     { data: tBet },
     thirdBetsResult,
+    { data: thirdScoring },
   ] = await Promise.all([
     supabase.from('matches')
       .select('id, match_number, phase, group_name, round, team_home, team_away, flag_home, flag_away, match_datetime, city, betting_deadline, score_home, score_away, is_brazil, penalty_winner')
@@ -102,6 +103,7 @@ async function PalpitesData({ participantId }: { participantId: string }) {
     admin.from('third_place_bets')
       .select('group_name, team, points')
       .eq('participant_id', participantId),
+    supabase.from('third_place_scoring').select('group_name, enabled'),
   ])
 
   const [phaseSettings, qualified] = await Promise.all([phaseSettingsP, qualifiedP])
@@ -156,10 +158,15 @@ async function PalpitesData({ participantId }: { participantId: string }) {
   const { completeGroups, allGroupsComplete } =
     computeGroupCompletion(groupMatches, officialScoreMap)
 
+  const thirdScoringEnabled = new Set<string>(
+    ((thirdScoring ?? []) as { group_name: string; enabled: boolean }[])
+      .filter(r => r.enabled)
+      .map(r => r.group_name),
+  )
   const officialThirdTeams: Record<string, string> = {}
   for (const s of officialStandings) {
-    // Só expõe o 3º oficial quando o grupo está 100% apurado
-    if (completeGroups.has(s.group) && s.teams[2]?.team) {
+    // Só expõe o 3º oficial quando o grupo está 100% apurado E habilitado p/ pontuação
+    if (completeGroups.has(s.group) && thirdScoringEnabled.has(s.group) && s.teams[2]?.team) {
       officialThirdTeams[s.group] = s.teams[2].team
     }
   }

@@ -260,15 +260,17 @@ export function ThirdPlaceSection({ groupTeams, deadline, existingBets, groupBet
 function ThirdPointsBadge({
   dbPoints, officialThird, isCorrect, thirdPts,
 }: { dbPoints?: number | null; officialThird?: string; isCorrect: boolean; thirdPts: number }) {
-  if (dbPoints != null) {
-    return dbPoints > 0
-      ? <span className="mt-0.5 block text-xs font-bold text-verde-600">+{dbPoints} pts</span>
-      : <span className="mt-0.5 block text-xs text-gray-400">0 pts</span>
-  }
+  // Quando o resultado oficial existe (grupo completo + habilitado p/ pontuação),
+  // usa cálculo ao vivo — idêntico ao TabelaMB — para evitar divergência com
+  // pontos armazenados desatualizados (ex: pts=0 gravado antes do grupo ser habilitado).
   if (officialThird) {
     return isCorrect
       ? <span className="mt-0.5 block text-xs font-bold text-verde-600">+{thirdPts} pts</span>
       : <span className="mt-0.5 block text-xs text-gray-400">0 pts</span>
+  }
+  // Sem resultado oficial ainda: exibe pontos armazenados no BD, se existirem
+  if (dbPoints != null && dbPoints > 0) {
+    return <span className="mt-0.5 block text-xs font-bold text-verde-600">+{dbPoints} pts</span>
   }
   return null
 }
