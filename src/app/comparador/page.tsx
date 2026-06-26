@@ -8,7 +8,9 @@ import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { ComparadorClient } from './ComparadorClient'
 import type { Snapshot } from './DiaDiaSection'
-import { getMatchResult } from '@/lib/scoring/engine'
+import { getMatchResult, scoreMatchBet, scoreTournamentBet } from '@/lib/scoring/engine'
+import { calcGroupStandings } from '@/lib/bracket/engine'
+import type { BetSlim, MatchSlim } from '@/lib/bracket/engine'
 import { getVisibilitySettings, isBonusVisible, isMatchBetsVisible, getServerNow } from '@/lib/production-mode'
 import type { MatchInfo, FlatBet, ColPop } from './engine'
 
@@ -94,11 +96,14 @@ export default async function ComparadorPage({
     visibilitySettings,
     scorerMappingRes,
     snapshotsRes,
+    thirdScoringRes,
+    artillarySettingRes,
+    topScorersRes,
   ] = await Promise.all([
     // Partidas: sempre fresco (placar muda ao vivo)
     admin
       .from('matches')
-      .select('id, match_number, phase, group_name, round, team_home, team_away, flag_home, flag_away, match_datetime, betting_deadline, score_home, score_away, is_brazil')
+      .select('id, match_number, phase, group_name, round, team_home, team_away, flag_home, flag_away, match_datetime, betting_deadline, score_home, score_away, penalty_winner, is_brazil')
       .order('match_datetime', { ascending: true })
       .then((r: { data: object[] | null }) => (r.data ?? []) as object[]),
     getCachedScoringRules(),
@@ -113,8 +118,7 @@ export default async function ComparadorPage({
       .select('participant_id, group_name, team, points')
       .in('participant_id', filter),
     admin.from('tournament_bets')
-      .select('participant_id, champion, runner_up, semi1, semi2, top_scorer')
-      .in('participant_id', filter),
+      .select('participant_id, champion, runner_up, semi1, semi2, top_scorer'),
     admin.from('participant_scores')
       .select('participant_id, pts_matches, pts_groups, pts_thirds, pts_tournament, pts_total')
       .in('participant_id', filter),
@@ -127,6 +131,11 @@ export default async function ComparadorPage({
       .select('event_date, participant_id, pts_matches, pts_groups, pts_thirds, pts_tournament')
       .in('participant_id', filter)
       .order('event_date', { ascending: true }),
+    admin.from('third_place_scoring').select('group_name, enabled'),
+    admin.from('tournament_settings').select('value').eq('key', 'artillary_points_active').maybeSingle()
+      .then((r: { data: { value: string } | null }) => r, () => ({ data: null })),
+    admin.from('top_scorers').select('player_name, goals_count').order('goals_count', { ascending: false })
+      .then((r: { data: { player_name: string; goals_count: number }[] | null }) => r, () => ({ data: [] })),
   ])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -307,6 +316,137 @@ export default async function ComparadorPage({
       ptsThirds:     s.pts_thirds     ?? 0,
       ptsTournament: s.pts_tournament ?? 0,
       ptsTotal:      s.pts_total      ?? 0,
+    }
+  }
+
+  // ── Snapshot "Hoje" ao vivo (mesma base da classificacaoMB) ─────────────────
+  {
+    const artillaryActive = artillarySettingRes?.data?.value === 'true'
+
+    // ptsMatches ao vivo (usa matchById e matchZebraMap já calculados acima)
+    const livePtsMatchesMap: Record<string, number> = {}
+    for (const b of allBets as { participant_id: string; match_id: string; score_home: number; score_away: number }[]) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const m = matchById[b.match_id] as any
+      if (!m || m.score_home === null || m.score_away === null) continue
+      const pts = scoreMatchBet(
+        b.score_home, b.score_away,
+        m.score_home, m.score_away,
+        matchZebraMap[b.match_id] ?? false,
+        m.is_brazil ?? false,
+        rulesMap,
+      )
+      livePtsMatchesMap[b.participant_id] = (livePtsMatchesMap[b.participant_id] ?? 0) + pts
+    }
+
+    // ptsGroups ao vivo (pontos armazenados — mesma fonte da classificacaoMB)
+    const livePtsGroupsMap: Record<string, number> = {}
+    for (const b of allGroupBets as { participant_id: string; points: number | null }[]) {
+      if (b.points != null) livePtsGroupsMap[b.participant_id] = (livePtsGroupsMap[b.participant_id] ?? 0) + b.points
+    }
+
+    // ptsThirds ao vivo
+    const thirdScoringEnabled = new Set<string>(
+      ((thirdScoringRes.data ?? []) as { group_name: string; enabled: boolean }[])
+        .filter(r => r.enabled)
+        .map(r => r.group_name)
+    )
+    const gmsSlim: MatchSlim[] = (rawMatches as { id: string; phase: string; group_name: string | null; team_home: string; team_away: string }[])
+      .filter(m => m.phase === 'group' && m.group_name)
+      .map(m => ({ id: m.id, group_name: m.group_name!, phase: m.phase, team_home: m.team_home, team_away: m.team_away, flag_home: '', flag_away: '' }))
+    const officialScoreMap = new Map<string, BetSlim>()
+    for (const m of rawMatches as { id: string; score_home: number | null; score_away: number | null }[]) {
+      if (m.score_home !== null && m.score_away !== null)
+        officialScoreMap.set(m.id, { match_id: m.id, score_home: m.score_home, score_away: m.score_away })
+    }
+    const officialGroupStandings = calcGroupStandings(gmsSlim, officialScoreMap)
+    const actualThirdByGroup = new Map<string, string>()
+    for (const standing of officialGroupStandings) {
+      const g = standing.group
+      if (!thirdScoringEnabled.has(g)) continue
+      const groupMatchIds = gmsSlim.filter(m => m.group_name === g).map(m => m.id)
+      if (!groupMatchIds.every(id => officialScoreMap.has(id))) continue
+      const thirdTeam = standing.teams[2]?.team
+      if (thirdTeam) actualThirdByGroup.set(g, thirdTeam)
+    }
+    const thirdPtsRule = rulesMap['terceiro_classificado'] ?? 3
+    const livePtsThirdsMap: Record<string, number> = {}
+    for (const b of allThirdBets as { participant_id: string; group_name: string; team: string }[]) {
+      const actualThird = actualThirdByGroup.get(b.group_name)
+      if (actualThird && b.team === actualThird)
+        livePtsThirdsMap[b.participant_id] = (livePtsThirdsMap[b.participant_id] ?? 0) + thirdPtsRule
+    }
+
+    // ptsG4 ao vivo
+    let officialScorers: string[] = []
+    if (artillaryActive) {
+      const topScorersData = (topScorersRes?.data ?? []) as { player_name: string; goals_count: number }[]
+      if (topScorersData.length > 0 && topScorersData[0].goals_count > 0) {
+        const maxGoals = topScorersData[0].goals_count
+        officialScorers = topScorersData.filter(s => s.goals_count === maxGoals).map(s => s.player_name)
+      }
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function koWinner(m: any): string | null {
+      if (m.score_home == null || m.score_away == null) return null
+      if (m.score_home > m.score_away) return m.team_home
+      if (m.score_away > m.score_home) return m.team_away
+      if (m.penalty_winner === 'H') return m.team_home
+      if (m.penalty_winner === 'A') return m.team_away
+      return null
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function koLoser(m: any): string | null {
+      const w = koWinner(m); if (!w) return null
+      return w === m.team_home ? m.team_away : m.team_home
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const koDone = (rawMatches as any[]).filter((m: any) => m.score_home !== null && ['quarterfinal', 'semifinal', 'third_place', 'final'].includes(m.phase))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const finDone = koDone.filter((m: any) => m.phase === 'final')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tpDone  = koDone.filter((m: any) => m.phase === 'third_place')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const semifinalists = koDone.filter((m: any) => m.phase === 'quarterfinal').map(koWinner).filter(Boolean) as string[]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const finalists     = koDone.filter((m: any) => m.phase === 'semifinal').map(koWinner).filter(Boolean) as string[]
+    const champion  = finDone.length > 0 ? koWinner(finDone[0]) : null
+    const runnerUp  = finDone.length > 0 ? koLoser(finDone[0])  : null
+    const third     = tpDone.length > 0  ? koWinner(tpDone[0])  : null
+    const fourth    = tpDone.length > 0  ? koLoser(tpDone[0])   : null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const allTBetsFull = allTBets as any[]
+    const chamBetsTotal    = allTBetsFull.filter((b: any) => b.champion).length
+    const chamBetsWithPick = allTBetsFull.filter((b: any) => b.champion && b.champion === champion)
+    const isZebraChampion  = chamBetsTotal > 0 && champion !== null
+      && (chamBetsWithPick.length / chamBetsTotal) * 100 <= zebraThreshold
+    const tournamentResults = { semifinalists, finalists, champion, runnerUp, third, fourth, officialScorers }
+    const livePtsG4Map: Record<string, number> = {}
+    for (const tb of filter.map(pid => allTBetsFull.find((b: any) => b.participant_id === pid)).filter(Boolean)) {
+      livePtsG4Map[tb.participant_id] = scoreTournamentBet(
+        {
+          champion:   tb.champion   ?? '',
+          runner_up:  tb.runner_up  ?? '',
+          semi1:      tb.semi1      ?? '',
+          semi2:      tb.semi2      ?? '',
+          top_scorer: artillaryActive ? (tb.top_scorer ?? '') : '',
+        },
+        tournamentResults,
+        rulesMap,
+        isZebraChampion,
+        scorerMapping,
+      )
+    }
+
+    // Injeta snapshot "Hoje" com totais ao vivo (UTC-6, mesma lógica das outras páginas)
+    const todayStr = new Intl.DateTimeFormat('fr-CA', { timeZone: 'Etc/GMT+6' }).format(now)
+    for (const pid of filter) {
+      const liveTotal =
+        (livePtsMatchesMap[pid]  ?? 0) +
+        (livePtsGroupsMap[pid]   ?? 0) +
+        (livePtsThirdsMap[pid]   ?? 0) +
+        (livePtsG4Map[pid]       ?? 0)
+      snapshots.push({ snapshot_date: todayStr, participant_id: pid, pts_total: liveTotal })
     }
   }
 
