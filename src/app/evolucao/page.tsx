@@ -9,6 +9,8 @@ import { Navbar } from '@/components/layout/Navbar'
 import { EvolucaoClient } from './EvolucaoClient'
 import { recalculateDailyPoints } from '@/lib/scoring/daily-points'
 import { scoreTournamentBet, scoreMatchBet, detectMatchZebra, getMatchResult } from '@/lib/scoring/engine'
+import { calcGroupStandings } from '@/lib/bracket/engine'
+import type { BetSlim, MatchSlim } from '@/lib/bracket/engine'
 
 export default async function EvolucaoPage() {
   const supabase = await createClient()
@@ -99,16 +101,16 @@ export default async function EvolucaoPage() {
   const [
     participantsRes, panelaRes, allMatchesRes, matchesTodayRes,
     artillarySettingRes, rulesRes, scorerMappingRes, tournamentBetsRes, topScorersRes, knockoutMatchesRes,
-    ptsThirdsRes,
+    thirdBetsRaw, thirdScoringRes,
     allBetsRaw, groupBetsRaw,
   ] = await Promise.all([
     admin.from('participants').select('id, apelido').order('apelido'),
     admin.from('user_panela')
       .select('member_participant_id')
       .eq('owner_participant_id', participantId),
-    // Todos os jogos (para calcular ptsMatches ao vivo)
+    // Todos os jogos (para calcular ptsMatches e ptsThirds ao vivo)
     admin.from('matches')
-      .select('id, phase, team_home, team_away, score_home, score_away, penalty_winner, is_brazil, match_datetime'),
+      .select('id, phase, group_name, team_home, team_away, score_home, score_away, penalty_winner, is_brazil, match_datetime'),
     // Jogos de hoje: verifica se há ao menos um iniciado ou finalizado
     admin.from('matches')
       .select('match_datetime, score_home')
@@ -133,8 +135,8 @@ export default async function EvolucaoPage() {
       .in('phase', ['quarterfinal', 'semifinal', 'third_place', 'final'])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .then((r: any) => r, () => ({ data: [] })),
-    // pts_thirds armazenado (igual a sum(third_place_bets.points))
-    admin.from('participant_scores').select('participant_id, pts_thirds'),
+    fetchAll('third_place_bets', 'participant_id, group_name, team'),
+    admin.from('third_place_scoring').select('group_name, enabled'),
     // Todos os palpites e group_bets (paginados) — para calcular ptsMatches e ptsGroups ao vivo
     fetchAll('bets', 'participant_id, match_id, score_home, score_away'),
     fetchAll('group_bets', 'participant_id, points'),
@@ -233,7 +235,7 @@ export default async function EvolucaoPage() {
   // ── Live scores: mesma fórmula da classificacaoMB ───────────────────────────
   // ptsMatches ao vivo (não usa participant_scores.pts_matches que pode estar stale)
   const allMatchesList = (allMatchesRes.data ?? []) as {
-    id: string; phase: string; team_home: string; team_away: string
+    id: string; phase: string; group_name: string | null; team_home: string; team_away: string
     score_home: number | null; score_away: number | null
     penalty_winner: string | null; is_brazil: boolean; match_datetime: string
   }[]
@@ -270,10 +272,37 @@ export default async function EvolucaoPage() {
     if (b.points != null) ptsGroupsMap[b.participant_id] = (ptsGroupsMap[b.participant_id] ?? 0) + b.points
   }
 
-  const ptsThirdsMap: Record<string, number> = Object.fromEntries(
-    ((ptsThirdsRes.data ?? []) as { participant_id: string; pts_thirds: number }[])
-      .map(s => [s.participant_id, s.pts_thirds ?? 0])
+  // ptsThirds ao vivo (mesma fórmula da classificacaoMB)
+  const thirdScoringEnabled = new Set<string>(
+    ((thirdScoringRes.data ?? []) as { group_name: string; enabled: boolean }[])
+      .filter(r => r.enabled)
+      .map(r => r.group_name)
   )
+  const gmsSlim: MatchSlim[] = allMatchesList
+    .filter(m => m.phase === 'group' && m.group_name)
+    .map(m => ({ id: m.id, group_name: m.group_name!, phase: m.phase, team_home: m.team_home, team_away: m.team_away, flag_home: '', flag_away: '' }))
+  const officialScoreMapThirds = new Map<string, BetSlim>()
+  for (const m of allMatchesList) {
+    if (m.score_home !== null && m.score_away !== null)
+      officialScoreMapThirds.set(m.id, { match_id: m.id, score_home: m.score_home, score_away: m.score_away })
+  }
+  const officialGroupStandings = calcGroupStandings(gmsSlim, officialScoreMapThirds)
+  const actualThirdByGroup = new Map<string, string>()
+  for (const standing of officialGroupStandings) {
+    const g = standing.group
+    if (!thirdScoringEnabled.has(g)) continue
+    const groupMatchIds = gmsSlim.filter(m => m.group_name === g).map(m => m.id)
+    if (!groupMatchIds.every(id => officialScoreMapThirds.has(id))) continue
+    const thirdTeam = standing.teams[2]?.team
+    if (thirdTeam) actualThirdByGroup.set(g, thirdTeam)
+  }
+  const thirdPts = rules['terceiro_classificado'] ?? 3
+  const ptsThirdsMap: Record<string, number> = {}
+  for (const bet of (thirdBetsRaw as { participant_id: string; group_name: string; team: string }[])) {
+    const actualThird = actualThirdByGroup.get(bet.group_name)
+    if (actualThird && bet.team === actualThird)
+      ptsThirdsMap[bet.participant_id] = (ptsThirdsMap[bet.participant_id] ?? 0) + thirdPts
+  }
 
   const liveScores: { participant_id: string; pts_total: number }[] = participants.map(p => ({
     participant_id: p.id,

@@ -7,7 +7,9 @@ import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { PanelaClient } from './PanelaClient'
 import { getServerNow } from '@/lib/production-mode'
-import { scoreMatchBet, detectMatchZebra, getMatchResult } from '@/lib/scoring/engine'
+import { scoreMatchBet, detectMatchZebra, getMatchResult, scoreTournamentBet } from '@/lib/scoring/engine'
+import { calcGroupStandings } from '@/lib/bracket/engine'
+import type { BetSlim, MatchSlim } from '@/lib/bracket/engine'
 
 export default async function MinhaPanelaPage() {
   const supabase = await createClient()
@@ -52,6 +54,10 @@ export default async function MinhaPanelaPage() {
     groupBetsRaw,
     thirdBetsRaw,
     tournamentBetsRes,
+    thirdScoringRes,
+    artillarySettingRes,
+    scorerMappingRes,
+    topScorersRes,
   ] = await Promise.all([
     admin.from('participants').select('id, apelido').order('apelido'),
     admin.from('user_panela')
@@ -62,13 +68,20 @@ export default async function MinhaPanelaPage() {
       .order('snapshot_date', { ascending: false })
       .limit(500),
     supabase.from('matches')
-      .select('id, team_home, team_away, flag_home, flag_away, match_datetime, betting_deadline, score_home, score_away, is_brazil')
+      .select('id, phase, group_name, team_home, team_away, flag_home, flag_away, match_datetime, betting_deadline, score_home, score_away, penalty_winner, is_brazil')
       .order('match_datetime', { ascending: true }),
     supabase.from('scoring_rules').select('key, points'),
     fetchAll('bets', 'participant_id, match_id, score_home, score_away'),
     fetchAll('group_bets', 'participant_id, points'),
-    fetchAll('third_place_bets', 'participant_id, points'),
-    admin.from('tournament_bets').select('participant_id, points'),
+    fetchAll('third_place_bets', 'participant_id, group_name, team'),
+    admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer'),
+    admin.from('third_place_scoring').select('group_name, enabled'),
+    admin.from('tournament_settings').select('value').eq('key', 'artillary_points_active').maybeSingle()
+      .then((r: { data: { value: string } | null }) => r, () => ({ data: null })),
+    admin.from('top_scorer_mapping').select('raw_name, standardized_name')
+      .then((r: { data: { raw_name: string; standardized_name: string }[] | null }) => r, () => ({ data: [] })),
+    admin.from('top_scorers').select('player_name, goals_count').order('goals_count', { ascending: false })
+      .then((r: { data: { player_name: string; goals_count: number }[] | null }) => r, () => ({ data: [] })),
   ])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -119,19 +132,114 @@ export default async function MinhaPanelaPage() {
     ptsMatchesMap[b.participant_id] = (ptsMatchesMap[b.participant_id] ?? 0) + pts
   }
 
-  // Pontos de grupos / 3os / torneio (somados das colunas já calculadas no DB)
+  // ptsGroups (pontos já armazenados em group_bets.points)
   const ptsGroupsMap: Record<string, number> = {}
   for (const b of groupBetsRaw) {
     if (b.points != null) ptsGroupsMap[b.participant_id] = (ptsGroupsMap[b.participant_id] ?? 0) + b.points
   }
-  const ptsThirdsMap: Record<string, number> = {}
-  for (const b of thirdBetsRaw) {
-    if (b.points != null) ptsThirdsMap[b.participant_id] = (ptsThirdsMap[b.participant_id] ?? 0) + b.points
-  }
-  const ptsG4Map: Record<string, number> = {}
+
+  // ptsThirds ao vivo (mesma fórmula da classificacaoMB)
+  const thirdScoringEnabled = new Set<string>(
+    ((thirdScoringRes.data ?? []) as { group_name: string; enabled: boolean }[])
+      .filter(r => r.enabled)
+      .map(r => r.group_name)
+  )
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const b of (tournamentBetsRes.data ?? []) as any[]) {
-    if (b.points != null) ptsG4Map[b.participant_id] = b.points
+  const gmsSlim: MatchSlim[] = (allMatches as any[])
+    .filter((m: any) => m.phase === 'group' && m.group_name)
+    .map((m: any) => ({ id: m.id, group_name: m.group_name, phase: m.phase, team_home: m.team_home, team_away: m.team_away, flag_home: '', flag_away: '' }))
+  const officialScoreMap = new Map<string, BetSlim>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const m of scoredMatches as any[]) {
+    officialScoreMap.set(m.id, { match_id: m.id, score_home: m.score_home, score_away: m.score_away })
+  }
+  const officialGroupStandings = calcGroupStandings(gmsSlim, officialScoreMap)
+  const actualThirdByGroup = new Map<string, string>()
+  for (const standing of officialGroupStandings) {
+    const g = standing.group
+    if (!thirdScoringEnabled.has(g)) continue
+    const groupMatchIds = gmsSlim.filter(m => m.group_name === g).map(m => m.id)
+    if (!groupMatchIds.every(id => officialScoreMap.has(id))) continue
+    const thirdTeam = standing.teams[2]?.team
+    if (thirdTeam) actualThirdByGroup.set(g, thirdTeam)
+  }
+  const thirdPts = rules['terceiro_classificado'] ?? 3
+  const ptsThirdsMap: Record<string, number> = {}
+  for (const bet of (thirdBetsRaw as { participant_id: string; group_name: string; team: string }[])) {
+    const actualThird = actualThirdByGroup.get(bet.group_name)
+    if (actualThird && bet.team === actualThird)
+      ptsThirdsMap[bet.participant_id] = (ptsThirdsMap[bet.participant_id] ?? 0) + thirdPts
+  }
+
+  // ptsG4 ao vivo (mesma fórmula da classificacaoMB/evolucao)
+  const artillaryActive = artillarySettingRes?.data?.value === 'true'
+  const scorerMapping: Record<string, string> = Object.fromEntries(
+    ((scorerMappingRes.data ?? []) as { raw_name: string; standardized_name: string }[])
+      .map(m => [m.raw_name.toLowerCase().trim(), m.standardized_name])
+  )
+  let officialScorers: string[] = []
+  if (artillaryActive) {
+    const topScorersData = (topScorersRes?.data ?? []) as { player_name: string; goals_count: number }[]
+    if (topScorersData.length > 0 && topScorersData[0].goals_count > 0) {
+      const maxGoals = topScorersData[0].goals_count
+      officialScorers = topScorersData.filter(s => s.goals_count === maxGoals).map(s => s.player_name)
+    }
+  }
+  function koWinner(m: {
+    team_home: string; team_away: string
+    score_home: number | null; score_away: number | null; penalty_winner: string | null
+  }): string | null {
+    if (m.score_home == null || m.score_away == null) return null
+    if (m.score_home > m.score_away) return m.team_home
+    if (m.score_away > m.score_home) return m.team_away
+    if (m.penalty_winner === 'H') return m.team_home
+    if (m.penalty_winner === 'A') return m.team_away
+    return null
+  }
+  function koLoser(m: Parameters<typeof koWinner>[0]): string | null {
+    const w = koWinner(m); if (!w) return null
+    return w === m.team_home ? m.team_away : m.team_home
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const koDone = (allMatches as any[]).filter((m: any) => m.score_home !== null && ['quarterfinal', 'semifinal', 'third_place', 'final'].includes(m.phase))
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const qfDone  = koDone.filter((m: any) => m.phase === 'quarterfinal')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sfDone  = koDone.filter((m: any) => m.phase === 'semifinal')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const finDone = koDone.filter((m: any) => m.phase === 'final')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tpDone  = koDone.filter((m: any) => m.phase === 'third_place')
+  const semifinalists = qfDone.map(koWinner).filter(Boolean) as string[]
+  const finalists     = sfDone.map(koWinner).filter(Boolean) as string[]
+  const champion      = finDone.length > 0 ? koWinner(finDone[0]) : null
+  const runnerUp      = finDone.length > 0 ? koLoser(finDone[0])  : null
+  const third         = tpDone.length > 0  ? koWinner(tpDone[0])  : null
+  const fourth        = tpDone.length > 0  ? koLoser(tpDone[0])   : null
+  const allTBets = (tournamentBetsRes.data ?? []) as {
+    participant_id: string; champion: string | null; runner_up: string | null
+    semi1: string | null; semi2: string | null; top_scorer: string | null
+  }[]
+  const chamBetsWithPick = allTBets.filter(b => b.champion && b.champion === champion)
+  const chamBetsTotal    = allTBets.filter(b => b.champion).length
+  const isZebraChampion  = chamBetsTotal > 0 && champion !== null
+    && (chamBetsWithPick.length / chamBetsTotal) * 100 <= zebraThreshold
+  const tournamentResults = { semifinalists, finalists, champion, runnerUp, third, fourth, officialScorers }
+  const ptsG4Map: Record<string, number> = {}
+  for (const tb of allTBets) {
+    ptsG4Map[tb.participant_id] = scoreTournamentBet(
+      {
+        champion:   tb.champion   ?? '',
+        runner_up:  tb.runner_up  ?? '',
+        semi1:      tb.semi1      ?? '',
+        semi2:      tb.semi2      ?? '',
+        top_scorer: artillaryActive ? (tb.top_scorer ?? '') : '',
+      },
+      tournamentResults,
+      rules,
+      isZebraChampion,
+      scorerMapping,
+    )
   }
 
   // ── Ranking completo ────────────────────────────────────────────────────────
