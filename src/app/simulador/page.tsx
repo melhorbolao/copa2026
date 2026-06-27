@@ -9,6 +9,7 @@ import { Navbar } from '@/components/layout/Navbar'
 import { SimuladorClient } from './SimuladorClient'
 import {
   getMatchResult, detectMatchZebra, scoreMatchBet, scoreTournamentBet,
+  scoreGroupBet, detectGroupZebra,
 } from '@/lib/scoring/engine'
 import type { TournamentResults } from '@/lib/scoring/engine'
 import {
@@ -70,7 +71,7 @@ export default async function SimuladorPage() {
 
   const [
     participantsRes, matchesRes, betsRes, groupBetsRes, tournamentBetsRes,
-    thirdScoresRes, thirdBetsRes, rulesRes, teamAbbrRes,
+    thirdBetsRes, rulesRes, teamAbbrRes,
     scorerRes, scorerSettingRes, simRes,
     groupSimRes, thirdSimRes, tournamentSimRes,
   ] = await Promise.all([
@@ -81,7 +82,6 @@ export default async function SimuladorPage() {
     fetchAll('bets', 'participant_id, match_id, score_home, score_away'),
     fetchAll('group_bets', 'participant_id, group_name, first_place, second_place, points'),
     admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer'),
-    admin.from('participant_scores').select('participant_id, pts_thirds'),
     fetchAll('third_place_bets', 'participant_id, group_name, team'),
     supabase.from('scoring_rules').select('key, points'),
     admin.from('teams').select('name, abbr_br, group_name'),
@@ -127,7 +127,6 @@ export default async function SimuladorPage() {
   )
   const allGroupBets  = groupBetsRes as any[]
   const allTBets      = (tournamentBetsRes.data   ?? []) as any[]
-  const thirdScores   = (thirdScoresRes.data      ?? []) as any[]
   const allThirdBets  = thirdBetsRes as any[]
 
   // ── Bonus deadline + visibility ────────────────────────────────────────────
@@ -180,14 +179,6 @@ export default async function SimuladorPage() {
     ptsMatchesMap[bet.participant_id] = (ptsMatchesMap[bet.participant_id] ?? 0) + pts
   }
 
-  const ptsGroupsMap: Record<string, number> = {}
-  for (const gb of allGroupBets)
-    ptsGroupsMap[gb.participant_id] = (ptsGroupsMap[gb.participant_id] ?? 0) + (gb.points ?? 0)
-
-  const ptsThirdsMap: Record<string, number> = Object.fromEntries(
-    thirdScores.map((s: any) => [s.participant_id, s.pts_thirds ?? 0])
-  )
-
   const sfDone  = completedMatches.filter((m: any) => m.phase === 'semifinal')
   const qfDone  = completedMatches.filter((m: any) => m.phase === 'quarterfinal')
   const finDone = completedMatches.filter((m: any) => m.phase === 'final')
@@ -230,16 +221,6 @@ export default async function SimuladorPage() {
     )
   }
 
-  const participants = (participantsRes.data ?? []) as { id: string; apelido: string }[]
-  const storedTotals: Record<string, number> = {}
-  for (const p of participants) {
-    storedTotals[p.id] =
-      (ptsMatchesMap[p.id] ?? 0) +
-      (ptsGroupsMap[p.id]  ?? 0) +
-      (ptsThirdsMap[p.id]  ?? 0) +
-      (ptsG4Map[p.id]      ?? 0)
-  }
-
   // ── Prize spot settings ────────────────────────────────────────────────────
   let prizeSpots = 8
   let premioSpots = 10
@@ -272,6 +253,49 @@ export default async function SimuladorPage() {
   const officialThirds    = rankThirds(officialStandings)
   const thirdSlots        = resolveThirdSlots(officialThirds)
   const officialCompletion = computeGroupCompletion(matchSlims, scoreMap)
+
+  // ── ptsGroupsMap: recalculo ao vivo (mesma lógica do cliente) ─────────────
+  const officialGroupZebras = new Set<string>()
+  for (const s of officialStandings) {
+    const g    = (s as any).group as string
+    const first = (s as any).teams[0]?.team ?? ''
+    if (!officialCompletion.completeGroups.has(g) || !first) continue
+    const picks = allGroupBets.filter((b: any) => b.group_name === g).map((b: any) => b.first_place as string).filter(Boolean)
+    if (picks.length > 0 && detectGroupZebra(picks.map(fp => ({ first_place: fp })), first, zebraThreshold))
+      officialGroupZebras.add(g)
+  }
+  const ptsGroupsMap: Record<string, number> = {}
+  for (const gb of allGroupBets) {
+    if (!gb.first_place) continue
+    const standing = officialStandings.find((s: any) => s.group === gb.group_name)
+    if (!officialCompletion.completeGroups.has(gb.group_name) || !(standing as any)?.teams[0]?.team) continue
+    const first  = (standing as any).teams[0].team as string
+    const second = (standing as any).teams[1]?.team ?? ''
+    const pts    = scoreGroupBet(gb.first_place, gb.second_place, first, second, officialGroupZebras.has(gb.group_name), rules)
+    ptsGroupsMap[gb.participant_id] = (ptsGroupsMap[gb.participant_id] ?? 0) + pts
+  }
+
+  // ── ptsThirdsMap: recalculo ao vivo (mesma lógica do cliente) ─────────────
+  const thirdPtsVal = rules['terceiro_classificado'] ?? 3
+  const ptsThirdsMap: Record<string, number> = {}
+  if (officialCompletion.allGroupsComplete) {
+    for (const tb of allThirdBets) {
+      const advancing = officialThirds.find((t: any) => t.group === tb.group_name && t.advances)?.team
+      if (advancing && tb.team === advancing) {
+        ptsThirdsMap[tb.participant_id] = (ptsThirdsMap[tb.participant_id] ?? 0) + thirdPtsVal
+      }
+    }
+  }
+
+  const participants = (participantsRes.data ?? []) as { id: string; apelido: string }[]
+  const storedTotals: Record<string, number> = {}
+  for (const p of participants) {
+    storedTotals[p.id] =
+      (ptsMatchesMap[p.id] ?? 0) +
+      (ptsGroupsMap[p.id]  ?? 0) +
+      (ptsThirdsMap[p.id]  ?? 0) +
+      (ptsG4Map[p.id]      ?? 0)
+  }
   const knockoutTeamMap   = thirdSlots
     ? buildKnockoutTeamMap(
         buildR32Teams(

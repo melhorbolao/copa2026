@@ -636,7 +636,6 @@ export function SimuladorClient({
   const [gabaritarDeSelected, setGabaritarDeSelected] = useState<string | null>(null)
   const [isGabaritandoDe,     setIsGabaritandoDe]     = useState(false)
   const [showLimparDialog,    setShowLimparDialog]    = useState(false)
-  const [limparOpts, setLimparOpts] = useState({ jogos: true, grupos12: true, grupos3: true, g4: true, artilheiro: true })
 
   // simMap: simulações pessoais do usuário — match_id → {score_home, score_away}
   const [simMap, setSimMap] = useState<Map<string, { score_home: number; score_away: number }>>(() => {
@@ -980,19 +979,22 @@ export function SimuladorClient({
 
   const effectiveKnockoutResults = useMemo((): TournamentResults => {
     const kr = knockoutResults
-    const effChampion = kr.champion  ?? (simTournament.champion   || null)
-    const effRunnerUp = kr.runnerUp  ?? (simTournament.runner_up  || null)
-    const effThird    = kr.third     ?? (simTournament.semi1      || null)
-    const effFourth   = kr.fourth    ?? (simTournament.semi2      || null)
-    const effFinalists = kr.finalists.length > 0
-      ? kr.finalists
-      : [effChampion, effRunnerUp].filter((t): t is string => !!t)
-    const effSemis = kr.semifinalists.length > 0
-      ? kr.semifinalists
-      : [...new Set([effChampion, effRunnerUp, effThird, effFourth].filter((t): t is string => !!t))]
-    const effScorers = kr.officialScorers.length > 0
-      ? kr.officialScorers
-      : simTournament.top_scorer.length > 0 ? simTournament.top_scorer.split('|').filter(Boolean) : []
+    // Simulação tem prioridade sobre oficial — permite simular mesmo com resultado conhecido
+    const hasAnySim   = !!(simTournament.champion || simTournament.runner_up || simTournament.semi1 || simTournament.semi2)
+    const effChampion = simTournament.champion   || kr.champion  || null
+    const effRunnerUp = simTournament.runner_up  || kr.runnerUp  || null
+    const effThird    = simTournament.semi1       || kr.third     || null
+    const effFourth   = simTournament.semi2       || kr.fourth    || null
+    // Se há qualquer sim de G4, deriva estágios dos valores efetivos para manter coerência
+    const effFinalists = hasAnySim
+      ? [effChampion, effRunnerUp].filter((t): t is string => !!t)
+      : (kr.finalists.length > 0 ? kr.finalists : [effChampion, effRunnerUp].filter((t): t is string => !!t))
+    const effSemis = hasAnySim
+      ? [...new Set([effChampion, effRunnerUp, effThird, effFourth].filter((t): t is string => !!t))]
+      : (kr.semifinalists.length > 0 ? kr.semifinalists : [...new Set([effChampion, effRunnerUp, effThird, effFourth].filter((t): t is string => !!t))])
+    const effScorers = simTournament.top_scorer.length > 0
+      ? simTournament.top_scorer.split('|').filter(Boolean)
+      : kr.officialScorers
     return { semifinalists: effSemis, finalists: effFinalists, champion: effChampion, runnerUp: effRunnerUp, third: effThird, fourth: effFourth, officialScorers: effScorers }
   }, [knockoutResults, simTournament])
 
@@ -1046,10 +1048,10 @@ export function SimuladorClient({
   const offSecondMap = useMemo(() => new Map(GROUP_ORDER.map(g => [g, completeGroupsSet.has(g) ? (officialStandings.find(s => s.group === g)?.teams[1]?.team ?? '') : ''])), [officialStandings, completeGroupsSet])
   const offThirdMap  = useMemo(() => new Map(GROUP_ORDER.map(g => [g, allGroupsComplete ? (officialThirds.find(t => t.group === g && t.advances)?.team ?? '') : ''])), [officialThirds, allGroupsComplete])
 
-  // Effective maps: oficial se disponível, sim como fallback
-  const effFirstMap  = useMemo(() => new Map(GROUP_ORDER.map(g => [g, offFirstMap.get(g)  || simGroupMap.get(g)?.first  || ''])), [offFirstMap,  simGroupMap])
-  const effSecondMap = useMemo(() => new Map(GROUP_ORDER.map(g => [g, offSecondMap.get(g) || simGroupMap.get(g)?.second || ''])), [offSecondMap, simGroupMap])
-  const effThirdMap  = useMemo(() => new Map(GROUP_ORDER.map(g => [g, offThirdMap.get(g)  || simThirdMap.get(g)?.team   || ''])), [offThirdMap,  simThirdMap])
+  // Effective maps: sim tem prioridade sobre oficial — permite simular mesmo com resultado conhecido
+  const effFirstMap  = useMemo(() => new Map(GROUP_ORDER.map(g => [g, simGroupMap.get(g)?.first  || offFirstMap.get(g)  || ''])), [offFirstMap,  simGroupMap])
+  const effSecondMap = useMemo(() => new Map(GROUP_ORDER.map(g => [g, simGroupMap.get(g)?.second || offSecondMap.get(g) || ''])), [offSecondMap, simGroupMap])
+  const effThirdMap  = useMemo(() => new Map(GROUP_ORDER.map(g => [g, simThirdMap.get(g)?.team   || offThirdMap.get(g)  || ''])), [offThirdMap,  simThirdMap])
 
   const persistGroupSim = useCallback(async (g: string, first: string, second: string) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1198,13 +1200,17 @@ export function SimuladorClient({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sb = supabase.current as any
       if (opts.jogos) {
-        const nonOfficialSimIds: string[] = []
+        // Recomputa livePoints antes de limpar: jogos com resultado oficial usam score oficial;
+        // jogos sem resultado oficial têm livePoints zerados
         for (const m of matches) {
-          if (m.score_home !== null) continue
-          if (simMap.has(m.id)) nonOfficialSimIds.push(m.id)
+          if (!simMap.has(m.id)) continue
+          if (m.score_home !== null && m.score_away !== null) {
+            recomputeForMatch(m.id, m.score_home, m.score_away, m.is_brazil)
+          } else {
+            resetLivePointsForMatch(m.id)
+          }
         }
         setSimMap(new Map())
-        for (const mid of nonOfficialSimIds) resetLivePointsForMatch(mid)
         await sb.from('user_simulations').delete().eq('user_id', userId)
       }
       if (!bonusIsLocked) {
@@ -1496,7 +1502,7 @@ export function SimuladorClient({
                 ) : null}
                 {isGabaritandoDe ? 'Salvando…' : 'Gabaritar de…'}
               </button>
-              <button onClick={() => { setLimparOpts({ jogos: true, grupos12: true, grupos3: true, g4: true, artilheiro: true }); setShowLimparDialog(true) }} disabled={isGabaritando || isGabaritandoDe || isLimpando}
+              <button onClick={() => setShowLimparDialog(true)} disabled={isGabaritando || isGabaritandoDe || isLimpando}
                 className="inline-flex items-center gap-1 rounded px-2.5 py-0.5 text-[11px] font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-60 disabled:cursor-not-allowed transition">
                 {isLimpando ? (
                   <svg className="animate-spin w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none">
@@ -1504,7 +1510,7 @@ export function SimuladorClient({
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
                   </svg>
                 ) : null}
-                {isLimpando ? 'Limpando…' : 'Limpar'}
+                {isLimpando ? 'Limpando…' : 'Limpar Simulações'}
               </button>
             </>
           )}
@@ -1807,23 +1813,30 @@ export function SimuladorClient({
                       </td>
                       <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: '#eff6ff', borderRight: '1px solid #bfdbfe' }}
                         className="text-center px-0.5">
-                        {of1 ? (
+                        {!bonusIsLocked ? (() => {
+                          const simFirst  = simGroupMap.get(g)?.first  ?? ''
+                          const simSecond = simGroupMap.get(g)?.second ?? ''
+                          const div1 = of1 && simFirst  && simFirst  !== of1
+                          const div2 = of2 && simSecond && simSecond !== of2
+                          return (
+                            <div className="flex flex-col gap-0.5">
+                              <select value={effFirstMap.get(g) ?? ''}
+                                onChange={e => { const v = e.target.value; const cur = simGroupMap.get(g); setSimGroupMap(prev => new Map(prev).set(g, { first: v, second: cur?.second ?? '' })); persistGroupSim(g, v, cur?.second ?? '') }}
+                                className={`w-full rounded border text-[9px] px-0.5 py-px text-gray-700 focus:outline-none ${div1 ? 'border-red-400 bg-red-50' : 'border-amber-200 bg-amber-50'}`}>
+                                <option value="">1º?</option>
+                                {(teamsByGroup.get(g) ?? []).map(t => <option key={t.name} value={t.name}>{teamAbbrs[t.name] ?? abbr(t.name, 5)}</option>)}
+                              </select>
+                              <select value={effSecondMap.get(g) ?? ''}
+                                onChange={e => { const v = e.target.value; const cur = simGroupMap.get(g); setSimGroupMap(prev => new Map(prev).set(g, { first: cur?.first ?? '', second: v })); persistGroupSim(g, cur?.first ?? '', v) }}
+                                className={`w-full rounded border text-[9px] px-0.5 py-px text-gray-700 focus:outline-none ${div2 ? 'border-red-400 bg-red-50' : 'border-amber-200 bg-amber-50'}`}>
+                                <option value="">2º?</option>
+                                {(teamsByGroup.get(g) ?? []).map(t => <option key={t.name} value={t.name}>{teamAbbrs[t.name] ?? abbr(t.name, 5)}</option>)}
+                              </select>
+                              {(div1 || div2) && <span className="text-[7px] text-red-600 font-bold leading-none">≠ oficial</span>}
+                            </div>
+                          )
+                        })() : of1 ? (
                           <span className="text-[10px] font-semibold text-blue-800">{`Gr. ${g}`}</span>
-                        ) : !bonusIsLocked ? (
-                          <div className="flex flex-col gap-0.5">
-                            <select value={simGroupMap.get(g)?.first ?? ''}
-                              onChange={e => { const v = e.target.value; setSimGroupMap(prev => new Map(prev).set(g, { first: v, second: simGroupMap.get(g)?.second ?? '' })); persistGroupSim(g, v, simGroupMap.get(g)?.second ?? '') }}
-                              className="w-full rounded border border-amber-200 bg-amber-50 text-[9px] px-0.5 py-px text-gray-700 focus:outline-none">
-                              <option value="">1º?</option>
-                              {(teamsByGroup.get(g) ?? []).map(t => <option key={t.name} value={t.name}>{teamAbbrs[t.name] ?? abbr(t.name, 5)}</option>)}
-                            </select>
-                            <select value={simGroupMap.get(g)?.second ?? ''}
-                              onChange={e => { const v = e.target.value; setSimGroupMap(prev => new Map(prev).set(g, { first: simGroupMap.get(g)?.first ?? '', second: v })); persistGroupSim(g, simGroupMap.get(g)?.first ?? '', v) }}
-                              className="w-full rounded border border-amber-200 bg-amber-50 text-[9px] px-0.5 py-px text-gray-700 focus:outline-none">
-                              <option value="">2º?</option>
-                              {(teamsByGroup.get(g) ?? []).map(t => <option key={t.name} value={t.name}>{teamAbbrs[t.name] ?? abbr(t.name, 5)}</option>)}
-                            </select>
-                          </div>
                         ) : (
                           <span className="text-gray-300 text-[10px]">–</span>
                         )}
@@ -1951,15 +1964,22 @@ export function SimuladorClient({
                       </td>
                       <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: '#faf5ff', borderRight: '1px solid #e9d5ff' }}
                         className="text-center px-0.5">
-                        {ot ? (
+                        {!bonusIsLocked ? (() => {
+                          const simTeam = simThirdMap.get(g)?.team ?? ''
+                          const div = ot && simTeam && simTeam !== ot
+                          return (
+                            <div className="flex flex-col gap-0.5">
+                              <select value={effThirdMap.get(g) ?? ''}
+                                onChange={e => { const v = e.target.value; setSimThirdMap(prev => new Map(prev).set(g, { team: v })); persistThirdSim(g, v) }}
+                                className={`w-full rounded border text-[9px] px-0.5 py-px text-gray-700 focus:outline-none ${div ? 'border-red-400 bg-red-50' : 'border-amber-200 bg-amber-50'}`}>
+                                <option value="">3º?</option>
+                                {(teamsByGroup.get(g) ?? []).map(t => <option key={t.name} value={t.name}>{teamAbbrs[t.name] ?? abbr(t.name, 5)}</option>)}
+                              </select>
+                              {div && <span className="text-[7px] text-red-600 font-bold leading-none">≠ oficial</span>}
+                            </div>
+                          )
+                        })() : ot ? (
                           <span className="text-[10px] text-violet-600 font-semibold">{`Gr. ${g}`}</span>
-                        ) : !bonusIsLocked ? (
-                          <select value={simThirdMap.get(g)?.team ?? ''}
-                            onChange={e => { const v = e.target.value; setSimThirdMap(prev => new Map(prev).set(g, { team: v })); persistThirdSim(g, v) }}
-                            className="w-full rounded border border-amber-200 bg-amber-50 text-[9px] px-0.5 py-px text-gray-700 focus:outline-none">
-                            <option value="">3º?</option>
-                            {(teamsByGroup.get(g) ?? []).map(t => <option key={t.name} value={t.name}>{teamAbbrs[t.name] ?? abbr(t.name, 5)}</option>)}
-                          </select>
                         ) : (
                           <span className="text-gray-300 text-[10px]">–</span>
                         )}
@@ -2074,23 +2094,30 @@ export function SimuladorClient({
                       </td>
                       <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: '#fffbeb', borderRight: '1px solid #fde68a' }}
                         className="text-center text-[9px] text-amber-600 font-semibold px-0.5 leading-tight">
-                        {officialIsReal ? (
-                          <span>{FULL[field].replace(/^[^\s]+ /, '')}</span>
-                        ) : !bonusIsLocked ? (
-                          <select
-                            value={simTournament[field === 'champion' ? 'champion' : field === 'runner_up' ? 'runner_up' : field === 'semi1' ? 'semi1' : 'semi2']}
-                            onChange={e => {
-                              const v = e.target.value
-                              const key = field === 'champion' ? 'champion' : field === 'runner_up' ? 'runner_up' : field === 'semi1' ? 'semi1' : 'semi2'
-                              const update = { ...simTournament, [key]: v }
-                              setSimTournament(update)
-                              persistTournamentSim({ [key]: v })
-                            }}
-                            className="w-full rounded border border-amber-200 bg-amber-50 text-[9px] px-0.5 py-px text-gray-700 focus:outline-none">
-                            <option value="">?</option>
-                            {allTeams.map(t => <option key={t.name} value={t.name}>{teamAbbrs[t.name] ?? abbr(t.name, 5)}</option>)}
-                          </select>
-                        ) : (
+                        {!bonusIsLocked ? (() => {
+                          const key = field === 'champion' ? 'champion' : field === 'runner_up' ? 'runner_up' : field === 'semi1' ? 'semi1' : 'semi2'
+                          const rawOfficial = field === 'champion' ? knockoutResults.champion : field === 'runner_up' ? knockoutResults.runnerUp : field === 'semi1' ? knockoutResults.third : knockoutResults.fourth
+                          const simVal = simTournament[key]
+                          const selectVal = simVal || rawOfficial || ''
+                          const div = officialIsReal && !!simVal && simVal !== rawOfficial
+                          return (
+                            <div className="flex flex-col gap-0.5">
+                              <select
+                                value={selectVal}
+                                onChange={e => {
+                                  const v = e.target.value
+                                  const update = { ...simTournament, [key]: v }
+                                  setSimTournament(update)
+                                  persistTournamentSim({ [key]: v })
+                                }}
+                                className={`w-full rounded border text-[9px] px-0.5 py-px text-gray-700 focus:outline-none ${div ? 'border-red-400 bg-red-50' : 'border-amber-200 bg-amber-50'}`}>
+                                <option value="">?</option>
+                                {allTeams.map(t => <option key={t.name} value={t.name}>{teamAbbrs[t.name] ?? abbr(t.name, 5)}</option>)}
+                              </select>
+                              {div && <span className="text-[7px] text-red-600 font-bold leading-none">≠ oficial</span>}
+                            </div>
+                          )
+                        })() : (
                           <span className="text-gray-300">–</span>
                         )}
                       </td>
@@ -2165,26 +2192,32 @@ export function SimuladorClient({
                       </td>
                       <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: '#fffbeb', borderRight: '1px solid #fde68a' }}
                         className="text-center px-0.5 text-[9px] text-amber-600 font-semibold">
-                        {officialTopScorers.length > 0 ? (
-                          <span>Art.</span>
-                        ) : !bonusIsLocked ? (
-                          allBettedScorers.length > 0 ? (
-                            <select multiple size={5}
-                              value={simTournament.top_scorer ? simTournament.top_scorer.split('|').filter(Boolean) : []}
-                              onChange={e => {
-                                const selected = Array.from(e.target.selectedOptions).map(o => o.value)
-                                const v = selected.join('|')
-                                setSimTournament(prev => ({ ...prev, top_scorer: v }))
-                                persistTournamentSim({ top_scorer: v })
-                              }}
-                              className="w-full rounded border border-amber-200 bg-amber-50 text-[8px] text-gray-700 focus:outline-none"
-                            >
-                              {allBettedScorers.map(s => <option key={s} value={s}>{s}</option>)}
-                            </select>
+                        {!bonusIsLocked ? (() => {
+                          const simPicks = simTournament.top_scorer ? simTournament.top_scorer.split('|').filter(Boolean) : []
+                          const div = officialTopScorers.length > 0 && simPicks.length > 0 && simPicks.some(s => {
+                            const norm = (scorerMapping[s.toLowerCase().trim()] ?? s).toLowerCase().trim()
+                            return !officialTopScorers.some(o => o.trim().toLowerCase() === norm)
+                          })
+                          return allBettedScorers.length > 0 ? (
+                            <div className="flex flex-col gap-0.5">
+                              <select multiple size={5}
+                                value={simPicks}
+                                onChange={e => {
+                                  const selected = Array.from(e.target.selectedOptions).map(o => o.value)
+                                  const v = selected.join('|')
+                                  setSimTournament(prev => ({ ...prev, top_scorer: v }))
+                                  persistTournamentSim({ top_scorer: v })
+                                }}
+                                className={`w-full rounded border text-[8px] text-gray-700 focus:outline-none ${div ? 'border-red-400 bg-red-50' : 'border-amber-200 bg-amber-50'}`}
+                              >
+                                {allBettedScorers.map(s => <option key={s} value={s}>{s}</option>)}
+                              </select>
+                              {div && <span className="text-[7px] text-red-600 font-bold leading-none">≠ oficial</span>}
+                            </div>
                           ) : (
                             <span className="text-[8px] text-gray-400">sem apostas</span>
                           )
-                        ) : (
+                        })() : (
                           <span className="text-gray-300">–</span>
                         )}
                       </td>
@@ -2493,44 +2526,26 @@ export function SimuladorClient({
         </div>
       )}
 
-      {/* Modal: Limpar simulação */}
+      {/* Modal: Limpar simulações */}
       {showLimparDialog && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4" onClick={() => setShowLimparDialog(false)}>
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-xs" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 pt-4 pb-2">
-              <span className="font-semibold text-gray-800">O que deseja limpar?</span>
+              <span className="font-semibold text-gray-800">Limpar simulações?</span>
               <button onClick={() => setShowLimparDialog(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
             </div>
-            <p className="px-4 pb-2 text-[11px] text-gray-400">Desmarque o que não quiser apagar.</p>
-            <div className="px-4 pb-3 flex flex-col gap-2">
-              {([
-                { key: 'jogos',    label: 'Jogos' },
-                { key: 'grupos12', label: 'Classificados 1º e 2º' },
-                { key: 'grupos3',  label: 'Classificados 3º' },
-                { key: 'g4',       label: 'G4' },
-                { key: 'artilheiro', label: 'Artilheiro' },
-              ] as const).map(({ key, label }) => (
-                <label key={key} className="flex items-center gap-3 cursor-pointer select-none rounded-lg px-2 py-1.5 hover:bg-gray-50 transition">
-                  <input
-                    type="checkbox"
-                    checked={limparOpts[key]}
-                    onChange={e => setLimparOpts(prev => ({ ...prev, [key]: e.target.checked }))}
-                    className="w-4 h-4 accent-gray-700 rounded cursor-pointer"
-                  />
-                  <span className="text-[13px] text-gray-700">{label}</span>
-                </label>
-              ))}
-            </div>
+            <p className="px-4 pb-4 text-[12px] text-gray-500">
+              Apaga todas as simulações (jogos, grupos, G4 e artilheiro). A classificação simulada ficará igual ao placar oficial atual.
+            </p>
             <div className="px-4 py-3 border-t border-gray-100 flex justify-end gap-2">
               <button onClick={() => setShowLimparDialog(false)}
                 className="px-4 py-1.5 text-[12px] rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 font-medium transition">
                 Cancelar
               </button>
               <button
-                disabled={!Object.values(limparOpts).some(Boolean)}
-                onClick={async () => { setShowLimparDialog(false); await handleLimpar(limparOpts) }}
-                className="px-4 py-1.5 text-[12px] rounded-lg bg-gray-700 text-white hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition">
-                Limpar
+                onClick={async () => { setShowLimparDialog(false); await handleLimpar({ jogos: true, grupos12: true, grupos3: true, g4: true, artilheiro: true }) }}
+                className="px-4 py-1.5 text-[12px] rounded-lg bg-gray-700 text-white hover:bg-gray-800 font-semibold transition">
+                Limpar tudo
               </button>
             </div>
           </div>
