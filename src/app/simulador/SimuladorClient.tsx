@@ -1060,7 +1060,7 @@ export function SimuladorClient({
       await sb.from('user_group_simulations').delete().eq('user_id', userId).eq('group_name', g)
     } else {
       await sb.from('user_group_simulations').upsert(
-        { user_id: userId, group_name: g, first_place: first || null, second_place: second || null },
+        { user_id: userId, group_name: g, first_place: first, second_place: second },
         { onConflict: 'user_id,group_name' },
       )
     }
@@ -1137,7 +1137,7 @@ export function SimuladorClient({
         return next
       })
       await sb.from('user_group_simulations').upsert(
-        groupEntries.map(({ g, f, s }) => ({ user_id: userId, group_name: g, first_place: f || null, second_place: s || null })),
+        groupEntries.map(({ g, f, s }) => ({ user_id: userId, group_name: g, first_place: f, second_place: s })),
         { onConflict: 'user_id,group_name' },
       )
     }
