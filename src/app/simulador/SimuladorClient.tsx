@@ -1857,7 +1857,7 @@ export function SimuladorClient({
                             className={`border-r border-blue-50 text-center ${isMobile ? CELL_BG[lbKind] : ''}`}>
                             {lb?.first_place ? (() => {
                               const isZebra1 = groupIsZebraMap.get(g) ?? false
-                              const lbPts = lb.points !== null
+                              const lbPts = (!simGroupMap.has(g) && lb.points !== null)
                                 ? lb.points
                                 : ef1 ? scoreGroupBet(lb.first_place, lb.second_place, ef1, ef2, isZebra1, rules) : null
                               return (
@@ -1906,7 +1906,7 @@ export function SimuladorClient({
                             className={`border-r border-blue-50 text-center ${!isFrozen ? CELL_BG[kind] : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                             {bet?.first_place ? (() => {
                               const isZebra1 = groupIsZebraMap.get(g) ?? false
-                              const pts = bet.points !== null
+                              const pts = (!simGroupMap.has(g) && bet.points !== null)
                                 ? bet.points
                                 : ef1 ? scoreGroupBet(bet.first_place, bet.second_place, ef1, ef2, isZebra1, rules) : null
                               return (
