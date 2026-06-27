@@ -25,6 +25,7 @@ interface Props {
   rules: Record<string, number>
   rankBefore: Record<string, number>
   rankAfter: Record<string, number>
+  currentRank: Record<string, number>
   hasAnyScore: boolean
   activeParticipantId?: string | null
   teamAbbrs?: Record<string, string>
@@ -41,6 +42,7 @@ type BetGroup = {
   isImpossible: boolean
   medals: number[]
   hasLantern: boolean
+  pids: string[]
 }
 
 function fmtPct(n: number) {
@@ -194,7 +196,7 @@ function ExportableBetStats({
 
 // ── Componente principal ───────────────────────────────────────────────────────
 
-export function BetStats({ match, matchBets, participants, isZebra, rules, rankBefore, rankAfter, hasAnyScore, activeParticipantId, teamAbbrs = {} }: Props) {
+export function BetStats({ match, matchBets, participants, isZebra, rules, rankBefore, rankAfter, currentRank, hasAnyScore, activeParticipantId, teamAbbrs = {} }: Props) {
   const hasResult      = match.score_home !== null && match.score_away !== null
   const zebraThreshold = rules['percentual_zebra'] ?? 15
 
@@ -206,6 +208,10 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankB
   const [showBetExport, setShowBetExport] = useState(false)
   const [isSharingBet, setIsSharingBet]   = useState(false)
   const betExportRef = useRef<HTMLDivElement>(null)
+
+  const [selectedGroup, setSelectedGroup] = useState<BetGroup | null>(null)
+
+  const participantMap = useMemo(() => new Map(participants.map(p => [p.id, p.apelido])), [participants])
 
   useEffect(() => {
     if (!showBetExport || !betExportRef.current) return
@@ -285,7 +291,7 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankB
           return false
         }) : []
         const hasLantern = hasAnyScore && [...pidSet].some(pid => lanternPids.has(pid))
-        return { score_home: sh, score_away: sa, result, count, pct: (count / total) * 100, pts, isExact, isImpossible, medals, hasLantern }
+        return { score_home: sh, score_away: sa, result, count, pids, pct: (count / total) * 100, pts, isExact, isImpossible, medals, hasLantern }
       })
       .sort((a, b) => b.count - a.count)
   }, [matchBets, match.score_home, match.score_away, hasResult, isZebra, rules, match.is_brazil, medalTier, lanternPids])
@@ -422,9 +428,11 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankB
           )
 
           return (
-            <div
+            <button
               key={`${g.score_home}-${g.score_away}`}
-              className={`flex items-center px-3 py-1${g.isExact ? ' bg-blue-50/60' : ''}`}
+              type="button"
+              onClick={() => setSelectedGroup(g)}
+              className={`w-full flex items-center px-3 py-1 text-left cursor-pointer transition-colors hover:bg-gray-50/80 active:bg-gray-100${g.isExact ? ' bg-blue-50/60 hover:bg-blue-50' : ''}`}
             >
               <div className="flex-1" />
               <span className={`${H_W} flex justify-center`}>{g.result === 'H' ? scoreEl : null}</span>
@@ -436,7 +444,7 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankB
                   {g.pts !== null ? (g.pts > 0 ? `+${g.pts}` : '0') : ''}
                 </span>
               </div>
-            </div>
+            </button>
           )
         })}
       </div>
@@ -513,6 +521,55 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankB
         </div>
       </div>
     )}
+
+    {/* Pop-up de participantes por placar */}
+    {selectedGroup !== null && (() => {
+      const entries = selectedGroup.pids
+        .map(pid => ({ pid, name: participantMap.get(pid) ?? pid, rank: currentRank[pid] ?? 0 }))
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+      return (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => setSelectedGroup(null)}
+        >
+          <div className="absolute inset-0 bg-black/40" />
+          <div
+            className="relative bg-white rounded-t-2xl sm:rounded-2xl shadow-xl border border-gray-100 w-full sm:max-w-xs overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <span className="font-mono font-bold text-lg text-gray-800">
+                  {selectedGroup.score_home}×{selectedGroup.score_away}
+                </span>
+                <span className="text-sm text-gray-500 ml-2">
+                  {selectedGroup.count} palpite{selectedGroup.count !== 1 ? 's' : ''}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedGroup(null)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition-colors"
+                aria-label="Fechar"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <ul className="divide-y divide-gray-50 max-h-72 overflow-y-auto">
+              {entries.map(({ pid, name, rank }) => (
+                <li key={pid} className="px-4 py-2.5 flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-800">{name}</span>
+                  <span className="text-xs text-gray-400 font-mono tabular-nums ml-2">({rank}º)</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )
+    })()}
     </>
   )
 }

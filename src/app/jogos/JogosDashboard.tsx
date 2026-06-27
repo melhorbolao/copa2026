@@ -301,6 +301,18 @@ export function JogosDashboard({
     return out
   }, [participants, ptsBeforeMatch, matchPoints])
 
+  // Ranking geral ao vivo — usa livePoints (todos os jogos, incluindo não recalculados)
+  const currentRank = useMemo(() => {
+    const sorted = [...participants].sort((a, b) => (livePoints[b.id] ?? 0) - (livePoints[a.id] ?? 0))
+    const out: Record<string, number> = {}
+    sorted.forEach((p, i) => {
+      out[p.id] = i > 0 && (livePoints[p.id] ?? 0) === (livePoints[sorted[i - 1].id] ?? 0)
+        ? out[sorted[i - 1].id]
+        : i + 1
+    })
+    return out
+  }, [participants, livePoints])
+
   // "Quase" — who scores if home gets +1 or away gets +1
   const quase = useMemo(() => {
     if (match?.score_home === null || match?.score_away === null) return { home: [], away: [] }
@@ -386,6 +398,7 @@ export function JogosDashboard({
           rules={rules}
           rankBefore={rankBefore}
           rankAfter={rankAfter}
+          currentRank={currentRank}
           hasAnyScore={match.score_home !== null || Object.values(livePoints).some(pts => pts > 0)}
           activeParticipantId={activeParticipantId}
           teamAbbrs={teamAbbrs}
