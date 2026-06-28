@@ -174,26 +174,25 @@ export async function calculateQualifiedSetsRaw(): Promise<{
   }
 
   const [
-    { data: participants },
-    { data: psRows },
+    mvRows,
     { data: matches },
     bets,
   ] = await Promise.all([
-    admin.from('participants').select('id'),
-    admin.from('participant_scores').select('participant_id, pts_total'),
+    // mv_general_ranking faz ::INT no pts_total — garante que participantes
+    // empatados no ranking tenham exatamente o mesmo valor inteiro aqui.
+    fetchAll('mv_general_ranking', 'participant_id, pts_total'),
     admin.from('matches').select('id, phase'),
     fetchAll('bets', 'participant_id, match_id, points'),
   ])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const allIds: string[] = (participants ?? []).map((p: any) => p.id as string)
+  const allIds: string[] = (mvRows ?? []).map((r: any) => r.participant_id as string)
   if (allIds.length === 0) return { cutoff1: new Set(), cutoff2: new Set(), totalParticipants: 0 }
 
-  // pts_total por participante (mesma fonte que o ranking)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const totalByPid = new Map<string, number>(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (psRows ?? []).map((r: any) => [r.participant_id as string, (r.pts_total ?? 0) as number]),
+    (mvRows ?? []).map((r: any) => [r.participant_id as string, (r.pts_total ?? 0) as number]),
   )
 
   // Para o corte 2: pts de fases após R16 que precisam ser subtraídos
