@@ -17,13 +17,14 @@
  *      • 2º corte (após oitavas): 50% dos habilitados após o 1º corte, usando
  *        pontos acumulados até oitavas. Empates na linha: todos passam.
  *
- * Pontos da fase de grupos = participant_scores.pts_total no momento do corte
- *   (mesma fonte que mv_general_ranking). Garante que empates no ranking
- *   se reflitam identicamente na linha de corte — sem divergência de cálculo.
+ * Pontos totais = soma ao vivo de bets+group_bets+third_place_bets+tournament_bets,
+ *   mesma lógica da classificação exibida na UI (ClassificacaoMBClient).
  * Pontos até oitavas = pts_total − pontos de QF/SF/3º lugar/Final.
  */
 
 import { createAuthAdminClient } from '@/lib/supabase/server'
+import { calcGroupStandings, rankThirds } from '@/lib/bracket/engine'
+import type { MatchSlim, BetSlim } from '@/lib/bracket/engine'
 
 // As 8 etapas exibidas no StageFilter (e na tabela /participantes).
 // "final" agrega 3º lugar + final.
@@ -145,9 +146,13 @@ const PHASES_AFTER_R16 = new Set(['quarterfinal', 'semifinal', 'third_place', 'f
  * ignorando qualquer lista congelada. Use para executar um novo corte ou
  * exibir uma prévia do resultado antes de confirmar.
  *
- * Usa participant_scores.pts_total como fonte de verdade — a mesma que
- * alimenta mv_general_ranking — garantindo que empates no ranking
- * se reflitam identicamente na linha de corte.
+ * Computa pontos ao vivo a partir das tabelas brutas (bets, group_bets,
+ * third_place_bets, tournament_bets) em vez de participant_scores / MV,
+ * garantindo consistência com a classificação exibida na UI mesmo quando
+ * participant_scores ficou desatualizado após correções de regras.
+ *
+ * group_phase_pts = total de TODAS as fases no momento do corte.
+ * through_r16_pts = total − pontos de QF/SF/3º/Final (para o 2º corte).
  */
 export async function calculateQualifiedSetsRaw(): Promise<{
   cutoff1: Set<string>
@@ -174,45 +179,101 @@ export async function calculateQualifiedSetsRaw(): Promise<{
   }
 
   const [
-    mvRows,
-    { data: matches },
-    bets,
+    participants,
+    allBets,
+    groupBets,
+    thirdBets,
+    allMatches,
+    { data: tournamentBetsData },
+    { data: rulesData },
   ] = await Promise.all([
-    // mv_general_ranking faz ::INT no pts_total — garante que participantes
-    // empatados no ranking tenham exatamente o mesmo valor inteiro aqui.
-    fetchAll('mv_general_ranking', 'participant_id, pts_total'),
-    admin.from('matches').select('id, phase'),
+    fetchAll('participants', 'id'),
     fetchAll('bets', 'participant_id, match_id, points'),
+    fetchAll('group_bets', 'participant_id, points'),
+    fetchAll('third_place_bets', 'participant_id, group_name, team'),
+    fetchAll('matches', 'id, phase, group_name, team_home, team_away, flag_home, flag_away, score_home, score_away'),
+    admin.from('tournament_bets').select('participant_id, points'),
+    admin.from('scoring_rules').select('key, points'),
   ])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const allIds: string[] = (mvRows ?? []).map((r: any) => r.participant_id as string)
+  const allIds: string[] = (participants as any[]).map(r => r.id as string)
   if (allIds.length === 0) return { cutoff1: new Set(), cutoff2: new Set(), totalParticipants: 0 }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const totalByPid = new Map<string, number>(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (mvRows ?? []).map((r: any) => [r.participant_id as string, (r.pts_total ?? 0) as number]),
-  )
+  const rules: Record<string, number> = Object.fromEntries((rulesData ?? []).map((r: any) => [r.key, r.points]))
+  const thirdPtsRule = rules['terceiro_classificado'] ?? 3
 
-  // Para o corte 2: pts de fases após R16 que precisam ser subtraídos
+  // Mapa fase por partida
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const phaseByMatch = new Map<string, string>(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (matches ?? []).map((m: any) => [m.id as string, m.phase as string]),
-  )
+  const phaseByMatch = new Map<string, string>((allMatches as any[]).map(m => [m.id as string, m.phase as string]))
+
+  // Soma pts de apostas de jogos (todas as fases) e calcula pts pós-R16 para corte 2
+  const matchPtsByPid = new Map<string, number>()
   const afterR16ByPid = new Map<string, number>()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const b of (bets ?? []) as any[]) {
-    const phase = phaseByMatch.get(b.match_id)
-    if (!phase || !PHASES_AFTER_R16.has(phase)) continue
+  for (const b of (allBets as any[])) {
     const pts = (b.points ?? 0) as number
     if (!pts) continue
-    afterR16ByPid.set(b.participant_id, (afterR16ByPid.get(b.participant_id) ?? 0) + pts)
+    matchPtsByPid.set(b.participant_id, (matchPtsByPid.get(b.participant_id) ?? 0) + pts)
+    const phase = phaseByMatch.get(b.match_id)
+    if (phase && PHASES_AFTER_R16.has(phase)) {
+      afterR16ByPid.set(b.participant_id, (afterR16ByPid.get(b.participant_id) ?? 0) + pts)
+    }
+  }
+
+  // Soma pts de apostas de grupo (group_bets)
+  const groupPtsByPid = new Map<string, number>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const gb of (groupBets as any[])) {
+    groupPtsByPid.set(gb.participant_id, (groupPtsByPid.get(gb.participant_id) ?? 0) + (gb.points ?? 0))
+  }
+
+  // Computa pts de terceiros AO VIVO via rankThirds (mesma lógica do motor de pontuação).
+  // Evita depender de participant_scores.pts_thirds que pode estar desatualizado após
+  // correções de regras (ex.: fix para pontuar apenas os 8 melhores thirds).
+  const thirdPtsByPid = new Map<string, number>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const groupMatchRows = (allMatches as any[]).filter(m => m.phase === 'group' && m.group_name)
+  if (
+    groupMatchRows.length > 0 &&
+    groupMatchRows.every(m => m.score_home !== null && m.score_away !== null)
+  ) {
+    const slim: MatchSlim[] = groupMatchRows.map(m => ({
+      id: m.id, group_name: m.group_name, phase: m.phase,
+      team_home: m.team_home, team_away: m.team_away,
+      flag_home: m.flag_home ?? '', flag_away: m.flag_away ?? '',
+    }))
+    const betMap = new Map<string, BetSlim>(
+      groupMatchRows.map(m => [m.id, { match_id: m.id, score_home: m.score_home, score_away: m.score_away }])
+    )
+    const standings = calcGroupStandings(slim, betMap)
+    const thirds    = rankThirds(standings)
+    const advancingThirds = new Map<string, string>(
+      thirds.filter(t => t.advances).map(t => [t.group, t.team])
+    )
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const bet of (thirdBets as any[])) {
+      const actualThird = advancingThirds.get(bet.group_name)
+      if (actualThird && bet.team === actualThird) {
+        thirdPtsByPid.set(bet.participant_id, (thirdPtsByPid.get(bet.participant_id) ?? 0) + thirdPtsRule)
+      }
+    }
+  }
+
+  // Pts de bônus torneio (G4 + artilheiro) — já armazenados em tournament_bets.points
+  const tournamentPtsByPid = new Map<string, number>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const tb of (tournamentBetsData ?? []) as any[]) {
+    tournamentPtsByPid.set(tb.participant_id, (tb.points ?? 0) as number)
   }
 
   const scoresList: ParticipantScores[] = allIds.map(pid => {
-    const total = totalByPid.get(pid) ?? 0
+    const total =
+      (matchPtsByPid.get(pid) ?? 0) +
+      (groupPtsByPid.get(pid) ?? 0) +
+      (thirdPtsByPid.get(pid) ?? 0) +
+      (tournamentPtsByPid.get(pid) ?? 0)
     return {
       participant_id: pid,
       group_phase_pts: total,
