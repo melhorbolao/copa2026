@@ -357,6 +357,14 @@ export default async function ClassificacaoMBPage() {
   ).map(m => ({ ...m, flag_home: '', flag_away: '' }))
   const derivedTeamMap = buildKnockoutTeamMap(officialR32Slots, knockoutMatchesFull)
 
+  const isBrazilByMatchId = new Map<string, boolean>()
+  for (const m of matches) {
+    const ov = derivedTeamMap.get(m.id)
+    const effHome = ov?.team_home || m.team_home
+    const effAway = ov?.team_away || m.team_away
+    isBrazilByMatchId.set(m.id, m.is_brazil || effHome === 'Brasil' || effAway === 'Brasil')
+  }
+
   const actualThirdByGroup = new Map<string, string>()
   for (const standing of officialGroupStandings) {
     const g = standing.group
@@ -422,7 +430,7 @@ export default async function ClassificacaoMBPage() {
         bet.score_home, bet.score_away,
         official.score_home, official.score_away,
         isZebraMatch[bet.match_id] ?? false,
-        match?.is_brazil ?? false,
+        isBrazilByMatchId.get(bet.match_id) ?? false,
         rules,
       )
       // Pontos e estatísticas de jogos encerrados

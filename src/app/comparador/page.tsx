@@ -255,7 +255,7 @@ export default async function ComparadorPage({
     bettingDeadline: m.betting_deadline,
     scoreHome:       m.score_home ?? null,
     scoreAway:       m.score_away ?? null,
-    isBrazil:        !!m.is_brazil,
+    isBrazil:        !!(m.is_brazil || m.team_home === 'Brasil' || m.team_away === 'Brasil'),
     isZebra:         matchZebraMap[m.id] ?? false,
   }))
 
@@ -335,7 +335,7 @@ export default async function ComparadorPage({
       b.score_home, b.score_away,
       lm.score_home, lm.score_away,
       matchZebraMap[b.match_id] ?? false,
-      lm.is_brazil ?? false,
+      (lm.is_brazil || lm.team_home === 'Brasil' || lm.team_away === 'Brasil'),
       rulesMap,
     )
     livePtsMatchesMap[b.participant_id] = (livePtsMatchesMap[b.participant_id] ?? 0) + pts

@@ -61,7 +61,7 @@ export default async function NinetyMinPage() {
       score_home:      m.score_home,
       score_away:      m.score_away,
       penalty_winner:  m.penalty_winner,
-      is_brazil:       m.is_brazil,
+      is_brazil:       m.is_brazil || m.team_home === 'Brasil' || m.team_away === 'Brasil',
       betting_deadline: m.betting_deadline,
       score_home_90min: r90?.score_home_90min ?? null,
       score_away_90min: r90?.score_away_90min ?? null,

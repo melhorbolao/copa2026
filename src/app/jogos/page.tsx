@@ -164,7 +164,7 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
       b.score_home, b.score_away,
       m.score_home, m.score_away,
       isZebraMatchAll[b.match_id] ?? false,
-      m.is_brazil ?? false,
+      (m.is_brazil || m.team_home === 'Brasil' || m.team_away === 'Brasil'),
       rules,
     )
     ptsMatchesMap[b.participant_id] = (ptsMatchesMap[b.participant_id] ?? 0) + pts
