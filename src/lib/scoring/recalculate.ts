@@ -157,41 +157,14 @@ async function _updateThirdBetPoints(admin: AdminClient, rules: RuleMap): Promis
 
   if (!groupMatches?.length) return []
 
-  // Carrega quais grupos estão habilitados para pontuação
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: scoringConfig } = await (admin as any)
-    .from('third_place_scoring')
-    .select('group_name, enabled')
-  let scoringEnabled = new Set<string>(
-    ((scoringConfig ?? []) as { group_name: string; enabled: boolean }[])
-      .filter(r => r.enabled)
-      .map(r => r.group_name),
-  )
+  const { data: thirdBets } = await (admin as any)
+    .from('third_place_bets')
+    .select('id, participant_id, group_name, team')
 
-  // Se o número de grupos habilitados não é exatamente 8 e TODOS os jogos de grupo
-  // já têm placar, re-sincroniza com os standings reais (cobre tanto o caso de
-  // migração inicial com 0 grupos quanto overrides manuais incorretos do admin).
-  if (scoringEnabled.size !== 8 && groupMatches.every(m => m.score_home !== null)) {
-    try {
-      await autoEnableAllThirdScoring()
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: newConfig } = await (admin as any)
-        .from('third_place_scoring').select('group_name, enabled')
-      scoringEnabled = new Set<string>(
-        ((newConfig ?? []) as { group_name: string; enabled: boolean }[])
-          .filter(r => r.enabled)
-          .map(r => r.group_name),
-      )
-    } catch { /* tabela ainda não criada — ignora */ }
-  }
+  if (!thirdBets?.length) return []
 
-  if (scoringEnabled.size === 0) {
-    // Nenhum grupo habilitado: zera todos os pontos residuais
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: thirdBets } = await (admin as any)
-      .from('third_place_bets')
-      .select('id, participant_id, group_name, team')
-    if (!thirdBets?.length) return []
+  const zeroAll = async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (admin as any).from('third_place_bets').upsert(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -205,39 +178,32 @@ async function _updateThirdBetPoints(admin: AdminClient, rules: RuleMap): Promis
     return [...new Set((thirdBets as any[]).map((b: any) => b.participant_id as string))]
   }
 
-  // Agrupa partidas por grupo e determina o 3º real de cada grupo habilitado
-  const matchesByGroup = new Map<string, typeof groupMatches>()
-  for (const m of groupMatches) {
-    if (!m.group_name) continue
-    if (!matchesByGroup.has(m.group_name)) matchesByGroup.set(m.group_name, [])
-    matchesByGroup.get(m.group_name)!.push(m)
+  // Só pontua terceiros quando TODOS os jogos de grupo têm placar.
+  // Antes disso é impossível saber quais 8 thirds avançam — zera tudo.
+  if (!groupMatches.every(m => m.score_home !== null && m.score_away !== null)) {
+    return zeroAll()
   }
 
-  // Para cada grupo habilitado e completo, calcula o time 3º colocado real
-  const actualThirdByGroup = new Map<string, string>()
-  for (const group of scoringEnabled) {
-    const gms = matchesByGroup.get(group)
-    if (!gms || !gms.every(m => m.score_home !== null && m.score_away !== null)) continue
+  // Todos os grupos completos: calcula os 8 melhores thirds diretamente via rankThirds.
+  // Não depende de third_place_scoring para decidir quem pontua.
+  const slim: MatchSlim[] = groupMatches.map(m => ({
+    id: m.id, group_name: m.group_name, phase: m.phase,
+    team_home: m.team_home, team_away: m.team_away,
+    flag_home: m.flag_home, flag_away: m.flag_away,
+  }))
+  const betMap = new Map<string, BetSlim>(
+    groupMatches.map(m => [m.id, { match_id: m.id, score_home: m.score_home!, score_away: m.score_away! }])
+  )
+  const standings = calcGroupStandings(slim, betMap)
+  const thirds    = rankThirds(standings)
 
-    const slim: MatchSlim[] = gms.map(m => ({
-      id: m.id, group_name: m.group_name, phase: m.phase,
-      team_home: m.team_home, team_away: m.team_away,
-      flag_home: m.flag_home, flag_away: m.flag_away,
-    }))
-    const bm = new Map<string, BetSlim>(
-      gms.map(m => [m.id, { match_id: m.id, score_home: m.score_home!, score_away: m.score_away! }])
-    )
-    const standings = calcGroupStandings(slim, bm)
-    const gs = standings.find(s => s.group === group)
-    if (gs && gs.teams.length >= 3) actualThirdByGroup.set(group, gs.teams[2].team)
-  }
+  // Mapa grupo → time que é o 3º colocado REAL e avança entre os 8 melhores
+  const actualThirdByGroup = new Map<string, string>(
+    thirds.filter(t => t.advances).map(t => [t.group, t.team])
+  )
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: thirdBets } = await (admin as any)
-    .from('third_place_bets')
-    .select('id, participant_id, group_name, team')
-
-  if (!thirdBets?.length) return []
+  // Sincroniza third_place_scoring para exibição na UI (não afeta a pontuação)
+  try { await autoEnableAllThirdScoring() } catch { /* ignora se tabela não existir */ }
 
   const thirdPts = rules['terceiro_classificado'] ?? 3
 
@@ -252,7 +218,7 @@ async function _updateThirdBetPoints(admin: AdminClient, rules: RuleMap): Promis
         participant_id: bet.participant_id,
         group_name:     bet.group_name,
         team:           bet.team,
-        points: pts,
+        points:         pts,
       }
     }),
     { onConflict: 'id' },
