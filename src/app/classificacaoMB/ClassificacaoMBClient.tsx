@@ -471,7 +471,7 @@ function G112CompactRanking({
 
       {/* 4 blocos lado a lado — scroll horizontal no mobile */}
       <div className="overflow-x-auto">
-        <div className="grid grid-cols-4 divide-x divide-gray-100" style={{ minWidth: '1440px' }}>
+        <div className="grid grid-cols-4 divide-x divide-gray-100" style={{ minWidth: '1152px' }}>
           {blocks.map((block, bi) => (
               <div key={bi}>
                 {/* cabeçalho do bloco */}
