@@ -94,21 +94,15 @@ export default async function ControlePage({
     getPhaseSettings(),
     getQualifiedSets(),
     fetchAll('user_participants', 'participant_id, users(padrinho)') as Promise<{ participant_id: string; users: { padrinho: string | null } | null }[]>,
-    admin.from('mv_general_ranking').select('participant_id, pts_total') as Promise<{ data: { participant_id: string; pts_total: number | null }[] | null }>,
+    admin.from('mv_general_ranking').select('participant_id, posicao') as Promise<{ data: { participant_id: string; posicao: number | null }[] | null }>,
   ])
 
-  // Calcula posição usando o mesmo algoritmo da ClassificacaoMBClient:
-  // rank padrão (com saltos em empates), ordenado apenas por pts_total (sem tiebreaker de cravadas)
-  const rankingSorted = [...(rankingData ?? [])].sort((a, b) => (b.pts_total ?? 0) - (a.pts_total ?? 0))
-  const rankMap = new Map<string, number>()
-  for (let i = 0; i < rankingSorted.length; i++) {
-    const r = rankingSorted[i]
-    const rank = i === 0 ? 1
-      : (r.pts_total ?? 0) === (rankingSorted[i - 1].pts_total ?? 0)
-        ? rankMap.get(rankingSorted[i - 1].participant_id)!
-        : i + 1
-    rankMap.set(r.participant_id, rank)
-  }
+  // Usa posicao pré-computada pela MV (DENSE_RANK por pts_total desc + cravadas desc).
+  const rankMap = new Map<string, number>(
+    (rankingData ?? [])
+      .filter(r => r.posicao !== null)
+      .map(r => [r.participant_id, r.posicao!])
+  )
 
   // Mapa de padrinho por participante (apenas admin)
   const padrinhoByPid = new Map<string, string | null>()
@@ -328,14 +322,16 @@ export default async function ControlePage({
   const nextStageIdx = nextStageKey ? STAGE_KEYS.indexOf(nextStageKey) : null
 
   // Subtotais de preenchimento para os chips de filtro
+  // Conta apenas participantes com stage 'open' (ativos e habilitados na fase).
+  // Exclui cortados e não-disponíveis — não faz sentido contar quem não pode palpitar.
   const fillCounts = nextStageIdx !== null ? (() => {
     let zerado = 0, parcial = 0, completo = 0
     for (const r of allRows) {
-      const pct = r.stages[nextStageIdx!].pct
-      if (pct === -1) continue
-      if (pct === 0)        zerado++
-      else if (pct === 100) completo++
-      else                  parcial++
+      const stage = r.stages[nextStageIdx!]
+      if (stage.kind !== 'open') continue
+      if (stage.pct === 0)        zerado++
+      else if (stage.pct === 100) completo++
+      else                        parcial++
     }
     return { zerado, parcial, completo }
   })() : null
