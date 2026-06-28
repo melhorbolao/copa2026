@@ -442,9 +442,9 @@ function G112CompactRanking({
   }
 
   const colsGrid = showLastMatch && showNextMatch
-    ? 'grid grid-cols-[1.5rem_1fr_2rem_2.5rem_2.5rem]'
+    ? 'grid grid-cols-[1.5rem_1fr_2rem_3.5rem_3.5rem]'
     : showLastMatch || showNextMatch
-      ? 'grid grid-cols-[1.5rem_1fr_2rem_2.5rem]'
+      ? 'grid grid-cols-[1.5rem_1fr_2rem_3.5rem]'
       : 'grid grid-cols-[1.5rem_1fr_2rem]'
   const BLOCK_SIZE = 28
   const blocks = [0, 1, 2, 3]
@@ -487,8 +487,8 @@ function G112CompactRanking({
                   <span className="text-right pr-0.5">#</span>
                   <span className="pl-1">Participante</span>
                   <span className="text-right">PTS</span>
-                  {showLastMatch && <span className="text-center truncate" title="Palpite no último jogo">{lastMatch ? `${lastMatch.abbr_home}×${lastMatch.abbr_away}` : 'Últ'}</span>}
-                  {showNextMatch && <span className="text-center truncate" title="Palpite no próximo jogo">{nextMatch ? `${nextMatch.abbr_home}×${nextMatch.abbr_away}` : 'Próx'}</span>}
+                  {showLastMatch && <span className="text-center truncate md:text-[10px]" title="Palpite no último jogo">{lastMatch ? `${lastMatch.abbr_home}×${lastMatch.abbr_away}` : 'Últ'}</span>}
+                  {showNextMatch && <span className="text-center truncate md:text-[10px]" title="Palpite no próximo jogo">{nextMatch ? `${nextMatch.abbr_home}×${nextMatch.abbr_away}` : 'Próx'}</span>}
                 </div>
                 {/* linhas */}
                 {block.map((r, ri) => {
@@ -511,8 +511,8 @@ function G112CompactRanking({
                       <span className={`text-right pr-0.5 tabular-nums ${textCls}`}>{r.rank}</span>
                       <span className={`pl-1 truncate ${textCls}`} title={r.apelido}>{r.apelido}</span>
                       <span className={`text-right tabular-nums font-bold ${textCls}`}>{r.pts}</span>
-                      {showLastMatch && <span className="text-center font-mono tabular-nums text-gray-600"><BetCell bet={r.lastMatchBet} /></span>}
-                      {showNextMatch && <span className="text-center font-mono tabular-nums text-gray-600"><BetCell bet={r.nextMatchBet} /></span>}
+                      {showLastMatch && <span className="text-center font-mono tabular-nums text-gray-600 md:text-[13px]"><BetCell bet={r.lastMatchBet} /></span>}
+                      {showNextMatch && <span className="text-center font-mono tabular-nums text-gray-600 md:text-[13px]"><BetCell bet={r.nextMatchBet} /></span>}
                     </div>
                   )
                 })}
