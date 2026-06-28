@@ -592,7 +592,7 @@ function ValidarButton({
   etapaLabel: string
 }) {
   const router = useRouter()
-  const { getQueue } = useBetSaveQueue()
+  const { getQueue, flushNow } = useBetSaveQueue()
   const [open, setOpen] = useState(false)
   const [stats, setStats] = useState<{ total: number; preenchidos: number; pendentes: number } | null>(null)
 
@@ -622,8 +622,9 @@ function ValidarButton({
     }, 0)
   }
 
-  const handleOk = () => {
+  const handleOk = async () => {
     setOpen(false)
+    await flushNow()
     router.refresh()
   }
 
