@@ -395,7 +395,8 @@ function CompactRanking({
 // ── Classificação G112 ────────────────────────────────────────────────────────
 
 function G112CompactRanking({
-  ranked, premioSpots, renderedAt, matchesRegistered, lastMatch,
+  ranked, premioSpots, renderedAt, matchesRegistered, lastMatch, nextMatch,
+  showLastMatch, showNextMatch,
   highlightMode, activeParticipantId, panelaSet, tribeMemberSet,
 }: {
   ranked: RankedRow[]
@@ -403,6 +404,9 @@ function G112CompactRanking({
   renderedAt: string
   matchesRegistered: number
   lastMatch: MatchInfo | null
+  nextMatch: MatchInfo | null
+  showLastMatch: boolean
+  showNextMatch: boolean
   highlightMode: HighlightMode
   activeParticipantId: string
   panelaSet: Set<string>
@@ -437,7 +441,8 @@ function G112CompactRanking({
     return 'out'
   }
 
-  const colsGrid = 'grid grid-cols-[1.5rem_1fr_2rem]'
+  const colDefs = ['1.5rem', '1fr', '2rem', ...(showLastMatch ? ['2.5rem'] : []), ...(showNextMatch ? ['2.5rem'] : [])]
+  const colsGrid = `grid grid-cols-[${colDefs.join('_')}]`
   const BLOCK_SIZE = 28
   const blocks = [0, 1, 2, 3]
     .map(i => ranked112.slice(i * BLOCK_SIZE, (i + 1) * BLOCK_SIZE))
@@ -479,6 +484,8 @@ function G112CompactRanking({
                   <span className="text-right pr-0.5">#</span>
                   <span className="pl-1">Participante</span>
                   <span className="text-right">PTS</span>
+                  {showLastMatch && <span className="text-center truncate" title="Palpite no último jogo">{lastMatch ? `${lastMatch.abbr_home}×${lastMatch.abbr_away}` : 'Últ'}</span>}
+                  {showNextMatch && <span className="text-center truncate" title="Palpite no próximo jogo">{nextMatch ? `${nextMatch.abbr_home}×${nextMatch.abbr_away}` : 'Próx'}</span>}
                 </div>
                 {/* linhas */}
                 {block.map((r, ri) => {
@@ -501,6 +508,8 @@ function G112CompactRanking({
                       <span className={`text-right pr-0.5 tabular-nums ${textCls}`}>{r.rank}</span>
                       <span className={`pl-1 truncate ${textCls}`} title={r.apelido}>{r.apelido}</span>
                       <span className={`text-right tabular-nums font-bold ${textCls}`}>{r.pts}</span>
+                      {showLastMatch && <span className="text-center font-mono tabular-nums text-gray-600"><BetCell bet={r.lastMatchBet} /></span>}
+                      {showNextMatch && <span className="text-center font-mono tabular-nums text-gray-600"><BetCell bet={r.nextMatchBet} /></span>}
                     </div>
                   )
                 })}
@@ -877,6 +886,9 @@ export function ClassificacaoMBClient({
         renderedAt={renderedAt}
         matchesRegistered={matchesRegistered}
         lastMatch={lastMatch}
+        nextMatch={nextMatch}
+        showLastMatch={showLastMatch}
+        showNextMatch={showNextMatch}
         highlightMode={highlightMode}
         activeParticipantId={activeParticipantId}
         panelaSet={panelaSet}
