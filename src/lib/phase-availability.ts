@@ -18,7 +18,9 @@
  *        pontos acumulados até oitavas. Empates na linha: todos passam.
  *
  * Pontos da fase de grupos = bets.points em partidas de grupo + group_bets.points
- *   + third_place_bets.points. (G4/artilheiro só pontuam após semis.)
+ *   + third_place_bets.points + tournament_bets.points (bônus artilheiro/G4).
+ *   Os pontos de bônus são incluídos porque já compõem pts_total no ranking;
+ *   excluí-los geraria empates diferentes entre ranking e corte.
  * Pontos até oitavas = pontos da fase de grupos + bets.points em R32 e R16.
  */
 
@@ -172,12 +174,14 @@ export async function calculateQualifiedSetsRaw(): Promise<{
     bets,
     groupBets,
     thirdBets,
+    tournamentBets,
   ] = await Promise.all([
     admin.from('participants').select('id'),
     admin.from('matches').select('id, phase'),
     fetchAll('bets', 'participant_id, match_id, points'),
     fetchAll('group_bets', 'participant_id, points'),
     fetchAll('third_place_bets', 'participant_id, points'),
+    fetchAll('tournament_bets', 'participant_id, points'),
   ])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -216,6 +220,15 @@ export async function calculateQualifiedSetsRaw(): Promise<{
   for (const t of (thirdBets ?? []) as any[]) {
     const s = scores.get(t.participant_id); if (!s) continue
     const pts = (t.points ?? 0) as number
+    s.group_phase_pts += pts; s.through_r16_pts += pts
+  }
+  // Bônus (artilheiro / G4): incluídos em pts_total do ranking, portanto também
+  // devem compor group_phase_pts para que empates visíveis na classificação
+  // se reflitam igualmente no corte.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const tb of (tournamentBets ?? []) as any[]) {
+    const s = scores.get(tb.participant_id); if (!s) continue
+    const pts = (tb.points ?? 0) as number
     s.group_phase_pts += pts; s.through_r16_pts += pts
   }
 
