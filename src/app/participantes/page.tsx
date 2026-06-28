@@ -82,6 +82,9 @@ export default async function ControlePage({
     qualified,
     userParticipants,
     { data: rankingData },
+    { data: artillarySettings },
+    { data: scoringRulesData },
+    { data: scorerMappingData },
   ] = await Promise.all([
     supabase.from('participants')
       .select('id, apelido, paid')
@@ -94,15 +97,51 @@ export default async function ControlePage({
     getPhaseSettings(),
     getQualifiedSets(),
     fetchAll('user_participants', 'participant_id, users(padrinho)') as Promise<{ participant_id: string; users: { padrinho: string | null } | null }[]>,
-    admin.from('mv_general_ranking').select('participant_id, posicao') as Promise<{ data: { participant_id: string; posicao: number | null }[] | null }>,
+    admin.from('mv_general_ranking').select('participant_id, pts_total') as Promise<{ data: { participant_id: string; pts_total: number | null }[] | null }>,
+    admin.from('tournament_settings').select('key, value').in('key', ['artillary_points_active', 'official_top_scorer']) as Promise<{ data: { key: string; value: string }[] | null }>,
+    admin.from('scoring_rules').select('key, points') as Promise<{ data: { key: string; points: number }[] | null }>,
+    (admin as any).from('top_scorer_mapping').select('raw_name, standardized_name').then((r: any) => r, () => ({ data: [] })) as Promise<{ data: { raw_name: string; standardized_name: string }[] }>,
   ])
 
-  // Usa posicao pré-computada pela MV (DENSE_RANK por pts_total desc + cravadas desc).
-  const rankMap = new Map<string, number>(
-    (rankingData ?? [])
-      .filter(r => r.posicao !== null)
-      .map(r => [r.participant_id, r.posicao!])
+  // Ajusta pts para ranking excluindo artilheiro quando artillaryPointsActive=false,
+  // espelhando o comportamento do ClassificacaoMBClient (top_scorer: '' quando desativado).
+  const artillaryActive = artillarySettings?.find(r => r.key === 'artillary_points_active')?.value === 'true'
+  const officialScorerRaw = artillarySettings?.find(r => r.key === 'official_top_scorer')?.value ?? ''
+  let officialScorers: string[] = []
+  if (officialScorerRaw) {
+    try { officialScorers = JSON.parse(officialScorerRaw) } catch { officialScorers = [officialScorerRaw] }
+  }
+  const artilheiroPoints = scoringRulesData?.find(r => r.key === 'artilheiro')?.points ?? 18
+  const scorerMapping: Record<string, string> = Object.fromEntries(
+    (scorerMappingData ?? []).map(r => [r.raw_name.toLowerCase().trim(), r.standardized_name])
   )
+
+  // Mapa de pts de artilheiro a subtrair por participante (apenas quando flag desativado)
+  const artilheiroSubMap = new Map<string, number>()
+  if (!artillaryActive && officialScorers.length > 0) {
+    for (const tb of (trnBets ?? [])) {
+      if (!tb.top_scorer) continue
+      const normalized = (scorerMapping[tb.top_scorer.toLowerCase().trim()] ?? tb.top_scorer).trim().toLowerCase()
+      if (officialScorers.some(s => s.trim().toLowerCase() === normalized))
+        artilheiroSubMap.set(tb.participant_id, artilheiroPoints)
+    }
+  }
+
+  const adjPts = (pid: string, raw: number | null) => (raw ?? 0) - (artilheiroSubMap.get(pid) ?? 0)
+
+  // Ranking padrão (com saltos em empates) — igual ao ClassificacaoMBClient.
+  const rankingSorted = [...(rankingData ?? [])].sort((a, b) =>
+    adjPts(b.participant_id, b.pts_total) - adjPts(a.participant_id, a.pts_total)
+  )
+  const rankMap = new Map<string, number>()
+  for (let i = 0; i < rankingSorted.length; i++) {
+    const r = rankingSorted[i]
+    const rank = i === 0 ? 1
+      : adjPts(r.participant_id, r.pts_total) === adjPts(rankingSorted[i - 1].participant_id, rankingSorted[i - 1].pts_total)
+        ? rankMap.get(rankingSorted[i - 1].participant_id)!
+        : i + 1
+    rankMap.set(r.participant_id, rank)
+  }
 
   // Mapa de padrinho por participante (apenas admin)
   const padrinhoByPid = new Map<string, string | null>()
