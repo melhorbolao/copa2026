@@ -12,9 +12,15 @@ import {
   isParticipantEliminated, STAGE_KEYS,
 } from '@/lib/phase-availability'
 import type { StageKey as PhaseStageKey } from '@/lib/phase-availability'
+import { scoreTournamentBet } from '@/lib/scoring/engine'
+import type { TournamentResults } from '@/lib/scoring/engine'
 
 type MatchPhase = 'group' | 'round_of_32' | 'round_of_16' | 'quarterfinal' | 'semifinal' | 'third_place' | 'final'
-interface Match { id: string; phase: MatchPhase; round: number | null; betting_deadline: string }
+interface Match {
+  id: string; phase: MatchPhase; round: number | null; betting_deadline: string
+  score_home: number | null; score_away: number | null
+  team_home: string; team_away: string; penalty_winner: string | null
+}
 interface Bet   { participant_id: string; match_id: string; updated_at: string; points: number | null }
 
 function getStageKey(m: Match): string | null {
@@ -25,6 +31,21 @@ function getStageKey(m: Match): string | null {
     third_place: 'final', final: 'final',
   }
   return map[m.phase] ?? null
+}
+
+function knockoutWinner(m: Pick<Match, 'team_home' | 'team_away' | 'score_home' | 'score_away' | 'penalty_winner'>): string | null {
+  if (m.score_home == null || m.score_away == null) return null
+  if (m.score_home > m.score_away) return m.team_home
+  if (m.score_away > m.score_home) return m.team_away
+  if (m.penalty_winner === 'H') return m.team_home
+  if (m.penalty_winner === 'A') return m.team_away
+  return null
+}
+
+function knockoutLoser(m: Pick<Match, 'team_home' | 'team_away' | 'score_home' | 'score_away' | 'penalty_winner'>): string | null {
+  const w = knockoutWinner(m)
+  if (!w) return null
+  return w === m.team_home ? m.team_away : m.team_home
 }
 
 type StageKey = PhaseStageKey
@@ -88,7 +109,7 @@ export default async function ControlePage({
     supabase.from('participants')
       .select('id, apelido, paid')
       .order('apelido', { ascending: true }),
-    supabase.from('matches').select('id, phase, round, betting_deadline'),
+    supabase.from('matches').select('id, phase, round, betting_deadline, score_home, score_away, team_home, team_away, penalty_winner'),
     fetchAll('bets', 'participant_id, match_id, updated_at, points') as Promise<Bet[]>,
     admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer, points').limit(10000),
     fetchAll('group_bets', 'participant_id, group_name, points'),
@@ -101,50 +122,89 @@ export default async function ControlePage({
     (admin as any).from('top_scorer_mapping').select('raw_name, standardized_name').then((r: any) => r, () => ({ data: [] })) as Promise<{ data: { raw_name: string; standardized_name: string }[] }>,
   ])
 
-  // Calcula pts diretamente das tabelas de apostas — a mesma fonte que ClassificacaoMBClient.
-  // participant_scores pode estar desatualizado; esta soma é sempre atual.
-  const betPtsMap    = new Map<string, number>()
-  const groupPtsMap  = new Map<string, number>()
-  const thirdPtsMap  = new Map<string, number>()
-  const trnPtsMap    = new Map<string, number>()
+  // Pontos de jogos, grupos e terceiros (valores armazenados, em sincronia com o scoring engine)
+  const betPtsMap   = new Map<string, number>()
+  const groupPtsMap = new Map<string, number>()
+  const thirdPtsMap = new Map<string, number>()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const b of allBets) betPtsMap.set(b.participant_id, (betPtsMap.get(b.participant_id) ?? 0) + (b.points ?? 0))
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const g of (groupBets as any[])) groupPtsMap.set(g.participant_id, (groupPtsMap.get(g.participant_id) ?? 0) + ((g.points ?? 0) as number))
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const t of (thirdBets as any[])) thirdPtsMap.set(t.participant_id, (thirdPtsMap.get(t.participant_id) ?? 0) + ((t.points ?? 0) as number))
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const t of (trnBets ?? []) as any[]) trnPtsMap.set(t.participant_id, (t.points ?? 0) as number)
 
-  // Quando artillaryPointsActive=false, ClassificacaoMBClient não conta artilheiro no total.
-  // tournament_bets.points inclui artilheiro sempre → subtrai para quem acertou.
+  // Pontos G4 calculados ao vivo — idêntico ao ClassificacaoMBClient para evitar divergência de posições
   const artillaryActive = artillarySettings?.find(r => r.key === 'artillary_points_active')?.value === 'true'
-  const officialScorerRaw = artillarySettings?.find(r => r.key === 'official_top_scorer')?.value ?? ''
-  let officialScorers: string[] = []
-  if (officialScorerRaw) {
-    try { officialScorers = JSON.parse(officialScorerRaw) } catch { officialScorers = [officialScorerRaw] }
-  }
-  const artilheiroPoints = scoringRulesData?.find(r => r.key === 'artilheiro')?.points ?? 18
   const scorerMapping: Record<string, string> = Object.fromEntries(
     (scorerMappingData ?? []).map(r => [r.raw_name.toLowerCase().trim(), r.standardized_name])
   )
-  const artilheiroSubMap = new Map<string, number>()
-  if (!artillaryActive && officialScorers.length > 0) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    for (const tb of (trnBets ?? []) as any[]) {
-      if (!tb.top_scorer) continue
-      const normalized = (scorerMapping[tb.top_scorer.toLowerCase().trim()] ?? tb.top_scorer).trim().toLowerCase()
-      if (officialScorers.some((s: string) => s.trim().toLowerCase() === normalized))
-        artilheiroSubMap.set(tb.participant_id, artilheiroPoints)
-    }
+
+  const completedKO = (matches ?? [] as Match[]).filter(m =>
+    (['quarterfinal', 'semifinal', 'third_place', 'final'] as MatchPhase[]).includes(m.phase) &&
+    m.score_home !== null
+  )
+  const semifinalists = completedKO.filter(m => m.phase === 'quarterfinal').map(m => knockoutWinner(m)).filter(Boolean) as string[]
+  const finalists     = completedKO.filter(m => m.phase === 'semifinal').map(m => knockoutWinner(m)).filter(Boolean) as string[]
+  const finMatch      = completedKO.find(m => m.phase === 'final')
+  const tpMatch       = completedKO.find(m => m.phase === 'third_place')
+  const champion      = finMatch ? knockoutWinner(finMatch) : null
+  const runnerUp      = finMatch ? knockoutLoser(finMatch)  : null
+  const third         = tpMatch  ? knockoutWinner(tpMatch)  : null
+  const fourth        = tpMatch  ? knockoutLoser(tpMatch)   : null
+
+  let liveOfficialScorers: string[] = []
+  if (artillaryActive) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: topScorersData } = await (admin as any).from('top_scorers').select('player_name, goals_count').order('goals_count', { ascending: false })
+      if (topScorersData && topScorersData.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const maxGoals = (topScorersData[0] as any).goals_count as number
+        if (maxGoals > 0) {
+          liveOfficialScorers = (topScorersData as { player_name: string; goals_count: number }[])
+            .filter(s => s.goals_count === maxGoals)
+            .map(s => s.player_name)
+        }
+      }
+    } catch { /* tabela não populada */ }
+  }
+
+  const rulesMap: Record<string, number> = Object.fromEntries((scoringRulesData ?? []).map(r => [r.key, r.points]))
+  const zebraThreshold = rulesMap['percentual_zebra'] ?? 15
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const chamBetsTotal    = (trnBets ?? []).filter((b: any) => b.champion).length
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const chamBetsWithPick = (trnBets ?? []).filter((b: any) => b.champion && b.champion === champion).length
+  const isZebraChampion  = champion !== null && chamBetsTotal > 0 &&
+    (chamBetsWithPick / chamBetsTotal) * 100 <= zebraThreshold
+
+  const tournamentResults: TournamentResults = {
+    semifinalists, finalists,
+    champion: champion ?? null, runnerUp: runnerUp ?? null,
+    third: third ?? null, fourth: fourth ?? null,
+    officialScorers: liveOfficialScorers,
+  }
+
+  const livePtsG4Map = new Map<string, number>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const tb of (trnBets ?? []) as any[]) {
+    livePtsG4Map.set(tb.participant_id, scoreTournamentBet(
+      {
+        champion:   tb.champion   ?? '',
+        runner_up:  tb.runner_up  ?? '',
+        semi1:      tb.semi1      ?? '',
+        semi2:      tb.semi2      ?? '',
+        top_scorer: artillaryActive ? (tb.top_scorer ?? '') : '',
+      },
+      tournamentResults, rulesMap, isZebraChampion, scorerMapping,
+    ))
   }
 
   const livePts = (pid: string) =>
     (betPtsMap.get(pid) ?? 0) +
     (groupPtsMap.get(pid) ?? 0) +
     (thirdPtsMap.get(pid) ?? 0) +
-    (trnPtsMap.get(pid) ?? 0) -
-    (artilheiroSubMap.get(pid) ?? 0)
+    (livePtsG4Map.get(pid) ?? 0)
 
   // Ranking padrão (com saltos em empates) — igual ao ClassificacaoMBClient.
   const allParticipantIds = (participants ?? []).map(p => p.id)
