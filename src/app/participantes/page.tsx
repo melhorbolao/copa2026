@@ -15,7 +15,7 @@ import type { StageKey as PhaseStageKey } from '@/lib/phase-availability'
 
 type MatchPhase = 'group' | 'round_of_32' | 'round_of_16' | 'quarterfinal' | 'semifinal' | 'third_place' | 'final'
 interface Match { id: string; phase: MatchPhase; round: number | null; betting_deadline: string }
-interface Bet   { participant_id: string; match_id: string; updated_at: string }
+interface Bet   { participant_id: string; match_id: string; updated_at: string; points: number | null }
 
 function getStageKey(m: Match): string | null {
   if (m.phase === 'group') return m.round === 1 ? 'r1' : m.round === 2 ? 'r2' : m.round === 3 ? 'r3' : null
@@ -81,7 +81,6 @@ export default async function ControlePage({
     phaseSettings,
     qualified,
     userParticipants,
-    { data: rankingData },
     { data: artillarySettings },
     { data: scoringRulesData },
     { data: scorerMappingData },
@@ -90,21 +89,35 @@ export default async function ControlePage({
       .select('id, apelido, paid')
       .order('apelido', { ascending: true }),
     supabase.from('matches').select('id, phase, round, betting_deadline'),
-    fetchAll('bets', 'participant_id, match_id, updated_at') as Promise<Bet[]>,
-    admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer').limit(10000),
-    fetchAll('group_bets', 'participant_id, group_name'),
-    fetchAll('third_place_bets', 'participant_id, group_name'),
+    fetchAll('bets', 'participant_id, match_id, updated_at, points') as Promise<Bet[]>,
+    admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer, points').limit(10000),
+    fetchAll('group_bets', 'participant_id, group_name, points'),
+    fetchAll('third_place_bets', 'participant_id, group_name, points'),
     getPhaseSettings(),
     getQualifiedSets(),
     fetchAll('user_participants', 'participant_id, users(padrinho)') as Promise<{ participant_id: string; users: { padrinho: string | null } | null }[]>,
-    admin.from('mv_general_ranking').select('participant_id, pts_total') as Promise<{ data: { participant_id: string; pts_total: number | null }[] | null }>,
     admin.from('tournament_settings').select('key, value').in('key', ['artillary_points_active', 'official_top_scorer']) as Promise<{ data: { key: string; value: string }[] | null }>,
     admin.from('scoring_rules').select('key, points') as Promise<{ data: { key: string; points: number }[] | null }>,
     (admin as any).from('top_scorer_mapping').select('raw_name, standardized_name').then((r: any) => r, () => ({ data: [] })) as Promise<{ data: { raw_name: string; standardized_name: string }[] }>,
   ])
 
-  // Ajusta pts para ranking excluindo artilheiro quando artillaryPointsActive=false,
-  // espelhando o comportamento do ClassificacaoMBClient (top_scorer: '' quando desativado).
+  // Calcula pts diretamente das tabelas de apostas — a mesma fonte que ClassificacaoMBClient.
+  // participant_scores pode estar desatualizado; esta soma é sempre atual.
+  const betPtsMap    = new Map<string, number>()
+  const groupPtsMap  = new Map<string, number>()
+  const thirdPtsMap  = new Map<string, number>()
+  const trnPtsMap    = new Map<string, number>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const b of allBets) betPtsMap.set(b.participant_id, (betPtsMap.get(b.participant_id) ?? 0) + (b.points ?? 0))
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const g of (groupBets as any[])) groupPtsMap.set(g.participant_id, (groupPtsMap.get(g.participant_id) ?? 0) + ((g.points ?? 0) as number))
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const t of (thirdBets as any[])) thirdPtsMap.set(t.participant_id, (thirdPtsMap.get(t.participant_id) ?? 0) + ((t.points ?? 0) as number))
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const t of (trnBets ?? []) as any[]) trnPtsMap.set(t.participant_id, (t.points ?? 0) as number)
+
+  // Quando artillaryPointsActive=false, ClassificacaoMBClient não conta artilheiro no total.
+  // tournament_bets.points inclui artilheiro sempre → subtrai para quem acertou.
   const artillaryActive = artillarySettings?.find(r => r.key === 'artillary_points_active')?.value === 'true'
   const officialScorerRaw = artillarySettings?.find(r => r.key === 'official_top_scorer')?.value ?? ''
   let officialScorers: string[] = []
@@ -115,32 +128,35 @@ export default async function ControlePage({
   const scorerMapping: Record<string, string> = Object.fromEntries(
     (scorerMappingData ?? []).map(r => [r.raw_name.toLowerCase().trim(), r.standardized_name])
   )
-
-  // Mapa de pts de artilheiro a subtrair por participante (apenas quando flag desativado)
   const artilheiroSubMap = new Map<string, number>()
   if (!artillaryActive && officialScorers.length > 0) {
-    for (const tb of (trnBets ?? [])) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const tb of (trnBets ?? []) as any[]) {
       if (!tb.top_scorer) continue
       const normalized = (scorerMapping[tb.top_scorer.toLowerCase().trim()] ?? tb.top_scorer).trim().toLowerCase()
-      if (officialScorers.some(s => s.trim().toLowerCase() === normalized))
+      if (officialScorers.some((s: string) => s.trim().toLowerCase() === normalized))
         artilheiroSubMap.set(tb.participant_id, artilheiroPoints)
     }
   }
 
-  const adjPts = (pid: string, raw: number | null) => (raw ?? 0) - (artilheiroSubMap.get(pid) ?? 0)
+  const livePts = (pid: string) =>
+    (betPtsMap.get(pid) ?? 0) +
+    (groupPtsMap.get(pid) ?? 0) +
+    (thirdPtsMap.get(pid) ?? 0) +
+    (trnPtsMap.get(pid) ?? 0) -
+    (artilheiroSubMap.get(pid) ?? 0)
 
   // Ranking padrão (com saltos em empates) — igual ao ClassificacaoMBClient.
-  const rankingSorted = [...(rankingData ?? [])].sort((a, b) =>
-    adjPts(b.participant_id, b.pts_total) - adjPts(a.participant_id, a.pts_total)
-  )
+  const allParticipantIds = (participants ?? []).map(p => p.id)
+  const rankingSorted = [...allParticipantIds].sort((a, b) => livePts(b) - livePts(a))
   const rankMap = new Map<string, number>()
   for (let i = 0; i < rankingSorted.length; i++) {
-    const r = rankingSorted[i]
+    const pid = rankingSorted[i]
     const rank = i === 0 ? 1
-      : adjPts(r.participant_id, r.pts_total) === adjPts(rankingSorted[i - 1].participant_id, rankingSorted[i - 1].pts_total)
-        ? rankMap.get(rankingSorted[i - 1].participant_id)!
+      : livePts(pid) === livePts(rankingSorted[i - 1])
+        ? rankMap.get(rankingSorted[i - 1])!
         : i + 1
-    rankMap.set(r.participant_id, rank)
+    rankMap.set(pid, rank)
   }
 
   // Mapa de padrinho por participante (apenas admin)
