@@ -168,10 +168,10 @@ async function _updateThirdBetPoints(admin: AdminClient, rules: RuleMap): Promis
       .map(r => r.group_name),
   )
 
-  // Se nenhum grupo está habilitado mas TODOS os jogos de grupo já têm placar,
-  // auto-habilita todos os grupos (cobre o caso da migração inicial que cria
-  // todos com enabled=false quando a fase de grupos já estava concluída).
-  if (scoringEnabled.size === 0 && groupMatches.every(m => m.score_home !== null)) {
+  // Se o número de grupos habilitados não é exatamente 8 e TODOS os jogos de grupo
+  // já têm placar, re-sincroniza com os standings reais (cobre tanto o caso de
+  // migração inicial com 0 grupos quanto overrides manuais incorretos do admin).
+  if (scoringEnabled.size !== 8 && groupMatches.every(m => m.score_home !== null)) {
     try {
       await autoEnableAllThirdScoring()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
