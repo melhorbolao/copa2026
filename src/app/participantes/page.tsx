@@ -12,16 +12,19 @@ import {
   isParticipantEliminated, STAGE_KEYS,
 } from '@/lib/phase-availability'
 import type { StageKey as PhaseStageKey } from '@/lib/phase-availability'
-import { scoreTournamentBet } from '@/lib/scoring/engine'
+import { scoreTournamentBet, scoreMatchBet, detectMatchZebra, getMatchResult } from '@/lib/scoring/engine'
 import type { TournamentResults } from '@/lib/scoring/engine'
+import { calcGroupStandings } from '@/lib/bracket/engine'
+import type { MatchSlim, BetSlim } from '@/lib/bracket/engine'
 
 type MatchPhase = 'group' | 'round_of_32' | 'round_of_16' | 'quarterfinal' | 'semifinal' | 'third_place' | 'final'
 interface Match {
   id: string; phase: MatchPhase; round: number | null; betting_deadline: string
   score_home: number | null; score_away: number | null
   team_home: string; team_away: string; penalty_winner: string | null
+  group_name: string | null; is_brazil: boolean
 }
-interface Bet   { participant_id: string; match_id: string; updated_at: string; points: number | null }
+interface Bet   { participant_id: string; match_id: string; updated_at: string; points: number | null; score_home: number; score_away: number }
 
 function getStageKey(m: Match): string | null {
   if (m.phase === 'group') return m.round === 1 ? 'r1' : m.round === 2 ? 'r2' : m.round === 3 ? 'r3' : null
@@ -105,40 +108,115 @@ export default async function ControlePage({
     { data: artillarySettings },
     { data: scoringRulesData },
     { data: scorerMappingData },
+    { data: thirdScoringData },
   ] = await Promise.all([
     supabase.from('participants')
       .select('id, apelido, paid')
       .order('apelido', { ascending: true }),
-    supabase.from('matches').select('id, phase, round, betting_deadline, score_home, score_away, team_home, team_away, penalty_winner'),
-    fetchAll('bets', 'participant_id, match_id, updated_at, points') as Promise<Bet[]>,
+    supabase.from('matches').select('id, phase, round, betting_deadline, score_home, score_away, team_home, team_away, penalty_winner, group_name, is_brazil'),
+    fetchAll('bets', 'participant_id, match_id, updated_at, points, score_home, score_away') as Promise<Bet[]>,
     admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer, points').limit(10000),
     fetchAll('group_bets', 'participant_id, group_name, points'),
-    fetchAll('third_place_bets', 'participant_id, group_name, points'),
+    fetchAll('third_place_bets', 'participant_id, group_name, team'),
     getPhaseSettings(),
     getQualifiedSets(),
     fetchAll('user_participants', 'participant_id, users(padrinho)') as Promise<{ participant_id: string; users: { padrinho: string | null } | null }[]>,
     admin.from('tournament_settings').select('key, value').in('key', ['artillary_points_active', 'official_top_scorer']) as Promise<{ data: { key: string; value: string }[] | null }>,
     admin.from('scoring_rules').select('key, points') as Promise<{ data: { key: string; points: number }[] | null }>,
     (admin as any).from('top_scorer_mapping').select('raw_name, standardized_name').then((r: any) => r, () => ({ data: [] })) as Promise<{ data: { raw_name: string; standardized_name: string }[] }>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (admin as any).from('third_place_scoring').select('group_name, enabled').then((r: any) => r, () => ({ data: [] })) as Promise<{ data: { group_name: string; enabled: boolean }[] }>,
   ])
 
-  // Pontos de jogos, grupos e terceiros (valores armazenados, em sincronia com o scoring engine)
-  const betPtsMap   = new Map<string, number>()
-  const groupPtsMap = new Map<string, number>()
-  const thirdPtsMap = new Map<string, number>()
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const b of allBets) betPtsMap.set(b.participant_id, (betPtsMap.get(b.participant_id) ?? 0) + (b.points ?? 0))
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const g of (groupBets as any[])) groupPtsMap.set(g.participant_id, (groupPtsMap.get(g.participant_id) ?? 0) + ((g.points ?? 0) as number))
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const t of (thirdBets as any[])) thirdPtsMap.set(t.participant_id, (thirdPtsMap.get(t.participant_id) ?? 0) + ((t.points ?? 0) as number))
-
-  // Pontos G4 calculados ao vivo — idêntico ao ClassificacaoMBClient para evitar divergência de posições
+  // ── Cálculo ao vivo — idêntico ao ClassificacaoMBClient ──────────────────────
+  const rulesMap: Record<string, number> = Object.fromEntries((scoringRulesData ?? []).map(r => [r.key, r.points]))
+  const zebraThreshold = rulesMap['percentual_zebra'] ?? 15
   const artillaryActive = artillarySettings?.find(r => r.key === 'artillary_points_active')?.value === 'true'
   const scorerMapping: Record<string, string> = Object.fromEntries(
     (scorerMappingData ?? []).map(r => [r.raw_name.toLowerCase().trim(), r.standardized_name])
   )
 
+  // Mapa de partida para lookup O(1)
+  const matchMap = new Map<string, Match>()
+  for (const m of (matches ?? [] as Match[])) matchMap.set(m.id, m)
+
+  // Placar oficial por partida concluída
+  const officialScoreMap = new Map<string, { score_home: number; score_away: number }>()
+  for (const m of (matches ?? [] as Match[])) {
+    if (m.score_home !== null && m.score_away !== null)
+      officialScoreMap.set(m.id, { score_home: m.score_home, score_away: m.score_away })
+  }
+
+  // Apostas agrupadas por partida (para detecção de zebra)
+  const betsByMatch = new Map<string, Bet[]>()
+  for (const b of allBets) {
+    if (!betsByMatch.has(b.match_id)) betsByMatch.set(b.match_id, [])
+    betsByMatch.get(b.match_id)!.push(b)
+  }
+
+  // Zebra real por partida
+  const isZebraMatch = new Map<string, boolean>()
+  for (const [matchId, betsForMatch] of betsByMatch) {
+    const official = officialScoreMap.get(matchId)
+    if (!official) continue
+    const actualResult = getMatchResult(official.score_home, official.score_away)
+    isZebraMatch.set(matchId, detectMatchZebra(betsForMatch, actualResult, zebraThreshold))
+  }
+
+  // Pontos de jogos — calculados ao vivo
+  const ptsMatchesMap = new Map<string, number>()
+  for (const b of allBets) {
+    const official = officialScoreMap.get(b.match_id)
+    if (!official) continue
+    const m = matchMap.get(b.match_id)
+    const pts = scoreMatchBet(
+      b.score_home, b.score_away,
+      official.score_home, official.score_away,
+      isZebraMatch.get(b.match_id) ?? false,
+      m?.is_brazil ?? false,
+      rulesMap,
+    )
+    ptsMatchesMap.set(b.participant_id, (ptsMatchesMap.get(b.participant_id) ?? 0) + pts)
+  }
+
+  // Pontos de grupos — valores armazenados (em sincronia com o scoring engine)
+  const groupPtsMap = new Map<string, number>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const g of (groupBets as any[])) groupPtsMap.set(g.participant_id, (groupPtsMap.get(g.participant_id) ?? 0) + ((g.points ?? 0) as number))
+
+  // Pontos de terceiros — calculados ao vivo via calcGroupStandings
+  const thirdScoringEnabled = new Set<string>(
+    ((thirdScoringData ?? []) as { group_name: string; enabled: boolean }[])
+      .filter(r => r.enabled).map(r => r.group_name)
+  )
+  const gmsSlim: MatchSlim[] = (matches ?? [] as Match[])
+    .filter(m => m.phase === 'group' && m.group_name)
+    .map(m => ({ id: m.id, group_name: m.group_name, phase: m.phase, team_home: m.team_home, team_away: m.team_away, flag_home: '', flag_away: '' }))
+  const officialScoreMapSlim = new Map<string, BetSlim>()
+  for (const m of (matches ?? [] as Match[])) {
+    if (m.score_home !== null && m.score_away !== null)
+      officialScoreMapSlim.set(m.id, { match_id: m.id, score_home: m.score_home, score_away: m.score_away })
+  }
+  const officialGroupStandings = calcGroupStandings(gmsSlim, officialScoreMapSlim)
+  const actualThirdByGroup = new Map<string, string>()
+  for (const standing of officialGroupStandings) {
+    const g = standing.group
+    if (!thirdScoringEnabled.has(g)) continue
+    const groupMatchIds = gmsSlim.filter(m => m.group_name === g).map(m => m.id)
+    if (!groupMatchIds.every(id => officialScoreMapSlim.has(id))) continue
+    const thirdTeamName = standing.teams[2]?.team
+    if (thirdTeamName) actualThirdByGroup.set(g, thirdTeamName)
+  }
+  const thirdPtsValue = rulesMap['terceiro_classificado'] ?? 3
+  const ptsThirdsMap = new Map<string, number>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const bet of (thirdBets as any[])) {
+    const actualThird = actualThirdByGroup.get(bet.group_name)
+    if (actualThird && bet.team === actualThird)
+      ptsThirdsMap.set(bet.participant_id, (ptsThirdsMap.get(bet.participant_id) ?? 0) + thirdPtsValue)
+  }
+
+  // Pontos G4 — calculados ao vivo
   const completedKO = (matches ?? [] as Match[]).filter(m =>
     (['quarterfinal', 'semifinal', 'third_place', 'final'] as MatchPhase[]).includes(m.phase) &&
     m.score_home !== null
@@ -169,8 +247,6 @@ export default async function ControlePage({
     } catch { /* tabela não populada */ }
   }
 
-  const rulesMap: Record<string, number> = Object.fromEntries((scoringRulesData ?? []).map(r => [r.key, r.points]))
-  const zebraThreshold = rulesMap['percentual_zebra'] ?? 15
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const chamBetsTotal    = (trnBets ?? []).filter((b: any) => b.champion).length
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -201,9 +277,9 @@ export default async function ControlePage({
   }
 
   const livePts = (pid: string) =>
-    (betPtsMap.get(pid) ?? 0) +
+    (ptsMatchesMap.get(pid) ?? 0) +
     (groupPtsMap.get(pid) ?? 0) +
-    (thirdPtsMap.get(pid) ?? 0) +
+    (ptsThirdsMap.get(pid) ?? 0) +
     (livePtsG4Map.get(pid) ?? 0)
 
   // Ranking padrão (com saltos em empates) — igual ao ClassificacaoMBClient.
