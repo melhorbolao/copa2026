@@ -417,8 +417,8 @@ function G112CompactRanking({
 
   const ranked112 = ranked.slice(0, 112)
 
-  // G56: top 55 do G112 passam claramente (56ª posição é o limite de empate)
-  const cut2 = Math.ceil(ranked112.length / 2) - 1
+  // G56: top 56 do G112 avançam para a próxima fase
+  const cut2 = Math.ceil(ranked112.length / 2)
   const premioLine = ranked[Math.min(premioSpots, n) - 1]?.pts ?? Infinity
   const cut2Line   = cut2 > premioSpots ? (ranked[cut2 - 1]?.pts ?? null) : null
 
