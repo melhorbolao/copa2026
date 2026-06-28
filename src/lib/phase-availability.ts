@@ -17,11 +17,10 @@
  *      • 2º corte (após oitavas): 50% dos habilitados após o 1º corte, usando
  *        pontos acumulados até oitavas. Empates na linha: todos passam.
  *
- * Pontos da fase de grupos = bets.points em partidas de grupo + group_bets.points
- *   + third_place_bets.points + tournament_bets.points (bônus artilheiro/G4).
- *   Os pontos de bônus são incluídos porque já compõem pts_total no ranking;
- *   excluí-los geraria empates diferentes entre ranking e corte.
- * Pontos até oitavas = pontos da fase de grupos + bets.points em R32 e R16.
+ * Pontos da fase de grupos = participant_scores.pts_total no momento do corte
+ *   (mesma fonte que mv_general_ranking). Garante que empates no ranking
+ *   se reflitam identicamente na linha de corte — sem divergência de cálculo.
+ * Pontos até oitavas = pts_total − pontos de QF/SF/3º lugar/Final.
  */
 
 import { createAuthAdminClient } from '@/lib/supabase/server'
@@ -134,14 +133,21 @@ export async function getPhaseSettings(): Promise<PhaseSettings> {
 
 interface ParticipantScores {
   participant_id: string
-  group_phase_pts: number    // pts de partidas de grupo + group_bets + third_place_bets
-  through_r16_pts: number    // group_phase_pts + bets.points em R32 e R16
+  group_phase_pts: number    // pts_total de participant_scores (fonte de verdade do ranking)
+  through_r16_pts: number    // pts_total menos pontos de QF/SF/3º/Final
 }
+
+// Fases que NÃO devem contar no corte 2 (pontos além das oitavas)
+const PHASES_AFTER_R16 = new Set(['quarterfinal', 'semifinal', 'third_place', 'final'])
 
 /**
  * Sempre calcula os cortes dinamicamente a partir das pontuações atuais,
  * ignorando qualquer lista congelada. Use para executar um novo corte ou
  * exibir uma prévia do resultado antes de confirmar.
+ *
+ * Usa participant_scores.pts_total como fonte de verdade — a mesma que
+ * alimenta mv_general_ranking — garantindo que empates no ranking
+ * se reflitam identicamente na linha de corte.
  */
 export async function calculateQualifiedSetsRaw(): Promise<{
   cutoff1: Set<string>
@@ -151,7 +157,6 @@ export async function calculateQualifiedSetsRaw(): Promise<{
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAuthAdminClient() as any
 
-  // PostgREST aplica max-rows=1000 mesmo com service_role.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async function fetchAll(table: string, select: string): Promise<any[]> {
     const PAGE = 1000
@@ -170,79 +175,63 @@ export async function calculateQualifiedSetsRaw(): Promise<{
 
   const [
     { data: participants },
+    { data: psRows },
     { data: matches },
     bets,
-    groupBets,
-    thirdBets,
-    tournamentBets,
   ] = await Promise.all([
     admin.from('participants').select('id'),
+    admin.from('participant_scores').select('participant_id, pts_total'),
     admin.from('matches').select('id, phase'),
     fetchAll('bets', 'participant_id, match_id, points'),
-    fetchAll('group_bets', 'participant_id, points'),
-    fetchAll('third_place_bets', 'participant_id, points'),
-    fetchAll('tournament_bets', 'participant_id, points'),
   ])
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const phaseByMatch = new Map<string, string>(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (matches ?? []).map((m: any) => [m.id as string, m.phase as string]),
-  )
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const allIds: string[] = (participants ?? []).map((p: any) => p.id as string)
   if (allIds.length === 0) return { cutoff1: new Set(), cutoff2: new Set(), totalParticipants: 0 }
 
-  const scores = new Map<string, ParticipantScores>()
-  for (const pid of allIds) {
-    scores.set(pid, { participant_id: pid, group_phase_pts: 0, through_r16_pts: 0 })
-  }
-
+  // pts_total por participante (mesma fonte que o ranking)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const b of (bets ?? []) as any[]) {
-    const s = scores.get(b.participant_id)
-    if (!s) continue
-    const pts = (b.points ?? 0) as number
-    if (!pts) continue
-    const phase = phaseByMatch.get(b.match_id)
-    if (phase === 'group') { s.group_phase_pts += pts; s.through_r16_pts += pts }
-    else if (phase === 'round_of_32' || phase === 'round_of_16') s.through_r16_pts += pts
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const g of (groupBets ?? []) as any[]) {
-    const s = scores.get(g.participant_id); if (!s) continue
-    const pts = (g.points ?? 0) as number
-    s.group_phase_pts += pts; s.through_r16_pts += pts
-  }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const t of (thirdBets ?? []) as any[]) {
-    const s = scores.get(t.participant_id); if (!s) continue
-    const pts = (t.points ?? 0) as number
-    s.group_phase_pts += pts; s.through_r16_pts += pts
-  }
-  // Bônus (artilheiro / G4): incluídos em pts_total do ranking, portanto também
-  // devem compor group_phase_pts para que empates visíveis na classificação
-  // se reflitam igualmente no corte.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const tb of (tournamentBets ?? []) as any[]) {
-    const s = scores.get(tb.participant_id); if (!s) continue
-    const pts = (tb.points ?? 0) as number
-    s.group_phase_pts += pts; s.through_r16_pts += pts
-  }
-
-  const cutoff1 = applyCutoff(
-    [...scores.values()],
-    s => s.group_phase_pts,
-    Math.ceil(allIds.length / 2 / 10) * 10,  // 50% arredondado pra cima a múltiplo de 10
+  const totalByPid = new Map<string, number>(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (psRows ?? []).map((r: any) => [r.participant_id as string, (r.pts_total ?? 0) as number]),
   )
 
-  const cutoff1List = [...scores.values()].filter(s => cutoff1.has(s.participant_id))
+  // Para o corte 2: pts de fases após R16 que precisam ser subtraídos
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const phaseByMatch = new Map<string, string>(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (matches ?? []).map((m: any) => [m.id as string, m.phase as string]),
+  )
+  const afterR16ByPid = new Map<string, number>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const b of (bets ?? []) as any[]) {
+    const phase = phaseByMatch.get(b.match_id)
+    if (!phase || !PHASES_AFTER_R16.has(phase)) continue
+    const pts = (b.points ?? 0) as number
+    if (!pts) continue
+    afterR16ByPid.set(b.participant_id, (afterR16ByPid.get(b.participant_id) ?? 0) + pts)
+  }
+
+  const scoresList: ParticipantScores[] = allIds.map(pid => {
+    const total = totalByPid.get(pid) ?? 0
+    return {
+      participant_id: pid,
+      group_phase_pts: total,
+      through_r16_pts: total - (afterR16ByPid.get(pid) ?? 0),
+    }
+  })
+
+  const cutoff1 = applyCutoff(
+    scoresList,
+    s => s.group_phase_pts,
+    Math.ceil(allIds.length / 2 / 10) * 10,
+  )
+
+  const cutoff1List = scoresList.filter(s => cutoff1.has(s.participant_id))
   const cutoff2 = applyCutoff(
     cutoff1List,
     s => s.through_r16_pts,
-    Math.ceil(cutoff1List.length / 2),       // 50% dos habilitados
+    Math.ceil(cutoff1List.length / 2),
   )
 
   return { cutoff1, cutoff2, totalParticipants: allIds.length }
