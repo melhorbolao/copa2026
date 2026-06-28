@@ -56,44 +56,52 @@ interface Props {
   activeParticipantId?: string
   panelaSet?: Set<string>
   tribeMemberSet?: Set<string>
+  /** 'g112': 4 colunas, sem corte1, sem lanterna, sem grupos definidos */
+  mode?: 'full' | 'g112'
 }
 
 export function ExportableRankingBoard({
   ranked, premioSpots, renderedAt, matchesRegistered, groupsDefined, lastMatch,
   highlightMode, activeParticipantId, panelaSet, tribeMemberSet,
+  mode = 'full',
 }: Props) {
   const n = ranked.length
   if (n === 0) return null
 
+  const isG112 = mode === 'g112'
+  const blockCount = isG112 ? 4 : 7
+
   const { cut1, cut2 } = calcCuts(n)
   const premioLine   = ranked[Math.min(premioSpots, n) - 1]?.pts ?? Infinity
   const cut2Line     = cut2 > premioSpots ? (ranked[cut2 - 1]?.pts ?? null) : null
-  const cut1Line     = cut1 > cut2        ? (ranked[cut1 - 1]?.pts ?? null) : null
+  const cut1Line     = !isG112 && cut1 > cut2 ? (ranked[cut1 - 1]?.pts ?? null) : null
   const lastRank     = ranked[n - 1].rank
-  const isUniqueLast = ranked.filter(r => r.rank === lastRank).length === 1
+  const isUniqueLast = !isG112 && ranked.filter(r => r.rank === lastRank).length === 1
 
   function zoneOf(r: ExportRow): Zone {
-    if (isUniqueLast && r.rank === lastRank)       return 'last'
-    if (r.pts >= premioLine)                       return 'premio'
-    if (cut2Line !== null && r.pts >= cut2Line)    return 'corte2'
-    if (cut1Line !== null && r.pts >= cut1Line)    return 'corte1'
+    if (!isG112 && isUniqueLast && r.rank === lastRank)    return 'last'
+    if (r.pts >= premioLine)                               return 'premio'
+    if (cut2Line !== null && r.pts >= cut2Line)            return 'corte2'
+    if (!isG112 && cut1Line !== null && r.pts >= cut1Line) return 'corte1'
     return 'out'
   }
 
-  const blockSize = Math.ceil(n / 7)
-  const blocks = Array.from({ length: 7 }, (_, i) => ranked.slice(i * blockSize, (i + 1) * blockSize)).filter(b => b.length > 0)
+  const blockSize = Math.ceil(n / blockCount)
+  const blocks = Array.from({ length: blockCount }, (_, i) => ranked.slice(i * blockSize, (i + 1) * blockSize)).filter(b => b.length > 0)
 
   const legendItems: { zone: Zone; label: string }[] = [
     { zone: 'premio', label: `Premiação (top ${premioSpots})` },
     ...(cut2 > premioSpots ? [{ zone: 'corte2' as Zone, label: `2º corte (top ${cut2})` }] : []),
-    ...(cut1 > cut2        ? [{ zone: 'corte1' as Zone, label: `1º corte (top ${cut1})` }] : []),
-    ...(isUniqueLast ? [{ zone: 'last' as Zone, label: 'Lanterna' }] : []),
+    ...(!isG112 && cut1 > cut2 ? [{ zone: 'corte1' as Zone, label: `1º corte (top ${cut1})` }] : []),
+    ...(!isG112 && isUniqueLast ? [{ zone: 'last' as Zone, label: 'Lanterna' }] : []),
   ]
+
+  const title = isG112 ? 'Classificação G112' : 'Classificação Melhor Bolão'
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white">
       <div className="border-b border-gray-100 px-4 py-3">
-        <p className="text-base font-black text-gray-800">Classificação Melhor Bolão</p>
+        <p className="text-base font-black text-gray-800">{title}</p>
         <p className="text-xs text-gray-400 mt-0.5">
           {formatDate(renderedAt)}
           {matchesRegistered > 0 && (
@@ -102,7 +110,7 @@ export function ExportableRankingBoard({
               {lastMatch && (
                 <> · último {lastMatch.abbr_home} {lastMatch.score_home}×{lastMatch.score_away}{lastMatch.penalty_winner ? 'P' : ''} {lastMatch.abbr_away}</>
               )}
-              {' · '}{groupsDefined}/12 grupos definidos
+              {!isG112 && <>{' · '}{groupsDefined}/12 grupos definidos</>}
             </>
           )}
         </p>
@@ -136,7 +144,7 @@ export function ExportableRankingBoard({
                   className={`grid grid-cols-[1.5rem_1fr_2rem] px-2 py-[3px] text-[12px] ${ZONE_ROW[z]} ${boundary ? 'border-t border-gray-200' : ''} ${highlightRing}`}
                 >
                   <span className={`text-right pr-0.5 tabular-nums ${textCls}`}>{r.rank}</span>
-                  <span className={`pl-1 truncate ${textCls}`}>{r.apelido}{z === 'last' && ' 🔦'}</span>
+                  <span className={`pl-1 truncate ${textCls}`}>{r.apelido}{!isG112 && z === 'last' && ' 🔦'}</span>
                   <span className={`text-right tabular-nums font-bold ${textCls}`}>{r.pts}</span>
                 </div>
               )

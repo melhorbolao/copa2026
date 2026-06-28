@@ -1,27 +1,31 @@
-ESPECIFICAÇÃO TÉCNICA: NOVA PÁGINA "90 MINUTOS" (O UNIVERSO ALTERNATIVO DA COPA)
+ESPECIFICAÇÃO TÉCNICA: NOVA TABELA "CLASSIFICAÇÃO G112"
 
-Objetivo: Criar uma nova rota (/src/app/90-minutos/page.tsx) com a mesma mecânica funcional do Simulador, mas utilizando como resultado base dos jogos concluídos estritamente o placar do encerramento do tempo regulamentar (aos 90 minutos cravados), descartando gols nos acréscimos, prorrogação ou pênaltis.
+Objetivo: Criar uma nova visualização de ranking chamada "Classificação G112" na página principal de Classificação. Ela deve ser a primeira tabela exibida na tela, contendo apenas os 112 primeiros colocados, com um layout de 4 colunas e regras visuais específicas, mantendo a compatibilidade total com os filtros e a exportação de imagem mobile.
 
-1. MODELAGEM DE DADOS (NOVA TABELA):
-Para garantir isolamento absoluto e não quebrar a classificação oficial da aplicação, crie a tabela 'match_90min_results':
-- Colunas: match_id (UUID PK, FK matches), score_home_90min (SMALLINT), score_away_90min (SMALLINT), updated_at, updated_by.
-- Habilite RLS: Leitura pública para todos, mas escrita (INSERT/UPDATE) restrita estritamente a usuários com role 'admin' na tabela user_roles.
+1. ESTRUTURA DE DADOS E POSICIONAMENTO:
+- Na página de Classificação, injete o componente da nova tabela "Classificação G112" logo acima da tabela existente (ou substitua a visualização inicial por ela, dependendo de como a interface lida com múltiplas tabelas, mas garantindo que seja a primeira que o usuário veja).
+- Os dados desta tabela devem ser um slice/filtro do array principal do ranking, pegando estritamente do 1º ao 112º colocado (ex: `rankingData.slice(0, 112)`).
+- Ela DEVE escutar e reagir aos mesmos controles de filtro já existentes na página (ex: "Destacar meu nome", "Destacar minha panela", etc.).
 
-2. CONTROLE DE ACESSO E INTERFACE:
-- Acesso Geral: Qualquer usuário pode acessar, visualizar e simular placares futuros na memória local da aplicação.
-- Modo Admin: Se o usuário logado for administrador, exiba campos de input numéricos dedicados ao lado do placar de 90 minutos dos jogos já encerrados. Alterar esses campos deve disparar um upsert direto na tabela 'match_90min_results'.
+2. LAYOUT DO GRID (4 BLOCOS VERTICAIS):
+- Diferente da tabela de 212 participantes (que possui 7 colunas no desktop), a G112 deve ser formatada em CSS Grid para ter exatamente 4 colunas em telas grandes.
+- Como são 112 participantes, a distribuição natural será de 28 participantes por coluna (4 * 28 = 112). Configure o CSS/Tailwind para forçar essa quebra (ex: `grid-cols-1 md:grid-cols-2 lg:grid-cols-4`).
 
-3. SINALIZAÇÃO VISUAL (UX):
-- Título da página: "Evolução e Simulação: Universo 90'".
-- Banner de Disclaimer: Adicione um cabeçalho fixo de destaque informando: "⏱️ Arena 90 Minutos: A Copa sem Acréscimos. Esta é uma página de simulação exclusiva. Todos os jogos finalizados utilizam o placar oficial registrado rigidamente aos 90:00 do tempo regulamentar."
+3. REGRAS VISUAIS E DE ESTILIZAÇÃO:
+- Subtítulo: Mantenha o formato de data/hora e jogos registrados, mas REMOVA o trecho que fala sobre grupos definidos (ex: "último CDM 1x0 EQU - 0/12 grupos definidos").
+- Cores de Zonas de Corte: 
+  * Mantenha as cores e lógicas da "Premiação" (Top 10) e do "2º corte" (Top 55).
+  * REMOVA completamente o background amarelo referente ao "1º corte" (pois todos os 112 já passaram por ele).
+  * REMOVA o destaque em vermelho e o ícone de lanterna para o último colocado (112º), pois ele não é o lanterna do bolão geral.
 
-4. LÓGICA DE DESTAQUE DE DIVERGÊNCIA:
-- O frontend deve comparar o placar oficial de 90 minutos com o placar final real proveniente da tabela 'matches'.
-- Regra: Se (score_home !== score_home_90min) OU (score_away !== score_away_90min), o jogo é classificado como "Divergente".
-- Estilização do Card Divergente: Aplique uma borda contrastante (ex: amber-500/50), exiba um badge flutuante "⏱️ Alterado nos acréscimos" no topo do card, e adicione um tooltip (ou subtítulo) informando o "Placar final oficial" para referência do usuário.
+4. EXPORTAÇÃO MOBILE (OFF-SCREEN RENDERING):
+- O botão "Compartilhar Tabela" (exclusivo para mobile) deve obrigatoriamente englobar esta nova tabela G112.
+- O componente fantasma (off-screen) responsável por gerar o PNG/Blob via 'html-to-image' deve ser adaptado para renderizar o layout de 4 colunas caso o usuário esteja exportando a G112.
+- É mandatório preservar a injeção dos estados de destaque (highlights de usuário e panela) na imagem gerada.
+- O payload de compartilhamento via `navigator.share` deve manter o texto exato que já acompanha a imagem atualmente.
 
 5. VERIFICAÇÃO INDEPENDENTE OBRIGATÓRIA:
-Antes de criar os arquivos e realizar o commit, apresente no terminal:
-A) O script SQL exato para criação da tabela 'match_90min_results' e suas políticas de RLS.
-B) A query do frontend (como fará o JOIN entre 'matches' e 'match_90min_results' em uma única chamada para não pesar a rede).
-C) A lógica da árvore do componente do card demonstrando a injeção condicional da classe visual de divergência sem quebrar o layout mobile.
+Antes de aplicar as mudanças e commitar, apresente no terminal:
+A) O trecho de código Tailwind/CSS onde o grid de 4 colunas foi definido para a G112.
+B) A lógica de filtro/slice utilizada para garantir que apenas 112 participantes sejam renderizados sem fazer uma nova requisição ao Supabase.
+C) A confirmação de como a função de exportação lida com o componente fantasma para garantir que os destaques ativos na tela sejam capturados na imagem.

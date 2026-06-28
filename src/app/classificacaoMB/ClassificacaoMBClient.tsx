@@ -392,6 +392,141 @@ function CompactRanking({
   )
 }
 
+// ── Classificação G112 ────────────────────────────────────────────────────────
+
+function G112CompactRanking({
+  ranked, premioSpots, renderedAt, matchesRegistered, lastMatch,
+  highlightMode, activeParticipantId, panelaSet, tribeMemberSet,
+}: {
+  ranked: RankedRow[]
+  premioSpots: number
+  renderedAt: string
+  matchesRegistered: number
+  lastMatch: MatchInfo | null
+  highlightMode: HighlightMode
+  activeParticipantId: string
+  panelaSet: Set<string>
+  tribeMemberSet: Set<string>
+}) {
+  const n = ranked.length
+  if (n === 0) return null
+
+  const ranked112 = ranked.slice(0, 112)
+
+  // Cut calculations use the full n (same as CompactRanking)
+  const { cut2 } = calcCuts(n)
+  const premioLine = ranked[Math.min(premioSpots, n) - 1]?.pts ?? Infinity
+  const cut2Line   = cut2 > premioSpots ? (ranked[cut2 - 1]?.pts ?? null) : null
+
+  type G112Zone = 'premio' | 'corte2' | 'out'
+
+  const G112_ZONE_ROW: Record<G112Zone, string> = {
+    premio: 'bg-green-50',
+    corte2: 'bg-sky-50',
+    out:    'bg-white',
+  }
+  const G112_ZONE_TEXT: Record<G112Zone, string> = {
+    premio: 'text-green-800 font-semibold',
+    corte2: 'text-sky-700 font-medium',
+    out:    'text-gray-400',
+  }
+
+  function g112ZoneOf(r: RankedRow): G112Zone {
+    if (r.pts >= premioLine)                    return 'premio'
+    if (cut2Line !== null && r.pts >= cut2Line) return 'corte2'
+    return 'out'
+  }
+
+  const colsGrid = 'grid grid-cols-[1.5rem_1fr_2rem]'
+  const BLOCK_SIZE = 28
+  const blocks = [0, 1, 2, 3]
+    .map(i => ranked112.slice(i * BLOCK_SIZE, (i + 1) * BLOCK_SIZE))
+    .filter(b => b.length > 0)
+
+  const dateStr = formatRenderedAt(renderedAt)
+
+  const legendItems: { zone: G112Zone; label: string }[] = [
+    { zone: 'premio', label: `Premiação (top ${premioSpots})` },
+    ...(cut2 > premioSpots ? [{ zone: 'corte2' as G112Zone, label: `2º corte (top ${cut2})` }] : []),
+  ]
+
+  function blockBorderCls(bi: number): string {
+    if (bi === 0) return ''
+    if (bi === 1) return 'border-t border-gray-100 md:border-t-0 md:border-l lg:border-l'
+    if (bi === 2) return 'border-t border-gray-100 lg:border-t-0 lg:border-l'
+    return 'border-t border-gray-100 md:border-l lg:border-t-0 lg:border-l'
+  }
+
+  return (
+    <div className="mb-6 rounded-2xl border border-gray-200 bg-white shadow-sm">
+
+      {/* Header */}
+      <div className="border-b border-gray-100 px-4 py-2.5">
+        <p className="text-base font-black text-gray-800">Classificação G112</p>
+        <p className="text-xs text-gray-400 mt-0.5">
+          {dateStr}
+          {matchesRegistered > 0 && (
+            <>
+              {' · '}{matchesRegistered} jogos registrados
+              {lastMatch && (
+                <> · último {lastMatch.abbr_home} {lastMatch.score_home}×{lastMatch.score_away}{lastMatch.penalty_winner ? 'P' : ''} {lastMatch.abbr_away}</>
+              )}
+            </>
+          )}
+        </p>
+      </div>
+
+      {/* 4 blocos em grid responsivo: 1 col mobile → 2 cols md → 4 cols lg */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+        {blocks.map((block, bi) => (
+          <div key={bi} className={blockBorderCls(bi)}>
+            {/* cabeçalho do bloco */}
+            <div className={`${colsGrid} border-b border-gray-100 bg-gray-50 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-gray-400`}>
+              <span className="text-right pr-0.5">#</span>
+              <span className="pl-1">Participante</span>
+              <span className="text-right">PTS</span>
+            </div>
+            {/* linhas */}
+            {block.map((r, ri) => {
+              const z = g112ZoneOf(r)
+              const boundary = ri > 0 && g112ZoneOf(block[ri - 1]) !== z
+              const isActive = r.id === activeParticipantId
+              const isPanela = panelaSet.has(r.id)
+              const shouldHighlight = (
+                (highlightMode === 'me'     && isActive) ||
+                (highlightMode === 'panela' && (isActive || isPanela)) ||
+                (highlightMode === 'tribo'  && tribeMemberSet.has(r.id))
+              )
+              const highlightRing = shouldHighlight ? 'ring-1 ring-inset ring-red-500' : ''
+              const textCls = shouldHighlight ? 'text-red-600 font-semibold' : G112_ZONE_TEXT[z]
+              return (
+                <div
+                  key={r.id}
+                  className={`${colsGrid} px-2 py-[3px] text-[12px] ${G112_ZONE_ROW[z]} ${boundary ? 'border-t border-gray-200' : ''} ${highlightRing}`}
+                >
+                  <span className={`text-right pr-0.5 tabular-nums ${textCls}`}>{r.rank}</span>
+                  <span className={`pl-1 truncate ${textCls}`} title={r.apelido}>{r.apelido}</span>
+                  <span className={`text-right tabular-nums font-bold ${textCls}`}>{r.pts}</span>
+                </div>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+
+      {/* Legenda */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-gray-100 bg-gray-50 px-4 py-2">
+        {legendItems.map(({ zone: z, label }) => (
+          <span key={z} className="flex items-center gap-1 text-[11px] text-gray-500">
+            <span className={`inline-block h-2.5 w-2.5 rounded-sm ${ZONE_DOT[z]}`} />
+            {label}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function ClassificacaoMBClient({
   rows, lastMatch, nextMatch,
   eliminatedTeams, eliminatedStdScorers,
@@ -740,6 +875,19 @@ export function ClassificacaoMBClient({
         </div>
       )}
 
+      {/* Classificação G112 — tabela compacta top 112 */}
+      <G112CompactRanking
+        ranked={ranked}
+        premioSpots={premioSpots}
+        renderedAt={renderedAt}
+        matchesRegistered={matchesRegistered}
+        lastMatch={lastMatch}
+        highlightMode={highlightMode}
+        activeParticipantId={activeParticipantId}
+        panelaSet={panelaSet}
+        tribeMemberSet={tribeMemberSet}
+      />
+
       {/* Classificação Melhor Bolão — tabela compacta com Sobe e Desce */}
       <CompactRanking
         ranked={ranked}
@@ -1001,7 +1149,7 @@ export function ClassificacaoMBClient({
       >
         <div ref={exportRef} style={{ width: '1600px' }}>
           <ExportableRankingBoard
-            ranked={ranked}
+            ranked={ranked.slice(0, 112)}
             premioSpots={premioSpots}
             renderedAt={renderedAt}
             matchesRegistered={matchesRegistered}
@@ -1011,6 +1159,7 @@ export function ClassificacaoMBClient({
             activeParticipantId={activeParticipantId}
             panelaSet={panelaSet}
             tribeMemberSet={tribeMemberSet}
+            mode="g112"
           />
         </div>
       </div>
