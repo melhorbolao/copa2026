@@ -441,8 +441,11 @@ function G112CompactRanking({
     return 'out'
   }
 
-  const colDefs = ['1.5rem', '1fr', '2rem', ...(showLastMatch ? ['2.5rem'] : []), ...(showNextMatch ? ['2.5rem'] : [])]
-  const colsGrid = `grid grid-cols-[${colDefs.join('_')}]`
+  const colsGrid = showLastMatch && showNextMatch
+    ? 'grid grid-cols-[1.5rem_1fr_2rem_2.5rem_2.5rem]'
+    : showLastMatch || showNextMatch
+      ? 'grid grid-cols-[1.5rem_1fr_2rem_2.5rem]'
+      : 'grid grid-cols-[1.5rem_1fr_2rem]'
   const BLOCK_SIZE = 28
   const blocks = [0, 1, 2, 3]
     .map(i => ranked112.slice(i * BLOCK_SIZE, (i + 1) * BLOCK_SIZE))
