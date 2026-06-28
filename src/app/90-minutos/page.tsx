@@ -7,7 +7,7 @@ import { requirePageAccess } from '@/lib/page-visibility'
 import { getActiveParticipantId } from '@/lib/participant'
 import { Navbar } from '@/components/layout/Navbar'
 import { NinetyMinClient } from './NinetyMinClient'
-import type { MatchWith90, BetRaw, Participant, OfficialScore } from './NinetyMinClient'
+import type { MatchWith90, BetRaw, Participant, OfficialScore, OfficialNonMatchPts } from './NinetyMinClient'
 
 export const metadata = { title: 'Universo 90\' — Bolão Copa' }
 
@@ -83,7 +83,7 @@ export default async function NinetyMinPage() {
     return rows
   }
 
-  const [betsRaw, participantsRaw, rulesRaw, settingsRaw, scoresRaw, panelaRaw] = await Promise.all([
+  const [betsRaw, participantsRaw, rulesRaw, settingsRaw, scoresRaw, panelaRaw, groupBetsRaw, thirdBetsRaw, tournamentBetsRaw] = await Promise.all([
     fetchAll('bets', 'participant_id, match_id, score_home, score_away'),
     supabase.from('participants').select('id, apelido').order('apelido'),
     supabase.from('scoring_rules').select('key, points'),
@@ -92,6 +92,9 @@ export default async function NinetyMinPage() {
     activeParticipantId
       ? admin.from('user_panela').select('member_participant_id').eq('owner_participant_id', activeParticipantId).then((r: any) => r, () => ({ data: [] }))
       : Promise.resolve({ data: [] }),
+    fetchAll('group_bets', 'participant_id, points'),
+    fetchAll('third_place_bets', 'participant_id, points'),
+    admin.from('tournament_bets').select('participant_id, points').then((r: any) => r, () => ({ data: [] })),
   ])
 
   const bets        = betsRaw as BetRaw[]
@@ -109,6 +112,17 @@ export default async function NinetyMinPage() {
   const officialScores: OfficialScore[] = ((scoresRaw.data ?? []) as { participant_id: string; pts_total: number | null }[])
     .map(r => ({ participant_id: r.participant_id, pts_total: r.pts_total ?? 0 }))
 
+  // Pontos oficiais de categorias não-jogo (grupos + 3os + torneio/G4).
+  // Somados ao pts90 de jogos para tornar o ∆ comparável: ambos os rankings passam a incluir
+  // as mesmas categorias e o delta reflete só a diferença de placar 90' vs. oficial nos jogos.
+  const officialNonMatchPts: OfficialNonMatchPts = {}
+  for (const b of groupBetsRaw as { participant_id: string; points: number | null }[])
+    officialNonMatchPts[b.participant_id] = (officialNonMatchPts[b.participant_id] ?? 0) + (b.points ?? 0)
+  for (const b of thirdBetsRaw as { participant_id: string; points: number | null }[])
+    officialNonMatchPts[b.participant_id] = (officialNonMatchPts[b.participant_id] ?? 0) + (b.points ?? 0)
+  for (const b of ((tournamentBetsRaw.data ?? []) as { participant_id: string; points: number | null }[]))
+    officialNonMatchPts[b.participant_id] = (officialNonMatchPts[b.participant_id] ?? 0) + (b.points ?? 0)
+
   const panelaMemberIds: string[] = ((panelaRaw.data ?? []) as { member_participant_id: string }[])
     .map(r => r.member_participant_id)
 
@@ -125,6 +139,7 @@ export default async function NinetyMinPage() {
         rules={rules}
         premioSpots={premioSpots}
         officialScores={officialScores}
+        officialNonMatchPts={officialNonMatchPts}
         panelaMemberIds={panelaMemberIds}
       />
     </>

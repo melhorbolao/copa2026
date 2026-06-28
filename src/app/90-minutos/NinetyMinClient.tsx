@@ -20,12 +20,15 @@ export interface MatchWith90 {
 export interface BetRaw { participant_id: string; match_id: string; score_home: number; score_away: number }
 export interface Participant { id: string; apelido: string }
 export interface OfficialScore { participant_id: string; pts_total: number }
+export type OfficialNonMatchPts = Record<string, number>
 
 interface Props {
   isAdmin: boolean; userId: string; activeParticipantId: string
   matches: MatchWith90[]; bets: BetRaw[]; participants: Participant[]
   rules: RuleMap; premioSpots: number
-  officialScores: OfficialScore[]; panelaMemberIds: string[]
+  officialScores: OfficialScore[]
+  officialNonMatchPts: OfficialNonMatchPts
+  panelaMemberIds: string[]
 }
 
 type Score        = { h: number; a: number }
@@ -101,7 +104,7 @@ function fmtMatchDate(dt: string) {
 
 export function NinetyMinClient({
   isAdmin, userId, activeParticipantId, matches, bets, participants, rules, premioSpots,
-  officialScores, panelaMemberIds,
+  officialScores, officialNonMatchPts, panelaMemberIds,
 }: Props) {
 
   const [results90, setResults90] = useState<Map<string, Score>>(() => {
@@ -181,7 +184,7 @@ export function NinetyMinClient({
     }
 
     const withPts = participants.map(p => {
-      let pts = 0; let cravados = 0; let pontuados = 0
+      let matchPts = 0; let cravados = 0; let pontuados = 0
       for (const bet of (betsByP.get(p.id) ?? [])) {
         const match = matchMap.get(bet.match_id); if (!match) continue
         let sh: number | null = null; let sa: number | null = null
@@ -197,8 +200,11 @@ export function NinetyMinClient({
         const p90       = scoreMatchBet(bet.score_home, bet.score_away, sh, sa, isZebra, match.is_brazil, rules)
         if (bet.score_home === sh && bet.score_away === sa) cravados++
         if (p90 > 0) pontuados++
-        pts += p90
+        matchPts += p90
       }
+      // Soma pontos oficiais de grupos/3os/G4 para tornar o ranking comparável ao oficial.
+      // O ∆ passa a refletir só a diferença de placar 90' vs. oficial nos jogos.
+      const pts = matchPts + (officialNonMatchPts[p.id] ?? 0)
       return { ...p, pts, cravados, pontuados }
     }).sort((a, b) => b.pts - a.pts)
 
@@ -222,7 +228,7 @@ export function NinetyMinClient({
       })
     }
     return out
-  }, [participants, bets, results90, simScores, matchMap, betsByMatch, rules, zebraThreshold, premioSpots, officialRankMap])
+  }, [participants, bets, results90, simScores, matchMap, betsByMatch, rules, zebraThreshold, premioSpots, officialRankMap, officialNonMatchPts])
 
   // Zone helpers
   const { premioLine, cut2Line, cut1Line, lastRank, isUniqueLast } = useMemo(() => {
