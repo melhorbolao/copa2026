@@ -5,7 +5,8 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { scoreMatchBet, getMatchResult, detectMatchZebra } from '@/lib/scoring/engine'
-import { calcGroupStandings } from '@/lib/bracket/engine'
+import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap } from '@/lib/bracket/engine'
+import type { MatchSlim, BetSlim } from '@/lib/bracket/engine'
 import { ScoreHeader } from './ScoreHeader'
 import { BetStats } from './BetStats'
 import { RankingPanel } from './RankingPanel'
@@ -313,6 +314,49 @@ export function JogosDashboard({
     return out
   }, [participants, livePoints])
 
+  // Resolve nomes reais para jogos eliminatórios a partir das classificações oficiais dos grupos
+  const derivedTeamMap = useMemo(() => {
+    const groupMatches = matches.filter(m => m.phase === 'group')
+    const slim: MatchSlim[] = groupMatches.map(m => ({
+      id: m.id, group_name: m.group_name, phase: m.phase,
+      team_home: m.team_home, team_away: m.team_away,
+      flag_home: m.flag_home, flag_away: m.flag_away,
+    }))
+    const betMap = new Map<string, BetSlim>()
+    const byGroup = new Map<string, { total: number; scored: number }>()
+    for (const m of groupMatches) {
+      if (m.score_home !== null && m.score_away !== null) {
+        betMap.set(m.id, { match_id: m.id, score_home: m.score_home as number, score_away: m.score_away as number })
+      }
+      if (m.group_name) {
+        const e = byGroup.get(m.group_name) ?? { total: 0, scored: 0 }
+        e.total++
+        if (m.score_home !== null && m.score_away !== null) e.scored++
+        byGroup.set(m.group_name, e)
+      }
+    }
+    const completeGroups = new Set<string>()
+    for (const [g, { total, scored }] of byGroup) {
+      if (total > 0 && scored === total) completeGroups.add(g)
+    }
+    const allGroupsComplete = byGroup.size > 0 && completeGroups.size === byGroup.size
+    const standings = calcGroupStandings(slim, betMap)
+    const thirds = rankThirds(standings)
+    const thirdSlots = resolveThirdSlots(thirds)
+    const r32Slots = buildR32Teams(standings, thirds, thirdSlots, undefined, completeGroups, allGroupsComplete)
+    const knockoutMatches = matches.filter(m =>
+      ['round_of_32', 'round_of_16', 'quarterfinal', 'semifinal', 'third_place', 'final'].includes(m.phase)
+    )
+    return buildKnockoutTeamMap(r32Slots, knockoutMatches)
+  }, [matches])
+
+  // Match efetivo: aplica nomes reais para fases eliminatórias
+  const effectiveMatch = useMemo(() => {
+    if (!match) return match
+    const override = derivedTeamMap.get(match.id)
+    return override ? { ...match, ...override } : match
+  }, [match, derivedTeamMap])
+
   // "Quase" — who scores if home gets +1 or away gets +1
   const quase = useMemo(() => {
     if (match?.score_home === null || match?.score_away === null) return { home: [], away: [] }
@@ -330,7 +374,7 @@ export function JogosDashboard({
     if (match?.phase !== 'group' || !match.group_name) return null
     const g = match.group_name
     const groupMatches = matches.filter(m => m.phase === 'group' && m.group_name === g)
-    const betMap = new Map<string, import('@/lib/bracket/engine').BetSlim>()
+    const betMap = new Map<string, BetSlim>()
     for (const m of groupMatches) {
       if (m.score_home !== null && m.score_away !== null) {
         betMap.set(m.id, { match_id: m.id, score_home: m.score_home as number, score_away: m.score_away as number })
@@ -370,7 +414,7 @@ export function JogosDashboard({
   return (
     <div className="min-h-screen bg-gray-50 pb-16">
       <ScoreHeader
-        match={match}
+        match={effectiveMatch}
         matches={matches}
         matchIdx={matchIdx}
         abbr={abbr}
@@ -391,7 +435,7 @@ export function JogosDashboard({
       <div className="jogos-content-top max-w-3xl mx-auto px-3 sm:px-4 space-y-4">
 
         <BetStats
-          match={match}
+          match={effectiveMatch}
           matchBets={matchBets}
           participants={participants}
           isZebra={headerZebra}
@@ -405,7 +449,7 @@ export function JogosDashboard({
         />
 
         <RankingPanel
-          match={match}
+          match={effectiveMatch}
           matchBets={matchBets}
           participants={participants}
           matchPoints={matchPoints}
