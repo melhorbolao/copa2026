@@ -8,7 +8,7 @@ import { Navbar } from '@/components/layout/Navbar'
 import { PanelaClient } from './PanelaClient'
 import { getServerNow } from '@/lib/production-mode'
 import { scoreMatchBet, detectMatchZebra, getMatchResult, scoreTournamentBet } from '@/lib/scoring/engine'
-import { calcGroupStandings } from '@/lib/bracket/engine'
+import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap } from '@/lib/bracket/engine'
 import type { BetSlim, MatchSlim } from '@/lib/bracket/engine'
 
 export default async function MinhaPanelaPage() {
@@ -68,7 +68,7 @@ export default async function MinhaPanelaPage() {
       .order('snapshot_date', { ascending: false })
       .limit(500),
     supabase.from('matches')
-      .select('id, phase, group_name, team_home, team_away, flag_home, flag_away, match_datetime, betting_deadline, score_home, score_away, penalty_winner, is_brazil')
+      .select('id, match_number, phase, group_name, team_home, team_away, flag_home, flag_away, match_datetime, betting_deadline, score_home, score_away, penalty_winner, is_brazil')
       .order('match_datetime', { ascending: true }),
     supabase.from('scoring_rules').select('key, points'),
     fetchAll('bets', 'participant_id, match_id, score_home, score_away'),
@@ -147,13 +147,41 @@ export default async function MinhaPanelaPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const gmsSlim: MatchSlim[] = (allMatches as any[])
     .filter((m: any) => m.phase === 'group' && m.group_name)
-    .map((m: any) => ({ id: m.id, group_name: m.group_name, phase: m.phase, team_home: m.team_home, team_away: m.team_away, flag_home: '', flag_away: '' }))
+    .map((m: any) => ({ id: m.id, group_name: m.group_name, phase: m.phase, team_home: m.team_home, team_away: m.team_away, flag_home: m.flag_home ?? '', flag_away: m.flag_away ?? '' }))
   const officialScoreMap = new Map<string, BetSlim>()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const m of scoredMatches as any[]) {
     officialScoreMap.set(m.id, { match_id: m.id, score_home: m.score_home, score_away: m.score_away })
   }
   const officialGroupStandings = calcGroupStandings(gmsSlim, officialScoreMap)
+
+  // Resolver nomes reais para jogos eliminatórios (16avos, oitavas, etc.)
+  const byGroupCompletion = new Map<string, { total: number; scored: number }>()
+  for (const m of gmsSlim) {
+    const e = byGroupCompletion.get(m.group_name!) ?? { total: 0, scored: 0 }
+    e.total++
+    if (officialScoreMap.has(m.id)) e.scored++
+    byGroupCompletion.set(m.group_name!, e)
+  }
+  const completeGroupsSet = new Set<string>(
+    [...byGroupCompletion.entries()].filter(([, v]) => v.total > 0 && v.scored === v.total).map(([k]) => k),
+  )
+  const allGroupsComplete = byGroupCompletion.size > 0 && completeGroupsSet.size === byGroupCompletion.size
+  const knockoutThirds = rankThirds(officialGroupStandings)
+  const knockoutThirdSlots = resolveThirdSlots(knockoutThirds)
+  const knockoutR32Slots = buildR32Teams(officialGroupStandings, knockoutThirds, knockoutThirdSlots, undefined, completeGroupsSet, allGroupsComplete)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const knockoutMatchesForMap = (allMatches as any[])
+    .filter((m: any) => ['round_of_32', 'round_of_16', 'quarterfinal', 'semifinal', 'third_place', 'final'].includes(m.phase))
+    .map((m: any) => ({
+      id: m.id as string, phase: m.phase as string, match_number: m.match_number as number,
+      team_home: m.team_home as string, flag_home: (m.flag_home ?? '') as string,
+      team_away: m.team_away as string, flag_away: (m.flag_away ?? '') as string,
+      score_home: m.score_home as number | null, score_away: m.score_away as number | null,
+      penalty_winner: m.penalty_winner as string | null,
+    }))
+  const knockoutTeamMap = buildKnockoutTeamMap(knockoutR32Slots, knockoutMatchesForMap)
+
   const actualThirdByGroup = new Map<string, string>()
   for (const standing of officialGroupStandings) {
     const g = standing.group
@@ -325,25 +353,31 @@ export default async function MinhaPanelaPage() {
         allRanked={allRanked}
         snapshotByPid={snapshotByPid}
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        recentMatches={recentMatches.map((m: any) => ({
-          id:            m.id,
-          teamHome:      m.team_home,
-          teamAway:      m.team_away,
-          flagHome:      m.flag_home  ?? '',
-          flagAway:      m.flag_away  ?? '',
-          matchDatetime: m.match_datetime,
-          scoreHome:     m.score_home,
-          scoreAway:     m.score_away,
-        }))}
+        recentMatches={recentMatches.map((m: any) => {
+          const ov = knockoutTeamMap.get(m.id)
+          return {
+            id:            m.id,
+            teamHome:      ov?.team_home ?? m.team_home,
+            teamAway:      ov?.team_away ?? m.team_away,
+            flagHome:      ov?.flag_home ?? m.flag_home  ?? '',
+            flagAway:      ov?.flag_away ?? m.flag_away  ?? '',
+            matchDatetime: m.match_datetime,
+            scoreHome:     m.score_home,
+            scoreAway:     m.score_away,
+          }
+        })}
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        upcomingMatches={upcomingMatches.map((m: any) => ({
-          id:            m.id,
-          teamHome:      m.team_home,
-          teamAway:      m.team_away,
-          flagHome:      m.flag_home  ?? '',
-          flagAway:      m.flag_away  ?? '',
-          matchDatetime: m.match_datetime,
-        }))}
+        upcomingMatches={upcomingMatches.map((m: any) => {
+          const ov = knockoutTeamMap.get(m.id)
+          return {
+            id:            m.id,
+            teamHome:      ov?.team_home ?? m.team_home,
+            teamAway:      ov?.team_away ?? m.team_away,
+            flagHome:      ov?.flag_home ?? m.flag_home  ?? '',
+            flagAway:      ov?.flag_away ?? m.flag_away  ?? '',
+            matchDatetime: m.match_datetime,
+          }
+        })}
         betsByParticipant={betsByParticipant}
       />
     </>

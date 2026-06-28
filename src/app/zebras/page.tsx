@@ -9,6 +9,8 @@ import { ZebrasClient } from './ZebrasClient'
 import { detectMatchZebra, getMatchResult, scoreMatchBet } from '@/lib/scoring/engine'
 import type { RuleMap } from '@/lib/scoring/engine'
 import type { ZebraMatch, ZebraRankingEntry, ZebraScorer, PotentialUpset, PotentialGroupZebra, PotentialG4Zebra } from './types'
+import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap } from '@/lib/bracket/engine'
+import type { BetSlim, MatchSlim } from '@/lib/bracket/engine'
 
 const ZEBRA_THRESHOLD = 15
 
@@ -39,7 +41,7 @@ export default async function ZebrasPage() {
     // Partidas com prazo encerrado E resultado oficial (para zebraMatches)
     admin
       .from('matches')
-      .select('id, match_number, phase, group_name, team_home, team_away, flag_home, flag_away, match_datetime, betting_deadline, score_home, score_away, is_brazil')
+      .select('id, match_number, phase, group_name, team_home, team_away, flag_home, flag_away, match_datetime, betting_deadline, score_home, score_away, penalty_winner, is_brazil')
       .not('score_home', 'is', null)
       .not('score_away', 'is', null)
       .lte('betting_deadline', now)
@@ -98,6 +100,64 @@ export default async function ZebrasPage() {
     if (row.team_away && row.flag_away) teamFlags[row.team_away] = row.flag_away
   }
 
+  // ── Resolver nomes reais de times em jogos eliminatórios ─────────────────────
+  // matchesRaw só tem jogos pontuados; radarMv tem os sem placar (potential upsets).
+  // Combinamos os dois para cobrir todos os jogos de mata-mata.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const zebrasGroupSlim: MatchSlim[] = (matchesRaw ?? []).filter((m: any) => m.phase === 'group').map((m: any) => ({
+    id: m.id, group_name: m.group_name, phase: m.phase,
+    team_home: m.team_home, team_away: m.team_away,
+    flag_home: m.flag_home ?? '', flag_away: m.flag_away ?? '',
+  }))
+  const zebrasOfficialBetMap = new Map<string, BetSlim>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const m of (matchesRaw ?? []) as any[]) {
+    if (m.phase === 'group')
+      zebrasOfficialBetMap.set(m.id, { match_id: m.id, score_home: m.score_home, score_away: m.score_away })
+  }
+  const zebrasByGroup = new Map<string, { total: number; scored: number }>()
+  for (const m of zebrasGroupSlim) {
+    const e = zebrasByGroup.get(m.group_name!) ?? { total: 0, scored: 0 }
+    e.total++
+    if (zebrasOfficialBetMap.has(m.id)) e.scored++
+    zebrasByGroup.set(m.group_name!, e)
+  }
+  const zebrasCompleteGroups = new Set<string>(
+    [...zebrasByGroup.entries()].filter(([, v]) => v.total > 0 && v.scored === v.total).map(([k]) => k),
+  )
+  const zebrasAllGroupsComplete = zebrasByGroup.size > 0 && zebrasCompleteGroups.size === zebrasByGroup.size
+  const zebrasStandings = calcGroupStandings(zebrasGroupSlim, zebrasOfficialBetMap)
+  const zebrasThirds = rankThirds(zebrasStandings)
+  const zebrasThirdSlots = resolveThirdSlots(zebrasThirds)
+  const zebrasR32Slots = buildR32Teams(zebrasStandings, zebrasThirds, zebrasThirdSlots, undefined, zebrasCompleteGroups, zebrasAllGroupsComplete)
+  // Agrupa partidas de mata-mata: sem placar (radar) + pontuadas (matchesRaw), priorizando pontuadas
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const zebrasKoMatchMap = new Map<string, any>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const row of (radarMv ?? []) as any[]) {
+    if (['round_of_32', 'round_of_16', 'quarterfinal', 'semifinal', 'third_place', 'final'].includes(row.phase)) {
+      zebrasKoMatchMap.set(row.match_id, {
+        id: row.match_id, phase: row.phase, match_number: row.match_number as number,
+        team_home: row.team_home, flag_home: row.flag_home ?? '',
+        team_away: row.team_away, flag_away: row.flag_away ?? '',
+        score_home: null, score_away: null, penalty_winner: null,
+      })
+    }
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const m of (matchesRaw ?? []) as any[]) {
+    if (['round_of_32', 'round_of_16', 'quarterfinal', 'semifinal', 'third_place', 'final'].includes(m.phase)) {
+      zebrasKoMatchMap.set(m.id, {
+        id: m.id, phase: m.phase, match_number: m.match_number as number,
+        team_home: m.team_home, flag_home: m.flag_home ?? '',
+        team_away: m.team_away, flag_away: m.flag_away ?? '',
+        score_home: m.score_home as number | null, score_away: m.score_away as number | null,
+        penalty_winner: m.penalty_winner as string | null,
+      })
+    }
+  }
+  const knockoutTeamMapZebra = buildKnockoutTeamMap(zebrasR32Slots, [...zebrasKoMatchMap.values()])
+
   // Apenas apostas de partidas com prazo encerrado (filtro duplo de segurança)
   const deadlineMatchIds = new Set((matchesRaw ?? []).map((m: { id: string }) => m.id))
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -153,13 +213,14 @@ export default async function ZebrasPage() {
       })
       .sort((a, b) => a.apelido.localeCompare(b.apelido, 'pt'))
 
+    const zmOv = knockoutTeamMapZebra.get(match.id)
     zebraMatches.push({
       id: match.id,
       matchNumber: match.match_number,
-      teamHome: match.team_home,
-      teamAway: match.team_away,
-      flagHome: match.flag_home ?? '',
-      flagAway: match.flag_away ?? '',
+      teamHome: zmOv?.team_home ?? match.team_home,
+      teamAway: zmOv?.team_away ?? match.team_away,
+      flagHome: zmOv?.flag_home ?? match.flag_home ?? '',
+      flagAway: zmOv?.flag_away ?? match.flag_away ?? '',
       scoreHome: match.score_home,
       scoreAway: match.score_away,
       actualResult,
@@ -196,7 +257,7 @@ export default async function ZebrasPage() {
   // ── Radar: potentialUpsets a partir da MV (prazo encerrado, sem placar) ────
   // mv_zebras_radar já tem os percentuais pré-calculados — zero I/O de agregação.
   type RadarRow = {
-    match_id: string; team_home: string; team_away: string
+    match_id: string; match_number: number; team_home: string; team_away: string
     flag_home: string; flag_away: string; match_datetime: string
     phase: string; group_name: string | null; round: number | null; city: string | null
     home_pct: number; draw_pct: number; away_pct: number
@@ -211,12 +272,13 @@ export default async function ZebrasPage() {
     if (total === 0 || row.draw_count / total * 100 <= ZEBRA_THRESHOLD) zebraColumns.push('D')
     if (total === 0 || row.away_count / total * 100 <= ZEBRA_THRESHOLD) zebraColumns.push('A')
     if (zebraColumns.length === 0) continue
+    const ruOv = knockoutTeamMapZebra.get(row.match_id)
     potentialUpsetsFromMv.push({
       id: row.match_id,
-      teamHome: row.team_home,
-      teamAway: row.team_away,
-      flagHome: row.flag_home ?? '',
-      flagAway: row.flag_away ?? '',
+      teamHome: ruOv?.team_home ?? row.team_home,
+      teamAway: ruOv?.team_away ?? row.team_away,
+      flagHome: ruOv?.flag_home ?? row.flag_home ?? '',
+      flagAway: ruOv?.flag_away ?? row.flag_away ?? '',
       matchDatetime: row.match_datetime,
       phase: row.phase,
       groupName: row.group_name ?? null,
