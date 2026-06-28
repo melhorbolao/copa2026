@@ -466,6 +466,7 @@ export function ACopaClient({ initialMatches, isAdmin, initialOfficialTopScorer,
             annexCOption={annexCOption}
             isAdmin={isAdmin}
             thirdScoring={thirdScoring}
+            allGroupsComplete={allGroupsComplete}
             onToggle={async (group, enabled) => {
               setThirdScoring(prev => ({ ...prev, [group]: enabled }))
               const result = await toggleThirdPlaceScoring(group, enabled)

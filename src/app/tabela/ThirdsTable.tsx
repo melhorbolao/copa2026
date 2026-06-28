@@ -10,9 +10,10 @@ interface Props {
   isAdmin?: boolean
   thirdScoring?: Record<string, boolean>
   onToggle?: (group: string, enabled: boolean) => Promise<void>
+  allGroupsComplete?: boolean
 }
 
-export function ThirdsTable({ thirds, annexCOption, isAdmin = false, thirdScoring = {}, onToggle }: Props) {
+export function ThirdsTable({ thirds, annexCOption, isAdmin = false, thirdScoring = {}, onToggle, allGroupsComplete = false }: Props) {
   const [pending, setPending] = useState<string | null>(null)
 
   const handleToggle = async (group: string, enabled: boolean) => {
@@ -110,11 +111,11 @@ export function ThirdsTable({ thirds, annexCOption, isAdmin = false, thirdScorin
                 <td className="px-2 py-2 text-center">
                   <input
                     type="checkbox"
-                    className="h-4 w-4 cursor-pointer accent-amber-500 disabled:cursor-wait"
-                    checked={thirdScoring[t.group] ?? false}
-                    disabled={pending === t.group}
+                    className="h-4 w-4 accent-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
+                    checked={allGroupsComplete ? t.advances : (thirdScoring[t.group] ?? false)}
+                    disabled={pending === t.group || allGroupsComplete}
                     onChange={e => handleToggle(t.group, e.target.checked)}
-                    title={thirdScoring[t.group] ? 'Clique para remover pontuação' : 'Clique para pontuar'}
+                    title={allGroupsComplete ? 'Definido automaticamente pelos 8 melhores terceiros' : (thirdScoring[t.group] ? 'Clique para remover pontuação' : 'Clique para pontuar')}
                   />
                 </td>
               )}
