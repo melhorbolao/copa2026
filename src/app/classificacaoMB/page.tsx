@@ -8,7 +8,7 @@ import { Navbar } from '@/components/layout/Navbar'
 import { ClassificacaoMBClient } from './ClassificacaoMBClient'
 import { getMatchResult, detectMatchZebra, scoreTournamentBet, scoreMatchBet } from '@/lib/scoring/engine'
 import type { TournamentResults } from '@/lib/scoring/engine'
-import { calcGroupStandings } from '@/lib/bracket/engine'
+import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap } from '@/lib/bracket/engine'
 import type { BetSlim, MatchSlim } from '@/lib/bracket/engine'
 import { getVisibilitySettings, isBonusVisible, isMatchBetsVisible } from '@/lib/production-mode'
 import { recalculateDailyPoints } from '@/lib/scoring/daily-points'
@@ -335,6 +335,28 @@ export default async function ClassificacaoMBPage() {
       officialScoreMap.set(m.id, { match_id: m.id, score_home: m.score_home, score_away: m.score_away })
   }
   const officialGroupStandings = calcGroupStandings(gmsSlim, officialScoreMap)
+
+  // Resolve nomes reais para jogos de mata-mata (16avos, oitavas, …)
+  const officialThirds     = rankThirds(officialGroupStandings)
+  const officialThirdSlots = resolveThirdSlots(officialThirds)
+  const groupMatchByGroup  = new Map<string, { total: number; scored: number }>()
+  for (const m of gmsSlim) {
+    if (!m.group_name) continue
+    const e = groupMatchByGroup.get(m.group_name) ?? { total: 0, scored: 0 }
+    e.total++
+    if (officialScoreMap.has(m.id)) e.scored++
+    groupMatchByGroup.set(m.group_name, e)
+  }
+  const completeGroups = new Set(
+    [...groupMatchByGroup.entries()].filter(([, v]) => v.total > 0 && v.scored === v.total).map(([g]) => g)
+  )
+  const allGroupsComplete = groupMatchByGroup.size > 0 && completeGroups.size === groupMatchByGroup.size
+  const officialR32Slots = buildR32Teams(officialGroupStandings, officialThirds, officialThirdSlots, undefined, completeGroups, allGroupsComplete)
+  const knockoutMatchesFull = matches.filter(m =>
+    ['round_of_32', 'round_of_16', 'quarterfinal', 'semifinal', 'third_place', 'final'].includes(m.phase)
+  ).map(m => ({ ...m, flag_home: '', flag_away: '' }))
+  const derivedTeamMap = buildKnockoutTeamMap(officialR32Slots, knockoutMatchesFull)
+
   const actualThirdByGroup = new Map<string, string>()
   for (const standing of officialGroupStandings) {
     const g = standing.group
@@ -513,16 +535,16 @@ export default async function ClassificacaoMBPage() {
         rows={rows}
         lastMatch={lastMatch ? {
           id: lastMatch.id,
-          abbr_home: abbr(lastMatch.team_home),
-          abbr_away: abbr(lastMatch.team_away),
+          abbr_home: abbr(derivedTeamMap.get(lastMatch.id)?.team_home ?? lastMatch.team_home),
+          abbr_away: abbr(derivedTeamMap.get(lastMatch.id)?.team_away ?? lastMatch.team_away),
           score_home: lastMatch.score_home ?? 0,
           score_away: lastMatch.score_away ?? 0,
           penalty_winner: lastMatch.penalty_winner ?? null,
         } : null}
         nextMatch={nextMatch ? {
           id: nextMatch.id,
-          abbr_home: abbr(nextMatch.team_home),
-          abbr_away: abbr(nextMatch.team_away),
+          abbr_home: abbr(derivedTeamMap.get(nextMatch.id)?.team_home ?? nextMatch.team_home),
+          abbr_away: abbr(derivedTeamMap.get(nextMatch.id)?.team_away ?? nextMatch.team_away),
           score_home: nextMatch.score_home ?? 0,
           score_away: nextMatch.score_away ?? 0,
           penalty_winner: nextMatch.penalty_winner ?? null,
