@@ -327,6 +327,18 @@ function PalpitesTabPane({
     ? activeRoundTotal + 5 + 12 + 8
     : activeRoundTotal
 
+  const knockoutEtapaMatches = useMemo(
+    () => isKnockoutEtapa
+      ? visibleKnockoutPhases.flatMap(p => resolvedKnockoutByPhase[p] ?? [])
+      : [],
+    [isKnockoutEtapa, visibleKnockoutPhases, resolvedKnockoutByPhase],
+  )
+  const knockoutProgressTotal  = knockoutEtapaMatches.length
+  const knockoutProgressFilled = useMemo(
+    () => knockoutEtapaMatches.filter(m => betMap[m.id] !== undefined).length,
+    [knockoutEtapaMatches, betMap],
+  )
+
   const hasAnything = useMemo(
     () => visibleGroupMatches.length > 0
       || (isGroupEtapa && visibleGroupOrder.some(g => groupTeams[g]))
@@ -391,7 +403,10 @@ function PalpitesTabPane({
           <div className="flex flex-col items-end gap-2">
             {nextDeadline && <Countdown deadline={nextDeadline.iso} label={nextDeadline.label} />}
             {activeRound !== null && !isKnockoutEtapa && (
-              <RoundProgress filled={r1ProgressFilled} total={r1ProgressTotal} round={activeRound} />
+              <RoundProgress filled={r1ProgressFilled} total={r1ProgressTotal} label={`Rodada ${activeRound}`} />
+            )}
+            {isKnockoutEtapa && knockoutProgressTotal > 0 && (
+              <RoundProgress filled={knockoutProgressFilled} total={knockoutProgressTotal} label={etapaLabel} />
             )}
           </div>
         </div>

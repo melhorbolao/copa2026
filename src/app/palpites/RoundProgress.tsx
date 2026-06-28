@@ -1,10 +1,10 @@
 interface Props {
   filled: number
   total: number
-  round: number
+  label: string
 }
 
-export function RoundProgress({ filled, total, round }: Props) {
+export function RoundProgress({ filled, total, label }: Props) {
   if (!total) return null
 
   const pct      = Math.min(100, Math.round((filled / total) * 100))
@@ -44,7 +44,7 @@ export function RoundProgress({ filled, total, round }: Props) {
       <span className={`text-[10px] font-semibold whitespace-nowrap leading-tight ${
         complete ? 'text-verde-600' : 'text-gray-400'
       }`}>
-        {complete ? `R${round} completa!` : `Rodada ${round}`}
+        {complete ? `${label}!` : label}
       </span>
     </div>
   )
