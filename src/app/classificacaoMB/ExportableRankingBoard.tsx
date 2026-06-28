@@ -71,7 +71,9 @@ export function ExportableRankingBoard({
   const isG112 = mode === 'g112'
   const blockCount = isG112 ? 4 : 7
 
-  const { cut1, cut2 } = calcCuts(n)
+  const { cut1, cut2: cut2Calc } = calcCuts(n)
+  // G112 → G56: top 55 passam claramente (56ª posição é o limite de empate)
+  const cut2 = isG112 ? Math.ceil(n / 2) - 1 : cut2Calc
   const premioLine   = ranked[Math.min(premioSpots, n) - 1]?.pts ?? Infinity
   const cut2Line     = cut2 > premioSpots ? (ranked[cut2 - 1]?.pts ?? null) : null
   const cut1Line     = !isG112 && cut1 > cut2 ? (ranked[cut1 - 1]?.pts ?? null) : null
