@@ -386,14 +386,37 @@ export async function recalculateThirdBets(): Promise<void> {
   await refreshParticipantTotals(ids)
 }
 
-/** Habilita todos os grupos em third_place_scoring. Chamado automaticamente
- *  quando todos os jogos da fase de grupos têm placar. */
+/** Habilita apenas os 8 grupos cujos terceiros avançam (Art. 13 FIFA).
+ *  Chamado automaticamente quando todos os jogos da fase de grupos têm placar. */
 export async function autoEnableAllThirdScoring(): Promise<void> {
   const admin = createAuthAdminClient()
+
+  const { data: groupMatches } = await admin
+    .from('matches')
+    .select('id, group_name, phase, team_home, team_away, flag_home, flag_away, score_home, score_away')
+    .eq('phase', 'group')
+
+  if (!groupMatches?.length) return
+  if (!groupMatches.every(m => m.score_home !== null && m.score_away !== null)) return
+
+  const slim: MatchSlim[] = groupMatches.map(m => ({
+    id: m.id, group_name: m.group_name, phase: m.phase,
+    team_home: m.team_home, team_away: m.team_away,
+    flag_home: m.flag_home, flag_away: m.flag_away,
+  }))
+  const betMap = new Map<string, BetSlim>(
+    groupMatches.map(m => [m.id, { match_id: m.id, score_home: m.score_home!, score_away: m.score_away! }])
+  )
+  const standings = calcGroupStandings(slim, betMap)
+  const thirds    = rankThirds(standings)
+  const advancing = new Set(thirds.filter(t => t.advances).map(t => t.group))
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (admin as any).from('third_place_scoring').upsert(
     ['A','B','C','D','E','F','G','H','I','J','K','L'].map(g => ({
-      group_name: g, enabled: true, updated_at: new Date().toISOString(),
+      group_name: g,
+      enabled: advancing.has(g),
+      updated_at: new Date().toISOString(),
     })),
     { onConflict: 'group_name' },
   )
