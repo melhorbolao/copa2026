@@ -40,7 +40,7 @@ function matchWinner(
 async function _updateMatchBetPoints(matchId: string, admin: AdminClient, rules: RuleMap): Promise<string[]> {
   const { data: match } = await admin
     .from('matches')
-    .select('id, score_home, score_away, is_brazil')
+    .select('id, score_home, score_away, is_brazil, team_home, team_away')
     .eq('id', matchId)
     .single()
 
@@ -56,6 +56,10 @@ async function _updateMatchBetPoints(matchId: string, admin: AdminClient, rules:
     .eq('match_id', matchId)
 
   if (!bets?.length) return []
+
+  // is_brazil pode estar desatualizado no DB para jogos de mata-mata inseridos com 'TBD'.
+  // O trigger fn_sync_is_brazil_from_teams mantém sincronizado, mas derivamos aqui também como segurança.
+  const isBrazil = match.is_brazil || match.team_home === 'Brasil' || match.team_away === 'Brasil'
 
   const actualResult = getMatchResult(match.score_home, match.score_away)
   const threshold    = rules['percentual_zebra'] ?? 15
@@ -77,7 +81,7 @@ async function _updateMatchBetPoints(matchId: string, admin: AdminClient, rules:
       points: scoreMatchBet(
         bet.score_home, bet.score_away,
         match.score_home!, match.score_away!,
-        isZebra, match.is_brazil, rules,
+        isZebra, isBrazil, rules,
       ),
     })),
     { onConflict: 'id' },

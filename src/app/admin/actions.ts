@@ -761,11 +761,13 @@ export async function saveMatchScore(
 
   // 1. Busca dados da partida e regras de pontuação em paralelo
   const [{ data: match }, { data: rulesData }] = await Promise.all([
-    supabase.from('matches').select('is_brazil').eq('id', matchId).single(),
+    supabase.from('matches').select('is_brazil, team_home, team_away').eq('id', matchId).single(),
     supabase.from('scoring_rules').select('key, points'),
   ])
 
-  const isBrazil = match?.is_brazil ?? false
+  // is_brazil pode estar desatualizado no DB para jogos de mata-mata (times 'TBD' ao serem inseridos).
+  // O trigger fn_sync_is_brazil_from_teams mantém sincronizado, mas derivamos aqui também como segurança.
+  const isBrazil = (match?.is_brazil ?? false) || match?.team_home === 'Brasil' || match?.team_away === 'Brasil'
   const rules: Rules = Object.fromEntries(
     (rulesData ?? []).map(r => [r.key, r.points])
   )

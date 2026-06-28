@@ -617,6 +617,7 @@ export function SimuladorClient({
   prizeSpots: _prizeSpots = 8, premioSpots = 10,
 }: Props) {
   const [matches, setMatches] = useState<MatchFull[]>(initialMatches)
+  const matchesRef = useRef<MatchFull[]>(initialMatches)
   const [betMap,  setBetMap]  = useState<BetMap>(() => buildBetMap(initialBets))
   const [phase,   setPhase]   = useState('all')
   const [isMobile, setIsMobile] = useState(false)
@@ -755,6 +756,9 @@ export function SimuladorClient({
     return () => window.removeEventListener('resize', check)
   }, [])
 
+  // Mantém ref sincronizado com o state para uso em callbacks de closure
+  useEffect(() => { matchesRef.current = matches }, [matches])
+
   // Supabase Realtime — monitora resultado oficial
   useEffect(() => {
     const sb = supabase.current
@@ -762,9 +766,19 @@ export function SimuladorClient({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches' }, (payload: any) => {
         const upd = payload.new as Partial<MatchFull> & { id: string }
-        setMatches(prev => prev.map(m => m.id === upd.id ? { ...m, ...upd } : m))
-        if (upd.score_home != null && upd.score_away != null && upd.is_brazil != null) {
-          recomputeForMatch(upd.id, upd.score_home, upd.score_away, upd.is_brazil)
+        // Jogos de mata-mata têm is_brazil=false no DB enquanto times são 'TBD'.
+        // Preservamos o is_brazil já derivado do bracket engine no estado atual,
+        // ou re-derivamos a partir dos times efetivos após o merge.
+        const curMatch = matchesRef.current.find(m => m.id === upd.id)
+        setMatches(prev => prev.map(m => {
+          if (m.id !== upd.id) return m
+          const merged = { ...m, ...upd }
+          return { ...merged, is_brazil: m.is_brazil || merged.team_home === 'Brasil' || merged.team_away === 'Brasil' }
+        }))
+        if (upd.score_home != null && upd.score_away != null) {
+          const merged = { ...curMatch, ...upd }
+          const isBrazil = (curMatch?.is_brazil ?? false) || merged.team_home === 'Brasil' || merged.team_away === 'Brasil'
+          recomputeForMatch(upd.id, upd.score_home, upd.score_away, isBrazil)
         }
       })
       .subscribe()

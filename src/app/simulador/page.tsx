@@ -311,12 +311,15 @@ export default async function SimuladorPage() {
   const allMatchesWithOverrides = allMatches.map((m: any) => {
     const ov = knockoutTeamMap.get(m.id)
     if (!ov) return m
+    const effHome = ov.team_home || m.team_home
+    const effAway = ov.team_away || m.team_away
     return {
       ...m,
-      team_home: ov.team_home || m.team_home,
-      team_away: ov.team_away || m.team_away,
+      team_home: effHome,
+      team_away: effAway,
       flag_home: ov.flag_home || m.flag_home,
       flag_away: ov.flag_away || m.flag_away,
+      is_brazil: effHome === 'Brasil' || effAway === 'Brasil',
     }
   })
 
