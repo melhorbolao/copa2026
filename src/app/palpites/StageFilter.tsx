@@ -15,13 +15,13 @@ const STAGES: { label: string; value: StageKey }[] = [
 ]
 
 interface Props {
-  /** Default filter applied when no `etapa` param exists in the URL. */
-  defaultActiveRound: number | null
+  /** Etapa ativa default (fase knockout ou rodada de grupo) quando URL não tem `?etapa=`. */
+  defaultStage: StageKey | null
   /** Quais etapas o participante pode preencher (admin liberou + passou no corte). */
   fillableStages: Record<StageKey, boolean>
 }
 
-export function StageFilter({ defaultActiveRound, fillableStages }: Props) {
+export function StageFilter({ defaultStage, fillableStages }: Props) {
   const router = useRouter()
   const sp     = useSearchParams()
 
@@ -29,7 +29,7 @@ export function StageFilter({ defaultActiveRound, fillableStages }: Props) {
   const param = sp.get('etapa')
   const active = param === 'todos'
     ? 'todos'
-    : (param ?? (defaultActiveRound !== null ? `r${defaultActiveRound}` : 'todos'))
+    : (param ?? (defaultStage ?? 'todos'))
 
   const set = (v: string) => {
     const params = new URLSearchParams(sp.toString())

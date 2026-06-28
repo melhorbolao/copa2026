@@ -88,9 +88,10 @@ export interface PalpitesContentProps {
   groupAllBetsFilled: Record<string, boolean>
   filledBets: number
   totalGroupMatches: number
-  /** Rodada da fase de grupos com prazo ainda aberto (1/2/3 ou null). Usado como
-   *  filtro default quando a URL não tem `?etapa=`. */
-  defaultActiveRound: number | null
+  /** Etapa com prazo ainda aberto que o participante pode preencher — usada como
+   *  filtro default quando a URL não tem `?etapa=`. Prioriza fases knockout
+   *  (16 avos → oitavas → quartas…) sobre rodadas de grupo. */
+  defaultStage: StageKey | null
   /** Grupos com TODOS os jogos palpitados pelo usuário — guard do bracket pessoal. */
   userCompleteGroups: string[]
   userAllGroupsComplete: boolean
@@ -245,15 +246,15 @@ function PalpitesTabPane({
   liveScore, liveBreakdown, scorerMapping, thirdPts, participantId,
   totalMatches, totalBets, totalGroupBets,
   thirdCount, bonusCount, allGroupsFilled, alreadyFilled, nextDeadline,
-  defaultActiveRound, fillableStages,
+  defaultStage, fillableStages,
 }: PalpitesContentProps) {
   const sp = useSearchParams()
-  // Default etapa = rodada ativa (se URL não trouxer `?etapa=`).
+  // Default etapa = fase ativa (se URL não trouxer `?etapa=`).
   // `?etapa=todos` é o sentinel para "ver tudo"; internamente vira ''.
   const etapaParam = sp.get('etapa')
   const etapa = etapaParam === 'todos'
     ? ''
-    : (etapaParam ?? (defaultActiveRound !== null ? `r${defaultActiveRound}` : ''))
+    : (etapaParam ?? (defaultStage ?? ''))
   const grupo = sp.get('grupo') ?? ''
 
   const isKnockoutEtapa = etapa ? KNOCKOUT_ETAPAS.has(etapa) : false
@@ -396,7 +397,7 @@ function PalpitesTabPane({
         </div>
 
         <div className="mb-2 space-y-1.5">
-          <StageFilter defaultActiveRound={defaultActiveRound} fillableStages={fillableStages} />
+          <StageFilter defaultStage={defaultStage} fillableStages={fillableStages} />
           {isGroupEtapa && <GroupFilter />}
         </div>
 

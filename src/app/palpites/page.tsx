@@ -327,14 +327,33 @@ async function PalpitesData({ participantId }: { participantId: string }) {
   const filledBets        = groupBetCount
   const totalGroupMatches = groupMatches.length
 
-  // ── Default etapa = rodada ativa (item A) ─────────────────────────
-  // O servidor calcula o default para o cliente saber qual etapa exibir
-  // quando a URL não tem `?etapa=...`. Cliente continua reativo a mudanças.
+  // ── Default etapa = fase ativa para este participante ─────────────
+  // Prioridade: knockout fillable com prazo aberto → rodada de grupo → null.
   const now = new Date()
-  let defaultActiveRound: number | null = null
-  for (const r of [1, 2, 3]) {
-    const m = groupMatches.find(gm => gm.round === r)
-    if (m && new Date(m.betting_deadline) > now) { defaultActiveRound = r; break }
+
+  const KNOCKOUT_STAGE_MAP: { stage: StageKey; phases: string[] }[] = [
+    { stage: 'r32',   phases: ['round_of_32'] },
+    { stage: 'r16',   phases: ['round_of_16'] },
+    { stage: 'qf',    phases: ['quarterfinal'] },
+    { stage: 'sf',    phases: ['semifinal'] },
+    { stage: 'final', phases: ['third_place', 'final'] },
+  ]
+
+  let defaultStage: StageKey | null = null
+
+  for (const { stage, phases } of KNOCKOUT_STAGE_MAP) {
+    if (!fillableStages[stage]) continue
+    const hasOpenDeadline = knockoutMatches.some(
+      m => phases.includes((m as { phase: string }).phase) && new Date((m as { betting_deadline: string }).betting_deadline) > now
+    )
+    if (hasOpenDeadline) { defaultStage = stage; break }
+  }
+
+  if (!defaultStage) {
+    for (const r of [1, 2, 3]) {
+      const m = groupMatches.find(gm => gm.round === r)
+      if (m && new Date(m.betting_deadline) > now) { defaultStage = `r${r}` as StageKey; break }
+    }
   }
 
   const nextMatch = (matches ?? [])
@@ -387,7 +406,7 @@ async function PalpitesData({ participantId }: { participantId: string }) {
     groupAllBetsFilled,
     filledBets,
     totalGroupMatches,
-    defaultActiveRound,
+    defaultStage,
     userCompleteGroups: [...userCompletion.completeGroups],
     userAllGroupsComplete: userCompletion.allGroupsComplete,
     fillableStages,
