@@ -450,13 +450,6 @@ function G112CompactRanking({
     ...(cut2 > premioSpots ? [{ zone: 'corte2' as G112Zone, label: `2º corte (top ${cut2})` }] : []),
   ]
 
-  function blockBorderCls(bi: number): string {
-    if (bi === 0) return ''
-    if (bi === 1) return 'border-t border-gray-100 md:border-t-0 md:border-l lg:border-l'
-    if (bi === 2) return 'border-t border-gray-100 lg:border-t-0 lg:border-l'
-    return 'border-t border-gray-100 md:border-l lg:border-t-0 lg:border-l'
-  }
-
   return (
     <div className="mb-6 rounded-2xl border border-gray-200 bg-white shadow-sm">
 
@@ -476,42 +469,44 @@ function G112CompactRanking({
         </p>
       </div>
 
-      {/* 4 blocos em grid responsivo: 1 col mobile → 2 cols md → 4 cols lg */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
-        {blocks.map((block, bi) => (
-          <div key={bi} className={blockBorderCls(bi)}>
-            {/* cabeçalho do bloco */}
-            <div className={`${colsGrid} border-b border-gray-100 bg-gray-50 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-gray-400`}>
-              <span className="text-right pr-0.5">#</span>
-              <span className="pl-1">Participante</span>
-              <span className="text-right">PTS</span>
-            </div>
-            {/* linhas */}
-            {block.map((r, ri) => {
-              const z = g112ZoneOf(r)
-              const boundary = ri > 0 && g112ZoneOf(block[ri - 1]) !== z
-              const isActive = r.id === activeParticipantId
-              const isPanela = panelaSet.has(r.id)
-              const shouldHighlight = (
-                (highlightMode === 'me'     && isActive) ||
-                (highlightMode === 'panela' && (isActive || isPanela)) ||
-                (highlightMode === 'tribo'  && tribeMemberSet.has(r.id))
-              )
-              const highlightRing = shouldHighlight ? 'ring-1 ring-inset ring-red-500' : ''
-              const textCls = shouldHighlight ? 'text-red-600 font-semibold' : G112_ZONE_TEXT[z]
-              return (
-                <div
-                  key={r.id}
-                  className={`${colsGrid} px-2 py-[3px] text-[12px] ${G112_ZONE_ROW[z]} ${boundary ? 'border-t border-gray-200' : ''} ${highlightRing}`}
-                >
-                  <span className={`text-right pr-0.5 tabular-nums ${textCls}`}>{r.rank}</span>
-                  <span className={`pl-1 truncate ${textCls}`} title={r.apelido}>{r.apelido}</span>
-                  <span className={`text-right tabular-nums font-bold ${textCls}`}>{r.pts}</span>
+      {/* 4 blocos lado a lado — scroll horizontal no mobile */}
+      <div className="overflow-x-auto">
+        <div className="grid grid-cols-4 divide-x divide-gray-100" style={{ minWidth: '480px' }}>
+          {blocks.map((block, bi) => (
+              <div key={bi}>
+                {/* cabeçalho do bloco */}
+                <div className={`${colsGrid} border-b border-gray-100 bg-gray-50 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-gray-400`}>
+                  <span className="text-right pr-0.5">#</span>
+                  <span className="pl-1">Participante</span>
+                  <span className="text-right">PTS</span>
                 </div>
-              )
-            })}
-          </div>
-        ))}
+                {/* linhas */}
+                {block.map((r, ri) => {
+                  const z = g112ZoneOf(r)
+                  const boundary = ri > 0 && g112ZoneOf(block[ri - 1]) !== z
+                  const isActive = r.id === activeParticipantId
+                  const isPanela = panelaSet.has(r.id)
+                  const shouldHighlight = (
+                    (highlightMode === 'me'     && isActive) ||
+                    (highlightMode === 'panela' && (isActive || isPanela)) ||
+                    (highlightMode === 'tribo'  && tribeMemberSet.has(r.id))
+                  )
+                  const highlightRing = shouldHighlight ? 'ring-1 ring-inset ring-red-500' : ''
+                  const textCls = shouldHighlight ? 'text-red-600 font-semibold' : G112_ZONE_TEXT[z]
+                  return (
+                    <div
+                      key={r.id}
+                      className={`${colsGrid} px-2 py-[3px] text-[12px] ${G112_ZONE_ROW[z]} ${boundary ? 'border-t border-gray-200' : ''} ${highlightRing}`}
+                    >
+                      <span className={`text-right pr-0.5 tabular-nums ${textCls}`}>{r.rank}</span>
+                      <span className={`pl-1 truncate ${textCls}`} title={r.apelido}>{r.apelido}</span>
+                      <span className={`text-right tabular-nums font-bold ${textCls}`}>{r.pts}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            ))}
+        </div>
       </div>
 
       {/* Legenda */}
