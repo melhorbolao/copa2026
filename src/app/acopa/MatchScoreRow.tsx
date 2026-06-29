@@ -79,12 +79,10 @@ export const MatchScoreRow = memo(function MatchScoreRow({ match, canEdit, teamO
   const localDraw = home !== '' && away !== '' && !isNaN(localH) && !isNaN(localA) && localH === localA
   const showPenalty = isKnockout && (isDraw || localDraw)
 
-  const isBrazil = match.is_brazil || teamHome === 'Brasil' || teamAway === 'Brasil'
-
   const doSave = (h: number, a: number) => {
     setError('')
     startTransition(async () => {
-      const r1 = await saveOfficialScore(match.id, h, a, isBrazil)
+      const r1 = await saveOfficialScore(match.id, h, a)
       if (r1.error) { setError(r1.error); return }
       if (h !== a && isKnockout) {
         const r2 = await savePenaltyWinner(match.id, null)

@@ -48,11 +48,88 @@ async function getCallerPermissions() {
   return { isAdmin, isParticipant }
 }
 
+// Detecta no servidor se o jogo envolve o Brasil.
+// Caso simples: banco já tem is_brazil=true ou team_home/away é 'Brasil'.
+// Caso mata-mata com 'TBD': computa posição do Brasil no grupo, mapeia para
+// o slot do R32 e verifica se o matchId é o jogo correspondente.
+async function detectIsBrazilForMatch(
+  matchId: string,
+  match: { team_home: string; team_away: string; is_brazil: boolean },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+): Promise<boolean> {
+  if (match.is_brazil) return true
+  if (match.team_home === 'Brasil' || match.team_away === 'Brasil') return true
+
+  // Busca todos os jogos do grupo que contém Brasil
+  const { data: brazilMatches } = await admin
+    .from('matches')
+    .select('group_name, team_home, team_away, score_home, score_away')
+    .eq('phase', 'group')
+    .eq('is_brazil', true)
+
+  if (!brazilMatches?.length) return false
+
+  const brazilGroup: string = brazilMatches[0].group_name
+  if (!brazilGroup) return false
+
+  // Busca TODOS os times do mesmo grupo (não só is_brazil=true)
+  const { data: fullGroup } = await admin
+    .from('matches')
+    .select('team_home, team_away, score_home, score_away')
+    .eq('phase', 'group')
+    .eq('group_name', brazilGroup)
+
+  if (!fullGroup?.length) return false
+  if (fullGroup.some((m: { score_home: unknown }) => m.score_home === null)) return false
+
+  // Calcula classificação do grupo
+  const pts: Record<string, number> = {}
+  const gd:  Record<string, number> = {}
+  const gf:  Record<string, number> = {}
+  for (const m of fullGroup) {
+    const [sh, sa] = [m.score_home as number, m.score_away as number]
+    for (const [team, scored, conceded] of [
+      [m.team_home, sh, sa], [m.team_away, sa, sh],
+    ] as [string, number, number][]) {
+      pts[team] = (pts[team] ?? 0) + (scored > conceded ? 3 : scored === conceded ? 1 : 0)
+      gd[team]  = (gd[team] ?? 0) + (scored - conceded)
+      gf[team]  = (gf[team] ?? 0) + scored
+    }
+  }
+  const sorted = Object.keys(pts).sort(
+    (a, b) => (pts[b] - pts[a]) || (gd[b] - gd[a]) || (gf[b] - gf[a])
+  )
+  const brazilPos = sorted.indexOf('Brasil')  // 0=1º, 1=2º, 2=3º
+  if (brazilPos < 0) return false
+
+  // Mapeia posição → slots no R32_MATCHES
+  const g = brazilGroup
+  const { R32_MATCHES } = await import('@/lib/bracket/engine')
+  const brazilMatchNums = R32_MATCHES
+    .filter(m => {
+      if (brazilPos === 0) return m.slotA === `1${g}` || m.slotB === `1${g}`
+      if (brazilPos === 1) return m.slotA === `2${g}` || m.slotB === `2${g}`
+      // 3º lugar: procura slot '3rd:' que inclua o grupo
+      return (m.slotA.startsWith('3rd:') && m.slotA.includes(g)) ||
+             (m.slotB.startsWith('3rd:') && m.slotB.includes(g))
+    })
+    .map(m => parseInt(m.matchNum.slice(1), 10))
+
+  if (!brazilMatchNums.length) return false
+
+  const { data: candidates } = await admin
+    .from('matches')
+    .select('id')
+    .in('match_number', brazilMatchNums)
+
+  return (candidates ?? []).some((m: { id: string }) => m.id === matchId)
+}
+
 export async function saveOfficialScore(
   matchId: string,
   scoreHome: number | null,
   scoreAway: number | null,
-  isBrazil?: boolean,
 ): Promise<{ error?: string }> {
   try {
     const perms = await getCallerPermissions()
@@ -60,10 +137,15 @@ export async function saveOfficialScore(
     const { isAdmin, isParticipant } = perms
     if (!isAdmin && !isParticipant) return { error: 'Sem permissão' }
 
-    const supabase = await createClient()
-    const { data: match } = await supabase
+    const admin = createAuthAdminClient()
+
+    // Busca match_datetime, team_home, team_away e is_brazil em uma única query.
+    // is_brazil derivado dos nomes é mais confiável do que o valor do DB (pode estar desatualizado
+    // para jogos de mata-mata onde o time ainda aparece como 'TBD').
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: match } = await (admin as any)
       .from('matches')
-      .select('match_datetime')
+      .select('match_datetime, team_home, team_away, is_brazil')
       .eq('id', matchId)
       .single()
     if (!match) return { error: 'Jogo não encontrado' }
@@ -72,26 +154,26 @@ export async function saveOfficialScore(
       return { error: 'Fora da janela de edição (início do jogo + 4h)' }
     }
 
-    const admin = createAuthAdminClient()
+    // Detecta Brasil no servidor: usa o valor atual do banco OU consulta
+    // a tabela de grupos para saber se este slot pertence ao Brasil.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const serverIsBrazil = await detectIsBrazilForMatch(matchId, match as any, admin as any)
 
-    // Persiste is_brazil=true no banco para que recalculateAll e outros caminhos
-    // também apliquem o ×2, mesmo quando team_home/team_away ainda são 'TBD'.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (admin as any)
       .from('matches')
       .update({
         score_home: scoreHome,
         score_away: scoreAway,
-        ...(isBrazil ? { is_brazil: true } : {}),
+        ...(serverIsBrazil ? { is_brazil: true } : {}),
       })
       .eq('id', matchId)
 
     if (error) return { error: error.message }
     revalidateTag('matches')
 
-    // Await explícito: fire-and-forget pode ser abortado pelo Next.js antes de terminar.
     try {
-      await recalculateAfterMatchScore(matchId, isBrazil)
+      await recalculateAfterMatchScore(matchId, serverIsBrazil || undefined)
     } catch (e) {
       console.error('[scoring/match]', e)
     }
