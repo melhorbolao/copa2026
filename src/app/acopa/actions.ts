@@ -73,9 +73,15 @@ export async function saveOfficialScore(
     }
 
     const admin = createAuthAdminClient()
+
+    // Persiste is_brazil=true no banco para que recalculateAll e outros caminhos
+    // também apliquem o ×2, mesmo quando team_home/team_away ainda são 'TBD'.
+    const updatePayload: Record<string, unknown> = { score_home: scoreHome, score_away: scoreAway }
+    if (isBrazil) updatePayload.is_brazil = true
+
     const { error } = await admin
       .from('matches')
-      .update({ score_home: scoreHome, score_away: scoreAway })
+      .update(updatePayload)
       .eq('id', matchId)
 
     if (error) return { error: error.message }
