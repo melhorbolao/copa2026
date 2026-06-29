@@ -37,7 +37,7 @@ function matchWinner(
 // ── Internal: update points without refreshing totals ─────────────────────────
 // These return the participant IDs they touched, so the caller can batch-refresh.
 
-async function _updateMatchBetPoints(matchId: string, admin: AdminClient, rules: RuleMap): Promise<string[]> {
+async function _updateMatchBetPoints(matchId: string, admin: AdminClient, rules: RuleMap, isBrazilOverride?: boolean): Promise<string[]> {
   const { data: match } = await admin
     .from('matches')
     .select('id, score_home, score_away, is_brazil, team_home, team_away')
@@ -58,8 +58,8 @@ async function _updateMatchBetPoints(matchId: string, admin: AdminClient, rules:
   if (!bets?.length) return []
 
   // is_brazil pode estar desatualizado no DB para jogos de mata-mata inseridos com 'TBD'.
-  // O trigger fn_sync_is_brazil_from_teams mantém sincronizado, mas derivamos aqui também como segurança.
-  const isBrazil = match.is_brazil || match.team_home === 'Brasil' || match.team_away === 'Brasil'
+  // isBrazilOverride é passado pelo cliente quando ele conhece o time real (via TeamOverride do chaveamento).
+  const isBrazil = isBrazilOverride ?? (match.is_brazil || match.team_home === 'Brasil' || match.team_away === 'Brasil')
 
   const actualResult = getMatchResult(match.score_home, match.score_away)
   const threshold    = rules['percentual_zebra'] ?? 15
@@ -454,7 +454,7 @@ export async function refreshParticipantTotals(participantIds: string[]): Promis
 
 const KNOCKOUT_SCORING_PHASES = new Set(['quarterfinal', 'semifinal', 'third_place', 'final'])
 
-export async function recalculateAfterMatchScore(matchId: string): Promise<void> {
+export async function recalculateAfterMatchScore(matchId: string, isBrazilOverride?: boolean): Promise<void> {
   const admin = createAuthAdminClient()
 
   const { data: match } = await admin
@@ -468,7 +468,7 @@ export async function recalculateAfterMatchScore(matchId: string): Promise<void>
   const rules  = await loadRules(admin)
   const allIds = new Set<string>()
 
-  ;(await _updateMatchBetPoints(matchId, admin, rules)).forEach(id => allIds.add(id))
+  ;(await _updateMatchBetPoints(matchId, admin, rules, isBrazilOverride)).forEach(id => allIds.add(id))
 
   if (match.phase === 'group' && match.group_name) {
     ;(await _updateGroupBetPoints(match.group_name, admin, rules)).forEach(id => allIds.add(id))

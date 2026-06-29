@@ -52,6 +52,7 @@ export async function saveOfficialScore(
   matchId: string,
   scoreHome: number | null,
   scoreAway: number | null,
+  isBrazil?: boolean,
 ): Promise<{ error?: string }> {
   try {
     const perms = await getCallerPermissions()
@@ -79,7 +80,7 @@ export async function saveOfficialScore(
 
     if (error) return { error: error.message }
     revalidateTag('matches')
-    recalculateAfterMatchScore(matchId).catch(e => console.error('[scoring/match]', e))
+    recalculateAfterMatchScore(matchId, isBrazil).catch(e => console.error('[scoring/match]', e))
     return {}
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Erro inesperado' }
