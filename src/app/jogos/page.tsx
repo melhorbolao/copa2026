@@ -10,6 +10,7 @@ import { JogosDashboard } from './JogosDashboard'
 import { filterBetsByDeadline, getServerNow } from '@/lib/production-mode'
 import { scoreTournamentBet } from '@/lib/scoring/engine'
 import type { TournamentResults } from '@/lib/scoring/engine'
+import { calcGroupStandings } from '@/lib/bracket/engine'
 
 export const metadata = {}
 
@@ -70,7 +71,7 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
 
   const [
     matchesRes, participantsRes, betsRes, rulesRes, teamAbbrRes,
-    groupBetsRaw, tournamentBetsPicksRes, scoresRes,
+    groupBetsRaw, tournamentBetsPicksRes, thirdBetsRaw, thirdScoringRes,
   ] = await Promise.all([
     supabase.from('matches')
       .select('id, match_number, phase, round, group_name, team_home, team_away, flag_home, flag_away, match_datetime, city, betting_deadline, score_home, score_away, penalty_winner, is_brazil')
@@ -82,7 +83,8 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
     // Dados extras para calcular storedTotals com a mesma fórmula da classificacaoMB
     fetchAll('group_bets', 'participant_id, points'),
     admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer'),
-    admin.from('participant_scores').select('participant_id, pts_thirds'),
+    fetchAll('third_place_bets', 'participant_id, group_name, team'),
+    admin.from('third_place_scoring').select('group_name, enabled'),
   ])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -151,10 +153,37 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
     if (b.points != null) ptsGroupsMap[b.participant_id] = (ptsGroupsMap[b.participant_id] ?? 0) + b.points
   }
 
-  const ptsThirdsMap: Record<string, number> = Object.fromEntries(
+  // Calcula ptsThirdsMap ao vivo (mesma lógica da classificacaoMB) para evitar stale data
+  const thirdScoringEnabled = new Set<string>(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ((scoresRes.data ?? []) as any[]).map((s: any) => [s.participant_id, s.pts_thirds ?? 0])
+    ((thirdScoringRes.data ?? []) as any[]).filter((r: any) => r.enabled).map((r: any) => r.group_name as string)
   )
+  const gmsSlim = allMatchesList
+    .filter((m: any) => m.phase === 'group' && m.group_name)
+    .map((m: any) => ({ id: m.id, group_name: m.group_name, phase: m.phase, team_home: m.team_home, team_away: m.team_away, flag_home: '', flag_away: '' }))
+  const officialScoreMap = new Map<string, { match_id: string; score_home: number; score_away: number }>()
+  for (const m of allMatchesList) {
+    if (m.score_home !== null && m.score_away !== null)
+      officialScoreMap.set(m.id, { match_id: m.id, score_home: m.score_home, score_away: m.score_away })
+  }
+  const officialGroupStandings = calcGroupStandings(gmsSlim, officialScoreMap)
+  const actualThirdByGroup = new Map<string, string>()
+  for (const standing of officialGroupStandings) {
+    const g = standing.group
+    if (!thirdScoringEnabled.has(g)) continue
+    const groupMatchIds = gmsSlim.filter((m: any) => m.group_name === g).map((m: any) => m.id as string)
+    if (!groupMatchIds.every((id: string) => officialScoreMap.has(id))) continue
+    const third = standing.teams[2]?.team
+    if (third) actualThirdByGroup.set(g, third)
+  }
+  const thirdPts = rules['terceiro_classificado'] ?? 3
+  const ptsThirdsMap: Record<string, number> = {}
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const bet of (thirdBetsRaw as any[]) as { participant_id: string; group_name: string; team: string }[]) {
+    const actualThird = actualThirdByGroup.get(bet.group_name)
+    if (actualThird && bet.team === actualThird)
+      ptsThirdsMap[bet.participant_id] = (ptsThirdsMap[bet.participant_id] ?? 0) + thirdPts
+  }
 
   // Resultados do torneio para ptsG4 ao vivo
   const qfDone  = scoredMatches.filter((m: any) => m.phase === 'quarterfinal')
