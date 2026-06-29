@@ -240,35 +240,22 @@ export function JogosDashboard({
     return out
   }, [participants, livePoints, matchPoints])
 
-  // Pontos estritamente antes deste jogo: parte de storedTotals e subtrai os pts armazenados
-  // do jogo atual e de todos os jogos seguintes (que já estão em storedTotals).
-  const ptsBeforeMatch = useMemo(() => {
-    const pts: Record<string, number> = {}
-    for (const p of participants) pts[p.id] = storedTotals[p.id] ?? 0
-    for (let i = matchIdx; i < matches.length; i++) {
-      const m = matches[i]
-      for (const b of bets.filter(bx => bx.match_id === m.id && bx.points !== null)) {
-        pts[b.participant_id] = (pts[b.participant_id] ?? 0) - (b.points ?? 0)
-      }
-    }
-    return pts
-  }, [matches, matchIdx, bets, participants, storedTotals]) // eslint-disable-line
-
-  // Ranking before: posição imediatamente antes deste jogo (sem este jogo nem os posteriores)
+  // Ranking before: usa ptsWithoutMatch (livePoints sem este jogo) para capturar o delta
+  // ao vivo de jogos recentes ainda não processados pelo cron, evitando posição desatualizada.
   const rankBefore = useMemo(() => {
-    const sorted = [...participants].sort((a, b) => (ptsBeforeMatch[b.id] ?? 0) - (ptsBeforeMatch[a.id] ?? 0))
+    const sorted = [...participants].sort((a, b) => (ptsWithoutMatch[b.id] ?? 0) - (ptsWithoutMatch[a.id] ?? 0))
     const out: Record<string, number> = {}
     sorted.forEach((p, i) => {
-      out[p.id] = i > 0 && (ptsBeforeMatch[p.id] ?? 0) === (ptsBeforeMatch[sorted[i - 1].id] ?? 0)
+      out[p.id] = i > 0 && (ptsWithoutMatch[p.id] ?? 0) === (ptsWithoutMatch[sorted[i - 1].id] ?? 0)
         ? out[sorted[i - 1].id]
         : i + 1
     })
     return out
-  }, [participants, ptsBeforeMatch])
+  }, [participants, ptsWithoutMatch])
 
-  // Ranking after: posição imediatamente após este jogo (sem considerar jogos posteriores)
+  // Ranking after: ptsWithoutMatch + matchPoints = livePoints — base consistente com rankBefore
   const rankAfter = useMemo(() => {
-    const ptsAfter = (p: { id: string }) => (ptsBeforeMatch[p.id] ?? 0) + (matchPoints[p.id] ?? 0)
+    const ptsAfter = (p: { id: string }) => (ptsWithoutMatch[p.id] ?? 0) + (matchPoints[p.id] ?? 0)
     const sorted = [...participants].sort((a, b) => ptsAfter(b) - ptsAfter(a))
     const out: Record<string, number> = {}
     sorted.forEach((p, i) => {
@@ -277,7 +264,7 @@ export function JogosDashboard({
         : i + 1
     })
     return out
-  }, [participants, ptsBeforeMatch, matchPoints])
+  }, [participants, ptsWithoutMatch, matchPoints])
 
   // Ranking geral ao vivo — usa livePoints (todos os jogos, incluindo não recalculados)
   const currentRank = useMemo(() => {
