@@ -76,17 +76,26 @@ export async function saveOfficialScore(
 
     // Persiste is_brazil=true no banco para que recalculateAll e outros caminhos
     // também apliquem o ×2, mesmo quando team_home/team_away ainda são 'TBD'.
-    const updatePayload: Record<string, unknown> = { score_home: scoreHome, score_away: scoreAway }
-    if (isBrazil) updatePayload.is_brazil = true
-
-    const { error } = await admin
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (admin as any)
       .from('matches')
-      .update(updatePayload)
+      .update({
+        score_home: scoreHome,
+        score_away: scoreAway,
+        ...(isBrazil ? { is_brazil: true } : {}),
+      })
       .eq('id', matchId)
 
     if (error) return { error: error.message }
     revalidateTag('matches')
-    recalculateAfterMatchScore(matchId, isBrazil).catch(e => console.error('[scoring/match]', e))
+
+    // Await explícito: fire-and-forget pode ser abortado pelo Next.js antes de terminar.
+    try {
+      await recalculateAfterMatchScore(matchId, isBrazil)
+    } catch (e) {
+      console.error('[scoring/match]', e)
+    }
+
     return {}
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Erro inesperado' }
