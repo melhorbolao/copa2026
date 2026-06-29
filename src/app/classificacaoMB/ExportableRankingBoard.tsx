@@ -42,7 +42,11 @@ function formatDate(iso: string) {
   } catch { return '' }
 }
 
-interface ExportRow { id: string; apelido: string; pts: number; rank: number }
+interface ExportRow {
+  id: string; apelido: string; pts: number; rank: number
+  lastMatchBet: { score_home: number; score_away: number } | null
+  nextMatchBet: { score_home: number; score_away: number } | null
+}
 interface LastMatch { abbr_home: string; abbr_away: string; score_home: number; score_away: number; penalty_winner: string | null }
 
 interface Props {
@@ -52,6 +56,9 @@ interface Props {
   matchesRegistered: number
   groupsDefined: number
   lastMatch: LastMatch | null
+  nextMatch?: LastMatch | null
+  showLastMatch?: boolean
+  showNextMatch?: boolean
   highlightMode?: HighlightMode
   activeParticipantId?: string
   panelaSet?: Set<string>
@@ -61,7 +68,8 @@ interface Props {
 }
 
 export function ExportableRankingBoard({
-  ranked, premioSpots, renderedAt, matchesRegistered, groupsDefined, lastMatch,
+  ranked, premioSpots, renderedAt, matchesRegistered, groupsDefined, lastMatch, nextMatch,
+  showLastMatch = false, showNextMatch = false,
   highlightMode, activeParticipantId, panelaSet, tribeMemberSet,
   mode = 'full',
 }: Props) {
@@ -87,6 +95,14 @@ export function ExportableRankingBoard({
     if (!isG112 && cut1Line !== null && r.pts >= cut1Line) return 'corte1'
     return 'out'
   }
+
+  const showLast = isG112 && showLastMatch
+  const showNext = isG112 && showNextMatch
+  const colsGrid = showLast && showNext
+    ? 'grid grid-cols-[1.5rem_1fr_2rem_3.5rem_3.5rem]'
+    : showLast || showNext
+      ? 'grid grid-cols-[1.5rem_1fr_2rem_3.5rem]'
+      : 'grid grid-cols-[1.5rem_1fr_2rem]'
 
   const blockSize = Math.ceil(n / blockCount)
   const blocks = Array.from({ length: blockCount }, (_, i) => ranked.slice(i * blockSize, (i + 1) * blockSize)).filter(b => b.length > 0)
@@ -121,10 +137,12 @@ export function ExportableRankingBoard({
       <div className="grid divide-x divide-gray-100" style={{ gridTemplateColumns: `repeat(${blocks.length}, 1fr)` }}>
         {blocks.map((block, bi) => (
           <div key={bi}>
-            <div className="grid grid-cols-[1.5rem_1fr_2rem] border-b border-gray-100 bg-gray-50 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-gray-400">
+            <div className={`${colsGrid} border-b border-gray-100 bg-gray-50 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-gray-400`}>
               <span className="text-right pr-0.5">#</span>
               <span className="pl-1">Participante</span>
               <span className="text-right">PTS</span>
+              {showLast && <span className="text-center truncate">{lastMatch ? `${lastMatch.abbr_home}×${lastMatch.abbr_away}` : 'Últ'}</span>}
+              {showNext && <span className="text-center truncate">{nextMatch ? `${nextMatch.abbr_home}×${nextMatch.abbr_away}` : 'Próx'}</span>}
             </div>
             {block.map((r, ri) => {
               const z = zoneOf(r)
@@ -143,11 +161,21 @@ export function ExportableRankingBoard({
               return (
                 <div
                   key={r.id}
-                  className={`grid grid-cols-[1.5rem_1fr_2rem] px-2 py-[3px] text-[12px] ${ZONE_ROW[z]} ${boundary ? 'border-t border-gray-200' : ''} ${highlightRing}`}
+                  className={`${colsGrid} px-2 py-[3px] text-[12px] ${ZONE_ROW[z]} ${boundary ? 'border-t border-gray-200' : ''} ${highlightRing}`}
                 >
                   <span className={`text-right pr-0.5 tabular-nums ${textCls}`}>{r.rank}</span>
                   <span className={`pl-1 truncate ${textCls}`}>{r.apelido}{!isG112 && z === 'last' && ' 🔦'}</span>
                   <span className={`text-right tabular-nums font-bold ${textCls}`}>{r.pts}</span>
+                  {showLast && (
+                    <span className="text-center font-mono tabular-nums text-gray-600">
+                      {r.lastMatchBet ? `${r.lastMatchBet.score_home}-${r.lastMatchBet.score_away}` : '—'}
+                    </span>
+                  )}
+                  {showNext && (
+                    <span className="text-center font-mono tabular-nums text-gray-600">
+                      {r.nextMatchBet ? `${r.nextMatchBet.score_home}-${r.nextMatchBet.score_away}` : '—'}
+                    </span>
+                  )}
                 </div>
               )
             })}

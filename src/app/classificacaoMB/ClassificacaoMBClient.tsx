@@ -1165,6 +1165,9 @@ export function ClassificacaoMBClient({
             matchesRegistered={matchesRegistered}
             groupsDefined={groupsDefined}
             lastMatch={lastMatch}
+            nextMatch={nextMatch}
+            showLastMatch={showLastMatch}
+            showNextMatch={showNextMatch}
             highlightMode={highlightMode}
             activeParticipantId={activeParticipantId}
             panelaSet={panelaSet}
