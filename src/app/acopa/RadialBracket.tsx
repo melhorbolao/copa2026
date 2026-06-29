@@ -28,11 +28,11 @@ interface Props {
 const CX = 500, CY = 500
 
 // Raios dos anéis: externo (ring 0, 32 times) → interno (ring 4, 2 finalistas)
-const RING_R: number[] = [424, 342, 260, 184, 114]
+const RING_R: number[] = [450, 360, 272, 192, 120]
 
-// Dimensões dos nós em unidades SVG [width, height]
-const NODE_W: number[] = [54,  70,  82,  96, 112]
-const NODE_H: number[] = [14,  16,  18,  20,  22]
+// Todos os nós mostram apenas a bandeira (lg = 48×36), sem texto
+const NODE_W = 54   // 48 de bandeira + 3px padding cada lado
+const NODE_H = 42   // 36 de bandeira + 3px padding cada lado
 
 // ── Matemática ─────────────────────────────────────────────────────────────────
 
@@ -302,26 +302,21 @@ export function RadialBracket({ r32Slots, knockoutMatches }: Props) {
         ))}
 
         {/* Nós do anel externo (32 times) */}
-        {outerNodes.map(({ key, ...n }) => (
+        {outerNodes.map(({ key, ring: _r, label: _l, ...n }) => (
           <BracketNodeCell key={key} {...n} />
         ))}
 
         {/* Nós dos anéis internos (rings 1–4) */}
-        {innerNodes.map(({ key, ...n }) => (
+        {innerNodes.map(({ key, ring: _r, label: _l, ...n }) => (
           <BracketNodeCell key={key} {...n} />
         ))}
 
         {/* Centro: troféu / campeão */}
         {champion ? (
-          <foreignObject x={CX - 44} y={CY - 22} width={88} height={44} overflow="visible">
-            <div
-              className="flex flex-col items-center justify-center gap-0.5 h-full w-full rounded-xl border-2 border-amarelo-400 bg-amarelo-50 shadow-md px-1"
-            >
-              <div className="flex items-center gap-1 leading-none">
-                <Flag code={champFlag} size="xs" className="shrink-0" />
-                <span className="text-[8px] font-black text-amarelo-800 truncate max-w-[60px]">{champion}</span>
-              </div>
-              <span className="text-base leading-none">🏆</span>
+          <foreignObject x={CX - 40} y={CY - 32} width={80} height={64} overflow="visible">
+            <div className="flex flex-col items-center justify-center gap-1 h-full w-full rounded-xl border-2 border-amarelo-400 bg-amarelo-50 shadow-md">
+              <Flag code={champFlag} size="md" />
+              <span className="text-lg leading-none">🏆</span>
             </div>
           </foreignObject>
         ) : (
@@ -329,7 +324,7 @@ export function RadialBracket({ r32Slots, knockoutMatches }: Props) {
             x={CX} y={CY + 10}
             textAnchor="middle"
             dominantBaseline="middle"
-            fontSize={32}
+            fontSize={36}
             className="select-none"
           >
             🏆
@@ -342,12 +337,11 @@ export function RadialBracket({ r32Slots, knockoutMatches }: Props) {
 
 // ── Sub-componente: nó individual ─────────────────────────────────────────────
 
-function BracketNodeCell({ ring, x, y, team, flag, label, isWin }: BracketNode) {
-  const w = NODE_W[ring]
-  const h = NODE_H[ring]
+function BracketNodeCell({ x, y, team, flag, isWin }: Omit<BracketNode, 'key' | 'label' | 'ring'> & { isWin: boolean }) {
+  const w = NODE_W
+  const h = NODE_H
 
   if (team) {
-    const fontSize = ring <= 1 ? 7 : ring <= 2 ? 8 : 9
     return (
       <foreignObject
         x={x - w / 2} y={y - h / 2}
@@ -356,15 +350,11 @@ function BracketNodeCell({ ring, x, y, team, flag, label, isWin }: BracketNode) 
       >
         <div
           className={[
-            'flex w-full h-full items-center gap-[2px] rounded px-[2px] leading-none overflow-hidden shadow-sm border',
-            isWin
-              ? 'bg-verde-50 border-verde-300 font-bold text-verde-800'
-              : 'bg-white border-gray-200 text-gray-600',
+            'flex w-full h-full items-center justify-center rounded-sm shadow border',
+            isWin ? 'border-verde-400 ring-1 ring-verde-400' : 'border-gray-200 bg-white',
           ].join(' ')}
-          style={{ fontSize }}
         >
-          <Flag code={flag} size="xs" className="shrink-0" />
-          <span className="truncate">{team}</span>
+          <Flag code={flag} size="lg" />
         </div>
       </foreignObject>
     )
@@ -376,12 +366,7 @@ function BracketNodeCell({ ring, x, y, team, flag, label, isWin }: BracketNode) 
       width={w} height={h}
       overflow="visible"
     >
-      <div
-        className="flex w-full h-full items-center justify-center rounded border border-dashed border-gray-200 bg-gray-50 leading-none text-gray-400"
-        style={{ fontSize: ring <= 1 ? 6 : 7 }}
-      >
-        {label}
-      </div>
+      <div className="w-full h-full rounded-sm border border-dashed border-gray-200 bg-gray-50" />
     </foreignObject>
   )
 }
