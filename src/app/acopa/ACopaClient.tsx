@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { MatchScoreRow } from './MatchScoreRow'
 import { OfficialGroupCard } from './OfficialGroupCard'
 import { OfficialBracketView } from './OfficialBracketView'
+import { RadialBracket } from './RadialBracket'
 import { ThirdsTable } from '@/app/tabela/ThirdsTable'
 import { saveOfficialTopScorer, toggleThirdPlaceScoring } from './actions'
 import { isDeadlinePassed } from '@/utils/date'
@@ -343,6 +344,21 @@ export function ACopaClient({ initialMatches, isAdmin, initialOfficialTopScorer,
 
   return (
     <div>
+      {/* ── Chaveamento Radial (visualização inicial) ──────────────────────── */}
+      <div className="mb-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="flex items-center gap-2 px-4 py-3" style={{ backgroundColor: '#002776' }}>
+          <span className="text-sm font-black uppercase tracking-widest text-white">
+            🌐 Chaveamento Radial
+          </span>
+          <span className="text-[11px] font-medium text-white/60">
+            teia do torneio · baseado nos resultados oficiais
+          </span>
+        </div>
+        <div className="p-3">
+          <RadialBracket r32Slots={r32Slots} knockoutMatches={knockoutMatches} />
+        </div>
+      </div>
+
       {/* ── Filtros ─────────────────────────────────────────────────────────── */}
       <div className="mb-4 flex flex-wrap gap-2">
         {/* Fases */}
