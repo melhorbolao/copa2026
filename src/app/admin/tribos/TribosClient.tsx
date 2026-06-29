@@ -43,10 +43,9 @@ export function TribosClient({ initialTribes, participants }: Props) {
     startTransition(async () => {
       const res = await createTribo(newName)
       if (res.error) { showMsg(false, res.error); return }
-      // Refetch tribes list via reload (simplest approach)
       const newTribes: Tribe[] = [
         ...tribes,
-        { id: crypto.randomUUID(), name: newName.trim(), created_at: new Date().toISOString() },
+        res.tribe!,
       ].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
       setTribes(newTribes)
       setNewName('')

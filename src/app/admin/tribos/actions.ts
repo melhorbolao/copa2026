@@ -53,16 +53,20 @@ export async function getTribeMemberIds(tribeId: string): Promise<string[]> {
   return ((data ?? []) as { participant_id: string }[]).map(r => r.participant_id)
 }
 
-export async function createTribo(name: string): Promise<{ error?: string }> {
+export async function createTribo(name: string): Promise<{ error?: string; tribe?: Tribe }> {
   try { await requireTribosAdmin() } catch { return { error: 'Acesso negado' } }
   const trimmed = name.trim()
   if (!trimmed) return { error: 'Nome obrigatório' }
   const admin = createAuthAdminClient()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (admin as any).from('tribes').insert({ name: trimmed })
+  const { data, error } = await (admin as any)
+    .from('tribes')
+    .insert({ name: trimmed })
+    .select('id, name, created_at')
+    .single()
   if (error) return { error: error.message }
   revalidatePath('/admin/tribos')
-  return {}
+  return { tribe: data as Tribe }
 }
 
 export async function renameTribo(id: string, name: string): Promise<{ error?: string }> {
