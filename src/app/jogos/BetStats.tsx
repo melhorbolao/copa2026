@@ -256,12 +256,14 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankB
 
   const medalTier = useMemo(() => {
     const m = new Map<string, number>()
+    // Para jogo sem placar, usa ranking atual; para jogo completo, usa ranking pós-jogo
+    const rankMap = match.score_home !== null ? rankAfter : currentRank
     for (const p of participants) {
-      const r = rankAfter[p.id]
+      const r = rankMap[p.id]
       if (r >= 1 && r <= 3) m.set(p.id, r)
     }
     return m
-  }, [participants, rankAfter])
+  }, [participants, rankAfter, currentRank, match.score_home])
 
   const lanternPids = useMemo(() => {
     const lastRank = Math.max(0, ...participants.map(p => rankAfter[p.id] ?? 0))
