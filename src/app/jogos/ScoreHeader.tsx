@@ -4,8 +4,7 @@
 import { useState, useTransition } from 'react'
 import { Flag } from '@/components/ui/Flag'
 import { saveOfficialScore } from '@/app/acopa/actions'
-import type { MatchFull, AttendanceRow, Participant } from './JogosDashboard'
-import { upsertAttendance } from './actions'
+import type { MatchFull } from './JogosDashboard'
 
 const CYAN = '#04EFD0'
 const EDIT_WINDOW_MS = 4 * 60 * 60 * 1000
@@ -34,18 +33,12 @@ interface Props {
   userId: string
   goalAnim: { home: boolean; away: boolean }
   isZebra: boolean
-  presentCount: number
-  attendance: AttendanceRow[]
-  participants: Participant[]
-  userToParticipants: Record<string, string[]>
-  activeParticipantId: string | null
   onNavigate: (dir: -1 | 1) => void
   onScoreSaved: (sh: number | null, sa: number | null) => void
 }
 
 export function ScoreHeader({
   match, matches, matchIdx, abbr, isAdmin, userId, goalAnim, isZebra,
-  presentCount, attendance, participants, userToParticipants, activeParticipantId,
   onNavigate, onScoreSaved,
 }: Props) {
   const [editing, setEditing]   = useState(false)
@@ -54,14 +47,7 @@ export function ScoreHeader({
   const [saveErr, setSaveErr]   = useState('')
   const [saving, startSave]     = useTransition()
 
-  const [showPresence, setShowPresence] = useState(false)
-  const [presenceSelecting, setPresenceSelecting] = useState(false)
-  const [selectedPids, setSelectedPids] = useState<string[]>([])
-  const [presencePending, startPresence] = useTransition()
-
   const canEdit = canEditScore(match, isAdmin)
-  const myAttendance = attendance.find(a => a.user_id === userId)
-  const amPresent = !!myAttendance
 
   const startEdit = () => {
     setIh(match.score_home !== null ? String(match.score_home) : '')
@@ -83,39 +69,6 @@ export function ScoreHeader({
     })
   }
 
-  const myPids       = userToParticipants[userId] ?? []
-  const myParticipants = participants.filter(p => myPids.includes(p.id))
-
-  const openPresenceEditor = () => {
-    if (amPresent) {
-      // Pre-select what's already saved (intersection with user's own pids)
-      const current = (myAttendance?.participant_ids ?? []).filter(id => myPids.includes(id))
-      setSelectedPids(current)
-    } else {
-      // Default: only the active participant (or first if no active)
-      const def = activeParticipantId && myPids.includes(activeParticipantId)
-        ? [activeParticipantId]
-        : myPids.slice(0, 1)
-      setSelectedPids(def)
-    }
-    setPresenceSelecting(true)
-  }
-
-  const confirmPresence = () => {
-    startPresence(async () => {
-      if (selectedPids.length === 0) {
-        await upsertAttendance(match.id, [], false)
-      } else {
-        await upsertAttendance(match.id, selectedPids, true)
-      }
-      setPresenceSelecting(false)
-    })
-  }
-
-  const presentPids = new Set<string>()
-  for (const a of attendance) for (const pid of a.participant_ids ?? []) presentPids.add(pid)
-  const presentNames = participants.filter(p => presentPids.has(p.id)).map(p => p.apelido)
-
   const phaseLabel = { round_of_32: '16 Avos', round_of_16: 'Oitavas', quarterfinal: 'Quartas', semifinal: 'Semifinal', third_place: '3º Lugar', final: 'Final' }[match.phase] ?? match.phase
 
   return (
@@ -127,7 +80,7 @@ export function ScoreHeader({
           className="w-full rounded-2xl shadow-2xl"
           style={{ background: '#2a2a2a', border: '1px solid #3a3a3a' }}
         >
-          {/* Top row: nav+phase | scoreboard | date+stadium */}
+          {/* Top row: nav+phase | scoreboard | date */}
           <div className="flex items-center gap-1 px-3 pt-3 pb-1">
 
             {/* Left: stacked nav arrows + phase label */}
@@ -211,7 +164,7 @@ export function ScoreHeader({
 
             </div>
 
-            {/* Right: date/city + stadium icon — flex-col mirrors center section height */}
+            {/* Right: date/city */}
             <div className="flex flex-col flex-1 items-end min-w-0">
               <div className="flex items-center gap-1.5 justify-end w-full">
                 <div className="min-w-0 text-right">
@@ -223,19 +176,6 @@ export function ScoreHeader({
                   </div>
                   <div className="text-[10px] text-gray-500 leading-tight mt-0.5 truncate hidden sm:block">{match.city}</div>
                 </div>
-                <button
-                  onClick={() => setShowPresence(v => !v)}
-                  className="relative shrink-0 hidden sm:flex items-center justify-center h-8 w-8"
-                  title="No Estádio"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/estou-aqui.png" alt="No Estádio" width={28} height={28} className="object-contain" />
-                  {presentCount > 0 && (
-                    <span className="absolute top-full left-1/2 -translate-x-1/2 pt-0.5 text-xs font-bold text-white leading-none whitespace-nowrap">
-                      {presentCount}
-                    </span>
-                  )}
-                </button>
               </div>
               {/* spacer mirrors the h-5 edit-link row so this column = 52px = same as center */}
               <div className="h-5" />
@@ -245,70 +185,6 @@ export function ScoreHeader({
         </div>
         </div>
       </div>
-
-      {/* Presence popup */}
-      {showPresence && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center p-4" onClick={() => setShowPresence(false)}>
-          <div className="w-full max-w-sm rounded-2xl bg-gray-900 border border-gray-700 p-4" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-3">
-              <span className="font-bold text-white text-sm">No Estádio</span>
-              <button onClick={() => setShowPresence(false)} className="text-gray-500 hover:text-white text-lg leading-none">×</button>
-            </div>
-            {presentNames.length === 0
-              ? <p className="text-gray-500 text-sm">Ninguém marcou presença ainda.</p>
-              : <ul className="space-y-1 mb-3">
-                  {presentNames.map(n => (
-                    <li key={n} className="text-sm text-gray-200 flex items-center gap-1">
-                      <span className="text-green-400">✓</span> {n}
-                    </li>
-                  ))}
-                </ul>
-            }
-            <button
-              onClick={() => { setShowPresence(false); openPresenceEditor() }}
-              disabled={presencePending}
-              className="w-full rounded-xl py-2 text-sm font-bold transition bg-cyan-500 text-black hover:bg-cyan-400"
-            >
-              {presencePending ? '…' : amPresent ? 'Editar presença' : 'Marcar presença'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Presence selection modal */}
-      {presenceSelecting && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center p-4" onClick={() => setPresenceSelecting(false)}>
-          <div className="w-full max-w-sm rounded-2xl bg-gray-900 border border-gray-700 p-4" onClick={e => e.stopPropagation()}>
-            <p className="text-sm font-bold text-white mb-1">{amPresent ? 'Editar presença' : 'Marcar presença'}</p>
-            <p className="text-xs text-gray-400 mb-3">{amPresent ? 'Desmarque todos para remover sua presença.' : 'Quem está com você no estádio?'}</p>
-            <ul className="space-y-1 max-h-52 overflow-y-auto mb-3">
-              {myParticipants.map(p => (
-                <li key={p.id}>
-                  <label className="flex items-center gap-2 cursor-pointer py-1">
-                    <input
-                      type="checkbox"
-                      checked={selectedPids.includes(p.id)}
-                      onChange={e => setSelectedPids(prev =>
-                        e.target.checked ? [...prev, p.id] : prev.filter(id => id !== p.id)
-                      )}
-                      className="accent-cyan-400"
-                    />
-                    <span className="text-sm text-gray-200">{p.apelido}</span>
-                  </label>
-                </li>
-              ))}
-            </ul>
-            <div className="flex gap-2">
-              <button onClick={confirmPresence} disabled={presencePending}
-                className="flex-1 rounded-xl py-2 text-sm font-bold bg-cyan-500 text-black hover:bg-cyan-400">
-                {presencePending ? '…' : 'Confirmar'}
-              </button>
-              <button onClick={() => setPresenceSelecting(false)}
-                className="px-4 text-sm text-gray-500 hover:text-gray-300">Cancelar</button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   )
 }

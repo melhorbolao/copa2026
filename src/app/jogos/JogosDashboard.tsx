@@ -11,7 +11,6 @@ import { ScoreHeader } from './ScoreHeader'
 import { BetStats } from './BetStats'
 import { RankingPanel } from './RankingPanel'
 import { GroupStandings } from './GroupStandings'
-import { StadiumSection } from './StadiumSection'
 
 export type MatchFull = {
   id: string; match_number: number; phase: string; round: number | null
@@ -22,8 +21,6 @@ export type MatchFull = {
 }
 export type BetRaw    = { participant_id: string; match_id: string; score_home: number; score_away: number; points: number | null }
 export type Participant = { id: string; apelido: string }
-export type AttendanceRow = { id: string; match_id: string; user_id: string; participant_ids: string[] | null }
-export type PhotoRow = { id: string; match_id: string; user_id: string; storage_path: string; participant_ids: string[] | null; caption: string | null; created_at: string; url: string | null }
 
 const GOAL_ANIM_MS = 3 * 60 * 1000
 
@@ -55,23 +52,18 @@ interface Props {
   userId: string
   userName: string
   activeParticipantId: string | null
-  userToParticipants: Record<string, string[]>
-  attendance: AttendanceRow[]
-  photos: PhotoRow[]
 }
 
 export function JogosDashboard({
   initialMatchId, matches: initialMatches, participants, bets: initialBets,
   rules, teamAbbrs, storedTotals, isAdmin, userId, userName,
-  activeParticipantId, userToParticipants, attendance: initialAttendance, photos: initialPhotos,
+  activeParticipantId,
 }: Props) {
   const router       = useRouter()
   const searchParams = useSearchParams()
 
-  const [matches, setMatches]     = useState(initialMatches)
-  const [bets, setBets]           = useState(initialBets)
-  const [attendance, setAttendance] = useState(initialAttendance)
-  const [photos, setPhotos]       = useState(initialPhotos)
+  const [matches, setMatches] = useState(initialMatches)
+  const [bets, setBets]       = useState(initialBets)
 
   // Goal animation state — booleans cleared automatically after GOAL_ANIM_MS
   const [goalAnim, setGoalAnim]   = useState<{ home: boolean; away: boolean }>({ home: false, away: false })
@@ -161,21 +153,6 @@ export function JogosDashboard({
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [])
-
-  // Realtime: attendance — filtrado pelo jogo atualmente selecionado
-  useEffect(() => {
-    if (!match?.id) return
-    const supabase = createClient()
-    const channel = supabase.channel(`jogos_attendance_rt_${match.id}`)
-      .on('postgres_changes', {
-        event: '*', schema: 'public', table: 'stadium_attendance',
-        filter: `match_id=eq.${match.id}`,
-      }, () => {
-        router.refresh()
-      })
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [match?.id]) // eslint-disable-line
 
   // Handle score save callback (from ScoreHeader)
   const handleScoreSaved = useCallback((sh: number | null, sa: number | null) => {
@@ -386,27 +363,6 @@ export function JogosDashboard({
     )
   }, [matches, match?.phase, match?.group_name])
 
-  // Attendance for this match
-  const matchAttendance = useMemo(
-    () => attendance.filter(a => a.match_id === match?.id),
-    [attendance, match?.id],
-  )
-
-  // Photos for this match
-  const matchPhotos = useMemo(
-    () => photos.filter(p => p.match_id === match?.id),
-    [photos, match?.id],
-  )
-
-  // Count distinct participants present
-  const presentParticipantIds = useMemo(() => {
-    const ids = new Set<string>()
-    for (const a of matchAttendance) {
-      for (const pid of a.participant_ids ?? []) ids.add(pid)
-    }
-    return ids
-  }, [matchAttendance])
-
   if (!match) return <div className="p-8 text-center text-gray-400">Nenhum jogo disponível.</div>
 
   const abbr = (team: string) => teamAbbrs[team] ?? team.slice(0, 3).toUpperCase()
@@ -422,11 +378,6 @@ export function JogosDashboard({
         userId={userId}
         goalAnim={goalAnim}
         isZebra={headerZebra}
-        presentCount={presentParticipantIds.size}
-        attendance={matchAttendance}
-        participants={participants}
-        userToParticipants={userToParticipants}
-        activeParticipantId={activeParticipantId}
         onNavigate={navigate}
         onScoreSaved={handleScoreSaved}
       />
@@ -469,24 +420,6 @@ export function JogosDashboard({
             teamAbbrs={teamAbbrs}
           />
         )}
-
-        <StadiumSection
-          match={match}
-          matchAttendance={matchAttendance}
-          matchPhotos={matchPhotos}
-          participants={participants}
-          userId={userId}
-          isAdmin={isAdmin}
-          userToParticipants={userToParticipants}
-          activeParticipantId={activeParticipantId}
-          onAttendanceChange={updated => setAttendance(prev => {
-            const filtered = prev.filter(a => !(a.match_id === match.id && a.user_id === userId))
-            return updated ? [...filtered, updated] : filtered
-          })}
-          onPhotoAdded={p => setPhotos(prev => [p, ...prev])}
-          onPhotoDeleted={id => setPhotos(prev => prev.filter(p => p.id !== id))}
-          onPhotoUpdated={updated => setPhotos(prev => prev.map(p => p.id === updated.id ? updated : p))}
-        />
       </div>
     </div>
   )

@@ -70,7 +70,6 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
 
   const [
     matchesRes, participantsRes, betsRes, rulesRes, teamAbbrRes,
-    attendanceRes, photosRes, userParticipantsRes,
     groupBetsRaw, tournamentBetsPicksRes, scoresRes,
   ] = await Promise.all([
     supabase.from('matches')
@@ -80,9 +79,6 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
     fetchAll('bets', 'participant_id, match_id, score_home, score_away, points'),
     supabase.from('scoring_rules').select('key, points'),
     admin.from('teams').select('name, abbr_br'),
-    admin.from('stadium_attendance').select('id, match_id, user_id, participant_ids'),
-    admin.from('stadium_photos').select('id, match_id, user_id, storage_path, participant_ids, caption, created_at').order('created_at', { ascending: false }),
-    supabase.from('user_participants').select('user_id, participant_id'),
     // Dados extras para calcular storedTotals com a mesma fórmula da classificacaoMB
     fetchAll('group_bets', 'participant_id, points'),
     admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer'),
@@ -253,18 +249,6 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
     activeParticipantId,
   )
 
-  // Map user_id → participant_ids for the attendance feature
-  const userToParticipants: Record<string, string[]> = {}
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const row of (userParticipantsRes.data ?? []) as any[]) {
-    if (!userToParticipants[row.user_id]) userToParticipants[row.user_id] = []
-    userToParticipants[row.user_id].push(row.participant_id)
-  }
-
-  // Photos are passed as storage_path only; signed URLs are generated client-side to avoid SSR failures
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const photos = (photosRes.data ?? []).map((p: any) => ({ ...p, url: null }))
-
   return (
     <>
       <Navbar />
@@ -281,9 +265,6 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
           userId={user.id}
           userName={profile?.name ?? ''}
           activeParticipantId={activeParticipantId ?? null}
-          userToParticipants={userToParticipants}
-          attendance={(attendanceRes.data ?? []) as any[]}
-          photos={photos as any[]}
         />
       </Suspense>
     </>
