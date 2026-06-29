@@ -8,7 +8,7 @@ import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { JogosDashboard } from './JogosDashboard'
 import { filterBetsByDeadline, getServerNow } from '@/lib/production-mode'
-import { scoreMatchBet, detectMatchZebra, getMatchResult, scoreTournamentBet } from '@/lib/scoring/engine'
+import { scoreTournamentBet } from '@/lib/scoring/engine'
 import type { TournamentResults } from '@/lib/scoring/engine'
 
 export const metadata = {}
@@ -134,36 +134,16 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const allBetsRaw = betsRes as any[] // fetchAll retorna array diretamente
 
-  const scoredMatches = allMatchesList.filter(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (m: any) => m.score_home !== null && m.score_away !== null,
-  )
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const scoredById = new Map<string, any>(scoredMatches.map((m: any) => [m.id, m]))
+  const scoredMatches = allMatchesList.filter((m: any) => m.score_home !== null && m.score_away !== null)
 
-  const betsByMatchAll: Record<string, Array<{ score_home: number; score_away: number }>> = {}
-  for (const b of allBetsRaw) {
-    ;(betsByMatchAll[b.match_id] ??= []).push({ score_home: b.score_home, score_away: b.score_away })
-  }
-  const isZebraMatchAll: Record<string, boolean> = {}
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const m of scoredMatches as any[]) {
-    const actual = getMatchResult(m.score_home, m.score_away)
-    isZebraMatchAll[m.id] = detectMatchZebra(betsByMatchAll[m.id] ?? [], actual, zebraThreshold)
-  }
-
+  // Usa pontos armazenados (bets.points) para evitar dupla contagem com livePoints no cliente,
+  // que adiciona delta apenas para apostas ainda não processadas pelo cron (points === null).
   const ptsMatchesMap: Record<string, number> = {}
   for (const b of allBetsRaw) {
-    const m = scoredById.get(b.match_id)
-    if (!m) continue
-    const pts = scoreMatchBet(
-      b.score_home, b.score_away,
-      m.score_home, m.score_away,
-      isZebraMatchAll[b.match_id] ?? false,
-      (m.is_brazil || m.team_home === 'Brasil' || m.team_away === 'Brasil'),
-      rules,
-    )
-    ptsMatchesMap[b.participant_id] = (ptsMatchesMap[b.participant_id] ?? 0) + pts
+    if (b.points !== null) {
+      ptsMatchesMap[b.participant_id] = (ptsMatchesMap[b.participant_id] ?? 0) + b.points
+    }
   }
 
   const ptsGroupsMap: Record<string, number> = {}
