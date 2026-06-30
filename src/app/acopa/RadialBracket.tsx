@@ -278,18 +278,18 @@ export function RadialBracket({ r32Slots, knockoutMatches }: Props) {
   const champFlag    = champion ? (flagMap.get(champion) ?? '') : ''
 
   // ── SVG ───────────────────────────────────────────────────────────────────────
-  // A taça fica como <img> HTML fora do SVG, posicionada via % do container.
-  // viewBox 1000×1000 é quadrado → left/top em % do width funcionam para x e y.
-  // Taça: center (500,500), size 104×130 → left=(500-52)/10=44.8%, top=(500-68)/10=43.2%
+  // CSS Grid sobrepõe SVG e <img> na mesma célula (gridArea '1/1').
+  // O SVG determina o tamanho do container; a img fica centralizada por align/justifySelf.
   return (
     <div className="w-full overflow-x-auto touch-pan-x">
       <div
-        className="relative mx-auto"
-        style={{ minWidth: 360, maxWidth: 920, width: '100%' }}
+        className="mx-auto"
+        style={{ minWidth: 360, maxWidth: 920, width: '100%', display: 'grid' }}
       >
         <svg
           viewBox="0 0 1000 1000"
           className="block w-full"
+          style={{ gridArea: '1 / 1' }}
         >
           {/* Círculos-guia concêntricos (muito sutis) */}
           {RING_R.map((r, i) => (
@@ -327,18 +327,18 @@ export function RadialBracket({ r32Slots, knockoutMatches }: Props) {
           )}
         </svg>
 
-        {/* Taça como <img> HTML puro — fora do SVG para evitar problemas de namespace */}
+        {/* Taça sobreposta via CSS Grid — sem position absolute, sem % de altura */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/taca.png"
           alt="Taça da Copa do Mundo"
-          className="absolute pointer-events-none"
+          className="pointer-events-none"
           style={{
-            left:   '44.8%',
-            top:    '43.2%',
-            width:  '10.4%',
-            height: '13%',
-            objectFit: 'contain',
+            gridArea:    '1 / 1',
+            alignSelf:   'center',
+            justifySelf: 'center',
+            width:       '11%',
+            objectFit:   'contain',
           }}
         />
       </div>
