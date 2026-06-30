@@ -312,12 +312,14 @@ export function RadialBracket({ r32Slots, knockoutMatches }: Props) {
         ))}
 
         {/* Centro: taça da Copa do Mundo */}
-        <image
-          href="/taca.png"
-          x={CX - 52} y={CY - 62}
-          width={104} height={124}
-          preserveAspectRatio="xMidYMid meet"
-        />
+        <foreignObject x={CX - 52} y={CY - 68} width={104} height={130} overflow="visible">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/taca.png"
+            alt="Taça da Copa do Mundo"
+            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+          />
+        </foreignObject>
 
         {/* Bandeira do campeão abaixo da taça */}
         {champion && (
