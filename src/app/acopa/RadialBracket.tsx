@@ -278,58 +278,70 @@ export function RadialBracket({ r32Slots, knockoutMatches }: Props) {
   const champFlag    = champion ? (flagMap.get(champion) ?? '') : ''
 
   // ── SVG ───────────────────────────────────────────────────────────────────────
+  // A taça fica como <img> HTML fora do SVG, posicionada via % do container.
+  // viewBox 1000×1000 é quadrado → left/top em % do width funcionam para x e y.
+  // Taça: center (500,500), size 104×130 → left=(500-52)/10=44.8%, top=(500-68)/10=43.2%
   return (
     <div className="w-full overflow-x-auto touch-pan-x">
-      <svg
-        viewBox="0 0 1000 1000"
-        style={{ minWidth: 360, width: '100%', maxWidth: 920 }}
-        className="mx-auto block"
+      <div
+        className="relative mx-auto"
+        style={{ minWidth: 360, maxWidth: 920, width: '100%' }}
       >
-        {/* Círculos-guia concêntricos (muito sutis) */}
-        {RING_R.map((r, i) => (
-          <circle key={`g-${i}`} cx={CX} cy={CY} r={r}
-            fill="none" stroke="#f1f5f9" strokeWidth={0.6} />
-        ))}
+        <svg
+          viewBox="0 0 1000 1000"
+          className="block w-full"
+        >
+          {/* Círculos-guia concêntricos (muito sutis) */}
+          {RING_R.map((r, i) => (
+            <circle key={`g-${i}`} cx={CX} cy={CY} r={r}
+              fill="none" stroke="#f1f5f9" strokeWidth={0.6} />
+          ))}
 
-        {/* Linhas conectoras */}
-        {lines.map(l => (
-          <line
-            key={l.key}
-            x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2}
-            stroke={l.active ? '#6b7280' : '#9ca3af'}
-            strokeWidth={l.active ? 1.2 : 0.8}
-          />
-        ))}
+          {/* Linhas conectoras */}
+          {lines.map(l => (
+            <line
+              key={l.key}
+              x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2}
+              stroke={l.active ? '#6b7280' : '#9ca3af'}
+              strokeWidth={l.active ? 1.2 : 0.8}
+            />
+          ))}
 
-        {/* Nós do anel externo (32 times) */}
-        {outerNodes.map(({ key, ring: _r, label: _l, ...n }) => (
-          <BracketNodeCell key={key} {...n} />
-        ))}
+          {/* Nós do anel externo (32 times) */}
+          {outerNodes.map(({ key, ring: _r, label: _l, ...n }) => (
+            <BracketNodeCell key={key} {...n} />
+          ))}
 
-        {/* Nós dos anéis internos (rings 1–4) */}
-        {innerNodes.map(({ key, ring: _r, label: _l, ...n }) => (
-          <BracketNodeCell key={key} {...n} />
-        ))}
+          {/* Nós dos anéis internos (rings 1–4) */}
+          {innerNodes.map(({ key, ring: _r, label: _l, ...n }) => (
+            <BracketNodeCell key={key} {...n} />
+          ))}
 
-        {/* Centro: taça da Copa do Mundo */}
-        <foreignObject x={CX - 52} y={CY - 68} width={104} height={130} overflow="visible">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/taca.png"
-            alt="Taça da Copa do Mundo"
-            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-          />
-        </foreignObject>
+          {/* Bandeira do campeão abaixo da taça */}
+          {champion && (
+            <foreignObject x={CX - 28} y={CY + 66} width={56} height={22} overflow="visible">
+              <div className="flex items-center justify-center gap-1 h-full w-full rounded border-2 border-amarelo-400 bg-amarelo-50 shadow-sm">
+                <Flag code={champFlag} size="xs" />
+              </div>
+            </foreignObject>
+          )}
+        </svg>
 
-        {/* Bandeira do campeão abaixo da taça */}
-        {champion && (
-          <foreignObject x={CX - 28} y={CY + 64} width={56} height={22} overflow="visible">
-            <div className="flex items-center justify-center gap-1 h-full w-full rounded border-2 border-amarelo-400 bg-amarelo-50 shadow-sm">
-              <Flag code={champFlag} size="xs" />
-            </div>
-          </foreignObject>
-        )}
-      </svg>
+        {/* Taça como <img> HTML puro — fora do SVG para evitar problemas de namespace */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/taca.png"
+          alt="Taça da Copa do Mundo"
+          className="absolute pointer-events-none"
+          style={{
+            left:   '44.8%',
+            top:    '43.2%',
+            width:  '10.4%',
+            height: '13%',
+            objectFit: 'contain',
+          }}
+        />
+      </div>
     </div>
   )
 }
