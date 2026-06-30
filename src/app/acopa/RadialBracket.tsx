@@ -296,8 +296,8 @@ export function RadialBracket({ r32Slots, knockoutMatches }: Props) {
           <line
             key={l.key}
             x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2}
-            stroke={l.active ? '#d1d5db' : '#e5e7eb'}
-            strokeWidth={l.active ? 0.9 : 0.5}
+            stroke={l.active ? '#6b7280' : '#9ca3af'}
+            strokeWidth={l.active ? 1.2 : 0.8}
           />
         ))}
 
