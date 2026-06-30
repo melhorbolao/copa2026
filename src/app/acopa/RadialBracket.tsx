@@ -313,7 +313,7 @@ export function RadialBracket({ r32Slots, knockoutMatches }: Props) {
 
         {/* Centro: taça da Copa do Mundo */}
         <image
-          href="/logoCopa.png"
+          href="/taca.png"
           x={CX - 52} y={CY - 62}
           width={104} height={124}
           preserveAspectRatio="xMidYMid meet"
