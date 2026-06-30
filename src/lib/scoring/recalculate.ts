@@ -34,15 +34,34 @@ function matchWinner(
   return m.penalty_winner ?? null
 }
 
+// ── Shared types for pre-loaded data ─────────────────────────────────────────
+
+interface GroupMatchRow {
+  id: string; group_name: string | null; phase: string
+  team_home: string; team_away: string; flag_home: string; flag_away: string
+  score_home: number | null; score_away: number | null
+}
+
+interface MatchScoreRow {
+  id: string; score_home: number | null; score_away: number | null
+  is_brazil: boolean; team_home: string; team_away: string
+}
+
 // ── Internal: update points without refreshing totals ─────────────────────────
 // These return the participant IDs they touched, so the caller can batch-refresh.
 
-async function _updateMatchBetPoints(matchId: string, admin: AdminClient, rules: RuleMap, isBrazilOverride?: boolean): Promise<string[]> {
-  const { data: match } = await admin
+async function _updateMatchBetPoints(
+  matchId: string,
+  admin: AdminClient,
+  rules: RuleMap,
+  isBrazilOverride?: boolean,
+  preloadedMatch?: MatchScoreRow,
+): Promise<string[]> {
+  const match: MatchScoreRow | null = preloadedMatch ?? (await admin
     .from('matches')
     .select('id, score_home, score_away, is_brazil, team_home, team_away')
     .eq('id', matchId)
-    .single()
+    .single()).data
 
   if (!match || match.score_home === null || match.score_away === null) {
     // Placar removido — limpa pontos residuais para não contaminar a TabelaMB
@@ -91,14 +110,21 @@ async function _updateMatchBetPoints(matchId: string, admin: AdminClient, rules:
   return [...new Set(bets.map(b => b.participant_id))]
 }
 
-async function _updateGroupBetPoints(groupName: string, admin: AdminClient, rules: RuleMap): Promise<string[]> {
-  const { data: groupMatches } = await admin
-    .from('matches')
-    .select('id, group_name, phase, team_home, team_away, flag_home, flag_away, score_home, score_away')
-    .eq('phase', 'group')
-    .eq('group_name', groupName)
+async function _updateGroupBetPoints(
+  groupName: string,
+  admin: AdminClient,
+  rules: RuleMap,
+  preloadedGroupMatches?: GroupMatchRow[],
+): Promise<string[]> {
+  const groupMatches = preloadedGroupMatches
+    ? preloadedGroupMatches.filter(m => m.group_name === groupName)
+    : (await admin
+        .from('matches')
+        .select('id, group_name, phase, team_home, team_away, flag_home, flag_away, score_home, score_away')
+        .eq('phase', 'group')
+        .eq('group_name', groupName)).data ?? []
 
-  if (!groupMatches?.length) return []
+  if (!groupMatches.length) return []
   if (!groupMatches.every(m => m.score_home !== null && m.score_away !== null)) return []
 
   const slimMatches: MatchSlim[] = groupMatches.map(m => ({
@@ -153,13 +179,17 @@ async function _updateGroupBetPoints(groupName: string, admin: AdminClient, rule
   return [...new Set(groupBets.map(b => b.participant_id))]
 }
 
-async function _updateThirdBetPoints(admin: AdminClient, rules: RuleMap): Promise<string[]> {
-  const { data: groupMatches } = await admin
+async function _updateThirdBetPoints(
+  admin: AdminClient,
+  rules: RuleMap,
+  preloadedGroupMatches?: GroupMatchRow[],
+): Promise<string[]> {
+  const groupMatches: GroupMatchRow[] = preloadedGroupMatches ?? (await admin
     .from('matches')
     .select('id, group_name, phase, team_home, team_away, flag_home, flag_away, score_home, score_away')
-    .eq('phase', 'group')
+    .eq('phase', 'group')).data ?? []
 
-  if (!groupMatches?.length) return []
+  if (!groupMatches.length) return []
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: thirdBets } = await (admin as any)
@@ -205,9 +235,6 @@ async function _updateThirdBetPoints(admin: AdminClient, rules: RuleMap): Promis
   const actualThirdByGroup = new Map<string, string>(
     thirds.filter(t => t.advances).map(t => [t.group, t.team])
   )
-
-  // Sincroniza third_place_scoring para exibição na UI (não afeta a pontuação)
-  try { await autoEnableAllThirdScoring() } catch { /* ignora se tabela não existir */ }
 
   const thirdPts = rules['terceiro_classificado'] ?? 3
 
@@ -358,15 +385,15 @@ export async function recalculateThirdBets(): Promise<void> {
 
 /** Habilita apenas os 8 grupos cujos terceiros avançam (Art. 13 FIFA).
  *  Chamado automaticamente quando todos os jogos da fase de grupos têm placar. */
-export async function autoEnableAllThirdScoring(): Promise<void> {
+export async function autoEnableAllThirdScoring(preloadedGroupMatches?: GroupMatchRow[]): Promise<void> {
   const admin = createAuthAdminClient()
 
-  const { data: groupMatches } = await admin
+  const groupMatches: GroupMatchRow[] = preloadedGroupMatches ?? (await admin
     .from('matches')
     .select('id, group_name, phase, team_home, team_away, flag_home, flag_away, score_home, score_away')
-    .eq('phase', 'group')
+    .eq('phase', 'group')).data ?? []
 
-  if (!groupMatches?.length) return
+  if (!groupMatches.length) return
   if (!groupMatches.every(m => m.score_home !== null && m.score_away !== null)) return
 
   const slim: MatchSlim[] = groupMatches.map(m => ({
@@ -457,33 +484,42 @@ const KNOCKOUT_SCORING_PHASES = new Set(['quarterfinal', 'semifinal', 'third_pla
 export async function recalculateAfterMatchScore(matchId: string, isBrazilOverride?: boolean): Promise<void> {
   const admin = createAuthAdminClient()
 
-  const { data: match } = await admin
-    .from('matches')
-    .select('id, phase, group_name, score_home, score_away')
-    .eq('id', matchId)
-    .single()
+  // Parallel: match (com todos os campos) + regras de pontuação
+  const [matchRes, rules] = await Promise.all([
+    (admin as any)
+      .from('matches')
+      .select('id, phase, group_name, score_home, score_away, is_brazil, team_home, team_away')
+      .eq('id', matchId)
+      .single() as Promise<{ data: (MatchScoreRow & { phase: string; group_name: string | null }) | null }>,
+    loadRules(admin),
+  ])
 
+  const match = matchRes.data
   if (!match || match.score_home === null || match.score_away === null) return
 
-  const rules  = await loadRules(admin)
   const allIds = new Set<string>()
 
-  ;(await _updateMatchBetPoints(matchId, admin, rules, isBrazilOverride)).forEach(id => allIds.add(id))
+  // Match bets — passa o match já carregado, evita re-fetch
+  ;(await _updateMatchBetPoints(matchId, admin, rules, isBrazilOverride, match)).forEach(id => allIds.add(id))
 
   if (match.phase === 'group' && match.group_name) {
-    ;(await _updateGroupBetPoints(match.group_name, admin, rules)).forEach(id => allIds.add(id))
-
-    // Quando todos os grupos terminam, habilita pontuação de terceiros automaticamente
-    const { data: allGroupMatches } = await admin
+    // Busca todos os jogos de grupo UMA vez — reutilizado por group bets, third bets e auto-enable
+    const { data: gmData } = await (admin as any)
       .from('matches')
-      .select('score_home, score_away')
+      .select('id, group_name, phase, team_home, team_away, flag_home, flag_away, score_home, score_away')
       .eq('phase', 'group')
-    const allGroupsComplete =
-      (allGroupMatches?.length ?? 0) > 0 &&
-      allGroupMatches!.every(m => m.score_home !== null && m.score_away !== null)
-    if (allGroupsComplete) await autoEnableAllThirdScoring()
+    const gm: GroupMatchRow[] = gmData ?? []
+    const allGroupsComplete = gm.length > 0 && gm.every((m: GroupMatchRow) => m.score_home !== null && m.score_away !== null)
 
-    ;(await _updateThirdBetPoints(admin, rules)).forEach(id => allIds.add(id))
+    // Group bets + third-place bets: tabelas independentes — roda em paralelo
+    const [groupIds, thirdIds] = await Promise.all([
+      _updateGroupBetPoints(match.group_name, admin, rules, gm),
+      _updateThirdBetPoints(admin, rules, gm),
+    ])
+    groupIds.forEach(id => allIds.add(id))
+    thirdIds.forEach(id => allIds.add(id))
+
+    if (allGroupsComplete) await autoEnableAllThirdScoring(gm)
   }
 
   if (KNOCKOUT_SCORING_PHASES.has(match.phase)) {

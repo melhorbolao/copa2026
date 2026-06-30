@@ -65,6 +65,9 @@ export function JogosDashboard({
   const [matches, setMatches] = useState(initialMatches)
   const [bets, setBets]       = useState(initialBets)
 
+  // Sincroniza bets com dados frescos do servidor após router.refresh()
+  useEffect(() => { setBets(initialBets) }, [initialBets])
+
   // Goal animation state — booleans cleared automatically after GOAL_ANIM_MS
   const [goalAnim, setGoalAnim]   = useState<{ home: boolean; away: boolean }>({ home: false, away: false })
   const prevScoreRef  = useRef<{ home: number | null; away: number | null }>({ home: null, away: null })
@@ -157,6 +160,8 @@ export function JogosDashboard({
   // Handle score save callback (from ScoreHeader)
   const handleScoreSaved = useCallback((sh: number | null, sa: number | null) => {
     setMatches(prev => prev.map(m => m.id === match.id ? { ...m, score_home: sh, score_away: sa } : m))
+    // Busca storedTotals e bets.points atualizados do servidor para recalcular posições
+    router.refresh()
   }, [match?.id]) // eslint-disable-line
 
   const navigate = (dir: -1 | 1) => {
