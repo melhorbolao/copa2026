@@ -311,24 +311,21 @@ export function RadialBracket({ r32Slots, knockoutMatches }: Props) {
           <BracketNodeCell key={key} {...n} />
         ))}
 
-        {/* Centro: troféu / campeão */}
-        {champion ? (
-          <foreignObject x={CX - 40} y={CY - 32} width={80} height={64} overflow="visible">
-            <div className="flex flex-col items-center justify-center gap-1 h-full w-full rounded-xl border-2 border-amarelo-400 bg-amarelo-50 shadow-md">
-              <Flag code={champFlag} size="md" />
-              <span className="text-lg leading-none">🏆</span>
+        {/* Centro: taça da Copa do Mundo */}
+        <image
+          href="/logoCopa.png"
+          x={CX - 52} y={CY - 62}
+          width={104} height={124}
+          preserveAspectRatio="xMidYMid meet"
+        />
+
+        {/* Bandeira do campeão abaixo da taça */}
+        {champion && (
+          <foreignObject x={CX - 28} y={CY + 64} width={56} height={22} overflow="visible">
+            <div className="flex items-center justify-center gap-1 h-full w-full rounded border-2 border-amarelo-400 bg-amarelo-50 shadow-sm">
+              <Flag code={champFlag} size="xs" />
             </div>
           </foreignObject>
-        ) : (
-          <text
-            x={CX} y={CY + 10}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            fontSize={36}
-            className="select-none"
-          >
-            🏆
-          </text>
         )}
       </svg>
     </div>
