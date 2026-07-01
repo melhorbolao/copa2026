@@ -397,6 +397,7 @@ function CompactRanking({
 function G112CompactRanking({
   ranked, premioSpots, renderedAt, matchesRegistered, lastMatch, nextMatch,
   showLastMatch, showNextMatch,
+  deltaMap, highlights, sdActive,
   highlightMode, activeParticipantId, panelaSet, tribeMemberSet,
 }: {
   ranked: RankedRow[]
@@ -407,6 +408,9 @@ function G112CompactRanking({
   nextMatch: MatchInfo | null
   showLastMatch: boolean
   showNextMatch: boolean
+  deltaMap: Map<string, DeltaEntry> | null
+  highlights: SobeDesceHighlights
+  sdActive: boolean
   highlightMode: HighlightMode
   activeParticipantId: string
   panelaSet: Set<string>
@@ -441,11 +445,22 @@ function G112CompactRanking({
     return 'out'
   }
 
+  // Destaque via borda esquerda colorida (subida e queda apenas)
+  function sdBorder(rowId: string): string {
+    if (!sdActive) return ''
+    if (highlights.maxUpIds.has(rowId))   return 'border-l-2 border-verde-500'
+    if (highlights.maxDownIds.has(rowId)) return 'border-l-2 border-red-500'
+    return 'border-l-2 border-transparent'
+  }
+
+  const sdCols = sdActive ? '_1.6rem' : ''
+  const sdColsAfterPts = sdActive ? '_2.5rem' : ''
   const colsGrid = showLastMatch && showNextMatch
-    ? 'grid grid-cols-[1.5rem_1fr_2rem_3.5rem_3.5rem]'
+    ? `grid grid-cols-[1.5rem${sdCols}_1fr_2rem${sdColsAfterPts}_3.5rem_3.5rem]`
     : showLastMatch || showNextMatch
-      ? 'grid grid-cols-[1.5rem_1fr_2rem_3.5rem]'
-      : 'grid grid-cols-[1.5rem_1fr_2rem]'
+      ? `grid grid-cols-[1.5rem${sdCols}_1fr_2rem${sdColsAfterPts}_3.5rem]`
+      : `grid grid-cols-[1.5rem${sdCols}_1fr_2rem${sdColsAfterPts}]`
+  const minW = sdActive ? 1408 : 1152
   const BLOCK_SIZE = 28
   const blocks = [0, 1, 2, 3]
     .map(i => ranked112.slice(i * BLOCK_SIZE, (i + 1) * BLOCK_SIZE))
@@ -479,14 +494,16 @@ function G112CompactRanking({
 
       {/* 4 blocos lado a lado — scroll horizontal no mobile */}
       <div className="overflow-x-auto">
-        <div className="grid grid-cols-4 divide-x divide-gray-100" style={{ minWidth: '1152px' }}>
+        <div className="grid grid-cols-4 divide-x divide-gray-100" style={{ minWidth: `${minW}px` }}>
           {blocks.map((block, bi) => (
               <div key={bi}>
                 {/* cabeçalho do bloco */}
                 <div className={`${colsGrid} border-b border-gray-100 bg-gray-50 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-gray-400`}>
                   <span className="text-right pr-0.5">#</span>
+                  {sdActive && <span className="text-center" title="Evolução de posição">↑↓</span>}
                   <span className="pl-1">Participante</span>
                   <span className="text-right">PTS</span>
+                  {sdActive && <span className="text-right" title="Pontos no período">↗</span>}
                   {showLastMatch && <span className="text-center truncate md:text-[10px]" title="Palpite no último jogo">{lastMatch ? `${lastMatch.abbr_home}×${lastMatch.abbr_away}` : 'Últ'}</span>}
                   {showNextMatch && <span className="text-center truncate md:text-[10px]" title="Palpite no próximo jogo">{nextMatch ? `${nextMatch.abbr_home}×${nextMatch.abbr_away}` : 'Próx'}</span>}
                 </div>
@@ -506,11 +523,33 @@ function G112CompactRanking({
                   return (
                     <div
                       key={r.id}
-                      className={`${colsGrid} px-2 py-[3px] text-[12px] ${G112_ZONE_ROW[z]} ${boundary ? 'border-t border-gray-200' : ''} ${highlightRing}`}
+                      className={`${colsGrid} px-2 py-[3px] text-[12px] ${G112_ZONE_ROW[z]} ${boundary ? 'border-t border-gray-200' : ''} ${sdBorder(r.id)} ${highlightRing}`}
                     >
                       <span className={`text-right pr-0.5 tabular-nums ${textCls}`}>{r.rank}</span>
+
+                      {sdActive && (
+                        <span className="flex items-center justify-center">
+                          <EvoCell
+                            delta={deltaMap?.get(r.id)}
+                            isMaxUp={highlights.maxUpIds.has(r.id)}
+                            isMaxDown={highlights.maxDownIds.has(r.id)}
+                          />
+                        </span>
+                      )}
+
                       <span className={`pl-1 truncate ${textCls}`} title={r.apelido}>{r.apelido}</span>
                       <span className={`text-right tabular-nums font-bold ${textCls}`}>{r.pts}</span>
+
+                      {sdActive && (
+                        <span className="flex items-center justify-end">
+                          <DeltaPtsCell
+                            delta={deltaMap?.get(r.id)}
+                            isMaxPts={highlights.maxPtsIds.has(r.id)}
+                            isMinPts={highlights.minPtsIds.has(r.id)}
+                          />
+                        </span>
+                      )}
+
                       {showLastMatch && <span className="text-center font-mono tabular-nums text-gray-600 md:text-[13px]"><BetCell bet={r.lastMatchBet} /></span>}
                       {showNextMatch && <span className="text-center font-mono tabular-nums text-gray-600 md:text-[13px]"><BetCell bet={r.nextMatchBet} /></span>}
                     </div>
@@ -882,7 +921,7 @@ export function ClassificacaoMBClient({
         </div>
       )}
 
-      {/* Classificação G112 — tabela compacta top 112 */}
+      {/* Classificação G112 — tabela compacta top 112, com Sobe e Desce */}
       <G112CompactRanking
         ranked={ranked}
         premioSpots={premioSpots}
@@ -892,6 +931,9 @@ export function ClassificacaoMBClient({
         nextMatch={nextMatch}
         showLastMatch={showLastMatch}
         showNextMatch={showNextMatch}
+        deltaMap={deltaMap}
+        highlights={highlights}
+        sdActive={sdActive}
         highlightMode={highlightMode}
         activeParticipantId={activeParticipantId}
         panelaSet={panelaSet}
