@@ -453,13 +453,17 @@ function G112CompactRanking({
     return 'border-l-2 border-transparent'
   }
 
-  const sdCols = sdActive ? '_1.6rem' : ''
-  const sdColsAfterPts = sdActive ? '_2.5rem' : ''
-  const colsGrid = showLastMatch && showNextMatch
-    ? `grid grid-cols-[1.5rem${sdCols}_1fr_2rem${sdColsAfterPts}_3.5rem_3.5rem]`
-    : showLastMatch || showNextMatch
-      ? `grid grid-cols-[1.5rem${sdCols}_1fr_2rem${sdColsAfterPts}_3.5rem]`
-      : `grid grid-cols-[1.5rem${sdCols}_1fr_2rem${sdColsAfterPts}]`
+  const colsGrid = sdActive
+    ? (showLastMatch && showNextMatch
+        ? 'grid grid-cols-[1.5rem_1.6rem_1fr_2rem_2.5rem_3.5rem_3.5rem]'
+        : showLastMatch || showNextMatch
+          ? 'grid grid-cols-[1.5rem_1.6rem_1fr_2rem_2.5rem_3.5rem]'
+          : 'grid grid-cols-[1.5rem_1.6rem_1fr_2rem_2.5rem]')
+    : (showLastMatch && showNextMatch
+        ? 'grid grid-cols-[1.5rem_1fr_2rem_3.5rem_3.5rem]'
+        : showLastMatch || showNextMatch
+          ? 'grid grid-cols-[1.5rem_1fr_2rem_3.5rem]'
+          : 'grid grid-cols-[1.5rem_1fr_2rem]')
   const minW = sdActive ? 1408 : 1152
   const BLOCK_SIZE = 28
   const blocks = [0, 1, 2, 3]
