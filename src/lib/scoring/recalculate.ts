@@ -191,23 +191,41 @@ async function _updateThirdBetPoints(
 
   if (!groupMatches.length) return []
 
+  // PostgREST aplica max-rows=1000 mesmo com service_role — third_place_bets
+  // tem até ~12 linhas por participante, então facilmente ultrapassa 1000.
+  // Sem paginação, linhas além do corte nunca eram recalculadas (bug real:
+  // participantes com acertos em grupos "fora da janela" ficavam com pts
+  // de 3º colocado presos em 0, mesmo com resultado correto).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: thirdBets } = await (admin as any)
-    .from('third_place_bets')
-    .select('id, participant_id, group_name, team')
+  const thirdBets: any[] = []
+  {
+    const PAGE = 1000
+    let from = 0
+    for (;;) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (admin as any)
+        .from('third_place_bets')
+        .select('id, participant_id, group_name, team')
+        .range(from, from + PAGE - 1)
+      if (error || !data || data.length === 0) break
+      thirdBets.push(...data)
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+  }
 
-  if (!thirdBets?.length) return []
+  if (!thirdBets.length) return []
 
   const zeroAll = async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (admin as any).from('third_place_bets').upsert(
+    const rows = (thirdBets as any[]).map((bet: any) => ({
+      id: bet.id, participant_id: bet.participant_id,
+      group_name: bet.group_name, team: bet.team, points: 0,
+    }))
+    for (let i = 0; i < rows.length; i += 500) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (thirdBets as any[]).map((bet: any) => ({
-        id: bet.id, participant_id: bet.participant_id,
-        group_name: bet.group_name, team: bet.team, points: 0,
-      })),
-      { onConflict: 'id' },
-    )
+      await (admin as any).from('third_place_bets')
+        .upsert(rows.slice(i, i + 500), { onConflict: 'id' })
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return [...new Set((thirdBets as any[]).map((b: any) => b.participant_id as string))]
   }
@@ -238,22 +256,23 @@ async function _updateThirdBetPoints(
 
   const thirdPts = rules['terceiro_classificado'] ?? 3
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (admin as any).from('third_place_bets').upsert(
+  const thirdBetRows = (thirdBets as any[]).map((bet: any) => {
+    const actualThird = actualThirdByGroup.get(bet.group_name)
+    const pts = (actualThird && actualThird === bet.team) ? thirdPts : 0
+    return {
+      id:             bet.id,
+      participant_id: bet.participant_id,
+      group_name:     bet.group_name,
+      team:           bet.team,
+      points:         pts,
+    }
+  })
+  // Upsert em lotes de 500 — mesmo motivo da paginação da leitura acima.
+  for (let i = 0; i < thirdBetRows.length; i += 500) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (thirdBets as any[]).map((bet: any) => {
-      const actualThird = actualThirdByGroup.get(bet.group_name)
-      const pts = (actualThird && actualThird === bet.team) ? thirdPts : 0
-      return {
-        id:             bet.id,
-        participant_id: bet.participant_id,
-        group_name:     bet.group_name,
-        team:           bet.team,
-        points:         pts,
-      }
-    }),
-    { onConflict: 'id' },
-  )
+    await (admin as any).from('third_place_bets')
+      .upsert(thirdBetRows.slice(i, i + 500), { onConflict: 'id' })
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return [...new Set((thirdBets as any[]).map((b: any) => b.participant_id as string))]
