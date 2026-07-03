@@ -76,27 +76,33 @@ export interface R32MatchDef {
 }
 
 // Ordem de exibição do chaveamento (16avos), organizada em 4 blocos de 4.
-// Bloco 1: 2A, 1F, 1E, 1I
-// Bloco 2: 1H, 2K, 1G, 1D
-// Bloco 3: 1C, 2E, 1A, 1L
+// Cada par de blocos consecutivos alimenta uma partida das oitavas (M89..M96,
+// na ordem de match_number). Ordem conferida contra o calendário oficial:
+// M89=Filadélfia(Paraguai x França), M90=Houston(Canadá x Marrocos),
+// M91=Nova York(Brasil x Noruega), M92=Cidade do México(México x Inglaterra),
+// M93=Dallas(Portugal x Espanha), M94=Seattle(EUA x Bélgica),
+// M95=Atlanta(venc. 86x88), M96=Vancouver(venc. 85x87).
+// Bloco 1: 1E, 1I, 2A, 1F
+// Bloco 2: 1C, 2E, 1A, 1L
+// Bloco 3: 1H, 2K, 1G, 1D
 // Bloco 4: 2D, 1J, 1B, 1K
 export const R32_MATCHES: R32MatchDef[] = [
-  // Bloco 1
-  { matchNum: 'M73', slotA: '2A', slotB: '2B' },
-  { matchNum: 'M75', slotA: '1F', slotB: '2C' },
+  // Bloco 1 → M89 (M74×M77) + M90 (M73×M75)
   { matchNum: 'M74', slotA: '1E', slotB: '3rd:ABCDF' },
   { matchNum: 'M77', slotA: '1I', slotB: '3rd:CDFGH' },
-  // Bloco 2
-  { matchNum: 'M84', slotA: '1H', slotB: '2J' },
-  { matchNum: 'M83', slotA: '2K', slotB: '2L' },
-  { matchNum: 'M82', slotA: '1G', slotB: '3rd:AEHIJ' },
-  { matchNum: 'M81', slotA: '1D', slotB: '3rd:BEFIJ' },
-  // Bloco 3
+  { matchNum: 'M73', slotA: '2A', slotB: '2B' },
+  { matchNum: 'M75', slotA: '1F', slotB: '2C' },
+  // Bloco 2 → M91 (M76×M78) + M92 (M79×M80)
   { matchNum: 'M76', slotA: '1C', slotB: '2F' },
   { matchNum: 'M78', slotA: '2E', slotB: '2I' },
   { matchNum: 'M79', slotA: '1A', slotB: '3rd:CEFHI' },
   { matchNum: 'M80', slotA: '1L', slotB: '3rd:EHIJK' },
-  // Bloco 4
+  // Bloco 3 → M93 (M84×M83) + M94 (M82×M81)
+  { matchNum: 'M84', slotA: '1H', slotB: '2J' },
+  { matchNum: 'M83', slotA: '2K', slotB: '2L' },
+  { matchNum: 'M82', slotA: '1G', slotB: '3rd:AEHIJ' },
+  { matchNum: 'M81', slotA: '1D', slotB: '3rd:BEFIJ' },
+  // Bloco 4 → M95 (M88×M86) + M96 (M85×M87)
   { matchNum: 'M88', slotA: '2D', slotB: '2G' },
   { matchNum: 'M86', slotA: '1J', slotB: '2H' },
   { matchNum: 'M85', slotA: '1B', slotB: '3rd:EFGIJ' },
