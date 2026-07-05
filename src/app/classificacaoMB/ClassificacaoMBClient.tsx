@@ -173,11 +173,16 @@ function formatRenderedAt(iso: string): string {
 
 // ── Compact ranking ────────────────────────────────────────────────────────────
 
+// Tamanho oficial do 1º corte (G112, já executado — ver tournament_settings.corte1_participantes).
+// O 2º corte (G56) é sempre metade do 1º corte, arredondado para cima — mesma base usada
+// por G112CompactRanking. Antes desta constante, calcCuts recalculava o 1º corte a partir do
+// total de participantes do bolão (sempre múltiplo de 10), o que nunca podia dar 112 e,
+// consequentemente, nunca dava um 2º corte de 56 — o 56º colocado ficava fora da faixa "2º corte".
+const G112_CORTE1_SIZE = 112
+
 function calcCuts(n: number): { cut1: number; cut2: number } {
-  // Primeiro corte: 50% rounded up to next multiple of 10 (regulamento §28)
-  const cut1 = Math.min(Math.ceil((n * 0.5) / 10) * 10, n)
-  // Segundo corte: 50% of cut1 survivors, arredondado para cima (regulamento §29)
-  const cut2 = Math.min(Math.ceil(cut1 * 0.5), cut1)
+  const cut1 = Math.min(G112_CORTE1_SIZE, n)
+  const cut2 = Math.ceil(cut1 / 2)
   return { cut1, cut2 }
 }
 
@@ -419,7 +424,7 @@ function G112CompactRanking({
   const n = ranked.length
   if (n === 0) return null
 
-  const ranked112 = ranked.slice(0, 112)
+  const ranked112 = ranked.slice(0, G112_CORTE1_SIZE)
 
   // G56: top 56 do G112 avançam para a próxima fase
   const cut2 = Math.ceil(ranked112.length / 2)
@@ -1016,8 +1021,8 @@ export function ClassificacaoMBClient({
                 {/* Diferenças */}
                 {sth('∆ Líder', 'diffLider', 'Diferença pro Líder', 'hidden md:table-cell w-14')}
                 {showDeltaPremio && sth('∆ Prêmio', 'diffPremio', `Diferença pro ${premioSpots}º colocado (1º premiado)`, 'hidden md:table-cell w-16')}
-                {showDeltaCorte1 && sth('∆ Corte 1', 'diffCorte1', 'Diferença para o 1º corte (≈ posição 110)', 'w-16')}
-                {showDeltaCorte2 && sth('∆ Corte 2', 'diffCorte2', 'Diferença para o 2º corte (≈ posição 55)', 'w-16')}
+                {showDeltaCorte1 && sth('∆ Corte 1', 'diffCorte1', 'Diferença para o 1º corte (≈ posição 112)', 'w-16')}
+                {showDeltaCorte2 && sth('∆ Corte 2', 'diffCorte2', 'Diferença para o 2º corte (≈ posição 56)', 'w-16')}
 
                 {/* Breakdown de pontos */}
                 {showPtsJg && sth('Pts Jg', 'ptsMatches', 'Pontos com Jogos', 'hidden md:table-cell w-12')}

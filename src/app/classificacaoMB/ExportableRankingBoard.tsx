@@ -26,9 +26,14 @@ const ZONE_DOT: Record<Zone, string> = {
   last:   'bg-red-400',
 }
 
+// Mesma base de G112CompactRanking (ClassificacaoMBClient.tsx): o 1º corte oficial já
+// executado é 112 (tournament_settings.corte1_participantes); o 2º corte (G56) é sempre
+// metade disso, arredondado para cima.
+const G112_CORTE1_SIZE = 112
+
 function calcCuts(n: number) {
-  const cut1 = Math.min(Math.ceil((n * 0.5) / 10) * 10, n)
-  const cut2 = Math.min(Math.ceil(cut1 * 0.5), cut1)
+  const cut1 = Math.min(G112_CORTE1_SIZE, n)
+  const cut2 = Math.ceil(cut1 / 2)
   return { cut1, cut2 }
 }
 
