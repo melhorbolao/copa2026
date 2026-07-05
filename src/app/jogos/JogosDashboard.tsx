@@ -146,16 +146,29 @@ export function JogosDashboard({
     prevScoreRef.current = { home: match.score_home, away: match.score_away }
   }, [match?.score_home, match?.score_away, match?.id]) // eslint-disable-line
 
-  // Realtime: matches score updates
+  // Realtime: matches score updates.
+  // Ao mudar o placar de um jogo, os `bets` locais de quem carregou a página antes do prazo
+  // fechar podem estar incompletos (filterBetsByDeadline oculta palpites alheios até o prazo).
+  // Um router.refresh() busca bets/storedTotals atualizados do servidor para TODOS os
+  // espectadores (antes só acontecia no navegador de quem salvava o placar), evitando
+  // ranking/medalhas divergentes calculados no cliente com dados parciais.
   useEffect(() => {
     const supabase = createClient()
     const channel = supabase.channel('jogos_matches_rt')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches' }, payload => {
-        setMatches(prev => prev.map(m => m.id === payload.new.id ? { ...m, ...payload.new } : m))
+        let scoreChanged = false
+        setMatches(prev => prev.map(m => {
+          if (m.id !== payload.new.id) return m
+          if (m.score_home !== payload.new.score_home || m.score_away !== payload.new.score_away) {
+            scoreChanged = true
+          }
+          return { ...m, ...payload.new }
+        }))
+        if (scoreChanged) router.refresh()
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, [])
+  }, [router])
 
   // Handle score save callback (from ScoreHeader)
   const handleScoreSaved = useCallback((sh: number | null, sa: number | null) => {
