@@ -64,9 +64,11 @@ async function _updateMatchBetPoints(
     .single()).data
 
   if (!match || match.score_home === null || match.score_away === null) {
-    // Placar removido — limpa pontos residuais para não contaminar a TabelaMB
+    // Placar removido — limpa pontos residuais para não contaminar a TabelaMB.
+    // Retorna os participantes afetados para que o chamador possa refrescar os totais.
+    const { data: residualBets } = await admin.from('bets').select('participant_id').eq('match_id', matchId)
     await (admin as any).from('bets').update({ points: null }).eq('match_id', matchId)
-    return []
+    return [...new Set((residualBets ?? []).map(b => b.participant_id))]
   }
 
   const { data: bets } = await admin
@@ -514,12 +516,21 @@ export async function recalculateAfterMatchScore(matchId: string, isBrazilOverri
   ])
 
   const match = matchRes.data
-  if (!match || match.score_home === null || match.score_away === null) return
+  if (!match) return
 
   const allIds = new Set<string>()
 
-  // Match bets — passa o match já carregado, evita re-fetch
+  // Match bets — passa o match já carregado, evita re-fetch.
+  // Também cobre o placar removido (score null): _updateMatchBetPoints zera os pontos
+  // residuais para não deixar bets.points contaminando os totais com um resultado antigo.
   ;(await _updateMatchBetPoints(matchId, admin, rules, isBrazilOverride, match)).forEach(id => allIds.add(id))
+
+  if (match.score_home === null || match.score_away === null) {
+    // Placar removido: só os pontos deste jogo precisam ser zerados agora.
+    // Grupo/terceiros/torneio serão recalculados normalmente quando um novo placar for salvo.
+    await refreshParticipantTotals([...allIds])
+    return
+  }
 
   if (match.phase === 'group' && match.group_name) {
     // Busca todos os jogos de grupo UMA vez — reutilizado por group bets, third bets e auto-enable
