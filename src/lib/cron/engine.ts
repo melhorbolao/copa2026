@@ -139,7 +139,7 @@ export async function getParticipants(
     let from = 0
     for (;;) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any).from('bets').select('user_id, match_id').in('match_id', ids).range(from, from + PAGE - 1)
+      const { data, error } = await (supabase as any).from('bets').select('user_id, match_id').in('match_id', ids).order('id', { ascending: true }).range(from, from + PAGE - 1)
       if (error || !data || data.length === 0) break
       allBets.push(...data)
       if (data.length < PAGE) break

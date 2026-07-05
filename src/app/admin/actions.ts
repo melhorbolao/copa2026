@@ -325,7 +325,7 @@ export async function sendReminderEmails(
         const PAGE = 1000
         let from = 0
         for (;;) {
-          const { data, error } = await supabase.from('bets').select('participant_id, match_id').in('participant_id', allParticipantIds).range(from, from + PAGE - 1)
+          const { data, error } = await supabase.from('bets').select('participant_id, match_id').in('participant_id', allParticipantIds).order('id', { ascending: true }).range(from, from + PAGE - 1)
           if (error || !data || data.length === 0) break
           bets.push(...data)
           if (data.length < PAGE) break
@@ -360,7 +360,7 @@ export async function sendReminderEmails(
         const PAGE = 1000
         let from = 0
         for (;;) {
-          const { data, error } = await supabase.from('bets').select('participant_id, match_id').in('participant_id', allParticipantIds).range(from, from + PAGE - 1)
+          const { data, error } = await supabase.from('bets').select('participant_id, match_id').in('participant_id', allParticipantIds).order('id', { ascending: true }).range(from, from + PAGE - 1)
           if (error || !data || data.length === 0) break
           bets.push(...data)
           if (data.length < PAGE) break

@@ -62,7 +62,7 @@ export async function buildAuditBuffer(): Promise<{ buffer: Buffer; fileName: st
     const rows: any[] = []
     let from = 0
     for (;;) {
-      const { data, error } = await admin.from(table).select(select).range(from, from + PAGE - 1)
+      const { data, error } = await admin.from(table).select(select).order('id', { ascending: true }).range(from, from + PAGE - 1)
       if (error || !data || data.length === 0) break
       rows.push(...data)
       if (data.length < PAGE) break
@@ -111,6 +111,8 @@ export async function buildAuditBuffer(): Promise<{ buffer: Buffer; fileName: st
       for (;;) {
         const { data, error } = await admin.from('prediction_logs')
           .select('participant_id, deadline_key, last_updated_at, completed_at')
+          .order('participant_id', { ascending: true })
+          .order('deadline_key', { ascending: true })
           .range(from, from + PAGE - 1)
         if (error) return null
         if (!data || data.length === 0) break

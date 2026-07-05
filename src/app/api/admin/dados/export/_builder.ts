@@ -56,6 +56,7 @@ export async function buildTabelaMBBuffer(
       const { data, error } = await admin
         .from('bets')
         .select('participant_id, match_id, score_home, score_away')
+        .order('id', { ascending: true })
         .range(from, from + PAGE - 1)
       if (error || !data || data.length === 0) break
       rows.push(...data)

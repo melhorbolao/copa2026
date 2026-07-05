@@ -55,6 +55,7 @@ export default async function ZebrasPage() {
       for (;;) {
         const { data, error } = await admin.from('vw_public_predictions')
           .select('participant_id, match_id, score_home, score_away, points')
+          .order('id', { ascending: true })
           .range(from, from + PAGE - 1)
         if (error || !data || data.length === 0) break
         rows.push(...data)
@@ -313,7 +314,7 @@ export default async function ZebrasPage() {
     {
       const PAGE = 1000; let from = 0
       for (;;) {
-        const { data, error } = await admin.from('group_bets').select('group_name, first_place').range(from, from + PAGE - 1)
+        const { data, error } = await admin.from('group_bets').select('group_name, first_place').order('id', { ascending: true }).range(from, from + PAGE - 1)
         if (error || !data || data.length === 0) break
         allGroupBets.push(...data)
         if (data.length < PAGE) break

@@ -208,6 +208,7 @@ async function _updateThirdBetPoints(
       const { data, error } = await (admin as any)
         .from('third_place_bets')
         .select('id, participant_id, group_name, team')
+        .order('id', { ascending: true })
         .range(from, from + PAGE - 1)
       if (error || !data || data.length === 0) break
       thirdBets.push(...data)
@@ -464,7 +465,7 @@ export async function refreshParticipantTotals(participantIds: string[]): Promis
     let from = 0
     for (;;) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (admin as any).from(table).select(select).in('participant_id', participantIds).range(from, from + PAGE - 1)
+      const { data, error } = await (admin as any).from(table).select(select).in('participant_id', participantIds).order('id', { ascending: true }).range(from, from + PAGE - 1)
       if (error || !data || data.length === 0) break
       rows.push(...data)
       if (data.length < PAGE) break

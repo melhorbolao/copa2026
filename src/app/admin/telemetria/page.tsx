@@ -226,6 +226,7 @@ export default async function TelemetriaAdminPage() {
         .from('page_views')
         .select('path, device_type')
         .eq('user_id', masterUserId)
+        .order('id', { ascending: true })
         .range(from, from + 999)
       if (error || !data || data.length === 0) break
       masterPageRows.push(...data)

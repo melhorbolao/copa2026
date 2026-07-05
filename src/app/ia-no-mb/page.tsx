@@ -57,7 +57,7 @@ async function fetchAllRealBets(admin: any): Promise<RealBet[]> {
   for (;;) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (admin as any)
-      .from('bets').select('match_id, score_home, score_away').range(from, from + PAGE - 1)
+      .from('bets').select('match_id, score_home, score_away').order('id', { ascending: true }).range(from, from + PAGE - 1)
     if (error || !data || data.length === 0) break
     rows.push(...data)
     if (data.length < PAGE) break
@@ -275,7 +275,7 @@ export default async function IaNoMbPage() {
     const rows: any[] = []
     let from = 0
     for (;;) {
-      const { data, error } = await admin.from('group_bets').select('group_name, first_place').range(from, from + PAGE - 1)
+      const { data, error } = await admin.from('group_bets').select('group_name, first_place').order('id', { ascending: true }).range(from, from + PAGE - 1)
       if (error || !data || data.length === 0) break
       rows.push(...data)
       if (data.length < PAGE) break

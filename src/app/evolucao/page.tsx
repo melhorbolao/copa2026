@@ -74,6 +74,7 @@ export default async function EvolucaoPage() {
         .select('event_date, participant_id, pts_matches, pts_groups, pts_thirds, pts_tournament')
         .lt('event_date', todayStr)
         .order('event_date', { ascending: true })
+        .order('participant_id', { ascending: true })
         .range(from, from + PAGE - 1)
       if (!data || data.length === 0) break
       rawDailyPoints.push(...(data as typeof rawDailyPoints))
@@ -89,7 +90,7 @@ export default async function EvolucaoPage() {
     const rows: any[] = []
     let from = 0
     for (;;) {
-      const { data, error } = await admin.from(table).select(select).range(from, from + PAGE - 1)
+      const { data, error } = await admin.from(table).select(select).order('id', { ascending: true }).range(from, from + PAGE - 1)
       if (error || !data || data.length === 0) break
       rows.push(...data)
       if (data.length < PAGE) break

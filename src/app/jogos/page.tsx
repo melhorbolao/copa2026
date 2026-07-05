@@ -60,7 +60,7 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
     const rows: any[] = []
     let from = 0
     for (;;) {
-      const { data, error } = await admin.from(table).select(select).range(from, from + PAGE - 1)
+      const { data, error } = await admin.from(table).select(select).order('id', { ascending: true }).range(from, from + PAGE - 1)
       if (error || !data || data.length === 0) break
       rows.push(...data)
       if (data.length < PAGE) break

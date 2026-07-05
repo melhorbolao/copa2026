@@ -69,6 +69,7 @@ export default async function AdminParticipantesPage() {
       const { data, error } = await supabase
         .from('bets').select('participant_id')
         .in('match_id', currentStageMatchIds)
+        .order('id', { ascending: true })
         .range(from, from + PAGE - 1)
       if (error || !data || data.length === 0) break
       for (const b of data) betCountByPid.set(b.participant_id, (betCountByPid.get(b.participant_id) ?? 0) + 1)
@@ -95,7 +96,7 @@ export default async function AdminParticipantesPage() {
 
       for (let from = 0;;) {
         const { data, error } = await supabase
-          .from('group_bets').select('participant_id').in('participant_id', pids).range(from, from + PAGE - 1)
+          .from('group_bets').select('participant_id').in('participant_id', pids).order('id', { ascending: true }).range(from, from + PAGE - 1)
         if (error || !data || data.length === 0) break
         for (const g of data) grpCountMap.set(g.participant_id, (grpCountMap.get(g.participant_id) ?? 0) + 1)
         if (data.length < PAGE) break
@@ -104,7 +105,7 @@ export default async function AdminParticipantesPage() {
 
       for (let from = 0;;) {
         const { data, error } = await supabase
-          .from('third_place_bets').select('participant_id').in('participant_id', pids).range(from, from + PAGE - 1)
+          .from('third_place_bets').select('participant_id').in('participant_id', pids).order('id', { ascending: true }).range(from, from + PAGE - 1)
         if (error || !data || data.length === 0) break
         for (const t of data) thirdCountMap.set(t.participant_id, (thirdCountMap.get(t.participant_id) ?? 0) + 1)
         if (data.length < PAGE) break

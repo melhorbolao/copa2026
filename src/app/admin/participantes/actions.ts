@@ -164,7 +164,7 @@ export async function getParticipantesSummaryText(): Promise<string> {
     const rows: any[] = []
     let from = 0
     for (;;) {
-      const { data, error } = await supabase.from(table).select(select).in(col, vals).range(from, from + PAGE - 1)
+      const { data, error } = await supabase.from(table).select(select).in(col, vals).order('id', { ascending: true }).range(from, from + PAGE - 1)
       if (error || !data || data.length === 0) break
       rows.push(...data)
       if (data.length < PAGE) break
