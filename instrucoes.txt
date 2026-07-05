@@ -1,31 +1,30 @@
-ESPECIFICAÇÃO TÉCNICA: NOVA TABELA "CLASSIFICAÇÃO G112"
+ESPECIFICAÇÃO TÉCNICA: CHAVEAMENTO RADIAL (RADIAL BRACKET - A COPA)
 
-Objetivo: Criar uma nova visualização de ranking chamada "Classificação G112" na página principal de Classificação. Ela deve ser a primeira tabela exibida na tela, contendo apenas os 112 primeiros colocados, com um layout de 4 colunas e regras visuais específicas, mantendo a compatibilidade total com os filtros e a exportação de imagem mobile.
+Objetivo: Substituir a visualização inicial da página "A Copa" (/src/app/a-copa/page.tsx) por um diagrama de chaveamento circular (Radial Bracket) semelhante a uma teia, convergindo os 32 times classificados para o centro (a Taça). 
 
-1. ESTRUTURA DE DADOS E POSICIONAMENTO:
-- Na página de Classificação, injete o componente da nova tabela "Classificação G112" logo acima da tabela existente (ou substitua a visualização inicial por ela, dependendo de como a interface lida com múltiplas tabelas, mas garantindo que seja a primeira que o usuário veja).
-- Os dados desta tabela devem ser um slice/filtro do array principal do ranking, pegando estritamente do 1º ao 112º colocado (ex: `rankingData.slice(0, 112)`).
-- Ela DEVE escutar e reagir aos mesmos controles de filtro já existentes na página (ex: "Destacar meu nome", "Destacar minha panela", etc.).
+1. TECNOLOGIA DE RENDERIZAÇÃO (SVG OBRIGATÓRIO):
+- É expressamente proibido tentar montar essa estrutura usando HTML/CSS Grid/Flexbox convencional.
+- Crie um componente dedicado chamado '<RadialBracket />' que retorne um único elemento '<svg>' responsivo (usando 'viewBox', ex: viewBox="0 0 1000 1000").
+- A lógica interna do componente deve utilizar funções trigonométricas nativas do JavaScript (Math.cos, Math.sin) para calcular as coordenadas (x, y) dos nós (partidas) e desenhar as linhas conectores (<path> ou <line>) em anéis concêntricos.
 
-2. LAYOUT DO GRID (4 BLOCOS VERTICAIS):
-- Diferente da tabela de 212 participantes (que possui 7 colunas no desktop), a G112 deve ser formatada em CSS Grid para ter exatamente 4 colunas em telas grandes.
-- Como são 112 participantes, a distribuição natural será de 28 participantes por coluna (4 * 28 = 112). Configure o CSS/Tailwind para forçar essa quebra (ex: `grid-cols-1 md:grid-cols-2 lg:grid-cols-4`).
+2. ESTRUTURA DO TORNEIO (COPA 2026):
+- Anel Externo (16 avos de final): 32 nós (16 do lado esquerdo, 16 do lado direito).
+- Anel 2 (Oitavas): 16 nós.
+- Anel 3 (Quartas): 8 nós.
+- Anel 4 (Semis): 4 nós.
+- Anel 5 (Final): 2 nós convergindo para a imagem/ícone central do troféu.
 
-3. REGRAS VISUAIS E DE ESTILIZAÇÃO:
-- Subtítulo: Mantenha o formato de data/hora e jogos registrados, mas REMOVA o trecho que fala sobre grupos definidos (ex: "último CDM 1x0 EQU - 0/12 grupos definidos").
-- Cores de Zonas de Corte: 
-  * Mantenha as cores e lógicas da "Premiação" (Top 10) e do "2º corte" (Top 55).
-  * REMOVA completamente o background amarelo referente ao "1º corte" (pois todos os 112 já passaram por ele).
-  * REMOVA o destaque em vermelho e o ícone de lanterna para o último colocado (112º), pois ele não é o lanterna do bolão geral.
+3. ESTADO E PREENCHIMENTO DINÂMICO:
+- O componente deve cruzar os dados com a tabela de 'matches'.
+- Se o time/seleção ainda não estiver definido para aquela posição no chaveamento, renderize um placeholder neutro (ex: um círculo cinza claro com borda tracejada e uma sigla genérica, como "1A" ou "Vencedor Jogo 73").
+- Assim que o banco de dados registrar a classificação de uma seleção, o nó correspondente no SVG deve ser preenchido (utilize a tag <foreignObject> dentro do SVG para renderizar a bandeira e o nome da seleção usando componentes React/Tailwind normais por cima da coordenada do nó).
 
-4. EXPORTAÇÃO MOBILE (OFF-SCREEN RENDERING):
-- O botão "Compartilhar Tabela" (exclusivo para mobile) deve obrigatoriamente englobar esta nova tabela G112.
-- O componente fantasma (off-screen) responsável por gerar o PNG/Blob via 'html-to-image' deve ser adaptado para renderizar o layout de 4 colunas caso o usuário esteja exportando a G112.
-- É mandatório preservar a injeção dos estados de destaque (highlights de usuário e panela) na imagem gerada.
-- O payload de compartilhamento via `navigator.share` deve manter o texto exato que já acompanha a imagem atualmente.
+4. COMPORTAMENTO MOBILE E RESPONSIVIDADE:
+- Como o SVG completo possui muitos detalhes, no celular os nós ficariam microscópicos se a tela encolhesse demais.
+- Encapsule o <svg> em uma div 'wrapper' com as classes Tailwind `w-full overflow-x-auto touch-pan-x`. Isso permite que no desktop a teia apareça por completo e, no mobile, o usuário possa deslizar lateralmente para explorar os dois lados da chave sem perder a nitidez.
 
 5. VERIFICAÇÃO INDEPENDENTE OBRIGATÓRIA:
-Antes de aplicar as mudanças e commitar, apresente no terminal:
-A) O trecho de código Tailwind/CSS onde o grid de 4 colunas foi definido para a G112.
-B) A lógica de filtro/slice utilizada para garantir que apenas 112 participantes sejam renderizados sem fazer uma nova requisição ao Supabase.
-C) A confirmação de como a função de exportação lida com o componente fantasma para garantir que os destaques ativos na tela sejam capturados na imagem.
+Antes de escrever o arquivo completo, apresente no terminal:
+A) A função matemática (em TypeScript) que você criará para distribuir os 32 nós do anel externo pelas bordas do círculo.
+B) A estrutura de dados (array de nós) que vai mapear os match_ids do Supabase para suas respectivas coordenadas (x, y) no diagrama.
+C) O trecho de código que usa `<foreignObject>` para garantir que as bandeiras/avatares sejam renderizadas corretamente sobre as coordenadas do SVG.
