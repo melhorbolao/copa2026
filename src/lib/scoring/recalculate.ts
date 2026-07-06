@@ -3,7 +3,7 @@
 
 import { createAuthAdminClient } from '@/lib/supabase/server'
 import { recalculateDailyPoints } from './daily-points'
-import { calcGroupStandings, rankThirds } from '@/lib/bracket/engine'
+import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap } from '@/lib/bracket/engine'
 import type { MatchSlim, BetSlim } from '@/lib/bracket/engine'
 import {
   scoreMatchBet,
@@ -34,6 +34,60 @@ function matchWinner(
   return m.penalty_winner ?? null
 }
 
+// is_brazil por partida, resolvido via o motor de chaveamento (mesma lógica usada em
+// JogosDashboard.tsx e classificacaoMB/page.tsx). A coluna matches.team_home/team_away de
+// jogos de mata-mata muitas vezes nunca é atualizada com o nome real do time (fica como
+// "Venc. Jogo N"), então checar apenas o valor cru da coluna não é suficiente — é preciso
+// encadear os resultados oficiais das rodadas anteriores para saber quem realmente joga.
+async function buildIsBrazilMap(admin: AdminClient): Promise<Map<string, boolean>> {
+  const { data } = await (admin as any)
+    .from('matches')
+    .select('id, phase, group_name, team_home, team_away, flag_home, flag_away, score_home, score_away, penalty_winner, is_brazil, match_number')
+  const matches: any[] = data ?? []
+
+  const groupMatches = matches.filter(m => m.phase === 'group')
+  const slim: MatchSlim[] = groupMatches.map(m => ({
+    id: m.id, group_name: m.group_name, phase: m.phase,
+    team_home: m.team_home, team_away: m.team_away,
+    flag_home: m.flag_home, flag_away: m.flag_away,
+  }))
+  const betMap = new Map<string, BetSlim>()
+  const byGroup = new Map<string, { total: number; scored: number }>()
+  for (const m of groupMatches) {
+    if (m.score_home !== null && m.score_away !== null) {
+      betMap.set(m.id, { match_id: m.id, score_home: m.score_home, score_away: m.score_away })
+    }
+    if (m.group_name) {
+      const e = byGroup.get(m.group_name) ?? { total: 0, scored: 0 }
+      e.total++
+      if (m.score_home !== null && m.score_away !== null) e.scored++
+      byGroup.set(m.group_name, e)
+    }
+  }
+  const completeGroups = new Set<string>()
+  for (const [g, { total, scored }] of byGroup) {
+    if (total > 0 && scored === total) completeGroups.add(g)
+  }
+  const allGroupsComplete = byGroup.size > 0 && completeGroups.size === byGroup.size
+  const standings  = calcGroupStandings(slim, betMap)
+  const thirds     = rankThirds(standings)
+  const thirdSlots = resolveThirdSlots(thirds)
+  const r32Slots   = buildR32Teams(standings, thirds, thirdSlots, undefined, completeGroups, allGroupsComplete)
+  const knockoutMatches = matches.filter(m =>
+    ['round_of_32', 'round_of_16', 'quarterfinal', 'semifinal', 'third_place', 'final'].includes(m.phase)
+  )
+  const derivedTeamMap = buildKnockoutTeamMap(r32Slots, knockoutMatches)
+
+  const map = new Map<string, boolean>()
+  for (const m of matches) {
+    const ov = derivedTeamMap.get(m.id)
+    const effHome = ov?.team_home || m.team_home
+    const effAway = ov?.team_away || m.team_away
+    map.set(m.id, m.is_brazil || effHome === 'Brasil' || effAway === 'Brasil')
+  }
+  return map
+}
+
 // ── Shared types for pre-loaded data ─────────────────────────────────────────
 
 interface GroupMatchRow {
@@ -56,6 +110,7 @@ async function _updateMatchBetPoints(
   rules: RuleMap,
   isBrazilOverride?: boolean,
   preloadedMatch?: MatchScoreRow,
+  isBrazilMap?: Map<string, boolean>,
 ): Promise<string[]> {
   const match: MatchScoreRow | null = preloadedMatch ?? (await admin
     .from('matches')
@@ -78,9 +133,11 @@ async function _updateMatchBetPoints(
 
   if (!bets?.length) return []
 
-  // is_brazil pode estar desatualizado no DB para jogos de mata-mata inseridos com 'TBD'.
-  // isBrazilOverride é passado pelo cliente quando ele conhece o time real (via TeamOverride do chaveamento).
-  const isBrazil = isBrazilOverride ?? (match.is_brazil || match.team_home === 'Brasil' || match.team_away === 'Brasil')
+  // is_brazil pode estar desatualizado/nunca preenchido no DB para jogos de mata-mata (o
+  // team_home/team_away às vezes nunca é atualizado além de "Venc. Jogo N"). Prioridade:
+  // override explícito do chamador > mapa resolvido via chaveamento > coluna crua como último recurso.
+  const isBrazil = isBrazilOverride ?? isBrazilMap?.get(matchId) ??
+    (match.is_brazil || match.team_home === 'Brasil' || match.team_away === 'Brasil')
 
   const actualResult = getMatchResult(match.score_home, match.score_away)
   const threshold    = rules['percentual_zebra'] ?? 15
@@ -382,8 +439,8 @@ async function _updateTournamentBetPoints(admin: AdminClient, rules: RuleMap): P
 
 export async function recalculateMatchBets(matchId: string): Promise<void> {
   const admin = createAuthAdminClient()
-  const rules = await loadRules(admin)
-  const ids   = await _updateMatchBetPoints(matchId, admin, rules)
+  const [rules, isBrazilMap] = await Promise.all([loadRules(admin), buildIsBrazilMap(admin)])
+  const ids   = await _updateMatchBetPoints(matchId, admin, rules, undefined, undefined, isBrazilMap)
   await refreshParticipantTotals(ids)
 }
 
@@ -506,14 +563,15 @@ const KNOCKOUT_SCORING_PHASES = new Set(['quarterfinal', 'semifinal', 'third_pla
 export async function recalculateAfterMatchScore(matchId: string, isBrazilOverride?: boolean): Promise<void> {
   const admin = createAuthAdminClient()
 
-  // Parallel: match (com todos os campos) + regras de pontuação
-  const [matchRes, rules] = await Promise.all([
+  // Parallel: match (com todos os campos) + regras de pontuação + mapa de is_brazil via chaveamento
+  const [matchRes, rules, isBrazilMap] = await Promise.all([
     (admin as any)
       .from('matches')
       .select('id, phase, group_name, score_home, score_away, is_brazil, team_home, team_away')
       .eq('id', matchId)
       .single() as Promise<{ data: (MatchScoreRow & { phase: string; group_name: string | null }) | null }>,
     loadRules(admin),
+    buildIsBrazilMap(admin),
   ])
 
   const match = matchRes.data
@@ -524,7 +582,7 @@ export async function recalculateAfterMatchScore(matchId: string, isBrazilOverri
   // Match bets — passa o match já carregado, evita re-fetch.
   // Também cobre o placar removido (score null): _updateMatchBetPoints zera os pontos
   // residuais para não deixar bets.points contaminando os totais com um resultado antigo.
-  ;(await _updateMatchBetPoints(matchId, admin, rules, isBrazilOverride, match)).forEach(id => allIds.add(id))
+  ;(await _updateMatchBetPoints(matchId, admin, rules, isBrazilOverride, match, isBrazilMap)).forEach(id => allIds.add(id))
 
   if (match.score_home === null || match.score_away === null) {
     // Placar removido: só os pontos deste jogo precisam ser zerados agora.
@@ -571,7 +629,7 @@ export async function recalculateAfterMatchScore(matchId: string, isBrazilOverri
 
 export async function recalculateAll(): Promise<void> {
   const admin = createAuthAdminClient()
-  const rules = await loadRules(admin)
+  const [rules, isBrazilMap] = await Promise.all([loadRules(admin), buildIsBrazilMap(admin)])
 
   const { data: scoredMatches } = await admin
     .from('matches')
@@ -585,7 +643,7 @@ export async function recalculateAll(): Promise<void> {
   // 1. Match bets (batches of 8 to avoid connection saturation)
   for (let i = 0; i < scoredMatches.length; i += 8) {
     const results = await Promise.all(
-      scoredMatches.slice(i, i + 8).map(m => _updateMatchBetPoints(m.id, admin, rules))
+      scoredMatches.slice(i, i + 8).map(m => _updateMatchBetPoints(m.id, admin, rules, undefined, undefined, isBrazilMap))
     )
     results.flat().forEach(id => allIds.add(id))
   }
