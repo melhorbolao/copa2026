@@ -199,6 +199,8 @@ function ExportableBetStats({
 export function BetStats({ match, matchBets, participants, isZebra, rules, rankBefore, rankAfter, currentRank, hasAnyScore, activeParticipantId, teamAbbrs = {} }: Props) {
   const hasResult      = match.score_home !== null && match.score_away !== null
   const zebraThreshold = rules['percentual_zebra'] ?? 15
+  // match.is_brazil pode estar desatualizado no DB para jogos de mata-mata (times eram 'TBD' na inserção)
+  const isBrazilMatch  = match.is_brazil || match.team_home === 'Brasil' || match.team_away === 'Brasil'
 
   // ── Share Resumo (mobile) — visível apenas dentro da janela de edição de resultado ──
   const EDIT_WINDOW_MS = 4 * 60 * 60 * 1000
@@ -285,7 +287,7 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankB
         const isExact = hasResult && match.score_home === sh && match.score_away === sa
         const isImpossible = hasResult && (match.score_home! > sh || match.score_away! > sa)
         const pts = hasResult
-          ? scoreMatchBet(sh, sa, match.score_home!, match.score_away!, isZebra, match.is_brazil, rules)
+          ? scoreMatchBet(sh, sa, match.score_home!, match.score_away!, isZebra, isBrazilMatch, rules)
           : null
         const pidSet = new Set(pids)
         const medals = hasAnyScore ? [1, 2, 3].filter(rank => {
@@ -296,7 +298,7 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankB
         return { score_home: sh, score_away: sa, result, count, pids, pct: (count / total) * 100, pts, isExact, isImpossible, medals, hasLantern }
       })
       .sort((a, b) => b.count - a.count)
-  }, [matchBets, match.score_home, match.score_away, hasResult, isZebra, rules, match.is_brazil, medalTier, lanternPids])
+  }, [matchBets, match.score_home, match.score_away, hasResult, isZebra, rules, isBrazilMatch, medalTier, lanternPids])
 
   const colTotals = useMemo(() => {
     const t = { H: 0, D: 0, A: 0 }
@@ -330,9 +332,9 @@ export function BetStats({ match, matchBets, participants, isZebra, rules, rankB
     return scoreMatchBet(
       ownBet.score_home, ownBet.score_away,
       match.score_home!, match.score_away!,
-      isZebra, match.is_brazil, rules,
+      isZebra, isBrazilMatch, rules,
     )
-  }, [ownBet, hasResult, match.score_home, match.score_away, isZebra, match.is_brazil, rules])
+  }, [ownBet, hasResult, match.score_home, match.score_away, isZebra, isBrazilMatch, rules])
 
   const ownIsExact = hasResult && ownBet !== null &&
     match.score_home === ownBet.score_home &&

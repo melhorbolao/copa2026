@@ -772,10 +772,15 @@ export async function saveMatchScore(
     (rulesData ?? []).map(r => [r.key, r.points])
   )
 
-  // 2. Salva o placar
+  // 2. Salva o placar (persiste também is_brazil quando detectado, já que a coluna
+  // pode estar desatualizada para jogos de mata-mata inseridos com times 'TBD')
   const { error } = await supabase
     .from('matches')
-    .update({ score_home: scoreHome, score_away: scoreAway })
+    .update({
+      score_home: scoreHome,
+      score_away: scoreAway,
+      ...(isBrazil ? { is_brazil: true } : {}),
+    })
     .eq('id', matchId)
 
   if (error) throw new Error(error.message)
