@@ -211,6 +211,55 @@ export function JogosDashboard({
     }
   }, [matchBets, threshold])
 
+  // Resolve nomes reais para jogos eliminatórios a partir das classificações oficiais dos grupos
+  const derivedTeamMap = useMemo(() => {
+    const groupMatches = matches.filter(m => m.phase === 'group')
+    const slim: MatchSlim[] = groupMatches.map(m => ({
+      id: m.id, group_name: m.group_name, phase: m.phase,
+      team_home: m.team_home, team_away: m.team_away,
+      flag_home: m.flag_home, flag_away: m.flag_away,
+    }))
+    const betMap = new Map<string, BetSlim>()
+    const byGroup = new Map<string, { total: number; scored: number }>()
+    for (const m of groupMatches) {
+      if (m.score_home !== null && m.score_away !== null) {
+        betMap.set(m.id, { match_id: m.id, score_home: m.score_home as number, score_away: m.score_away as number })
+      }
+      if (m.group_name) {
+        const e = byGroup.get(m.group_name) ?? { total: 0, scored: 0 }
+        e.total++
+        if (m.score_home !== null && m.score_away !== null) e.scored++
+        byGroup.set(m.group_name, e)
+      }
+    }
+    const completeGroups = new Set<string>()
+    for (const [g, { total, scored }] of byGroup) {
+      if (total > 0 && scored === total) completeGroups.add(g)
+    }
+    const allGroupsComplete = byGroup.size > 0 && completeGroups.size === byGroup.size
+    const standings = calcGroupStandings(slim, betMap)
+    const thirds = rankThirds(standings)
+    const thirdSlots = resolveThirdSlots(thirds)
+    const r32Slots = buildR32Teams(standings, thirds, thirdSlots, undefined, completeGroups, allGroupsComplete)
+    const knockoutMatches = matches.filter(m =>
+      ['round_of_32', 'round_of_16', 'quarterfinal', 'semifinal', 'third_place', 'final'].includes(m.phase)
+    )
+    return buildKnockoutTeamMap(r32Slots, knockoutMatches)
+  }, [matches])
+
+  // is_brazil por partida, com fallback pelo nome do time resolvido (derivedTeamMap) — a coluna
+  // matches.is_brazil pode estar desatualizada em jogos de mata-mata inseridos com times 'TBD'.
+  const isBrazilByMatchId = useMemo(() => {
+    const map = new Map<string, boolean>()
+    for (const m of matches) {
+      const ov = derivedTeamMap.get(m.id)
+      const effHome = ov?.team_home || m.team_home
+      const effAway = ov?.team_away || m.team_away
+      map.set(m.id, m.is_brazil || effHome === 'Brasil' || effAway === 'Brasil')
+    }
+    return map
+  }, [matches, derivedTeamMap])
+
   // Total live: parte de storedTotals (inclui grupos, torneio, artilheiro) e soma apenas o delta
   // de jogos ainda não recalculados no servidor (bets.points === null mas match já tem placar).
   const livePoints = useMemo(() => {
@@ -221,13 +270,14 @@ export function JogosDashboard({
       const mBets = bets.filter(b => b.match_id === m.id)
       if (!mBets.some(b => b.points === null)) continue  // tudo recalculado, já em storedTotals
       const isZebra = detectMatchZebra(mBets, getMatchResult(m.score_home, m.score_away), threshold)
+      const isBrazilMatch = isBrazilByMatchId.get(m.id) ?? m.is_brazil
       for (const b of mBets.filter(bx => bx.points === null)) {
         pts[b.participant_id] = (pts[b.participant_id] ?? 0) +
-          scoreMatchBet(b.score_home, b.score_away, m.score_home, m.score_away, isZebra, m.is_brazil, rules)
+          scoreMatchBet(b.score_home, b.score_away, m.score_home, m.score_away, isZebra, isBrazilMatch, rules)
       }
     }
     return pts
-  }, [matches, bets, participants, rules, threshold, storedTotals])
+  }, [matches, bets, participants, rules, threshold, storedTotals, isBrazilByMatchId])
 
   // Points contributed by this match only.
   // Usa bets.points armazenados quando disponíveis (evita divergência na detecção de zebra
@@ -240,14 +290,15 @@ export function JogosDashboard({
       if (b.points !== null) pts[b.participant_id] = b.points
     }
     const unrecalculated = matchBets.filter(b => b.points === null)
-    if (unrecalculated.length > 0) {
+    if (unrecalculated.length > 0 && match) {
       const isZebra = detectMatchZebra(matchBets, getMatchResult(match.score_home!, match.score_away!), threshold)
+      const isBrazilMatch = isBrazilByMatchId.get(match.id) ?? match.is_brazil
       for (const b of unrecalculated) {
-        pts[b.participant_id] = scoreMatchBet(b.score_home, b.score_away, match.score_home!, match.score_away!, isZebra, match.is_brazil, rules)
+        pts[b.participant_id] = scoreMatchBet(b.score_home, b.score_away, match.score_home!, match.score_away!, isZebra, isBrazilMatch, rules)
       }
     }
     return pts
-  }, [match?.score_home, match?.score_away, matchBets, match?.is_brazil, rules, threshold])
+  }, [match, matchBets, isBrazilByMatchId, rules, threshold])
 
   // Points WITHOUT this match (live total minus this match's contribution) — usado para "PTS Total" no painel
   const ptsWithoutMatch = useMemo(() => {
@@ -295,42 +346,6 @@ export function JogosDashboard({
     })
     return out
   }, [participants, livePoints])
-
-  // Resolve nomes reais para jogos eliminatórios a partir das classificações oficiais dos grupos
-  const derivedTeamMap = useMemo(() => {
-    const groupMatches = matches.filter(m => m.phase === 'group')
-    const slim: MatchSlim[] = groupMatches.map(m => ({
-      id: m.id, group_name: m.group_name, phase: m.phase,
-      team_home: m.team_home, team_away: m.team_away,
-      flag_home: m.flag_home, flag_away: m.flag_away,
-    }))
-    const betMap = new Map<string, BetSlim>()
-    const byGroup = new Map<string, { total: number; scored: number }>()
-    for (const m of groupMatches) {
-      if (m.score_home !== null && m.score_away !== null) {
-        betMap.set(m.id, { match_id: m.id, score_home: m.score_home as number, score_away: m.score_away as number })
-      }
-      if (m.group_name) {
-        const e = byGroup.get(m.group_name) ?? { total: 0, scored: 0 }
-        e.total++
-        if (m.score_home !== null && m.score_away !== null) e.scored++
-        byGroup.set(m.group_name, e)
-      }
-    }
-    const completeGroups = new Set<string>()
-    for (const [g, { total, scored }] of byGroup) {
-      if (total > 0 && scored === total) completeGroups.add(g)
-    }
-    const allGroupsComplete = byGroup.size > 0 && completeGroups.size === byGroup.size
-    const standings = calcGroupStandings(slim, betMap)
-    const thirds = rankThirds(standings)
-    const thirdSlots = resolveThirdSlots(thirds)
-    const r32Slots = buildR32Teams(standings, thirds, thirdSlots, undefined, completeGroups, allGroupsComplete)
-    const knockoutMatches = matches.filter(m =>
-      ['round_of_32', 'round_of_16', 'quarterfinal', 'semifinal', 'third_place', 'final'].includes(m.phase)
-    )
-    return buildKnockoutTeamMap(r32Slots, knockoutMatches)
-  }, [matches])
 
   // Match efetivo: aplica nomes reais para fases eliminatórias
   const effectiveMatch = useMemo(() => {
