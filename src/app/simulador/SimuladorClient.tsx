@@ -1442,19 +1442,25 @@ export function SimuladorClient({
     })
   }, [participants, computedTotals])
 
+  // Ranking com saltos em empates (competition ranking) — mesmo padrão de
+  // classificacaoMB/participantes. Usar índice puro (findIndex+1) mostra
+  // posições diferentes para participantes empatados nos mesmos pontos.
   const officialRanking = useMemo(() => {
     if (!activeParticipantId) return 0
     const sorted = [...participants].sort((a, b) => {
       const diff = (participantTotals[b.id] ?? 0) - (participantTotals[a.id] ?? 0)
       return diff !== 0 ? diff : a.apelido.localeCompare(b.apelido)
     })
-    return sorted.findIndex(p => p.id === activeParticipantId) + 1
+    let rank = 0
+    for (let i = 0; i < sorted.length; i++) {
+      rank = i === 0 ? 1
+        : (participantTotals[sorted[i].id] ?? 0) === (participantTotals[sorted[i - 1].id] ?? 0)
+          ? rank
+          : i + 1
+      if (sorted[i].id === activeParticipantId) return rank
+    }
+    return 0
   }, [participants, participantTotals, activeParticipantId])
-
-  const simRanking = useMemo(() => {
-    if (!activeParticipantId) return 0
-    return classificationSorted.findIndex(p => p.id === activeParticipantId) + 1
-  }, [classificationSorted, activeParticipantId])
 
   const simRanked = useMemo(() => {
     const result = classificationSorted.map((p, i) => ({
@@ -1465,6 +1471,11 @@ export function SimuladorClient({
     }
     return result
   }, [classificationSorted, computedTotals])
+
+  const simRanking = useMemo(() => {
+    if (!activeParticipantId) return 0
+    return simRanked.find(r => r.id === activeParticipantId)?.rank ?? 0
+  }, [simRanked, activeParticipantId])
 
   const simIsUniqueLast = useMemo(() => {
     if (simRanked.length === 0) return false
