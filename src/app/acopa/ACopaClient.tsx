@@ -16,6 +16,7 @@ import {
   findAnnexeCOption,
   buildR32Teams,
   R32_MATCHES,
+  SF_PAIRS,
 } from '@/lib/bracket/engine'
 import type { MatchSlim, BetSlim } from '@/lib/bracket/engine'
 import type { R32Slot } from '@/app/tabela/BracketView'
@@ -135,10 +136,11 @@ function buildKnockoutTeamMap(r32Slots: R32Slot[], knockoutMatches: MatchFull[])
     return winner(m, a, b)
   })
 
-  // SF
+  // SF — cruzamento oficial (ver SF_PAIRS), não pareamento adjacente
   const sfDB = byPhase('semifinal')
   const sfW: (string | null)[] = sfDB.map((m, i) => {
-    const a = qfW[i * 2] ?? null, b = qfW[i * 2 + 1] ?? null
+    const [qa, qb] = SF_PAIRS[i] ?? [0, 1]
+    const a = qfW[qa] ?? null, b = qfW[qb] ?? null
     set(m, a, b)
     return winner(m, a, b)
   })
@@ -152,7 +154,8 @@ function buildKnockoutTeamMap(r32Slots: R32Slot[], knockoutMatches: MatchFull[])
   if (thirdM) {
     const loser = (i: number) => {
       const w = sfW[i]; if (!w) return null
-      const a = qfW[i * 2] ?? null, b = qfW[i * 2 + 1] ?? null
+      const [qa, qb] = SF_PAIRS[i] ?? [0, 1]
+      const a = qfW[qa] ?? null, b = qfW[qb] ?? null
       return w === a ? b : a
     }
     set(thirdM, loser(0), loser(1))

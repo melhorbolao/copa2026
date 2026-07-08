@@ -77,46 +77,53 @@ export interface R32MatchDef {
 
 // Ordem de exibição do chaveamento (16avos), organizada em 4 blocos de 4.
 // Cada par de blocos consecutivos alimenta uma partida das oitavas (M89..M96,
-// na ordem de match_number), e cada par de oitavas consecutivas alimenta uma
-// quarta de final. Confirmado pelo calendário oficial:
+// na ordem de match_number). Ordem conferida contra o calendário oficial:
 // M89=Filadélfia(Paraguai x França), M90=Houston(Canadá x Marrocos),
-// M93=Dallas(Portugal x Espanha), M94=Seattle(EUA x Bélgica),
 // M91=Nova York(Brasil x Noruega), M92=Cidade do México(México x Inglaterra),
+// M93=Dallas(Portugal x Espanha), M94=Seattle(EUA x Bélgica),
 // M95=Atlanta(venc. 86x88), M96=Vancouver(venc. 85x87).
+// Bloco 1: 1E, 1I, 2A, 1F
+// Bloco 2: 1C, 2E, 1A, 1L
+// Bloco 3: 1H, 2K, 1G, 1D
+// Bloco 4: 2D, 1J, 1B, 1K
 //
-// IMPORTANTE: nas semifinais, os pares NÃO seguem a ordem simples dos blocos
-// 1-2-3-4. O chaveamento oficial cruza: vencedor(França/Marrocos) enfrenta
-// vencedor(Espanha/Bélgica), e vencedor(Noruega/Inglaterra) enfrenta
-// vencedor(Argentina/Suíça). Por isso os blocos "Noruega/Inglaterra" (antigo
-// Bloco 2) e "Espanha/Bélgica" (antigo Bloco 3) foram TROCADOS de posição
-// abaixo — assim o pareamento adjacente simples (i*2, i*2+1), usado em todas
-// as fases por todo o app, produz as semis corretas sem lógica especial.
-// Bloco 1: 1E, 1I, 2A, 1F         (França / Marrocos)
-// Bloco 2: 1H, 2K, 1G, 1D         (Espanha / Bélgica)      [era Bloco 3]
-// Bloco 3: 1C, 2E, 1A, 1L         (Noruega / Inglaterra)   [era Bloco 2]
-// Bloco 4: 2D, 1J, 1B, 1K         (Argentina / Suíça)
+// IMPORTANTE — NÃO reordenar os blocos acima para "corrigir" o pareamento das
+// semifinais: M89..M96 são partidas reais e já disputadas (oitavas), cada uma
+// com data/estádio/placar oficial fixos. Mudar a posição de um bloco troca a
+// qual número de partida real aquele par de resultados é atribuído, corrom-
+// pendo o placar já registrado de uma partida que nada tem a ver com o par.
+// O cruzamento correto das semifinais (vencedor Bloco1/Bloco3 x vencedor
+// Bloco2/Bloco4 — ver Anexo A/D da FIFA) deve ser feito exclusivamente na
+// etapa quartas→semifinal (função que calcula `sf` a partir de `qf`), que
+// ainda não tem resultado real e por isso pode ser reindexada com segurança.
 export const R32_MATCHES: R32MatchDef[] = [
   // Bloco 1 → M89 (M74×M77) + M90 (M73×M75)
   { matchNum: 'M74', slotA: '1E', slotB: '3rd:ABCDF' },
   { matchNum: 'M77', slotA: '1I', slotB: '3rd:CDFGH' },
   { matchNum: 'M73', slotA: '2A', slotB: '2B' },
   { matchNum: 'M75', slotA: '1F', slotB: '2C' },
-  // Bloco 2 → M93 (M84×M83) + M94 (M82×M81)
-  { matchNum: 'M84', slotA: '1H', slotB: '2J' },
-  { matchNum: 'M83', slotA: '2K', slotB: '2L' },
-  { matchNum: 'M82', slotA: '1G', slotB: '3rd:AEHIJ' },
-  { matchNum: 'M81', slotA: '1D', slotB: '3rd:BEFIJ' },
-  // Bloco 3 → M91 (M76×M78) + M92 (M79×M80)
+  // Bloco 2 → M91 (M76×M78) + M92 (M79×M80)
   { matchNum: 'M76', slotA: '1C', slotB: '2F' },
   { matchNum: 'M78', slotA: '2E', slotB: '2I' },
   { matchNum: 'M79', slotA: '1A', slotB: '3rd:CEFHI' },
   { matchNum: 'M80', slotA: '1L', slotB: '3rd:EHIJK' },
+  // Bloco 3 → M93 (M84×M83) + M94 (M82×M81)
+  { matchNum: 'M84', slotA: '1H', slotB: '2J' },
+  { matchNum: 'M83', slotA: '2K', slotB: '2L' },
+  { matchNum: 'M82', slotA: '1G', slotB: '3rd:AEHIJ' },
+  { matchNum: 'M81', slotA: '1D', slotB: '3rd:BEFIJ' },
   // Bloco 4 → M95 (M88×M86) + M96 (M85×M87)
   { matchNum: 'M88', slotA: '2D', slotB: '2G' },
   { matchNum: 'M86', slotA: '1J', slotB: '2H' },
   { matchNum: 'M85', slotA: '1B', slotB: '3rd:EFGIJ' },
   { matchNum: 'M87', slotA: '1K', slotB: '3rd:DEIJL' },
 ]
+
+// Cruzamento oficial das semifinais: QF[0] (Bloco1) x QF[2] (Bloco3), e
+// QF[1] (Bloco2) x QF[3] (Bloco4) — NÃO é o pareamento adjacente (0,1)/(2,3)
+// usado nas fases anteriores. Único ponto que expressa esse cruzamento;
+// consumido por todo componente que calcula `sf` a partir de `qf`.
+export const SF_PAIRS: [number, number][] = [[0, 2], [1, 3]]
 
 // ── Motor de cálculo de grupos ────────────────────────────────────────────────
 
@@ -614,10 +621,11 @@ export function buildKnockoutTeamMap(
     set(m, a, b); return winner(m, a, b)
   })
 
-  // SF
+  // SF — cruzamento oficial (ver SF_PAIRS), não pareamento adjacente
   const sfDB = byPhase('semifinal')
   const sfW: (string | null)[] = sfDB.map((m, i) => {
-    const a = qfW[i * 2] ?? null, b = qfW[i * 2 + 1] ?? null
+    const [qa, qb] = SF_PAIRS[i] ?? [0, 1]
+    const a = qfW[qa] ?? null, b = qfW[qb] ?? null
     set(m, a, b); return winner(m, a, b)
   })
 
@@ -630,7 +638,8 @@ export function buildKnockoutTeamMap(
   if (thirdM) {
     const loser = (i: number) => {
       const w = sfW[i]; if (!w) return null
-      const a = qfW[i * 2] ?? null, b = qfW[i * 2 + 1] ?? null
+      const [qa, qb] = SF_PAIRS[i] ?? [0, 1]
+      const a = qfW[qa] ?? null, b = qfW[qb] ?? null
       return w === a ? b : a
     }
     set(thirdM, loser(0), loser(1))

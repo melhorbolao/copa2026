@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 import { Flag } from '@/components/ui/Flag'
-import { R32_MATCHES } from '@/lib/bracket/engine'
+import { R32_MATCHES, SF_PAIRS } from '@/lib/bracket/engine'
 import type { R32Slot } from '@/app/tabela/BracketView'
 
 interface KnockoutMatch {
@@ -88,16 +88,20 @@ function buildOfficialPicks(r32Slots: R32Slot[], knockoutMatches: KnockoutMatch[
     getWinner(m, r16Winners[i * 2] ?? null, r16Winners[i * 2 + 1] ?? null)
   )
 
-  // SF winners e perdedores (para 3º lugar)
-  const sfWinners = sfDB.map((m, i) =>
-    getWinner(m, qfWinners[i * 2] ?? null, qfWinners[i * 2 + 1] ?? null)
-  )
+  // SF winners e perdedores (para 3º lugar) — cruzamento oficial (SF_PAIRS),
+  // não pareamento adjacente: vencedor(Bloco1) x vencedor(Bloco3), e
+  // vencedor(Bloco2) x vencedor(Bloco4).
+  const sfWinners = sfDB.map((m, i) => {
+    const [qa, qb] = SF_PAIRS[i] ?? [0, 1]
+    return getWinner(m, qfWinners[qa] ?? null, qfWinners[qb] ?? null)
+  })
 
   const sfLoser = (i: number): string | null => {
     const w = sfWinners[i]
     if (!w) return null
-    const a = qfWinners[i * 2] ?? null
-    const b = qfWinners[i * 2 + 1] ?? null
+    const [qa, qb] = SF_PAIRS[i] ?? [0, 1]
+    const a = qfWinners[qa] ?? null
+    const b = qfWinners[qb] ?? null
     return w === a ? b : a
   }
 
@@ -139,17 +143,19 @@ export function OfficialBracketView({ r32Slots, knockoutMatches }: Props) {
   const thirdTop = finalTop + MATCH_H + 48
   const totalWidth = COL_STEP * 4 + MATCH_W
 
-  // Perdedores das SFs para o 3º lugar
+  // Perdedores das SFs para o 3º lugar — cruzamento oficial (SF_PAIRS)
   const sf0Loser = (() => {
     const w = picks.sf[0]
     if (!w) return null
-    const a = picks.qf[0]; const b = picks.qf[1]
+    const [qa, qb] = SF_PAIRS[0]
+    const a = picks.qf[qa]; const b = picks.qf[qb]
     return w === a ? b : a
   })()
   const sf1Loser = (() => {
     const w = picks.sf[1]
     if (!w) return null
-    const a = picks.qf[2]; const b = picks.qf[3]
+    const [qa, qb] = SF_PAIRS[1]
+    const a = picks.qf[qa]; const b = picks.qf[qb]
     return w === a ? b : a
   })()
 
@@ -216,15 +222,20 @@ export function OfficialBracketView({ r32Slots, knockoutMatches }: Props) {
           ))}
 
           {/* ── SF ── */}
-          {Array.from({ length: 2 }, (_, i) => (
-            <OfficialMatchCard
-              key={i}
-              style={{ position: 'absolute', left: COL_STEP * 3, top: matchTop(3, i) }}
-              teamA={getTeam(picks.qf[i * 2])}
-              teamB={getTeam(picks.qf[i * 2 + 1])}
-              winner={picks.sf[i]}
-            />
-          ))}
+          {/* Cruzamento oficial (SF_PAIRS): QF exibidas não são as vizinhas
+              geométricas i*2/i*2+1, e sim o par real que se enfrenta. */}
+          {Array.from({ length: 2 }, (_, i) => {
+            const [qa, qb] = SF_PAIRS[i]
+            return (
+              <OfficialMatchCard
+                key={i}
+                style={{ position: 'absolute', left: COL_STEP * 3, top: matchTop(3, i) }}
+                teamA={getTeam(picks.qf[qa])}
+                teamB={getTeam(picks.qf[qb])}
+                winner={picks.sf[i]}
+              />
+            )
+          })}
 
           {/* ── 3º Lugar ── */}
           <div style={{ position: 'absolute', left: COL_STEP * 4, top: thirdTop }}>

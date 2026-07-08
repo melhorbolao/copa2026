@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 import { Flag } from '@/components/ui/Flag'
-import { R32_MATCHES } from '@/lib/bracket/engine'
+import { R32_MATCHES, SF_PAIRS } from '@/lib/bracket/engine'
 import type { R32Slot } from '@/app/tabela/BracketView'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -99,8 +99,11 @@ function buildPicks(r32Slots: R32Slot[], ko: KnockoutMatch[]): Picks {
     getWinner(m, r32W[i * 2] ?? null, r32W[i * 2 + 1] ?? null))
   const qfW  = qfDB.map((m, i) =>
     getWinner(m, r16W[i * 2] ?? null, r16W[i * 2 + 1] ?? null))
-  const sfW  = sfDB.map((m, i) =>
-    getWinner(m, qfW[i * 2] ?? null, qfW[i * 2 + 1] ?? null))
+  // SF — cruzamento oficial (ver SF_PAIRS), não pareamento adjacente
+  const sfW  = sfDB.map((m, i) => {
+    const [qa, qb] = SF_PAIRS[i] ?? [0, 1]
+    return getWinner(m, qfW[qa] ?? null, qfW[qb] ?? null)
+  })
 
   return {
     r32:   r32W,
@@ -155,12 +158,16 @@ export function RadialBracket({ r32Slots, knockoutMatches }: Props) {
       result.push({ key: `fin-${i}`, x1: CX, y1: CY, x2: x, y2: y, active: !!picks.sf[i] })
     }
 
-    // Ring 4 → Ring 3 (semis → quartas)
+    // Ring 4 → Ring 3 (semis → quartas) — cruzamento oficial (ver SF_PAIRS):
+    // a semi i não liga aos vizinhos geométricos 2i/2i+1, e sim ao par real
+    // definido em SF_PAIRS (o vencedor do Bloco 1 enfrenta o do Bloco 3, e o
+    // do Bloco 2 enfrenta o do Bloco 4).
     for (let i = 0; i < 2; i++) {
       const p = nodePos(4, i)
-      for (let c = 0; c < 2; c++) {
-        const ch = nodePos(3, 2 * i + c)
-        result.push({ key: `r4-${i}-${c}`, x1: p.x, y1: p.y, x2: ch.x, y2: ch.y, active: !!picks.qf[2 * i + c] })
+      const [qa, qb] = SF_PAIRS[i] ?? [0, 1]
+      for (const qi of [qa, qb]) {
+        const ch = nodePos(3, qi)
+        result.push({ key: `r4-${i}-${qi}`, x1: p.x, y1: p.y, x2: ch.x, y2: ch.y, active: !!picks.qf[qi] })
       }
     }
 
@@ -244,7 +251,10 @@ export function RadialBracket({ r32Slots, knockoutMatches }: Props) {
       {
         ring: 3, count: 4,
         getTeam:   (i: number) => picks.qf[i] ?? null,
-        isWinner:  (i: number, t: string | null) => !!t && picks.sf[Math.floor(i / 2)] === t,
+        // Cruzamento oficial (SF_PAIRS): a quarta i não alimenta a semi
+        // Math.floor(i/2), e sim a semi cujo par contém i.
+        isWinner:  (i: number, t: string | null) =>
+          !!t && picks.sf[SF_PAIRS.findIndex(([a, b]) => a === i || b === i)] === t,
         getLabel:  (i: number) => `QF${i + 1}`,
       },
       {

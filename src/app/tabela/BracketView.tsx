@@ -3,6 +3,7 @@
 import { useState, useEffect, useTransition } from 'react'
 import { Flag } from '@/components/ui/Flag'
 import { fillG4FromBracket } from '@/app/palpites/actions'
+import { SF_PAIRS } from '@/lib/bracket/engine'
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -63,9 +64,13 @@ function sanitizePicks(picks: Picks, r32Slots: R32Slot[]): Picks {
     const a = r16[i * 2], b = r16[i * 2 + 1]
     return p === a || p === b ? p : null
   })
+  // SF: cruzamento oficial (SF_PAIRS) — vencedor do Bloco 1 x vencedor do
+  // Bloco 3, e vencedor do Bloco 2 x vencedor do Bloco 4 (não o par
+  // geometricamente adjacente i*2/i*2+1).
   const sf = picks.sf.map((p, i) => {
     if (!p) return null
-    const a = qf[i * 2], b = qf[i * 2 + 1]
+    const [qa, qb] = SF_PAIRS[i]
+    const a = qf[qa], b = qf[qb]
     return p === a || p === b ? p : null
   })
   const final = picks.final && (picks.final === sf[0] || picks.final === sf[1]) ? picks.final : null
@@ -73,7 +78,8 @@ function sanitizePicks(picks: Picks, r32Slots: R32Slot[]): Picks {
   const thirdValid = (() => {
     if (!picks.third) return false
     for (let i = 0; i < 2; i++) {
-      const a = qf[i * 2], b = qf[i * 2 + 1]
+      const [qa, qb] = SF_PAIRS[i]
+      const a = qf[qa], b = qf[qb]
       const sfi = sf[i]
       if (!sfi) continue
       const loser = sfi === a ? b : sfi === b ? a : null
@@ -103,7 +109,10 @@ function makePick(picks: Picks, round: string, idx: number, team: string): Picks
     n.final = null; n.third = null
   } else if (round === 'qf') {
     n.qf[idx] = team
-    const sfi = Math.floor(idx / 2); n.sf[sfi] = null
+    // Cruzamento oficial (SF_PAIRS): a quarta idx não alimenta a semi
+    // Math.floor(idx/2), e sim a semi cujo par em SF_PAIRS contém idx.
+    const sfi = SF_PAIRS.findIndex(([a, b]) => a === idx || b === idx)
+    if (sfi >= 0) n.sf[sfi] = null
     n.final = null; n.third = null
   } else if (round === 'sf') {
     n.sf[idx] = team; n.final = null; n.third = null
@@ -204,8 +213,10 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet, re
   const deriveG4 = () => {
     const champion  = picks.final!
     const runner_up = picks.sf[0] === champion ? picks.sf[1]! : picks.sf[0]!
-    const semi1     = picks.sf[0] === picks.qf[0] ? picks.qf[1]! : picks.qf[0]!
-    const semi2     = picks.sf[1] === picks.qf[2] ? picks.qf[3]! : picks.qf[2]!
+    const [q0a, q0b] = SF_PAIRS[0]
+    const [q1a, q1b] = SF_PAIRS[1]
+    const semi1     = picks.sf[0] === picks.qf[q0a] ? picks.qf[q0b]! : picks.qf[q0a]!
+    const semi2     = picks.sf[1] === picks.qf[q1a] ? picks.qf[q1b]! : picks.qf[q1a]!
     return { champion, runner_up, semi1, semi2 }
   }
 
@@ -226,12 +237,13 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet, re
     else doFillG4()
   }
 
-  // Perdedores das SFs → jogo de 3º lugar
+  // Perdedores das SFs → jogo de 3º lugar (cruzamento oficial, ver SF_PAIRS)
   const sfLoser = (sfIdx: number): string | null => {
     const winner = picks.sf[sfIdx]
     if (!winner) return null
-    const a = picks.qf[sfIdx * 2]
-    const b = picks.qf[sfIdx * 2 + 1]
+    const [qa, qb] = SF_PAIRS[sfIdx]
+    const a = picks.qf[qa]
+    const b = picks.qf[qb]
     if (winner === a) return b
     if (winner === b) return a
     return null
@@ -324,17 +336,21 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet, re
           ))}
 
           {/* ── SF ── */}
-          {Array.from({ length: 2 }, (_, i) => (
-            <MatchCard
-              key={i}
-              style={{ position: 'absolute', left: COL_STEP * 3, top: matchTop(3, i) }}
-              teamA={getTeam(picks.qf[i * 2])}
-              teamB={getTeam(picks.qf[i * 2 + 1])}
-              winner={picks.sf[i]}
-              onPick={t => pick('sf', i, t)}
-              readOnly={readOnly}
-            />
-          ))}
+          {/* Cruzamento oficial (SF_PAIRS): não são as quartas vizinhas i*2/i*2+1 */}
+          {Array.from({ length: 2 }, (_, i) => {
+            const [qa, qb] = SF_PAIRS[i]
+            return (
+              <MatchCard
+                key={i}
+                style={{ position: 'absolute', left: COL_STEP * 3, top: matchTop(3, i) }}
+                teamA={getTeam(picks.qf[qa])}
+                teamB={getTeam(picks.qf[qb])}
+                winner={picks.sf[i]}
+                onPick={t => pick('sf', i, t)}
+                readOnly={readOnly}
+              />
+            )
+          })}
 
           {/* ── 3º Lugar (abaixo da Final, mesma coluna) ── */}
           <div style={{ position: 'absolute', left: COL_STEP * 4, top: thirdTop }}>
