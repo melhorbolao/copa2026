@@ -14,14 +14,17 @@ import {
 import type { StageKey as PhaseStageKey } from '@/lib/phase-availability'
 import { scoreTournamentBet, scoreMatchBet, detectMatchZebra, getMatchResult } from '@/lib/scoring/engine'
 import type { TournamentResults } from '@/lib/scoring/engine'
-import { calcGroupStandings } from '@/lib/bracket/engine'
+import {
+  calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap,
+  computeGroupCompletion,
+} from '@/lib/bracket/engine'
 import type { MatchSlim, BetSlim } from '@/lib/bracket/engine'
 
 type MatchPhase = 'group' | 'round_of_32' | 'round_of_16' | 'quarterfinal' | 'semifinal' | 'third_place' | 'final'
 interface Match {
-  id: string; phase: MatchPhase; round: number | null; betting_deadline: string
+  id: string; match_number: number; phase: MatchPhase; round: number | null; betting_deadline: string
   score_home: number | null; score_away: number | null
-  team_home: string; team_away: string; penalty_winner: string | null
+  team_home: string; team_away: string; flag_home: string; flag_away: string; penalty_winner: string | null
   group_name: string | null; is_brazil: boolean
 }
 interface Bet   { participant_id: string; match_id: string; updated_at: string; points: number | null; score_home: number; score_away: number }
@@ -113,7 +116,7 @@ export default async function ControlePage({
     supabase.from('participants')
       .select('id, apelido, paid')
       .order('apelido', { ascending: true }),
-    supabase.from('matches').select('id, phase, round, betting_deadline, score_home, score_away, team_home, team_away, penalty_winner, group_name, is_brazil'),
+    supabase.from('matches').select('id, match_number, phase, round, betting_deadline, score_home, score_away, team_home, team_away, flag_home, flag_away, penalty_winner, group_name, is_brazil'),
     fetchAll('bets', 'participant_id, match_id, updated_at, points, score_home, score_away') as Promise<Bet[]>,
     admin.from('tournament_bets').select('participant_id, champion, runner_up, semi1, semi2, top_scorer, points').limit(10000),
     fetchAll('group_bets', 'participant_id, group_name, points'),
@@ -135,10 +138,6 @@ export default async function ControlePage({
   const scorerMapping: Record<string, string> = Object.fromEntries(
     (scorerMappingData ?? []).map(r => [r.raw_name.toLowerCase().trim(), r.standardized_name])
   )
-
-  // Mapa de partida para lookup O(1)
-  const matchMap = new Map<string, Match>()
-  for (const m of (matches ?? [] as Match[])) matchMap.set(m.id, m)
 
   // Placar oficial por partida concluída
   const officialScoreMap = new Map<string, { score_home: number; score_away: number }>()
@@ -163,17 +162,46 @@ export default async function ControlePage({
     isZebraMatch.set(matchId, detectMatchZebra(betsForMatch, actualResult, zebraThreshold))
   }
 
+  // ── Resolve chaveamento de mata-mata (mesmo padrão de classificacaoMB/simulador) ──
+  const gmsSlim: MatchSlim[] = (matches ?? [] as Match[])
+    .filter(m => m.phase === 'group' && m.group_name)
+    .map(m => ({ id: m.id, group_name: m.group_name, phase: m.phase, team_home: m.team_home, team_away: m.team_away, flag_home: '', flag_away: '' }))
+  const officialScoreMapSlim = new Map<string, BetSlim>()
+  for (const m of (matches ?? [] as Match[])) {
+    if (m.score_home !== null && m.score_away !== null)
+      officialScoreMapSlim.set(m.id, { match_id: m.id, score_home: m.score_home, score_away: m.score_away })
+  }
+  const officialGroupStandings = calcGroupStandings(gmsSlim, officialScoreMapSlim)
+  const officialThirds     = rankThirds(officialGroupStandings)
+  const officialThirdSlots = resolveThirdSlots(officialThirds)
+  const officialCompletion = computeGroupCompletion(gmsSlim, officialScoreMapSlim)
+  const officialR32Slots = buildR32Teams(
+    officialGroupStandings, officialThirds, officialThirdSlots, undefined,
+    officialCompletion.completeGroups, officialCompletion.allGroupsComplete,
+  )
+  const knockoutMatchesFull = (matches ?? [] as Match[]).filter(m => m.phase !== 'group')
+  const derivedTeamMap = buildKnockoutTeamMap(officialR32Slots, knockoutMatchesFull)
+  // Times/`is_brazil` de jogos de mata-mata dependem do chaveamento — o campo
+  // cru salvo no banco fica desatualizado enquanto os times ainda são
+  // "Venc. Jogo N". OR com o valor cru preserva is_brazil=true já salvo.
+  const isBrazilByMatchId = new Map<string, boolean>()
+  for (const m of (matches ?? [] as Match[])) {
+    const ov = derivedTeamMap.get(m.id)
+    const effHome = ov?.team_home || m.team_home
+    const effAway = ov?.team_away || m.team_away
+    isBrazilByMatchId.set(m.id, m.is_brazil || effHome === 'Brasil' || effAway === 'Brasil')
+  }
+
   // Pontos de jogos — calculados ao vivo
   const ptsMatchesMap = new Map<string, number>()
   for (const b of allBets) {
     const official = officialScoreMap.get(b.match_id)
     if (!official) continue
-    const m = matchMap.get(b.match_id)
     const pts = scoreMatchBet(
       b.score_home, b.score_away,
       official.score_home, official.score_away,
       isZebraMatch.get(b.match_id) ?? false,
-      m?.is_brazil ?? false,
+      isBrazilByMatchId.get(b.match_id) ?? false,
       rulesMap,
     )
     ptsMatchesMap.set(b.participant_id, (ptsMatchesMap.get(b.participant_id) ?? 0) + pts)
@@ -189,15 +217,6 @@ export default async function ControlePage({
     ((thirdScoringData ?? []) as { group_name: string; enabled: boolean }[])
       .filter(r => r.enabled).map(r => r.group_name)
   )
-  const gmsSlim: MatchSlim[] = (matches ?? [] as Match[])
-    .filter(m => m.phase === 'group' && m.group_name)
-    .map(m => ({ id: m.id, group_name: m.group_name, phase: m.phase, team_home: m.team_home, team_away: m.team_away, flag_home: '', flag_away: '' }))
-  const officialScoreMapSlim = new Map<string, BetSlim>()
-  for (const m of (matches ?? [] as Match[])) {
-    if (m.score_home !== null && m.score_away !== null)
-      officialScoreMapSlim.set(m.id, { match_id: m.id, score_home: m.score_home, score_away: m.score_away })
-  }
-  const officialGroupStandings = calcGroupStandings(gmsSlim, officialScoreMapSlim)
   const actualThirdByGroup = new Map<string, string>()
   for (const standing of officialGroupStandings) {
     const g = standing.group
