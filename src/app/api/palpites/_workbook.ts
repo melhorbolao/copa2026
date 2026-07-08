@@ -1,6 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import ExcelJS from 'exceljs'
 import { toZonedTime } from 'date-fns-tz'
+import {
+  calcGroupStandings, computeGroupCompletion, rankThirds, resolveThirdSlots,
+  buildR32Teams, buildKnockoutTeamMap,
+} from '@/lib/bracket/engine'
 type AnySupabase = any
 
 // ── Workbook-level structure protection (ExcelJS não expõe isso nativamente) ───
@@ -151,7 +155,7 @@ export async function buildPalpitesBuffer(
 ): Promise<{ buffer: Buffer; displayName: string; fileName: string }> {
   const [{ data: matches }, { data: profile }] = await Promise.all([
     supabase.from('matches')
-      .select('id, match_number, round, phase, group_name, match_datetime, betting_deadline, team_home, team_away, city')
+      .select('id, match_number, round, phase, group_name, match_datetime, betting_deadline, team_home, team_away, flag_home, flag_away, city, score_home, score_away, penalty_winner')
       .order('match_datetime', { ascending: true }),
     supabase.from('participants').select('apelido').eq('id', participantId).single(),
   ])
@@ -188,6 +192,33 @@ export async function buildPalpitesBuffer(
   const bonusDeadlineStr = matchList.find((m: any) => m.round === 1)?.betting_deadline ?? ''
   const bonusLocked      = bonusDeadlineStr ? now >= new Date(bonusDeadlineStr) : false
   const bonusDeadline    = bonusDeadlineStr ? new Date(bonusDeadlineStr) : null
+
+  // Resolve os nomes reais das seleções do mata-mata a partir dos placares
+  // OFICIAIS da fase de grupos e das rodadas de mata-mata já disputadas —
+  // mesma lógica usada em /palpites, /simulador etc (src/lib/bracket/engine.ts).
+  // Sem isso, as células de mata-mata mostrariam apenas o placeholder cru do
+  // banco (ex: "TBD", "Vencedor Jogo 97") em vez do nome da seleção definida.
+  const officialScoreMap = new Map(
+    matchList
+      .filter((m: any) => m.phase === 'group' && m.score_home !== null && m.score_away !== null)
+      .map((m: any) => [m.id, { match_id: m.id, score_home: m.score_home, score_away: m.score_away }]),
+  )
+  const officialStandings = calcGroupStandings(matchList, officialScoreMap)
+  const { completeGroups, allGroupsComplete } = computeGroupCompletion(matchList, officialScoreMap)
+  const officialThirds     = rankThirds(officialStandings)
+  const officialThirdSlots = resolveThirdSlots(officialThirds)
+  const officialR32Slots   = officialThirdSlots
+    ? buildR32Teams(officialStandings, officialThirds, officialThirdSlots, undefined, completeGroups, allGroupsComplete)
+    : []
+  const knockoutTeamMap = buildKnockoutTeamMap(
+    officialR32Slots,
+    matchList.filter((m: any) => m.phase !== 'group'),
+  )
+  const resolveTeam = (m: any, side: 'home' | 'away'): string => {
+    if (m.phase === 'group') return side === 'home' ? m.team_home : m.team_away
+    const ov = knockoutTeamMap.get(m.id)
+    return side === 'home' ? (ov?.team_home ?? m.team_home) : (ov?.team_away ?? m.team_away)
+  }
 
   const allTeams = [...new Set(matchList.flatMap((m: any) => [m.team_home, m.team_away]).filter((t: any) => t && t !== 'TBD'))].sort() as string[]
 
@@ -353,6 +384,8 @@ export async function buildPalpitesBuffer(
     }
 
     const etapa = m.phase === 'group' ? `R${m.round}` : (PHASE_ETAPA_LABEL[m.phase] ?? m.phase)
+    const teamHome = resolveTeam(m, 'home')
+    const teamAway = resolveTeam(m, 'away')
 
     const row = ws.getRow(rowIdx++)
     row.height = 18
@@ -361,10 +394,10 @@ export async function buildPalpitesBuffer(
     baseCell(row, 3,          etapa,          locked, { align: 'center' })
     baseCell(row, 4,          m.group_name,   locked, { align: 'center' })
     baseCell(row, 5,          toBR(new Date(m.match_datetime)), locked, { align: 'center', numFmt: 'dd/MM/yy HH:mm' })
-    baseCell(row, 6,          m.team_home,    locked, { align: 'right' })
+    baseCell(row, 6,          teamHome,       locked, { align: 'right' })
     editCell(row, COL_VAL_A,  (bet as any)?.score_home ?? null, locked, 'number')
     editCell(row, COL_VAL_B,  (bet as any)?.score_away ?? null, locked, 'number')
-    baseCell(row, COL_TEAM_B, m.team_away,    locked, { align: 'left' })
+    baseCell(row, COL_TEAM_B, teamAway,       locked, { align: 'left' })
     baseCell(row, COL_CITY,   m.city ?? '',   locked, { align: 'center' })
     baseCell(row, COL_PRAZO,  toBR(deadline), true,   { align: 'center', numFmt: 'dd/MM/yy HH:mm' })
     baseCell(row, COL_STATUS, locked ? '🔒 Bloqueado' : '✏️ Editável', true, { align: 'center' })
