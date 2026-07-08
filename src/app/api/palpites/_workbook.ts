@@ -82,6 +82,34 @@ const C_RED_VIVID = 'FFFF0000'
 const GROUP_ORDER = ['A','B','C','D','E','F','G','H','I','J','K','L']
 const BRASILIA_TZ = 'America/Sao_Paulo'
 
+// Rótulos e ordem das fases de mata-mata — usados para não misturar fases
+// diferentes na planilha mesmo se match_datetime vier inconsistente.
+const PHASE_ORDER: Record<string, number> = {
+  group: 0,
+  round_of_32: 100,
+  round_of_16: 200,
+  quarterfinal: 300,
+  semifinal: 400,
+  third_place: 500,
+  final: 600,
+}
+const PHASE_SECTION_LABEL: Record<string, string> = {
+  round_of_32:  '16 AVOS DE FINAL',
+  round_of_16:  'OITAVAS DE FINAL',
+  quarterfinal: 'QUARTAS DE FINAL',
+  semifinal:    'SEMIFINAL',
+  third_place:  '3º LUGAR',
+  final:        'FINAL',
+}
+const PHASE_ETAPA_LABEL: Record<string, string> = {
+  round_of_32:  '16avos',
+  round_of_16:  'Oitavas',
+  quarterfinal: 'Quartas',
+  semifinal:    'Semi',
+  third_place:  '3ºLugar',
+  final:        'Final',
+}
+
 // Converte Date UTC para horário de Brasília usando IANA timezone database.
 // O objeto retornado tem UTC fields iguais ao horário local de Brasília,
 // que é o que o Excel usa para exibir datas com numFmt.
@@ -123,8 +151,7 @@ export async function buildPalpitesBuffer(
 ): Promise<{ buffer: Buffer; displayName: string; fileName: string }> {
   const [{ data: matches }, { data: profile }] = await Promise.all([
     supabase.from('matches')
-      .select('id, match_number, round, group_name, match_datetime, betting_deadline, team_home, team_away, city')
-      .eq('phase', 'group')
+      .select('id, match_number, round, phase, group_name, match_datetime, betting_deadline, team_home, team_away, city')
       .order('match_datetime', { ascending: true }),
     supabase.from('participants').select('apelido').eq('id', participantId).single(),
   ])
@@ -148,7 +175,15 @@ export async function buildPalpitesBuffer(
   const displayName = apelido
   const fileName    = makeFileName(apelido)
 
-  const matchList = (matches ?? []) as any[]
+  // Ordena por fase → rodada → data, garantindo que grupos venham antes do
+  // mata-mata mesmo que match_datetime não esteja estritamente ordenado.
+  const matchList = ([...(matches ?? [])] as any[]).sort((a, b) => {
+    const pa = PHASE_ORDER[a.phase] ?? 999
+    const pb = PHASE_ORDER[b.phase] ?? 999
+    if (pa !== pb) return pa - pb
+    if ((a.round ?? 0) !== (b.round ?? 0)) return (a.round ?? 0) - (b.round ?? 0)
+    return new Date(a.match_datetime).getTime() - new Date(b.match_datetime).getTime()
+  })
 
   const bonusDeadlineStr = matchList.find((m: any) => m.round === 1)?.betting_deadline ?? ''
   const bonusLocked      = bonusDeadlineStr ? now >= new Date(bonusDeadlineStr) : false
@@ -304,23 +339,26 @@ export async function buildPalpitesBuffer(
   const bonusDeadlineDisplay = toBR(bonusDeadline ?? new Date())
   const bonusStatus = bonusLocked ? '🔒 Bloqueado' : '✏️ Editável'
 
-  // SEÇÃO 1: JOGOS
-  let currentRound = 0
+  // SEÇÃO 1: JOGOS (fase de grupos + mata-mata)
+  let currentSection = ''
   for (const m of matchList) {
     const deadline = new Date(m.betting_deadline)
     const locked   = now >= deadline
     const bet      = betMap.get(m.id)
 
-    if (m.round !== currentRound) {
-      currentRound = m.round
-      addSection(`RODADA ${m.round}`)
+    const sectionKey = m.phase === 'group' ? `group_r${m.round}` : m.phase
+    if (sectionKey !== currentSection) {
+      currentSection = sectionKey
+      addSection(m.phase === 'group' ? `RODADA ${m.round}` : (PHASE_SECTION_LABEL[m.phase] ?? String(m.phase).toUpperCase()))
     }
+
+    const etapa = m.phase === 'group' ? `R${m.round}` : (PHASE_ETAPA_LABEL[m.phase] ?? m.phase)
 
     const row = ws.getRow(rowIdx++)
     row.height = 18
     baseCell(row, COL_KEY,    m.id,           true,   { align: 'center' })
     baseCell(row, 2,          m.match_number, locked, { align: 'center' })
-    baseCell(row, 3,          `R${m.round}`,  locked, { align: 'center' })
+    baseCell(row, 3,          etapa,          locked, { align: 'center' })
     baseCell(row, 4,          m.group_name,   locked, { align: 'center' })
     baseCell(row, 5,          toBR(new Date(m.match_datetime)), locked, { align: 'center', numFmt: 'dd/MM/yy HH:mm' })
     baseCell(row, 6,          m.team_home,    locked, { align: 'right' })

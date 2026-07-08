@@ -43,10 +43,11 @@ export async function POST(req: NextRequest) {
     (allMatches ?? []).flatMap(m => [m.team_home, m.team_away]).filter(t => t && t !== 'TBD')
   )
 
-  const matches = (allMatches ?? []).filter(m => m.phase === 'group')
+  const matches = allMatches ?? []
+  const groupMatches = matches.filter(m => m.phase === 'group')
 
-  const matchDeadlineMap = new Map((matches ?? []).map(m => [m.id as string, m.betting_deadline as string]))
-  const bonusDeadlineStr = (matches ?? []).find(m => m.round === 1)?.betting_deadline ?? ''
+  const matchDeadlineMap = new Map(matches.map(m => [m.id as string, m.betting_deadline as string]))
+  const bonusDeadlineStr = groupMatches.find(m => m.round === 1)?.betting_deadline ?? ''
   const bonusLocked      = bonusDeadlineStr ? now >= new Date(bonusDeadlineStr) : false
 
   // Acumuladores
