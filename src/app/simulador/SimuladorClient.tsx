@@ -8,7 +8,6 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { createClient } from '@/lib/supabase/client'
 import { scoreMatchBet, scoreGroupBet, detectMatchZebra, detectGroupZebra, getMatchResult, scoreTournamentBet } from '@/lib/scoring/engine'
 import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap, computeGroupCompletion } from '@/lib/bracket/engine'
-import type { KnockoutTeamOverride } from '@/lib/bracket/engine'
 import { Flag } from '@/components/ui/Flag'
 import type { RuleMap, TournamentResults, MatchResult } from '@/lib/scoring/engine'
 import type { MatchSlim, BetSlim } from '@/lib/bracket/engine'
@@ -950,7 +949,6 @@ export function SimuladorClient({
 
   const knockoutTeamMap = useMemo(() => {
     const thirdSlots = resolveThirdSlots(officialThirds)
-    if (!thirdSlots) return new Map<string, KnockoutTeamOverride>()
     const r32Slots = buildR32Teams(
       officialStandings, officialThirds, thirdSlots, undefined,
       officialContext.completion.completeGroups,

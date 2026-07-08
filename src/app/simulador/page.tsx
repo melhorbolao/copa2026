@@ -129,6 +129,55 @@ export default async function SimuladorPage() {
   const allTBets      = (tournamentBetsRes.data   ?? []) as any[]
   const allThirdBets  = thirdBetsRes as any[]
 
+  // ── Resolve knockout team names via bracket engine ────────────────────────
+  // Feito antes de qualquer cálculo de pontos: times/is_brazil de mata-mata
+  // (round_of_32 em diante) dependem do chaveamento, não só do valor cru salvo
+  // no banco (que fica desatualizado enquanto os times ainda são "Venc. Jogo N").
+  const groupMatches = allMatches.filter((m: any) => m.phase === 'group')
+  const scoreMap = new Map<string, BetSlim>()
+  for (const m of groupMatches) {
+    if (m.score_home !== null && m.score_away !== null)
+      scoreMap.set(m.id, { match_id: m.id, score_home: m.score_home, score_away: m.score_away })
+  }
+  const matchSlims: MatchSlim[] = groupMatches.map((m: any) => ({
+    id: m.id, group_name: m.group_name, phase: m.phase,
+    team_home: m.team_home, team_away: m.team_away,
+    flag_home: m.flag_home, flag_away: m.flag_away,
+  }))
+  const officialStandings = calcGroupStandings(matchSlims, scoreMap)
+  const officialThirds    = rankThirds(officialStandings)
+  const thirdSlots        = resolveThirdSlots(officialThirds)
+  const officialCompletion = computeGroupCompletion(matchSlims, scoreMap)
+
+  // Chamado incondicionalmente (mesmo se thirdSlots vier null) — resolve o que
+  // for possível do chaveamento em vez de descartar tudo. Mesmo padrão usado em
+  // /classificacaoMB, /jogos e recalculate.ts.
+  const knockoutTeamMap = buildKnockoutTeamMap(
+    buildR32Teams(
+      officialStandings, officialThirds, thirdSlots, undefined,
+      officialCompletion.completeGroups,
+      officialCompletion.allGroupsComplete,
+    ),
+    allMatches.filter((m: any) => m.phase !== 'group'),
+  )
+
+  // ── Todos os jogos com overrides de times aplicados ───────────────────────
+  const allMatchesWithOverrides = allMatches.map((m: any) => {
+    const ov = knockoutTeamMap.get(m.id)
+    const effHome = ov?.team_home || m.team_home
+    const effAway = ov?.team_away || m.team_away
+    return {
+      ...m,
+      team_home: effHome,
+      team_away: effAway,
+      flag_home: ov?.flag_home || m.flag_home,
+      flag_away: ov?.flag_away || m.flag_away,
+      // OR com o valor cru: preserva is_brazil=true já salvo mesmo que o
+      // chaveamento não tenha (ainda) resolvido esse jogo específico.
+      is_brazil: m.is_brazil || effHome === 'Brasil' || effAway === 'Brasil',
+    }
+  })
+
   // ── Bonus deadline + visibility ────────────────────────────────────────────
   const round1Group = allMatches.filter((m: any) => m.phase === 'group' && m.round === 1)
   const bonusDeadlineIso: string | null = round1Group.length > 0
@@ -149,7 +198,7 @@ export default async function SimuladorPage() {
 
   // ── Compute PTS Oficial live (base para split Oficial/+Sim na aba Classificação) ─
 
-  const completedMatches = allMatches.filter((m: any) => m.score_home !== null && m.score_away !== null)
+  const completedMatches = allMatchesWithOverrides.filter((m: any) => m.score_home !== null && m.score_away !== null)
 
   const betsByMatch: Record<string, { score_home: number; score_away: number }[]> = {}
   for (const bet of allBets) {
@@ -237,23 +286,6 @@ export default async function SimuladorPage() {
     }
   } catch { /* opcional */ }
 
-  // ── Resolve knockout team names via bracket engine ────────────────────────
-  const groupMatches = allMatches.filter((m: any) => m.phase === 'group')
-  const scoreMap = new Map<string, BetSlim>()
-  for (const m of groupMatches) {
-    if (m.score_home !== null && m.score_away !== null)
-      scoreMap.set(m.id, { match_id: m.id, score_home: m.score_home, score_away: m.score_away })
-  }
-  const matchSlims: MatchSlim[] = groupMatches.map((m: any) => ({
-    id: m.id, group_name: m.group_name, phase: m.phase,
-    team_home: m.team_home, team_away: m.team_away,
-    flag_home: m.flag_home, flag_away: m.flag_away,
-  }))
-  const officialStandings = calcGroupStandings(matchSlims, scoreMap)
-  const officialThirds    = rankThirds(officialStandings)
-  const thirdSlots        = resolveThirdSlots(officialThirds)
-  const officialCompletion = computeGroupCompletion(matchSlims, scoreMap)
-
   // ── ptsGroupsMap: recalculo ao vivo (mesma lógica do cliente) ─────────────
   const officialGroupZebras = new Set<string>()
   for (const s of officialStandings) {
@@ -296,32 +328,6 @@ export default async function SimuladorPage() {
       (ptsThirdsMap[p.id]  ?? 0) +
       (ptsG4Map[p.id]      ?? 0)
   }
-  const knockoutTeamMap   = thirdSlots
-    ? buildKnockoutTeamMap(
-        buildR32Teams(
-          officialStandings, officialThirds, thirdSlots, undefined,
-          officialCompletion.completeGroups,
-          officialCompletion.allGroupsComplete,
-        ),
-        allMatches.filter((m: any) => m.phase !== 'group'),
-      )
-    : new Map<string, { team_home: string; flag_home: string; team_away: string; flag_away: string }>()
-
-  // ── Todos os jogos com overrides de times aplicados ───────────────────────
-  const allMatchesWithOverrides = allMatches.map((m: any) => {
-    const ov = knockoutTeamMap.get(m.id)
-    if (!ov) return m
-    const effHome = ov.team_home || m.team_home
-    const effAway = ov.team_away || m.team_away
-    return {
-      ...m,
-      team_home: effHome,
-      team_away: effAway,
-      flag_home: ov.flag_home || m.flag_home,
-      flag_away: ov.flag_away || m.flag_away,
-      is_brazil: effHome === 'Brasil' || effAway === 'Brasil',
-    }
-  })
 
   return (
     <>
