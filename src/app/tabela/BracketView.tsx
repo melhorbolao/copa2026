@@ -3,7 +3,7 @@
 import { useState, useEffect, useTransition } from 'react'
 import { Flag } from '@/components/ui/Flag'
 import { fillG4FromBracket } from '@/app/palpites/actions'
-import { SF_PAIRS } from '@/lib/bracket/engine'
+import { QF_PAIRS, SF_PAIRS } from '@/lib/bracket/engine'
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -59,9 +59,12 @@ function sanitizePicks(picks: Picks, r32Slots: R32Slot[]): Picks {
     const a = r32[i * 2], b = r32[i * 2 + 1]
     return p === a || p === b ? p : null
   })
+  // QF: cruzamento oficial (QF_PAIRS) — não o par geometricamente adjacente
+  // i*2/i*2+1 (ver comentário em SF_PAIRS/QF_PAIRS no engine.ts).
   const qf = picks.qf.map((p, i) => {
     if (!p) return null
-    const a = r16[i * 2], b = r16[i * 2 + 1]
+    const [ra, rb] = QF_PAIRS[i]
+    const a = r16[ra], b = r16[rb]
     return p === a || p === b ? p : null
   })
   // SF: cruzamento oficial (SF_PAIRS) — vencedor do Bloco 1 x vencedor do
@@ -323,17 +326,21 @@ export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet, re
           ))}
 
           {/* ── QF ── */}
-          {Array.from({ length: 4 }, (_, i) => (
-            <MatchCard
-              key={i}
-              style={{ position: 'absolute', left: COL_STEP * 2, top: matchTop(2, i) }}
-              teamA={getTeam(picks.r16[i * 2])}
-              teamB={getTeam(picks.r16[i * 2 + 1])}
-              winner={picks.qf[i]}
-              onPick={t => pick('qf', i, t)}
-              readOnly={readOnly}
-            />
-          ))}
+          {/* Cruzamento oficial (QF_PAIRS): não são as oitavas vizinhas i*2/i*2+1 */}
+          {Array.from({ length: 4 }, (_, i) => {
+            const [ra, rb] = QF_PAIRS[i]
+            return (
+              <MatchCard
+                key={i}
+                style={{ position: 'absolute', left: COL_STEP * 2, top: matchTop(2, i) }}
+                teamA={getTeam(picks.r16[ra])}
+                teamB={getTeam(picks.r16[rb])}
+                winner={picks.qf[i]}
+                onPick={t => pick('qf', i, t)}
+                readOnly={readOnly}
+              />
+            )
+          })}
 
           {/* ── SF ── */}
           {/* Cruzamento oficial (SF_PAIRS): não são as quartas vizinhas i*2/i*2+1 */}
