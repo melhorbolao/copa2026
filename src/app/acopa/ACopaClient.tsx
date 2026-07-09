@@ -16,6 +16,7 @@ import {
   findAnnexeCOption,
   buildR32Teams,
   R32_MATCHES,
+  QF_PAIRS,
   SF_PAIRS,
 } from '@/lib/bracket/engine'
 import type { MatchSlim, BetSlim } from '@/lib/bracket/engine'
@@ -128,10 +129,11 @@ function buildKnockoutTeamMap(r32Slots: R32Slot[], knockoutMatches: MatchFull[])
     return winner(m, a, b)
   })
 
-  // QF
+  // QF — cruzamento oficial (ver QF_PAIRS), não pareamento sequencial
   const qfDB = byPhase('quarterfinal')
   const qfW: (string | null)[] = qfDB.map((m, i) => {
-    const a = r16W[i * 2] ?? null, b = r16W[i * 2 + 1] ?? null
+    const [ra, rb] = QF_PAIRS[i] ?? [i * 2, i * 2 + 1]
+    const a = r16W[ra] ?? null, b = r16W[rb] ?? null
     set(m, a, b)
     return winner(m, a, b)
   })

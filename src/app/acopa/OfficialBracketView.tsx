@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 import { Flag } from '@/components/ui/Flag'
-import { R32_MATCHES, SF_PAIRS } from '@/lib/bracket/engine'
+import { R32_MATCHES, QF_PAIRS, SF_PAIRS } from '@/lib/bracket/engine'
 import type { R32Slot } from '@/app/tabela/BracketView'
 
 interface KnockoutMatch {
@@ -83,10 +83,11 @@ function buildOfficialPicks(r32Slots: R32Slot[], knockoutMatches: KnockoutMatch[
     getWinner(m, r32Winners[i * 2] ?? null, r32Winners[i * 2 + 1] ?? null)
   )
 
-  // QF winners
-  const qfWinners = qfDB.map((m, i) =>
-    getWinner(m, r16Winners[i * 2] ?? null, r16Winners[i * 2 + 1] ?? null)
-  )
+  // QF winners — cruzamento oficial (ver QF_PAIRS), não pareamento sequencial
+  const qfWinners = qfDB.map((m, i) => {
+    const [qa, qb] = QF_PAIRS[i] ?? [i * 2, i * 2 + 1]
+    return getWinner(m, r16Winners[qa] ?? null, r16Winners[qb] ?? null)
+  })
 
   // SF winners e perdedores (para 3º lugar) — cruzamento oficial (SF_PAIRS),
   // não pareamento adjacente: vencedor(Bloco1) x vencedor(Bloco3), e
@@ -211,15 +212,19 @@ export function OfficialBracketView({ r32Slots, knockoutMatches }: Props) {
           ))}
 
           {/* ── QF ── */}
-          {Array.from({ length: 4 }, (_, i) => (
-            <OfficialMatchCard
-              key={i}
-              style={{ position: 'absolute', left: COL_STEP * 2, top: matchTop(2, i) }}
-              teamA={getTeam(picks.r16[i * 2])}
-              teamB={getTeam(picks.r16[i * 2 + 1])}
-              winner={picks.qf[i]}
-            />
-          ))}
+          {/* Cruzamento oficial (QF_PAIRS): não são as oitavas vizinhas i*2/i*2+1 */}
+          {Array.from({ length: 4 }, (_, i) => {
+            const [ra, rb] = QF_PAIRS[i]
+            return (
+              <OfficialMatchCard
+                key={i}
+                style={{ position: 'absolute', left: COL_STEP * 2, top: matchTop(2, i) }}
+                teamA={getTeam(picks.r16[ra])}
+                teamB={getTeam(picks.r16[rb])}
+                winner={picks.qf[i]}
+              />
+            )
+          })}
 
           {/* ── SF ── */}
           {/* Cruzamento oficial (SF_PAIRS): QF exibidas não são as vizinhas
