@@ -119,20 +119,11 @@ export const R32_MATCHES: R32MatchDef[] = [
   { matchNum: 'M87', slotA: '1K', slotB: '3rd:DEIJL' },
 ]
 
-// Cruzamento oficial quartas → semifinal: no calendário real, o jogo 98
-// (Los Angeles) é alimentado pelo Bloco 3 (oitavas 93×94), e o jogo 99
-// (Miami) é alimentado pelo Bloco 2 (oitavas 91×92) — ou seja, os índices
-// 1 e 2 do QF (ordenados por match_number: 97,98,99,100) NÃO seguem o par
-// sequencial i*2/i*2+1 do R16. Único ponto que expressa esse cruzamento;
-// consumido por todo componente que calcula `qf` a partir de `r16`.
-export const QF_PAIRS: [number, number][] = [[0, 1], [4, 5], [2, 3], [6, 7]]
-
-// Cruzamento oficial das semifinais: com QF_PAIRS acima, QF[0]=Bloco1,
-// QF[1]=Bloco3, QF[2]=Bloco2, QF[3]=Bloco4 — logo o pareamento correto
-// (Bloco1×Bloco3, Bloco2×Bloco4) já cai nos pares adjacentes (0,1)/(2,3).
-// Único ponto que expressa esse cruzamento; consumido por todo componente
-// que calcula `sf` a partir de `qf`.
-export const SF_PAIRS: [number, number][] = [[0, 1], [2, 3]]
+// Cruzamento oficial das semifinais: QF[0] (Bloco1) x QF[2] (Bloco3), e
+// QF[1] (Bloco2) x QF[3] (Bloco4) — NÃO é o pareamento adjacente (0,1)/(2,3)
+// usado nas fases anteriores. Único ponto que expressa esse cruzamento;
+// consumido por todo componente que calcula `sf` a partir de `qf`.
+export const SF_PAIRS: [number, number][] = [[0, 2], [1, 3]]
 
 // ── Motor de cálculo de grupos ────────────────────────────────────────────────
 
@@ -623,11 +614,10 @@ export function buildKnockoutTeamMap(
     set(m, a, b); return winner(m, a, b)
   })
 
-  // QF — cruzamento oficial (ver QF_PAIRS), não pareamento sequencial
+  // QF
   const qfDB = byPhase('quarterfinal')
   const qfW: (string | null)[] = qfDB.map((m, i) => {
-    const [ra, rb] = QF_PAIRS[i] ?? [i * 2, i * 2 + 1]
-    const a = r16W[ra] ?? null, b = r16W[rb] ?? null
+    const a = r16W[i * 2] ?? null, b = r16W[i * 2 + 1] ?? null
     set(m, a, b); return winner(m, a, b)
   })
 

@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 import { Flag } from '@/components/ui/Flag'
-import { R32_MATCHES, QF_PAIRS, SF_PAIRS } from '@/lib/bracket/engine'
+import { R32_MATCHES, SF_PAIRS } from '@/lib/bracket/engine'
 import type { R32Slot } from '@/app/tabela/BracketView'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -97,11 +97,8 @@ function buildPicks(r32Slots: R32Slot[], ko: KnockoutMatch[]): Picks {
   })
   const r16W = r16DB.map((m, i) =>
     getWinner(m, r32W[i * 2] ?? null, r32W[i * 2 + 1] ?? null))
-  // QF — cruzamento oficial (ver QF_PAIRS), não pareamento sequencial
-  const qfW  = qfDB.map((m, i) => {
-    const [qa, qb] = QF_PAIRS[i] ?? [i * 2, i * 2 + 1]
-    return getWinner(m, r16W[qa] ?? null, r16W[qb] ?? null)
-  })
+  const qfW  = qfDB.map((m, i) =>
+    getWinner(m, r16W[i * 2] ?? null, r16W[i * 2 + 1] ?? null))
   // SF — cruzamento oficial (ver SF_PAIRS), não pareamento adjacente
   const sfW  = sfDB.map((m, i) => {
     const [qa, qb] = SF_PAIRS[i] ?? [0, 1]
