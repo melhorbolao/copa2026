@@ -34,6 +34,15 @@ const RING_R: number[] = [450, 360, 272, 192, 120]
 const NODE_W = 54   // 48 de bandeira + 3px padding cada lado
 const NODE_H = 42   // 36 de bandeira + 3px padding cada lado
 
+// Ordem visual dos anéis 0–2 (32 times → 16avos → oitavas): reordena as
+// posições geométricas — não os dados — para que o cruzamento oficial
+// oitavas→quartas (QF_PAIRS, em engine.ts) apareça como vizinhança direta
+// no diagrama, sem linhas cruzadas. QF_PAIRS.flat() = [0,1,4,5,2,3,6,7]:
+// as oitavas de índice real 2/3 (Bloco 2) e 4/5 (Bloco 3) trocam de posição
+// visual, e seus 16avos (ring 1) e times (ring 0) acompanham a troca.
+const VISUAL_R16_ORDER: number[] = QF_PAIRS.flat()
+const VISUAL_R32_ORDER: number[] = VISUAL_R16_ORDER.flatMap(k => [2 * k, 2 * k + 1])
+
 // ── Matemática ─────────────────────────────────────────────────────────────────
 
 /**
@@ -174,44 +183,50 @@ export function RadialBracket({ r32Slots, knockoutMatches }: Props) {
       }
     }
 
-    // Ring 3 → Ring 2 (quartas → oitavas) — cruzamento oficial (ver QF_PAIRS):
-    // a quarta i não liga aos vizinhos geométricos 2i/2i+1, e sim ao par real
-    // definido em QF_PAIRS (mesmo princípio do cruzamento ring4→ring3 acima).
+    // Ring 3 → Ring 2 (quartas → oitavas) — geometricamente adjacente: a
+    // ordem visual do ring 2 (VISUAL_R16_ORDER) já foi rearranjada para que
+    // a quarta i sempre ligue aos vizinhos 2i/2i+1 corretos.
     for (let i = 0; i < 4; i++) {
       const p = nodePos(3, i)
-      const [ra, rb] = QF_PAIRS[i] ?? [2 * i, 2 * i + 1]
-      for (const ri of [ra, rb]) {
-        const ch = nodePos(2, ri)
-        result.push({ key: `r3-${i}-${ri}`, x1: p.x, y1: p.y, x2: ch.x, y2: ch.y, active: !!picks.r16[ri] })
+      for (let c = 0; c < 2; c++) {
+        const r16Visual = 2 * i + c
+        const ch = nodePos(2, r16Visual)
+        result.push({ key: `r3-${i}-${c}`, x1: p.x, y1: p.y, x2: ch.x, y2: ch.y, active: !!picks.r16[VISUAL_R16_ORDER[r16Visual]] })
       }
     }
 
-    // Ring 2 → Ring 1 (oitavas → 16avos winners)
+    // Ring 2 → Ring 1 (oitavas → 16avos winners) — idem, via VISUAL_R32_ORDER
     for (let i = 0; i < 8; i++) {
       const p = nodePos(2, i)
       for (let c = 0; c < 2; c++) {
-        const ch = nodePos(1, 2 * i + c)
-        result.push({ key: `r2-${i}-${c}`, x1: p.x, y1: p.y, x2: ch.x, y2: ch.y, active: !!picks.r32[2 * i + c] })
+        const r32Visual = 2 * i + c
+        const ch = nodePos(1, r32Visual)
+        result.push({ key: `r2-${i}-${c}`, x1: p.x, y1: p.y, x2: ch.x, y2: ch.y, active: !!picks.r32[VISUAL_R32_ORDER[r32Visual]] })
       }
     }
 
-    // Ring 1 → Ring 0 (16avos winners → 32 times)
+    // Ring 1 → Ring 0 (16avos winners → 32 times) — idem, via VISUAL_R32_ORDER
     for (let i = 0; i < 16; i++) {
+      const mi = VISUAL_R32_ORDER[i]
       const p = nodePos(1, i)
       const pA = nodePos(0, 2 * i)
       const pB = nodePos(0, 2 * i + 1)
-      result.push({ key: `r1-${i}-0`, x1: p.x, y1: p.y, x2: pA.x, y2: pA.y, active: !!r32Slots[i]?.teamA })
-      result.push({ key: `r1-${i}-1`, x1: p.x, y1: p.y, x2: pB.x, y2: pB.y, active: !!r32Slots[i]?.teamB })
+      result.push({ key: `r1-${i}-0`, x1: p.x, y1: p.y, x2: pA.x, y2: pA.y, active: !!r32Slots[mi]?.teamA })
+      result.push({ key: `r1-${i}-1`, x1: p.x, y1: p.y, x2: pB.x, y2: pB.y, active: !!r32Slots[mi]?.teamB })
     }
 
     return result
   }, [picks, r32Slots])
 
   // ── Nós do anel externo (ring 0, 32 times) ───────────────────────────────────
+  // Percorre na ORDEM VISUAL (VISUAL_R32_ORDER): vi = posição geométrica,
+  // mi = índice real do jogo do R32 (dados de picks.r32/r32Slots inalterados).
   const outerNodes = useMemo<BracketNode[]>(() =>
-    r32Slots.flatMap((slot, mi) => {
-      const pA = nodePos(0, 2 * mi)
-      const pB = nodePos(0, 2 * mi + 1)
+    VISUAL_R32_ORDER.flatMap((mi, vi) => {
+      const slot = r32Slots[mi]
+      if (!slot) return []
+      const pA = nodePos(0, 2 * vi)
+      const pB = nodePos(0, 2 * vi + 1)
       return [
         {
           key:   `r0-${mi}-A`,
@@ -241,51 +256,60 @@ export function RadialBracket({ r32Slots, knockoutMatches }: Props) {
   const innerNodes = useMemo<BracketNode[]>(() => {
     const result: BracketNode[] = []
 
+    // `mapIndex` converte a posição visual (vi, geométrica) no índice real
+    // dos arrays de `picks` — necessário nos anéis 1 e 2, cuja ordem visual
+    // foi rearranjada (VISUAL_R32_ORDER/VISUAL_R16_ORDER) para eliminar
+    // linhas cruzadas. Anéis 3 e 4 não são reordenados (vi === real).
     const ringCfg = [
       {
         ring: 1, count: 16,
-        getTeam:   (i: number) => picks.r32[i] ?? null,
-        isWinner:  (i: number, t: string | null) => !!t && picks.r16[Math.floor(i / 2)] === t,
-        getLabel:  (i: number) => `V.${R32_MATCHES[i]?.matchNum ?? ''}`,
+        mapIndex:  (vi: number) => VISUAL_R32_ORDER[vi],
+        getTeam:   (real: number) => picks.r32[real] ?? null,
+        // R32→R16 nunca é cruzado: o real índice 2k/2k+1 sempre alimenta a
+        // oitava real k.
+        isWinner:  (_vi: number, real: number, t: string | null) => !!t && picks.r16[Math.floor(real / 2)] === t,
+        getLabel:  (real: number) => `V.${R32_MATCHES[real]?.matchNum ?? ''}`,
       },
       {
         ring: 2, count: 8,
-        getTeam:   (i: number) => picks.r16[i] ?? null,
-        // Cruzamento oficial (QF_PAIRS): a oitava i não alimenta a quarta
-        // Math.floor(i/2), e sim a quarta cujo par contém i.
-        isWinner:  (i: number, t: string | null) =>
-          !!t && picks.qf[QF_PAIRS.findIndex(([a, b]) => a === i || b === i)] === t,
-        getLabel:  (i: number) => `Oit.${i + 1}`,
+        mapIndex:  (vi: number) => VISUAL_R16_ORDER[vi],
+        getTeam:   (real: number) => picks.r16[real] ?? null,
+        // Cruzamento oficial (QF_PAIRS) já embutido na ordem visual: usando a
+        // posição visual (vi), o par adjacente 2*floor(vi/2) sempre cai na
+        // quarta correta.
+        isWinner:  (vi: number, _real: number, t: string | null) => !!t && picks.qf[Math.floor(vi / 2)] === t,
+        getLabel:  (real: number) => `Oit.${real + 1}`,
       },
       {
         ring: 3, count: 4,
-        getTeam:   (i: number) => picks.qf[i] ?? null,
+        getTeam:   (real: number) => picks.qf[real] ?? null,
         // Cruzamento oficial (SF_PAIRS): a quarta i não alimenta a semi
         // Math.floor(i/2), e sim a semi cujo par contém i.
-        isWinner:  (i: number, t: string | null) =>
-          !!t && picks.sf[SF_PAIRS.findIndex(([a, b]) => a === i || b === i)] === t,
-        getLabel:  (i: number) => `QF${i + 1}`,
+        isWinner:  (_vi: number, real: number, t: string | null) =>
+          !!t && picks.sf[SF_PAIRS.findIndex(([a, b]) => a === real || b === real)] === t,
+        getLabel:  (real: number) => `QF${real + 1}`,
       },
       {
         ring: 4, count: 2,
-        getTeam:   (i: number) => picks.sf[i] ?? null,
-        isWinner:  (i: number, t: string | null) => !!t && picks.final === t,
-        getLabel:  (i: number) => `SF${i + 1}`,
+        getTeam:   (real: number) => picks.sf[real] ?? null,
+        isWinner:  (_vi: number, _real: number, t: string | null) => !!t && picks.final === t,
+        getLabel:  (real: number) => `SF${real + 1}`,
       },
     ]
 
-    for (const { ring, count, getTeam, isWinner, getLabel } of ringCfg) {
-      for (let i = 0; i < count; i++) {
-        const team = getTeam(i)
-        const { x, y } = nodePos(ring, i)
+    for (const { ring, count, mapIndex, getTeam, isWinner, getLabel } of ringCfg) {
+      for (let vi = 0; vi < count; vi++) {
+        const real = mapIndex ? mapIndex(vi) : vi
+        const team = getTeam(real)
+        const { x, y } = nodePos(ring, vi)
         result.push({
-          key:   `r${ring}-${i}`,
+          key:   `r${ring}-${vi}`,
           ring,
           x, y,
           team,
           flag:  team ? (flagMap.get(team) ?? '') : '',
-          label: getLabel(i),
-          isWin: isWinner(i, team),
+          label: getLabel(real),
+          isWin: isWinner(vi, real, team),
         })
       }
     }
