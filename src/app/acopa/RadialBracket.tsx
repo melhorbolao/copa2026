@@ -174,12 +174,15 @@ export function RadialBracket({ r32Slots, knockoutMatches }: Props) {
       }
     }
 
-    // Ring 3 → Ring 2 (quartas → oitavas)
+    // Ring 3 → Ring 2 (quartas → oitavas) — cruzamento oficial (ver QF_PAIRS):
+    // a quarta i não liga aos vizinhos geométricos 2i/2i+1, e sim ao par real
+    // definido em QF_PAIRS (mesmo princípio do cruzamento ring4→ring3 acima).
     for (let i = 0; i < 4; i++) {
       const p = nodePos(3, i)
-      for (let c = 0; c < 2; c++) {
-        const ch = nodePos(2, 2 * i + c)
-        result.push({ key: `r3-${i}-${c}`, x1: p.x, y1: p.y, x2: ch.x, y2: ch.y, active: !!picks.r16[2 * i + c] })
+      const [ra, rb] = QF_PAIRS[i] ?? [2 * i, 2 * i + 1]
+      for (const ri of [ra, rb]) {
+        const ch = nodePos(2, ri)
+        result.push({ key: `r3-${i}-${ri}`, x1: p.x, y1: p.y, x2: ch.x, y2: ch.y, active: !!picks.r16[ri] })
       }
     }
 
@@ -248,7 +251,10 @@ export function RadialBracket({ r32Slots, knockoutMatches }: Props) {
       {
         ring: 2, count: 8,
         getTeam:   (i: number) => picks.r16[i] ?? null,
-        isWinner:  (i: number, t: string | null) => !!t && picks.qf[Math.floor(i / 2)] === t,
+        // Cruzamento oficial (QF_PAIRS): a oitava i não alimenta a quarta
+        // Math.floor(i/2), e sim a quarta cujo par contém i.
+        isWinner:  (i: number, t: string | null) =>
+          !!t && picks.qf[QF_PAIRS.findIndex(([a, b]) => a === i || b === i)] === t,
         getLabel:  (i: number) => `Oit.${i + 1}`,
       },
       {
