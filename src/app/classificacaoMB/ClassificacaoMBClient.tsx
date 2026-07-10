@@ -403,7 +403,7 @@ function CompactRanking({
 // ── Classificação G112 / G56 (compacta, 4 blocos) ─────────────────────────────
 
 function GCompactRanking({
-  title, sliceSize, numBlocks, hasCut2,
+  title, sliceSize, numBlocks, hasCut2, highlightLeader,
   ranked, premioSpots, renderedAt, matchesRegistered, lastMatch, nextMatch,
   showLastMatch, showNextMatch, showPremio, prizeMap,
   deltaMap, highlights, sdActive,
@@ -414,6 +414,8 @@ function GCompactRanking({
   numBlocks: number
   /** Se há um 2º corte de eliminação dentro deste recorte (ex.: G112 → G56). O G56 não tem próximo corte — todos avançam até o final. */
   hasCut2: boolean
+  /** Destaca a linha inteira do 1º colocado com uma cor diferenciada */
+  highlightLeader: boolean
   ranked: RankedRow[]
   premioSpots: number
   renderedAt: string
@@ -422,6 +424,7 @@ function GCompactRanking({
   nextMatch: MatchInfo | null
   showLastMatch: boolean
   showNextMatch: boolean
+  /** Coluna Prêmio — exibida apenas no primeiro bloco */
   showPremio: boolean
   prizeMap: Map<string, number>
   deltaMap: Map<string, DeltaEntry> | null
@@ -471,17 +474,16 @@ function GCompactRanking({
 
   // Colunas montadas dinamicamente (largura via style, não classe Tailwind literal,
   // pois o nº de colunas opcionais — Prêmio/Últ./Próx. — varia por combinação).
-  const colWidths: string[] = []
-  if (showPremio) colWidths.push('4.75rem')
-  colWidths.push('1.5rem')
-  if (sdActive) colWidths.push('1.6rem')
-  colWidths.push('1fr')
-  colWidths.push('2rem')
-  if (sdActive) colWidths.push('2.5rem')
-  if (showLastMatch) colWidths.push('3.5rem')
-  if (showNextMatch) colWidths.push('3.5rem')
-  const rowStyle: CSSProperties = { gridTemplateColumns: colWidths.join(' ') }
-  const minW = (sdActive ? 1408 : 1152) + (showPremio ? 304 : 0)
+  // Prêmio só aparece no 1º bloco, então há duas larguras de coluna possíveis.
+  const baseColWidths: string[] = ['1.5rem']
+  if (sdActive) baseColWidths.push('1.6rem')
+  baseColWidths.push('1fr', '2rem')
+  if (sdActive) baseColWidths.push('2.5rem')
+  if (showLastMatch) baseColWidths.push('3.5rem')
+  if (showNextMatch) baseColWidths.push('3.5rem')
+  const rowStyle: CSSProperties = { gridTemplateColumns: baseColWidths.join(' ') }
+  const rowStyleWithPremio: CSSProperties = { gridTemplateColumns: ['4.75rem', ...baseColWidths].join(' ') }
+  const minW = (sdActive ? 1408 : 1152) + (showPremio ? 76 : 0)
   const BLOCK_SIZE = Math.ceil(sliceSize / numBlocks)
   const blocks = Array.from({ length: numBlocks }, (_, i) =>
     rankedSlice.slice(i * BLOCK_SIZE, (i + 1) * BLOCK_SIZE),
@@ -516,11 +518,14 @@ function GCompactRanking({
       {/* blocos lado a lado — scroll horizontal no mobile */}
       <div className="overflow-x-auto">
         <div className="grid grid-cols-4 divide-x divide-gray-100" style={{ minWidth: `${minW}px` }}>
-          {blocks.map((block, bi) => (
+          {blocks.map((block, bi) => {
+            const showPremioInBlock = showPremio && bi === 0
+            const blockStyle = showPremioInBlock ? rowStyleWithPremio : rowStyle
+            return (
               <div key={bi}>
                 {/* cabeçalho do bloco */}
-                <div className="grid border-b border-gray-100 bg-gray-50 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-gray-400" style={rowStyle}>
-                  {showPremio && <span className="text-right pr-0.5" title="Valor do prêmio">Prêmio</span>}
+                <div className="grid border-b border-gray-100 bg-gray-50 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-gray-400" style={blockStyle}>
+                  {showPremioInBlock && <span className="text-right pr-0.5" title="Valor do prêmio">Prêmio</span>}
                   <span className="text-right pr-0.5">#</span>
                   {sdActive && <span className="text-center" title="Evolução de posição">↑↓</span>}
                   <span className="pl-1">Participante</span>
@@ -540,16 +545,18 @@ function GCompactRanking({
                     (highlightMode === 'panela' && (isActive || isPanela)) ||
                     (highlightMode === 'tribo'  && tribeMemberSet.has(r.id))
                   )
+                  const isLeader = highlightLeader && r.rank === 1
                   const highlightRing = shouldHighlight ? 'ring-1 ring-inset ring-red-500' : ''
-                  const textCls = shouldHighlight ? 'text-red-600 font-semibold' : G112_ZONE_TEXT[z]
+                  const textCls = shouldHighlight ? 'text-red-600 font-semibold' : isLeader ? 'text-amber-900 font-extrabold' : G112_ZONE_TEXT[z]
+                  const rowBg = isLeader ? 'bg-amber-200' : G112_ZONE_ROW[z]
                   const prizeAmount = prizeMap.get(r.id)
                   return (
                     <div
                       key={r.id}
-                      className={`grid px-2 py-[3px] text-[12px] ${G112_ZONE_ROW[z]} ${boundary ? 'border-t border-gray-200' : ''} ${sdBorder(r.id)} ${highlightRing}`}
-                      style={rowStyle}
+                      className={`grid px-2 py-[3px] text-[12px] ${rowBg} ${boundary ? 'border-t border-gray-200' : ''} ${sdBorder(r.id)} ${highlightRing}`}
+                      style={blockStyle}
                     >
-                      {showPremio && (
+                      {showPremioInBlock && (
                         <span className={`text-right pr-0.5 tabular-nums truncate ${prizeAmount ? 'text-amber-600 font-semibold' : 'text-gray-300'}`}>
                           {prizeAmount ? brl(prizeAmount, { cents: false }) : '—'}
                         </span>
@@ -566,7 +573,7 @@ function GCompactRanking({
                         </span>
                       )}
 
-                      <span className={`pl-1 truncate ${textCls}`} title={r.apelido}>{r.apelido}</span>
+                      <span className={`pl-1 truncate ${textCls}`} title={r.apelido}>{r.apelido}{isLeader && ' 👑'}</span>
                       <span className={`text-right tabular-nums font-bold ${textCls}`}>{r.pts}</span>
 
                       {sdActive && (
@@ -585,7 +592,8 @@ function GCompactRanking({
                   )
                 })}
               </div>
-            ))}
+            )
+          })}
         </div>
       </div>
 
@@ -974,6 +982,7 @@ export function ClassificacaoMBClient({
         sliceSize={56}
         numBlocks={4}
         hasCut2={false}
+        highlightLeader={true}
         ranked={ranked}
         premioSpots={premioSpots}
         renderedAt={renderedAt}
@@ -999,6 +1008,7 @@ export function ClassificacaoMBClient({
         sliceSize={G112_CORTE1_SIZE}
         numBlocks={4}
         hasCut2={true}
+        highlightLeader={false}
         ranked={ranked}
         premioSpots={premioSpots}
         renderedAt={renderedAt}
