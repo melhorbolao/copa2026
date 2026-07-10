@@ -21,6 +21,9 @@ import { getVisibilitySettings, filterBetsByDeadline, isBonusVisible, getServerN
 
 export const metadata = {}
 
+// team_home/team_away aqui já vêm resolvidos via allMatchesWithOverrides (chaveamento
+// aplicado mais acima), então basta usar penalty_winner como o nome do time direto —
+// é assim que a coluna é preenchida no banco, nunca como 'H'/'A'.
 function knockoutWinner(m: {
   team_home: string; team_away: string
   score_home: number | null; score_away: number | null
@@ -29,9 +32,7 @@ function knockoutWinner(m: {
   if (m.score_home == null || m.score_away == null) return null
   if (m.score_home > m.score_away) return m.team_home
   if (m.score_away > m.score_home) return m.team_away
-  if (m.penalty_winner === 'H') return m.team_home
-  if (m.penalty_winner === 'A') return m.team_away
-  return null
+  return m.penalty_winner ?? null
 }
 
 function knockoutLoser(m: Parameters<typeof knockoutWinner>[0]): string | null {

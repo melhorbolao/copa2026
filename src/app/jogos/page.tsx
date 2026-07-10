@@ -10,28 +10,35 @@ import { JogosDashboard } from './JogosDashboard'
 import { filterBetsByDeadline, getServerNow } from '@/lib/production-mode'
 import { scoreTournamentBet } from '@/lib/scoring/engine'
 import type { TournamentResults } from '@/lib/scoring/engine'
-import { calcGroupStandings } from '@/lib/bracket/engine'
+import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap, computeGroupCompletion } from '@/lib/bracket/engine'
+import type { KnockoutTeamOverride } from '@/lib/bracket/engine'
 
 export const metadata = {}
 
 // ── Helpers de mata-mata ──────────────────────────────────────────────────────
-function knockoutWinner(m: {
-  team_home: string; team_away: string
-  score_home: number | null; score_away: number | null
-  penalty_winner: string | null
-}): string | null {
+// team_home/team_away crus ficam como placeholder ("Venc. Jogo N") até o fim do
+// torneio — por isso recebem home/away já resolvidos via buildKnockoutTeamMap
+// (mesmo motor de chaveamento usado em classificacaoMB/recalculate.ts).
+function knockoutWinner(
+  m: { score_home: number | null; score_away: number | null; penalty_winner: string | null },
+  home: string, away: string,
+): string | null {
   if (m.score_home == null || m.score_away == null) return null
-  if (m.score_home > m.score_away) return m.team_home
-  if (m.score_away > m.score_home) return m.team_away
-  if (m.penalty_winner === 'H') return m.team_home
-  if (m.penalty_winner === 'A') return m.team_away
-  return null
+  if (m.score_home > m.score_away) return home
+  if (m.score_away > m.score_home) return away
+  return m.penalty_winner ?? null
 }
 
-function knockoutLoser(m: Parameters<typeof knockoutWinner>[0]): string | null {
-  const w = knockoutWinner(m)
-  if (!w) return null
-  return w === m.team_home ? m.team_away : m.team_home
+function resolveKnockout(
+  m: { id: string; team_home: string; team_away: string; score_home: number | null; score_away: number | null; penalty_winner: string | null },
+  teamMap: Map<string, KnockoutTeamOverride>,
+): { winner: string | null; loser: string | null } {
+  const ov = teamMap.get(m.id)
+  const home = ov?.team_home || m.team_home
+  const away = ov?.team_away || m.team_away
+  const winner = knockoutWinner(m, home, away)
+  const loser  = winner ? (winner === home ? away : home) : null
+  return { winner, loser }
 }
 
 export default async function JogosPage({ searchParams }: { searchParams: Promise<{ m?: string }> }) {
@@ -167,6 +174,21 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
       officialScoreMap.set(m.id, { match_id: m.id, score_home: m.score_home, score_away: m.score_away })
   }
   const officialGroupStandings = calcGroupStandings(gmsSlim, officialScoreMap)
+
+  // Nomes reais dos jogos de mata-mata (para o G4 mais abaixo) — mesmo motor de
+  // chaveamento usado em classificacaoMB/recalculate.ts.
+  const officialThirds     = rankThirds(officialGroupStandings)
+  const officialThirdSlots = resolveThirdSlots(officialThirds)
+  const officialCompletion = computeGroupCompletion(gmsSlim, officialScoreMap)
+  const officialR32Slots = buildR32Teams(
+    officialGroupStandings, officialThirds, officialThirdSlots, undefined,
+    officialCompletion.completeGroups, officialCompletion.allGroupsComplete,
+  )
+  const knockoutMatchesFull = allMatchesList
+    .filter((m: any) => m.phase !== 'group')
+    .map((m: any) => ({ ...m, flag_home: m.flag_home ?? '', flag_away: m.flag_away ?? '' }))
+  const derivedTeamMap = buildKnockoutTeamMap(officialR32Slots, knockoutMatchesFull)
+
   const actualThirdByGroup = new Map<string, string>()
   for (const standing of officialGroupStandings) {
     const g = standing.group
@@ -191,12 +213,14 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
   const finDone = scoredMatches.filter((m: any) => m.phase === 'final')
   const tpDone  = scoredMatches.filter((m: any) => m.phase === 'third_place')
 
-  const semifinalists = qfDone.map(knockoutWinner).filter(Boolean) as string[]
-  const finalists     = sfDone.map(knockoutWinner).filter(Boolean) as string[]
-  const champion      = finDone.length > 0 ? knockoutWinner(finDone[0]) : null
-  const runnerUp      = finDone.length > 0 ? knockoutLoser(finDone[0])  : null
-  const third         = tpDone.length > 0  ? knockoutWinner(tpDone[0])  : null
-  const fourth        = tpDone.length > 0  ? knockoutLoser(tpDone[0])   : null
+  const semifinalists = qfDone.map((m: any) => resolveKnockout(m, derivedTeamMap).winner).filter(Boolean) as string[]
+  const finalists     = sfDone.map((m: any) => resolveKnockout(m, derivedTeamMap).winner).filter(Boolean) as string[]
+  const finResolved   = finDone.length > 0 ? resolveKnockout(finDone[0], derivedTeamMap) : null
+  const tpResolved    = tpDone.length > 0  ? resolveKnockout(tpDone[0],  derivedTeamMap) : null
+  const champion      = finResolved?.winner ?? null
+  const runnerUp      = finResolved?.loser  ?? null
+  const third         = tpResolved?.winner  ?? null
+  const fourth        = tpResolved?.loser   ?? null
 
   const tournamentResults: TournamentResults = {
     semifinalists, finalists,

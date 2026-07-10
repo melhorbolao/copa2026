@@ -9,30 +9,37 @@ import { ClassificacaoMBClient } from './ClassificacaoMBClient'
 import { getMatchResult, detectMatchZebra, scoreTournamentBet, scoreMatchBet } from '@/lib/scoring/engine'
 import type { TournamentResults } from '@/lib/scoring/engine'
 import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap } from '@/lib/bracket/engine'
-import type { BetSlim, MatchSlim } from '@/lib/bracket/engine'
+import type { BetSlim, MatchSlim, KnockoutTeamOverride } from '@/lib/bracket/engine'
 import { getVisibilitySettings, isBonusVisible, isMatchBetsVisible } from '@/lib/production-mode'
 import { recalculateDailyPoints } from '@/lib/scoring/daily-points'
 import { getPrizeAmounts } from '@/lib/prizes'
 
 export const metadata = {}
 
-function knockoutWinner(m: {
-  team_home: string; team_away: string
-  score_home: number | null; score_away: number | null
-  penalty_winner: string | null
-}): string | null {
+// team_home/team_away crus de jogos de mata-mata ficam como placeholder ("Venc. Jogo N")
+// até o fim do torneio — por isso recebem home/away já resolvidos via buildKnockoutTeamMap
+// (mesmo motor de chaveamento usado para o multiplicador do Brasil, mais abaixo).
+function knockoutWinner(
+  m: { score_home: number | null; score_away: number | null; penalty_winner: string | null },
+  home: string,
+  away: string,
+): string | null {
   if (m.score_home == null || m.score_away == null) return null
-  if (m.score_home > m.score_away) return m.team_home
-  if (m.score_away > m.score_home) return m.team_away
-  if (m.penalty_winner === 'H') return m.team_home
-  if (m.penalty_winner === 'A') return m.team_away
-  return null
+  if (m.score_home > m.score_away) return home
+  if (m.score_away > m.score_home) return away
+  return m.penalty_winner ?? null
 }
 
-function knockoutLoser(m: Parameters<typeof knockoutWinner>[0]): string | null {
-  const w = knockoutWinner(m)
-  if (!w) return null
-  return w === m.team_home ? m.team_away : m.team_home
+function resolveKnockout(
+  m: { id: string; team_home: string; team_away: string; score_home: number | null; score_away: number | null; penalty_winner: string | null },
+  teamMap: Map<string, KnockoutTeamOverride>,
+): { winner: string | null; loser: string | null } {
+  const ov = teamMap.get(m.id)
+  const home = ov?.team_home || m.team_home
+  const away = ov?.team_away || m.team_away
+  const winner = knockoutWinner(m, home, away)
+  const loser  = winner ? (winner === home ? away : home) : null
+  return { winner, loser }
 }
 
 export default async function ClassificacaoMBPage() {
@@ -272,21 +279,65 @@ export default async function ClassificacaoMBPage() {
   const bonusDeadline = matches.find(m => m.phase === 'group' && m.round === 1)?.betting_deadline ?? null
   const bonusVis = isBonusVisible(bonusDeadline, now, visibilitySettings, isAdmin)
 
-  // ── Resultados do torneio (G4) ─────────────────────────────────────────────
   const completedMatches = matches.filter(m => m.score_home !== null)
   const pendingMatches   = matches.filter(m => m.score_home === null)
 
+  // ── Chaveamento: nomes reais dos jogos de mata-mata ────────────────────────
+  // team_home/team_away crus ficam como placeholder ("Venc. Jogo N") até o fim do
+  // torneio — precisa encadear os resultados oficiais das rodadas anteriores (mesmo
+  // motor usado em recalculate.ts) para saber quem realmente joga em cada fase,
+  // tanto para o multiplicador do Brasil quanto para o G4 mais abaixo.
+  const gmsSlim: MatchSlim[] = matches
+    .filter(m => m.phase === 'group' && m.group_name)
+    .map(m => ({ id: m.id, group_name: m.group_name, phase: m.phase, team_home: m.team_home, team_away: m.team_away, flag_home: '', flag_away: '' }))
+  const officialScoreMap = new Map<string, BetSlim>()
+  for (const m of matches) {
+    if (m.score_home !== null && m.score_away !== null)
+      officialScoreMap.set(m.id, { match_id: m.id, score_home: m.score_home, score_away: m.score_away })
+  }
+  const officialGroupStandings = calcGroupStandings(gmsSlim, officialScoreMap)
+  const officialThirds     = rankThirds(officialGroupStandings)
+  const officialThirdSlots = resolveThirdSlots(officialThirds)
+  const groupMatchByGroup  = new Map<string, { total: number; scored: number }>()
+  for (const m of gmsSlim) {
+    if (!m.group_name) continue
+    const e = groupMatchByGroup.get(m.group_name) ?? { total: 0, scored: 0 }
+    e.total++
+    if (officialScoreMap.has(m.id)) e.scored++
+    groupMatchByGroup.set(m.group_name, e)
+  }
+  const completeGroups = new Set(
+    [...groupMatchByGroup.entries()].filter(([, v]) => v.total > 0 && v.scored === v.total).map(([g]) => g)
+  )
+  const allGroupsComplete = groupMatchByGroup.size > 0 && completeGroups.size === groupMatchByGroup.size
+  const officialR32Slots = buildR32Teams(officialGroupStandings, officialThirds, officialThirdSlots, undefined, completeGroups, allGroupsComplete)
+  const knockoutMatchesFull = matches.filter(m =>
+    ['round_of_32', 'round_of_16', 'quarterfinal', 'semifinal', 'third_place', 'final'].includes(m.phase)
+  ).map(m => ({ ...m, flag_home: '', flag_away: '' }))
+  const derivedTeamMap = buildKnockoutTeamMap(officialR32Slots, knockoutMatchesFull)
+
+  const isBrazilByMatchId = new Map<string, boolean>()
+  for (const m of matches) {
+    const ov = derivedTeamMap.get(m.id)
+    const effHome = ov?.team_home || m.team_home
+    const effAway = ov?.team_away || m.team_away
+    isBrazilByMatchId.set(m.id, m.is_brazil || effHome === 'Brasil' || effAway === 'Brasil')
+  }
+
+  // ── Resultados do torneio (G4) ─────────────────────────────────────────────
   const qfDone  = completedMatches.filter(m => m.phase === 'quarterfinal')
   const sfDone  = completedMatches.filter(m => m.phase === 'semifinal')
   const finDone = completedMatches.filter(m => m.phase === 'final')
   const tpDone  = completedMatches.filter(m => m.phase === 'third_place')
 
-  const semifinalists = qfDone.map(knockoutWinner).filter(Boolean) as string[]
-  const finalists     = sfDone.map(knockoutWinner).filter(Boolean) as string[]
-  const champion      = finDone.length > 0 ? knockoutWinner(finDone[0]) : null
-  const runnerUp      = finDone.length > 0 ? knockoutLoser(finDone[0])  : null
-  const third         = tpDone.length > 0  ? knockoutWinner(tpDone[0])  : null
-  const fourth        = tpDone.length > 0  ? knockoutLoser(tpDone[0])   : null
+  const semifinalists = qfDone.map(m => resolveKnockout(m, derivedTeamMap).winner).filter(Boolean) as string[]
+  const finalists     = sfDone.map(m => resolveKnockout(m, derivedTeamMap).winner).filter(Boolean) as string[]
+  const finalResolved = finDone.length > 0 ? resolveKnockout(finDone[0], derivedTeamMap) : null
+  const thirdResolved = tpDone.length > 0  ? resolveKnockout(tpDone[0],  derivedTeamMap) : null
+  const champion      = finalResolved?.winner ?? null
+  const runnerUp       = finalResolved?.loser  ?? null
+  const third         = thirdResolved?.winner ?? null
+  const fourth        = thirdResolved?.loser  ?? null
 
   const tournamentResults: TournamentResults = {
     semifinalists, finalists,
@@ -334,44 +385,6 @@ export default async function ClassificacaoMBPage() {
       .filter(r => r.enabled)
       .map(r => r.group_name)
   )
-  const gmsSlim: MatchSlim[] = matches
-    .filter(m => m.phase === 'group' && m.group_name)
-    .map(m => ({ id: m.id, group_name: m.group_name, phase: m.phase, team_home: m.team_home, team_away: m.team_away, flag_home: '', flag_away: '' }))
-  const officialScoreMap = new Map<string, BetSlim>()
-  for (const m of matches) {
-    if (m.score_home !== null && m.score_away !== null)
-      officialScoreMap.set(m.id, { match_id: m.id, score_home: m.score_home, score_away: m.score_away })
-  }
-  const officialGroupStandings = calcGroupStandings(gmsSlim, officialScoreMap)
-
-  // Resolve nomes reais para jogos de mata-mata (16avos, oitavas, …)
-  const officialThirds     = rankThirds(officialGroupStandings)
-  const officialThirdSlots = resolveThirdSlots(officialThirds)
-  const groupMatchByGroup  = new Map<string, { total: number; scored: number }>()
-  for (const m of gmsSlim) {
-    if (!m.group_name) continue
-    const e = groupMatchByGroup.get(m.group_name) ?? { total: 0, scored: 0 }
-    e.total++
-    if (officialScoreMap.has(m.id)) e.scored++
-    groupMatchByGroup.set(m.group_name, e)
-  }
-  const completeGroups = new Set(
-    [...groupMatchByGroup.entries()].filter(([, v]) => v.total > 0 && v.scored === v.total).map(([g]) => g)
-  )
-  const allGroupsComplete = groupMatchByGroup.size > 0 && completeGroups.size === groupMatchByGroup.size
-  const officialR32Slots = buildR32Teams(officialGroupStandings, officialThirds, officialThirdSlots, undefined, completeGroups, allGroupsComplete)
-  const knockoutMatchesFull = matches.filter(m =>
-    ['round_of_32', 'round_of_16', 'quarterfinal', 'semifinal', 'third_place', 'final'].includes(m.phase)
-  ).map(m => ({ ...m, flag_home: '', flag_away: '' }))
-  const derivedTeamMap = buildKnockoutTeamMap(officialR32Slots, knockoutMatchesFull)
-
-  const isBrazilByMatchId = new Map<string, boolean>()
-  for (const m of matches) {
-    const ov = derivedTeamMap.get(m.id)
-    const effHome = ov?.team_home || m.team_home
-    const effAway = ov?.team_away || m.team_away
-    isBrazilByMatchId.set(m.id, m.is_brazil || effHome === 'Brasil' || effAway === 'Brasil')
-  }
 
   const actualThirdByGroup = new Map<string, string>()
   for (const standing of officialGroupStandings) {

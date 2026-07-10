@@ -9,8 +9,8 @@ import { Navbar } from '@/components/layout/Navbar'
 import { ComparadorClient } from './ComparadorClient'
 import type { Snapshot } from './DiaDiaSection'
 import { getMatchResult, scoreMatchBet, scoreTournamentBet } from '@/lib/scoring/engine'
-import { calcGroupStandings } from '@/lib/bracket/engine'
-import type { BetSlim, MatchSlim } from '@/lib/bracket/engine'
+import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap, computeGroupCompletion } from '@/lib/bracket/engine'
+import type { BetSlim, MatchSlim, KnockoutTeamOverride } from '@/lib/bracket/engine'
 import { getVisibilitySettings, isBonusVisible, isMatchBetsVisible, getServerNow } from '@/lib/production-mode'
 import type { MatchInfo, FlatBet, ColPop } from './engine'
 
@@ -362,6 +362,23 @@ export default async function ComparadorPage({
       liveOfficialScoreMap.set(m.id, { match_id: m.id, score_home: m.score_home, score_away: m.score_away })
   }
   const liveGroupStandings = calcGroupStandings(liveGmsSlim, liveOfficialScoreMap)
+
+  // Nomes reais dos jogos de mata-mata (para o G4 mais abaixo) — mesmo motor de
+  // chaveamento usado em classificacaoMB/recalculate.ts. team_home/team_away crus
+  // ficam como placeholder ("Venc. Jogo N") até o fim do torneio.
+  const liveThirds     = rankThirds(liveGroupStandings)
+  const liveThirdSlots = resolveThirdSlots(liveThirds)
+  const liveCompletion = computeGroupCompletion(liveGmsSlim, liveOfficialScoreMap)
+  const liveR32Slots = buildR32Teams(
+    liveGroupStandings, liveThirds, liveThirdSlots, undefined,
+    liveCompletion.completeGroups, liveCompletion.allGroupsComplete,
+  )
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const liveKnockoutMatchesFull = (rawMatches as any[])
+    .filter((m: any) => m.phase !== 'group')
+    .map((m: any) => ({ ...m, flag_home: m.flag_home ?? '', flag_away: m.flag_away ?? '' }))
+  const liveKnockoutTeamMap = buildKnockoutTeamMap(liveR32Slots, liveKnockoutMatchesFull)
+
   const liveActualThirdByGroup = new Map<string, string>()
   for (const standing of liveGroupStandings) {
     const g = standing.group
@@ -388,19 +405,23 @@ export default async function ComparadorPage({
       liveOfficialScorers = topScorersData.filter(s => s.goals_count === maxGoals).map(s => s.player_name)
     }
   }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function koWinner(m: any): string | null {
+  function koWinner(
+    m: { score_home: number | null; score_away: number | null; penalty_winner: string | null },
+    home: string, away: string,
+  ): string | null {
     if (m.score_home == null || m.score_away == null) return null
-    if (m.score_home > m.score_away) return m.team_home
-    if (m.score_away > m.score_home) return m.team_away
-    if (m.penalty_winner === 'H') return m.team_home
-    if (m.penalty_winner === 'A') return m.team_away
-    return null
+    if (m.score_home > m.score_away) return home
+    if (m.score_away > m.score_home) return away
+    return m.penalty_winner ?? null
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function koLoser(m: any): string | null {
-    const w = koWinner(m); if (!w) return null
-    return w === m.team_home ? m.team_away : m.team_home
+  function resolveKo(m: any): { winner: string | null; loser: string | null } {
+    const ov = liveKnockoutTeamMap.get(m.id) as KnockoutTeamOverride | undefined
+    const home = ov?.team_home || m.team_home
+    const away = ov?.team_away || m.team_away
+    const winner = koWinner(m, home, away)
+    const loser  = winner ? (winner === home ? away : home) : null
+    return { winner, loser }
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const koDone = (rawMatches as any[]).filter((m: any) => m.score_home !== null && ['quarterfinal', 'semifinal', 'third_place', 'final'].includes(m.phase))
@@ -409,13 +430,15 @@ export default async function ComparadorPage({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tpDone  = koDone.filter((m: any) => m.phase === 'third_place')
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const semifinalists = koDone.filter((m: any) => m.phase === 'quarterfinal').map(koWinner).filter(Boolean) as string[]
+  const semifinalists = koDone.filter((m: any) => m.phase === 'quarterfinal').map((m: any) => resolveKo(m).winner).filter(Boolean) as string[]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const finalists     = koDone.filter((m: any) => m.phase === 'semifinal').map(koWinner).filter(Boolean) as string[]
-  const champion  = finDone.length > 0 ? koWinner(finDone[0]) : null
-  const runnerUp  = finDone.length > 0 ? koLoser(finDone[0])  : null
-  const third     = tpDone.length > 0  ? koWinner(tpDone[0])  : null
-  const fourth    = tpDone.length > 0  ? koLoser(tpDone[0])   : null
+  const finalists     = koDone.filter((m: any) => m.phase === 'semifinal').map((m: any) => resolveKo(m).winner).filter(Boolean) as string[]
+  const finResolved = finDone.length > 0 ? resolveKo(finDone[0]) : null
+  const tpResolved  = tpDone.length > 0  ? resolveKo(tpDone[0])  : null
+  const champion  = finResolved?.winner ?? null
+  const runnerUp  = finResolved?.loser  ?? null
+  const third     = tpResolved?.winner  ?? null
+  const fourth    = tpResolved?.loser   ?? null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const allTBetsFull = allTBets as any[]
   const chamBetsTotal    = allTBetsFull.filter((b: any) => b.champion).length

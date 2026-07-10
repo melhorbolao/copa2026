@@ -18,7 +18,7 @@ import {
   calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap,
   computeGroupCompletion,
 } from '@/lib/bracket/engine'
-import type { MatchSlim, BetSlim } from '@/lib/bracket/engine'
+import type { MatchSlim, BetSlim, KnockoutTeamOverride } from '@/lib/bracket/engine'
 
 type MatchPhase = 'group' | 'round_of_32' | 'round_of_16' | 'quarterfinal' | 'semifinal' | 'third_place' | 'final'
 interface Match {
@@ -39,19 +39,30 @@ function getStageKey(m: Match): string | null {
   return map[m.phase] ?? null
 }
 
-function knockoutWinner(m: Pick<Match, 'team_home' | 'team_away' | 'score_home' | 'score_away' | 'penalty_winner'>): string | null {
+// team_home/team_away crus de jogos de mata-mata ficam como placeholder ("Venc. Jogo N")
+// até o fim do torneio — por isso recebem home/away já resolvidos via buildKnockoutTeamMap
+// (mesmo motor de chaveamento usado para is_brazil, mais abaixo).
+function knockoutWinner(
+  m: Pick<Match, 'score_home' | 'score_away' | 'penalty_winner'>,
+  home: string,
+  away: string,
+): string | null {
   if (m.score_home == null || m.score_away == null) return null
-  if (m.score_home > m.score_away) return m.team_home
-  if (m.score_away > m.score_home) return m.team_away
-  if (m.penalty_winner === 'H') return m.team_home
-  if (m.penalty_winner === 'A') return m.team_away
-  return null
+  if (m.score_home > m.score_away) return home
+  if (m.score_away > m.score_home) return away
+  return m.penalty_winner ?? null
 }
 
-function knockoutLoser(m: Pick<Match, 'team_home' | 'team_away' | 'score_home' | 'score_away' | 'penalty_winner'>): string | null {
-  const w = knockoutWinner(m)
-  if (!w) return null
-  return w === m.team_home ? m.team_away : m.team_home
+function resolveKnockout(
+  m: Pick<Match, 'id' | 'team_home' | 'team_away' | 'score_home' | 'score_away' | 'penalty_winner'>,
+  teamMap: Map<string, KnockoutTeamOverride>,
+): { winner: string | null; loser: string | null } {
+  const ov = teamMap.get(m.id)
+  const home = ov?.team_home || m.team_home
+  const away = ov?.team_away || m.team_away
+  const winner = knockoutWinner(m, home, away)
+  const loser  = winner ? (winner === home ? away : home) : null
+  return { winner, loser }
 }
 
 type StageKey = PhaseStageKey
@@ -240,14 +251,16 @@ export default async function ControlePage({
     (['quarterfinal', 'semifinal', 'third_place', 'final'] as MatchPhase[]).includes(m.phase) &&
     m.score_home !== null
   )
-  const semifinalists = completedKO.filter(m => m.phase === 'quarterfinal').map(m => knockoutWinner(m)).filter(Boolean) as string[]
-  const finalists     = completedKO.filter(m => m.phase === 'semifinal').map(m => knockoutWinner(m)).filter(Boolean) as string[]
+  const semifinalists = completedKO.filter(m => m.phase === 'quarterfinal').map(m => resolveKnockout(m, derivedTeamMap).winner).filter(Boolean) as string[]
+  const finalists     = completedKO.filter(m => m.phase === 'semifinal').map(m => resolveKnockout(m, derivedTeamMap).winner).filter(Boolean) as string[]
   const finMatch      = completedKO.find(m => m.phase === 'final')
   const tpMatch       = completedKO.find(m => m.phase === 'third_place')
-  const champion      = finMatch ? knockoutWinner(finMatch) : null
-  const runnerUp      = finMatch ? knockoutLoser(finMatch)  : null
-  const third         = tpMatch  ? knockoutWinner(tpMatch)  : null
-  const fourth        = tpMatch  ? knockoutLoser(tpMatch)   : null
+  const finResolved   = finMatch ? resolveKnockout(finMatch, derivedTeamMap) : null
+  const tpResolved    = tpMatch  ? resolveKnockout(tpMatch,  derivedTeamMap) : null
+  const champion      = finResolved?.winner ?? null
+  const runnerUp       = finResolved?.loser  ?? null
+  const third         = tpResolved?.winner  ?? null
+  const fourth        = tpResolved?.loser   ?? null
 
   let liveOfficialScorers: string[] = []
   if (artillaryActive) {
