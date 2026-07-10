@@ -403,7 +403,7 @@ function CompactRanking({
 // ── Classificação G112 / G56 (compacta, 4 blocos) ─────────────────────────────
 
 function GCompactRanking({
-  title, sliceSize, numBlocks,
+  title, sliceSize, numBlocks, hasCut2,
   ranked, premioSpots, renderedAt, matchesRegistered, lastMatch, nextMatch,
   showLastMatch, showNextMatch, showPremio, prizeMap,
   deltaMap, highlights, sdActive,
@@ -412,6 +412,8 @@ function GCompactRanking({
   title: string
   sliceSize: number
   numBlocks: number
+  /** Se há um 2º corte de eliminação dentro deste recorte (ex.: G112 → G56). O G56 não tem próximo corte — todos avançam até o final. */
+  hasCut2: boolean
   ranked: RankedRow[]
   premioSpots: number
   renderedAt: string
@@ -435,10 +437,10 @@ function GCompactRanking({
 
   const rankedSlice = ranked.slice(0, sliceSize)
 
-  // Top metade do bloco avança para a próxima fase de corte
-  const cut2 = Math.ceil(rankedSlice.length / 2)
+  // Top metade do bloco avança para a próxima fase de corte (não se aplica ao G56)
+  const cut2 = hasCut2 ? Math.ceil(rankedSlice.length / 2) : 0
   const premioLine = ranked[Math.min(premioSpots, n) - 1]?.pts ?? Infinity
-  const cut2Line   = cut2 > premioSpots ? (ranked[cut2 - 1]?.pts ?? null) : null
+  const cut2Line   = hasCut2 && cut2 > premioSpots ? (ranked[cut2 - 1]?.pts ?? null) : null
 
   type G112Zone = 'premio' | 'corte2' | 'out'
 
@@ -489,7 +491,7 @@ function GCompactRanking({
 
   const legendItems: { zone: G112Zone; label: string }[] = [
     { zone: 'premio', label: `Premiação (top ${premioSpots})` },
-    ...(cut2 > premioSpots ? [{ zone: 'corte2' as G112Zone, label: `2º corte (top ${cut2})` }] : []),
+    ...(hasCut2 && cut2 > premioSpots ? [{ zone: 'corte2' as G112Zone, label: `2º corte (top ${cut2})` }] : []),
   ]
 
   return (
@@ -971,6 +973,7 @@ export function ClassificacaoMBClient({
         title="Classificação G56"
         sliceSize={56}
         numBlocks={4}
+        hasCut2={false}
         ranked={ranked}
         premioSpots={premioSpots}
         renderedAt={renderedAt}
@@ -995,6 +998,7 @@ export function ClassificacaoMBClient({
         title="Classificação G112"
         sliceSize={G112_CORTE1_SIZE}
         numBlocks={4}
+        hasCut2={true}
         ranked={ranked}
         premioSpots={premioSpots}
         renderedAt={renderedAt}
