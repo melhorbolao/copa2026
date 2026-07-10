@@ -470,7 +470,7 @@ function GCompactRanking({
   // Colunas montadas dinamicamente (largura via style, não classe Tailwind literal,
   // pois o nº de colunas opcionais — Prêmio/Últ./Próx. — varia por combinação).
   const colWidths: string[] = []
-  if (showPremio) colWidths.push('3.5rem')
+  if (showPremio) colWidths.push('4.75rem')
   colWidths.push('1.5rem')
   if (sdActive) colWidths.push('1.6rem')
   colWidths.push('1fr')
@@ -479,7 +479,7 @@ function GCompactRanking({
   if (showLastMatch) colWidths.push('3.5rem')
   if (showNextMatch) colWidths.push('3.5rem')
   const rowStyle: CSSProperties = { gridTemplateColumns: colWidths.join(' ') }
-  const minW = (sdActive ? 1408 : 1152) + (showPremio ? 224 : 0)
+  const minW = (sdActive ? 1408 : 1152) + (showPremio ? 304 : 0)
   const BLOCK_SIZE = Math.ceil(sliceSize / numBlocks)
   const blocks = Array.from({ length: numBlocks }, (_, i) =>
     rankedSlice.slice(i * BLOCK_SIZE, (i + 1) * BLOCK_SIZE),
@@ -1051,7 +1051,7 @@ export function ClassificacaoMBClient({
               <tr>
                 {/* Prêmio (opcional, antes de #) */}
                 {showPremio && (
-                  <th className="px-1.5 py-2 text-center w-24 whitespace-nowrap" title="Valor do prêmio (rateado em caso de empate)">Prêmio</th>
+                  <th className="px-1.5 py-2 text-center w-32 whitespace-nowrap" title="Valor do prêmio (rateado em caso de empate)">Prêmio</th>
                 )}
 
                 {/* Identidade */}
