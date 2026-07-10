@@ -4,27 +4,9 @@ import { redirect } from 'next/navigation'
 import { createClient, createAuthAdminClient } from '@/lib/supabase/server'
 import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
+import { ENTRY_FEE, PRIZE_DIST, brl } from '@/lib/prizes'
 
 export const metadata = {}
-
-const ENTRY_FEE = 250
-
-const PRIZE_DIST = [
-  { place: '1º',  pct: 55.0 },
-  { place: '2º',  pct: 15.0 },
-  { place: '3º',  pct:  9.0 },
-  { place: '4º',  pct:  6.0 },
-  { place: '5º',  pct:  5.0 },
-  { place: '6º',  pct:  3.0 },
-  { place: '7º',  pct:  2.5 },
-  { place: '8º',  pct:  2.0 },
-  { place: '9º',  pct:  1.5 },
-  { place: '10º', pct:  1.0 },
-]
-
-function brl(value: number) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
-}
 
 export default async function PremiacaoMBPage() {
   const supabase = await createClient()

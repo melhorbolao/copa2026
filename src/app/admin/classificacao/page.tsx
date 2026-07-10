@@ -2,7 +2,7 @@ import { createAuthAdminClient } from '@/lib/supabase/server'
 import { ClassificacaoAdminClient } from './ClassificacaoAdminClient'
 
 const COL_DEFS = [
-  { key: 'classif_col_premio',       label: 'Prêmio',        description: 'Primeira coluna (antes da colocação) — faixa de premiação', enabled: false },
+  { key: 'classif_col_premio',       label: 'Prêmio',        description: 'Valor em R$ do prêmio por posição (Classificação Detalhada e G56) — rateado em caso de empate', enabled: false },
   { key: 'classif_col_last_match',   label: 'Último jogo',   description: 'Palpite do participante no último jogo disputado', enabled: true },
   { key: 'classif_col_next_match',   label: 'Próximo jogo',  description: 'Palpite do participante no próximo jogo', enabled: true },
   { key: 'classif_col_delta_premio', label: '∆ Prêmio',      description: 'Diferença de pontos para o 1º colocado premiado (10ª posição por padrão)', enabled: true },

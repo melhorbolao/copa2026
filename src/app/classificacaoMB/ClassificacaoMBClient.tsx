@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useMemo, useEffect, useRef, useState } from 'react'
+import { memo, useMemo, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -14,6 +14,7 @@ import {
 } from './SobeDesce'
 import { toBlob } from 'html-to-image'
 import { ExportableRankingBoard } from './ExportableRankingBoard'
+import { brl, prizeForTiedRank } from '@/lib/prizes'
 
 interface ParticipantRow {
   id: string
@@ -46,6 +47,8 @@ interface Props {
   teamAbbrs: Record<string, string>
   prizeSpots: number
   premioSpots: number
+  /** Valor em R$ de cada posição premiada — índice 0 = 1º lugar (fonte: página Premiação) */
+  prizeAmounts: number[]
   activeParticipantId: string
   panelaMemberIds: string[]
   colVisibility: Record<string, boolean>
@@ -402,7 +405,7 @@ function CompactRanking({
 function GCompactRanking({
   title, sliceSize, numBlocks,
   ranked, premioSpots, renderedAt, matchesRegistered, lastMatch, nextMatch,
-  showLastMatch, showNextMatch,
+  showLastMatch, showNextMatch, showPremio, prizeMap,
   deltaMap, highlights, sdActive,
   highlightMode, activeParticipantId, panelaSet, tribeMemberSet,
 }: {
@@ -417,6 +420,8 @@ function GCompactRanking({
   nextMatch: MatchInfo | null
   showLastMatch: boolean
   showNextMatch: boolean
+  showPremio: boolean
+  prizeMap: Map<string, number>
   deltaMap: Map<string, DeltaEntry> | null
   highlights: SobeDesceHighlights
   sdActive: boolean
@@ -462,18 +467,19 @@ function GCompactRanking({
     return 'border-l-2 border-transparent'
   }
 
-  const colsGrid = sdActive
-    ? (showLastMatch && showNextMatch
-        ? 'grid grid-cols-[1.5rem_1.6rem_1fr_2rem_2.5rem_3.5rem_3.5rem]'
-        : showLastMatch || showNextMatch
-          ? 'grid grid-cols-[1.5rem_1.6rem_1fr_2rem_2.5rem_3.5rem]'
-          : 'grid grid-cols-[1.5rem_1.6rem_1fr_2rem_2.5rem]')
-    : (showLastMatch && showNextMatch
-        ? 'grid grid-cols-[1.5rem_1fr_2rem_3.5rem_3.5rem]'
-        : showLastMatch || showNextMatch
-          ? 'grid grid-cols-[1.5rem_1fr_2rem_3.5rem]'
-          : 'grid grid-cols-[1.5rem_1fr_2rem]')
-  const minW = sdActive ? 1408 : 1152
+  // Colunas montadas dinamicamente (largura via style, não classe Tailwind literal,
+  // pois o nº de colunas opcionais — Prêmio/Últ./Próx. — varia por combinação).
+  const colWidths: string[] = []
+  if (showPremio) colWidths.push('3.5rem')
+  colWidths.push('1.5rem')
+  if (sdActive) colWidths.push('1.6rem')
+  colWidths.push('1fr')
+  colWidths.push('2rem')
+  if (sdActive) colWidths.push('2.5rem')
+  if (showLastMatch) colWidths.push('3.5rem')
+  if (showNextMatch) colWidths.push('3.5rem')
+  const rowStyle: CSSProperties = { gridTemplateColumns: colWidths.join(' ') }
+  const minW = (sdActive ? 1408 : 1152) + (showPremio ? 224 : 0)
   const BLOCK_SIZE = Math.ceil(sliceSize / numBlocks)
   const blocks = Array.from({ length: numBlocks }, (_, i) =>
     rankedSlice.slice(i * BLOCK_SIZE, (i + 1) * BLOCK_SIZE),
@@ -511,7 +517,8 @@ function GCompactRanking({
           {blocks.map((block, bi) => (
               <div key={bi}>
                 {/* cabeçalho do bloco */}
-                <div className={`${colsGrid} border-b border-gray-100 bg-gray-50 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-gray-400`}>
+                <div className="grid border-b border-gray-100 bg-gray-50 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-gray-400" style={rowStyle}>
+                  {showPremio && <span className="text-right pr-0.5" title="Valor do prêmio">Prêmio</span>}
                   <span className="text-right pr-0.5">#</span>
                   {sdActive && <span className="text-center" title="Evolução de posição">↑↓</span>}
                   <span className="pl-1">Participante</span>
@@ -533,11 +540,18 @@ function GCompactRanking({
                   )
                   const highlightRing = shouldHighlight ? 'ring-1 ring-inset ring-red-500' : ''
                   const textCls = shouldHighlight ? 'text-red-600 font-semibold' : G112_ZONE_TEXT[z]
+                  const prizeAmount = prizeMap.get(r.id)
                   return (
                     <div
                       key={r.id}
-                      className={`${colsGrid} px-2 py-[3px] text-[12px] ${G112_ZONE_ROW[z]} ${boundary ? 'border-t border-gray-200' : ''} ${sdBorder(r.id)} ${highlightRing}`}
+                      className={`grid px-2 py-[3px] text-[12px] ${G112_ZONE_ROW[z]} ${boundary ? 'border-t border-gray-200' : ''} ${sdBorder(r.id)} ${highlightRing}`}
+                      style={rowStyle}
                     >
+                      {showPremio && (
+                        <span className={`text-right pr-0.5 tabular-nums truncate ${prizeAmount ? 'text-amber-600 font-semibold' : 'text-gray-300'}`}>
+                          {prizeAmount ? brl(prizeAmount, { cents: false }) : '—'}
+                        </span>
+                      )}
                       <span className={`text-right pr-0.5 tabular-nums ${textCls}`}>{r.rank}</span>
 
                       {sdActive && (
@@ -589,7 +603,7 @@ function GCompactRanking({
 export function ClassificacaoMBClient({
   rows, lastMatch, nextMatch,
   eliminatedTeams, eliminatedStdScorers,
-  scorerMapping, teamAbbrs, prizeSpots, premioSpots,
+  scorerMapping, teamAbbrs, prizeSpots, premioSpots, prizeAmounts,
   activeParticipantId, panelaMemberIds, colVisibility, renderedAt, matchesRegistered, groupsDefined,
   lastResultDate, currentPhaseStartDate,
   sobeDesceVisible, isAdmin, lastDataDate, minhaPanelaEnabled,
@@ -717,8 +731,8 @@ export function ClassificacaoMBClient({
   const showPtsCl       = colVisibility['pts_cl']        ?? true
   const showPtsG4       = colVisibility['pts_g4']        ?? true
 
-  const { ranked, cutPts, premioCutPts, lastRank, isUniqueLast, premioLine, cut2Line, cut1Line } = useMemo((): {
-    ranked: RankedRow[]; cutPts: number | null; premioCutPts: number | null
+  const { ranked, cutPts, lastRank, isUniqueLast, premioLine, cut2Line, cut1Line } = useMemo((): {
+    ranked: RankedRow[]; cutPts: number | null
     lastRank: number; isUniqueLast: boolean
     premioLine: number; cut2Line: number | null; cut1Line: number | null
   } => {
@@ -757,8 +771,26 @@ export function ClassificacaoMBClient({
     const cut2LineVal   = cut2 > premioSpots ? (sorted[cut2 - 1]?.pts ?? null) : null
     const cut1LineVal   = cut1 > cut2        ? (sorted[cut1 - 1]?.pts ?? null) : null
 
-    return { ranked: out, cutPts: cut, premioCutPts: premioCut, lastRank: lastRankVal, isUniqueLast: isUniqueLastVal, premioLine: premioLineVal, cut2Line: cut2LineVal, cut1Line: cut1LineVal }
+    return { ranked: out, cutPts: cut, lastRank: lastRankVal, isUniqueLast: isUniqueLastVal, premioLine: premioLineVal, cut2Line: cut2LineVal, cut1Line: cut1LineVal }
   }, [rows, prizeSpots, premioSpots])
+
+  // Valor de prêmio por participante — rateado entre empatados dentro da zona
+  // premiada (Regulamento item 33: soma-se as faixas empatadas e divide-se igualmente).
+  const prizeMap = useMemo(() => {
+    const map = new Map<string, number>()
+    const byRank = new Map<number, RankedRow[]>()
+    for (const r of ranked) {
+      if (r.rank > prizeAmounts.length) continue
+      const group = byRank.get(r.rank) ?? []
+      group.push(r)
+      byRank.set(r.rank, group)
+    }
+    for (const [rank, group] of byRank) {
+      const amount = prizeForTiedRank(prizeAmounts, rank, group.length)
+      for (const r of group) map.set(r.id, amount)
+    }
+    return map
+  }, [ranked, prizeAmounts])
 
   const sortedRanked = useMemo(() => {
     if (!sortKey) return ranked
@@ -947,6 +979,8 @@ export function ClassificacaoMBClient({
         nextMatch={nextMatch}
         showLastMatch={showLastMatch}
         showNextMatch={showNextMatch}
+        showPremio={showPremio}
+        prizeMap={prizeMap}
         deltaMap={deltaMap}
         highlights={highlights}
         sdActive={sdActive}
@@ -969,6 +1003,8 @@ export function ClassificacaoMBClient({
         nextMatch={nextMatch}
         showLastMatch={showLastMatch}
         showNextMatch={showNextMatch}
+        showPremio={false}
+        prizeMap={prizeMap}
         deltaMap={deltaMap}
         highlights={highlights}
         sdActive={sdActive}
@@ -1015,7 +1051,7 @@ export function ClassificacaoMBClient({
               <tr>
                 {/* Prêmio (opcional, antes de #) */}
                 {showPremio && (
-                  <th className="px-1.5 py-2 text-center w-14" title="Faixa de premiação">Prêmio</th>
+                  <th className="px-1.5 py-2 text-center w-24 whitespace-nowrap" title="Valor do prêmio (rateado em caso de empate)">Prêmio</th>
                 )}
 
                 {/* Identidade */}
@@ -1096,12 +1132,15 @@ export function ClassificacaoMBClient({
                     className={`border-b border-gray-100 last:border-0 ${rowBg} ${fontCls} ${highlightCls} ${z === 'last' ? '[&_*]:!text-white' : ''}`}
                   >
                     {showPremio && (
-                      <td className="px-1.5 py-1 text-center text-gray-400 tabular-nums">
-                        {premioCutPts !== null && row.pts >= premioCutPts ? (
-                          <span className="text-amber-600 font-semibold">🏆</span>
-                        ) : (
-                          <span className="text-gray-300">—</span>
-                        )}
+                      <td className="px-1.5 py-1 text-center tabular-nums whitespace-nowrap">
+                        {(() => {
+                          const amount = prizeMap.get(row.id)
+                          return amount ? (
+                            <span className={z === 'last' ? '' : 'text-amber-600 font-semibold'}>{brl(amount, { cents: false })}</span>
+                          ) : (
+                            <span className={z === 'last' ? '' : 'text-gray-300'}>—</span>
+                          )
+                        })()}
                       </td>
                     )}
 

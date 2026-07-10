@@ -12,6 +12,7 @@ import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, build
 import type { BetSlim, MatchSlim } from '@/lib/bracket/engine'
 import { getVisibilitySettings, isBonusVisible, isMatchBetsVisible } from '@/lib/production-mode'
 import { recalculateDailyPoints } from '@/lib/scoring/daily-points'
+import { getPrizeAmounts } from '@/lib/prizes'
 
 export const metadata = {}
 
@@ -94,7 +95,7 @@ export default async function ClassificacaoMBPage() {
   }
 
   // ── Fetch #1: dados base ───────────────────────────────────────────────────
-  const [participantsRes, matchesRes, betsRes, groupBetsRes, tournamentBetsRes, scoresRes, rulesRes, thirdBetsRes, thirdScoringRes] = await Promise.all([
+  const [participantsRes, matchesRes, betsRes, groupBetsRes, tournamentBetsRes, scoresRes, rulesRes, thirdBetsRes, thirdScoringRes, paidParticipantsRes] = await Promise.all([
     supabase.from('participants').select('id, apelido').order('apelido'),
     supabase.from('matches')
       .select('id, match_number, match_datetime, betting_deadline, team_home, team_away, score_home, score_away, phase, round, group_name, penalty_winner, is_brazil')
@@ -106,7 +107,12 @@ export default async function ClassificacaoMBPage() {
     supabase.from('scoring_rules').select('key, points'),
     fetchAll('third_place_bets', 'participant_id, group_name, team'),
     admin.from('third_place_scoring').select('group_name, enabled'),
+    admin.from('participants').select('paid'),
   ])
+
+  // Premiação (mesma fonte usada na página Premiação) — valor em R$ por posição.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pagos = ((paidParticipantsRes.data ?? []) as any[]).filter(p => p.paid).length
 
   // ── Fetch #2: dados auxiliares ─────────────────────────────────────────────
   let teamAbbrs: Record<string, string> = {}
@@ -235,6 +241,8 @@ export default async function ClassificacaoMBPage() {
       }
     }
   } catch { /* tabelas opcionais */ }
+
+  const prizeAmounts = getPrizeAmounts(pagos, premioSpots)
 
   // ── Processar dados base ───────────────────────────────────────────────────
   const participants = (participantsRes.data ?? []) as { id: string; apelido: string }[]
@@ -563,6 +571,7 @@ export default async function ClassificacaoMBPage() {
         teamAbbrs={teamAbbrs}
         prizeSpots={prizeSpots}
         premioSpots={premioSpots}
+        prizeAmounts={prizeAmounts}
         activeParticipantId={activeParticipantId ?? ''}
         panelaMemberIds={panelaMemberIds}
         colVisibility={colVisibility}

@@ -6,25 +6,7 @@ import { ScoringTable } from '../pontuacao/ScoringTable'
 import type { ScoringRule } from '../pontuacao/ScoringTable'
 import { ScoreSimulator } from '../pontuacao/ScoreSimulator'
 import { GroupSimulator } from '../pontuacao/GroupSimulator'
-
-const ENTRY_FEE = 250
-
-const PRIZE_DIST = [
-  { place: '1º',  pct: 55.0 },
-  { place: '2º',  pct: 15.0 },
-  { place: '3º',  pct:  9.0 },
-  { place: '4º',  pct:  6.0 },
-  { place: '5º',  pct:  5.0 },
-  { place: '6º',  pct:  3.0 },
-  { place: '7º',  pct:  2.5 },
-  { place: '8º',  pct:  2.0 },
-  { place: '9º',  pct:  1.5 },
-  { place: '10º', pct:  1.0 },
-]
-
-function brl(value: number) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
-}
+import { ENTRY_FEE, PRIZE_DIST, brl } from '@/lib/prizes'
 
 interface Props {
   regulamentoContent: string
