@@ -4,7 +4,7 @@
 import { createAuthAdminClient } from '@/lib/supabase/server'
 import { recalculateDailyPoints } from './daily-points'
 import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap } from '@/lib/bracket/engine'
-import type { MatchSlim, BetSlim } from '@/lib/bracket/engine'
+import type { MatchSlim, BetSlim, KnockoutTeamOverride } from '@/lib/bracket/engine'
 import {
   scoreMatchBet,
   scoreGroupBet,
@@ -26,20 +26,29 @@ async function loadRules(admin: AdminClient): Promise<RuleMap> {
 }
 
 function matchWinner(
-  m: { team_home: string; team_away: string; score_home: number | null; score_away: number | null; penalty_winner: string | null },
+  m: { score_home: number | null; score_away: number | null; penalty_winner: string | null },
+  home: string,
+  away: string,
 ): string | null {
   if (m.score_home === null || m.score_away === null) return null
-  if (m.score_home > m.score_away) return m.team_home
-  if (m.score_away > m.score_home) return m.team_away
+  if (m.score_home > m.score_away) return home
+  if (m.score_away > m.score_home) return away
   return m.penalty_winner ?? null
 }
 
-// is_brazil por partida, resolvido via o motor de chaveamento (mesma lógica usada em
-// JogosDashboard.tsx e classificacaoMB/page.tsx). A coluna matches.team_home/team_away de
-// jogos de mata-mata muitas vezes nunca é atualizada com o nome real do time (fica como
-// "Venc. Jogo N"), então checar apenas o valor cru da coluna não é suficiente — é preciso
-// encadear os resultados oficiais das rodadas anteriores para saber quem realmente joga.
-async function buildIsBrazilMap(admin: AdminClient): Promise<Map<string, boolean>> {
+interface BracketMaps {
+  derivedTeamMap: Map<string, KnockoutTeamOverride>
+  isBrazilMap: Map<string, boolean>
+}
+
+// Nomes reais de times em jogos de mata-mata + is_brazil por partida, resolvidos via o motor de
+// chaveamento (mesma lógica usada em JogosDashboard.tsx e classificacaoMB/page.tsx). A coluna
+// matches.team_home/team_away de jogos de mata-mata muitas vezes nunca é atualizada com o nome
+// real do time (fica como "Venc. Jogo N"), então checar apenas o valor cru da coluna não é
+// suficiente — é preciso encadear os resultados oficiais das rodadas anteriores para saber quem
+// realmente joga. Usado tanto para o multiplicador do Brasil quanto para casar os palpites de
+// campeão/vice/semis do G4 com o time que realmente avançou (ver _updateTournamentBetPoints).
+async function buildBracketMaps(admin: AdminClient): Promise<BracketMaps> {
   const { data } = await (admin as any)
     .from('matches')
     .select('id, phase, group_name, team_home, team_away, flag_home, flag_away, score_home, score_away, penalty_winner, is_brazil, match_number')
@@ -78,14 +87,14 @@ async function buildIsBrazilMap(admin: AdminClient): Promise<Map<string, boolean
   )
   const derivedTeamMap = buildKnockoutTeamMap(r32Slots, knockoutMatches)
 
-  const map = new Map<string, boolean>()
+  const isBrazilMap = new Map<string, boolean>()
   for (const m of matches) {
     const ov = derivedTeamMap.get(m.id)
     const effHome = ov?.team_home || m.team_home
     const effAway = ov?.team_away || m.team_away
-    map.set(m.id, m.is_brazil || effHome === 'Brasil' || effAway === 'Brasil')
+    isBrazilMap.set(m.id, m.is_brazil || effHome === 'Brasil' || effAway === 'Brasil')
   }
-  return map
+  return { derivedTeamMap, isBrazilMap }
 }
 
 // ── Shared types for pre-loaded data ─────────────────────────────────────────
@@ -338,7 +347,11 @@ async function _updateThirdBetPoints(
   return [...new Set((thirdBets as any[]).map((b: any) => b.participant_id as string))]
 }
 
-async function _updateTournamentBetPoints(admin: AdminClient, rules: RuleMap): Promise<string[]> {
+async function _updateTournamentBetPoints(
+  admin: AdminClient,
+  rules: RuleMap,
+  derivedTeamMap?: Map<string, KnockoutTeamOverride>,
+): Promise<string[]> {
   const { data: knockoutMatches } = await admin
     .from('matches')
     .select('id, phase, team_home, team_away, score_home, score_away, penalty_winner, match_number')
@@ -346,6 +359,15 @@ async function _updateTournamentBetPoints(admin: AdminClient, rules: RuleMap): P
     .order('match_number', { ascending: true })
 
   if (!knockoutMatches) return []
+
+  // Resolve nomes reais via o chaveamento — team_home/team_away crus ficam como
+  // "Venc. Jogo N" até o fim do torneio, então comparar direto nunca bateria com o
+  // palpite do participante (ex.: "França"). Ver buildBracketMaps.
+  const teamMap = derivedTeamMap ?? (await buildBracketMaps(admin)).derivedTeamMap
+  const resolveTeams = (m: { id: string; team_home: string; team_away: string }) => {
+    const ov = teamMap.get(m.id)
+    return { home: ov?.team_home || m.team_home, away: ov?.team_away || m.team_away }
+  }
 
   const results: TournamentResults = {
     semifinalists:   [],
@@ -358,24 +380,28 @@ async function _updateTournamentBetPoints(admin: AdminClient, rules: RuleMap): P
   }
 
   for (const m of knockoutMatches.filter(m => m.phase === 'quarterfinal')) {
-    const w = matchWinner(m)
+    const { home, away } = resolveTeams(m)
+    const w = matchWinner(m, home, away)
     if (w) results.semifinalists.push(w)
   }
   for (const m of knockoutMatches.filter(m => m.phase === 'semifinal')) {
-    const w = matchWinner(m)
+    const { home, away } = resolveTeams(m)
+    const w = matchWinner(m, home, away)
     if (w) results.finalists.push(w)
   }
   const thirdMatch = knockoutMatches.find(m => m.phase === 'third_place')
   if (thirdMatch) {
-    results.third  = matchWinner(thirdMatch)
-    const w = matchWinner(thirdMatch)
-    results.fourth = w ? (w === thirdMatch.team_home ? thirdMatch.team_away : thirdMatch.team_home) : null
+    const { home, away } = resolveTeams(thirdMatch)
+    const w = matchWinner(thirdMatch, home, away)
+    results.third  = w
+    results.fourth = w ? (w === home ? away : home) : null
   }
   const finalMatch = knockoutMatches.find(m => m.phase === 'final')
   if (finalMatch) {
-    results.champion = matchWinner(finalMatch)
-    const w = matchWinner(finalMatch)
-    results.runnerUp = w ? (w === finalMatch.team_home ? finalMatch.team_away : finalMatch.team_home) : null
+    const { home, away } = resolveTeams(finalMatch)
+    const w = matchWinner(finalMatch, home, away)
+    results.champion = w
+    results.runnerUp  = w ? (w === home ? away : home) : null
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -439,7 +465,7 @@ async function _updateTournamentBetPoints(admin: AdminClient, rules: RuleMap): P
 
 export async function recalculateMatchBets(matchId: string): Promise<void> {
   const admin = createAuthAdminClient()
-  const [rules, isBrazilMap] = await Promise.all([loadRules(admin), buildIsBrazilMap(admin)])
+  const [rules, { isBrazilMap }] = await Promise.all([loadRules(admin), buildBracketMaps(admin)])
   const ids   = await _updateMatchBetPoints(matchId, admin, rules, undefined, undefined, isBrazilMap)
   await refreshParticipantTotals(ids)
 }
@@ -563,15 +589,15 @@ const KNOCKOUT_SCORING_PHASES = new Set(['quarterfinal', 'semifinal', 'third_pla
 export async function recalculateAfterMatchScore(matchId: string, isBrazilOverride?: boolean): Promise<void> {
   const admin = createAuthAdminClient()
 
-  // Parallel: match (com todos os campos) + regras de pontuação + mapa de is_brazil via chaveamento
-  const [matchRes, rules, isBrazilMap] = await Promise.all([
+  // Parallel: match (com todos os campos) + regras de pontuação + mapas de chaveamento (is_brazil + nomes reais)
+  const [matchRes, rules, { isBrazilMap, derivedTeamMap }] = await Promise.all([
     (admin as any)
       .from('matches')
       .select('id, phase, group_name, score_home, score_away, is_brazil, team_home, team_away')
       .eq('id', matchId)
       .single() as Promise<{ data: (MatchScoreRow & { phase: string; group_name: string | null }) | null }>,
     loadRules(admin),
-    buildIsBrazilMap(admin),
+    buildBracketMaps(admin),
   ])
 
   const match = matchRes.data
@@ -612,7 +638,7 @@ export async function recalculateAfterMatchScore(matchId: string, isBrazilOverri
   }
 
   if (KNOCKOUT_SCORING_PHASES.has(match.phase)) {
-    ;(await _updateTournamentBetPoints(admin, rules)).forEach(id => allIds.add(id))
+    ;(await _updateTournamentBetPoints(admin, rules, derivedTeamMap)).forEach(id => allIds.add(id))
   }
 
   // Único upsert em lote → único disparo do trigger → único REFRESH da MV
@@ -629,7 +655,7 @@ export async function recalculateAfterMatchScore(matchId: string, isBrazilOverri
 
 export async function recalculateAll(): Promise<void> {
   const admin = createAuthAdminClient()
-  const [rules, isBrazilMap] = await Promise.all([loadRules(admin), buildIsBrazilMap(admin)])
+  const [rules, { isBrazilMap, derivedTeamMap }] = await Promise.all([loadRules(admin), buildBracketMaps(admin)])
 
   const { data: scoredMatches } = await admin
     .from('matches')
@@ -668,7 +694,7 @@ export async function recalculateAll(): Promise<void> {
   thirdIds.forEach(id => allIds.add(id))
 
   // 4. Tournament bets
-  const tournamentIds = await _updateTournamentBetPoints(admin, rules)
+  const tournamentIds = await _updateTournamentBetPoints(admin, rules, derivedTeamMap)
   tournamentIds.forEach(id => allIds.add(id))
 
   // 5. Refresh participant totals once for all affected participants
