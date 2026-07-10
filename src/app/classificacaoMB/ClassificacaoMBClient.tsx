@@ -397,14 +397,18 @@ function CompactRanking({
   )
 }
 
-// ── Classificação G112 ────────────────────────────────────────────────────────
+// ── Classificação G112 / G56 (compacta, 4 blocos) ─────────────────────────────
 
-function G112CompactRanking({
+function GCompactRanking({
+  title, sliceSize, numBlocks,
   ranked, premioSpots, renderedAt, matchesRegistered, lastMatch, nextMatch,
   showLastMatch, showNextMatch,
   deltaMap, highlights, sdActive,
   highlightMode, activeParticipantId, panelaSet, tribeMemberSet,
 }: {
+  title: string
+  sliceSize: number
+  numBlocks: number
   ranked: RankedRow[]
   premioSpots: number
   renderedAt: string
@@ -424,10 +428,10 @@ function G112CompactRanking({
   const n = ranked.length
   if (n === 0) return null
 
-  const ranked112 = ranked.slice(0, G112_CORTE1_SIZE)
+  const rankedSlice = ranked.slice(0, sliceSize)
 
-  // G56: top 56 do G112 avançam para a próxima fase
-  const cut2 = Math.ceil(ranked112.length / 2)
+  // Top metade do bloco avança para a próxima fase de corte
+  const cut2 = Math.ceil(rankedSlice.length / 2)
   const premioLine = ranked[Math.min(premioSpots, n) - 1]?.pts ?? Infinity
   const cut2Line   = cut2 > premioSpots ? (ranked[cut2 - 1]?.pts ?? null) : null
 
@@ -470,10 +474,10 @@ function G112CompactRanking({
           ? 'grid grid-cols-[1.5rem_1fr_2rem_3.5rem]'
           : 'grid grid-cols-[1.5rem_1fr_2rem]')
   const minW = sdActive ? 1408 : 1152
-  const BLOCK_SIZE = 28
-  const blocks = [0, 1, 2, 3]
-    .map(i => ranked112.slice(i * BLOCK_SIZE, (i + 1) * BLOCK_SIZE))
-    .filter(b => b.length > 0)
+  const BLOCK_SIZE = Math.ceil(sliceSize / numBlocks)
+  const blocks = Array.from({ length: numBlocks }, (_, i) =>
+    rankedSlice.slice(i * BLOCK_SIZE, (i + 1) * BLOCK_SIZE),
+  ).filter(b => b.length > 0)
 
   const dateStr = formatRenderedAt(renderedAt)
 
@@ -487,7 +491,7 @@ function G112CompactRanking({
 
       {/* Header */}
       <div className="border-b border-gray-100 px-4 py-2.5">
-        <p className="text-base font-black text-gray-800">Classificação G112</p>
+        <p className="text-base font-black text-gray-800">{title}</p>
         <p className="text-xs text-gray-400 mt-0.5">
           {dateStr}
           {matchesRegistered > 0 && (
@@ -501,7 +505,7 @@ function G112CompactRanking({
         </p>
       </div>
 
-      {/* 4 blocos lado a lado — scroll horizontal no mobile */}
+      {/* blocos lado a lado — scroll horizontal no mobile */}
       <div className="overflow-x-auto">
         <div className="grid grid-cols-4 divide-x divide-gray-100" style={{ minWidth: `${minW}px` }}>
           {blocks.map((block, bi) => (
@@ -930,8 +934,33 @@ export function ClassificacaoMBClient({
         </div>
       )}
 
+      {/* Classificação G56 — tabela compacta top 56, com Sobe e Desce */}
+      <GCompactRanking
+        title="Classificação G56"
+        sliceSize={56}
+        numBlocks={4}
+        ranked={ranked}
+        premioSpots={premioSpots}
+        renderedAt={renderedAt}
+        matchesRegistered={matchesRegistered}
+        lastMatch={lastMatch}
+        nextMatch={nextMatch}
+        showLastMatch={showLastMatch}
+        showNextMatch={showNextMatch}
+        deltaMap={deltaMap}
+        highlights={highlights}
+        sdActive={sdActive}
+        highlightMode={highlightMode}
+        activeParticipantId={activeParticipantId}
+        panelaSet={panelaSet}
+        tribeMemberSet={tribeMemberSet}
+      />
+
       {/* Classificação G112 — tabela compacta top 112, com Sobe e Desce */}
-      <G112CompactRanking
+      <GCompactRanking
+        title="Classificação G112"
+        sliceSize={G112_CORTE1_SIZE}
+        numBlocks={4}
         ranked={ranked}
         premioSpots={premioSpots}
         renderedAt={renderedAt}
