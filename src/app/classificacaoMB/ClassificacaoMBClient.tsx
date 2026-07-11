@@ -68,6 +68,8 @@ interface Props {
   minhaPanelaEnabled: boolean
   /** Lista de tribos disponíveis para destaque (admin/master only) */
   tribes: { id: string; name: string }[]
+  /** Se os cortes já foram executados (listas congeladas) — define qual tabela usar em "Compartilhar Tabela" */
+  cutsExecuted: { corte1: boolean; corte2: boolean }
 }
 
 type RankedRow = ParticipantRow & { rank: number; diffLider: number; diffPremio: number | null; diffCorte1: number | null; diffCorte2: number | null }
@@ -483,7 +485,11 @@ function GCompactRanking({
   if (showNextMatch) baseColWidths.push('3.5rem')
   const rowStyle: CSSProperties = { gridTemplateColumns: baseColWidths.join(' ') }
   const rowStyleWithPremio: CSSProperties = { gridTemplateColumns: ['4.75rem', ...baseColWidths].join(' ') }
-  const minW = (sdActive ? 1408 : 1152) + (showPremio ? 76 : 0)
+  // +30% na largura base (coluna Participante, que é '1fr', absorve o ganho).
+  // A coluna Prêmio some no 1º bloco: como a largura total é dividida igualmente
+  // entre os `numBlocks` blocos (grid-cols-4), multiplicamos seu custo por numBlocks
+  // para que o 1º bloco não perca espaço da coluna Participante para os demais.
+  const minW = Math.round((sdActive ? 1408 : 1152) * 1.3) + (showPremio ? 76 * numBlocks : 0)
   const BLOCK_SIZE = Math.ceil(sliceSize / numBlocks)
   const blocks = Array.from({ length: numBlocks }, (_, i) =>
     rankedSlice.slice(i * BLOCK_SIZE, (i + 1) * BLOCK_SIZE),
@@ -617,7 +623,7 @@ export function ClassificacaoMBClient({
   activeParticipantId, panelaMemberIds, colVisibility, renderedAt, matchesRegistered, groupsDefined,
   lastResultDate, currentPhaseStartDate,
   sobeDesceVisible, isAdmin, lastDataDate, minhaPanelaEnabled,
-  tribes,
+  tribes, cutsExecuted,
 }: Props) {
   const router = useRouter()
   const elTeams    = useMemo(() => new Set(eliminatedTeams),   [eliminatedTeams])
@@ -783,6 +789,15 @@ export function ClassificacaoMBClient({
 
     return { ranked: out, cutPts: cut, lastRank: lastRankVal, isUniqueLast: isUniqueLastVal, premioLine: premioLineVal, cut2Line: cut2LineVal, cut1Line: cut1LineVal }
   }, [rows, prizeSpots, premioSpots])
+
+  // Compartilhar Tabela: usa sempre a classificação com menos participantes já
+  // disponível — G56 se o 2º corte foi executado, senão G112 se o 1º corte foi
+  // executado, senão a lista completa (nenhum corte ainda disponível).
+  const exportConfig = useMemo((): { size: number; mode: 'full' | 'g112' | 'g56' } => {
+    if (cutsExecuted.corte2) return { size: 56, mode: 'g56' }
+    if (cutsExecuted.corte1) return { size: 112, mode: 'g112' }
+    return { size: ranked.length, mode: 'full' }
+  }, [cutsExecuted, ranked.length])
 
   // Valor de prêmio por participante — rateado entre empatados dentro da zona
   // premiada (Regulamento item 33: soma-se as faixas empatadas e divide-se igualmente).
@@ -1292,7 +1307,7 @@ export function ClassificacaoMBClient({
       >
         <div ref={exportRef} style={{ width: '1600px' }}>
           <ExportableRankingBoard
-            ranked={ranked.slice(0, 112)}
+            ranked={ranked.slice(0, exportConfig.size)}
             premioSpots={premioSpots}
             renderedAt={renderedAt}
             matchesRegistered={matchesRegistered}
@@ -1305,7 +1320,7 @@ export function ClassificacaoMBClient({
             activeParticipantId={activeParticipantId}
             panelaSet={panelaSet}
             tribeMemberSet={tribeMemberSet}
-            mode="g112"
+            mode={exportConfig.mode}
           />
         </div>
       </div>

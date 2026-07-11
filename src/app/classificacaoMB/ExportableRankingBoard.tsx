@@ -68,8 +68,11 @@ interface Props {
   activeParticipantId?: string
   panelaSet?: Set<string>
   tribeMemberSet?: Set<string>
-  /** 'g112': 4 colunas, sem corte1, sem lanterna, sem grupos definidos */
-  mode?: 'full' | 'g112'
+  /**
+   * 'g112': 4 blocos, mostra zona de 2º corte projetado, sem corte1, sem lanterna, sem grupos definidos.
+   * 'g56': 4 blocos, já é o recorte final (sem projeção de corte), coroa no líder, sem lanterna, sem grupos definidos.
+   */
+  mode?: 'full' | 'g112' | 'g56'
 }
 
 export function ExportableRankingBoard({
@@ -82,27 +85,29 @@ export function ExportableRankingBoard({
   if (n === 0) return null
 
   const isG112 = mode === 'g112'
-  const blockCount = isG112 ? 4 : 7
+  const isG56  = mode === 'g56'
+  const isCompact = isG112 || isG56
+  const blockCount = isCompact ? 4 : 7
 
   const { cut1, cut2: cut2Calc } = calcCuts(n)
-  // G112 → G56: top 56 avançam para a próxima fase
+  // G112 → G56: top 56 avançam para a próxima fase. G56 já é o recorte final, sem próxima projeção.
   const cut2 = isG112 ? Math.ceil(n / 2) : cut2Calc
   const premioLine   = ranked[Math.min(premioSpots, n) - 1]?.pts ?? Infinity
-  const cut2Line     = cut2 > premioSpots ? (ranked[cut2 - 1]?.pts ?? null) : null
-  const cut1Line     = !isG112 && cut1 > cut2 ? (ranked[cut1 - 1]?.pts ?? null) : null
+  const cut2Line     = !isG56 && cut2 > premioSpots ? (ranked[cut2 - 1]?.pts ?? null) : null
+  const cut1Line     = !isCompact && cut1 > cut2 ? (ranked[cut1 - 1]?.pts ?? null) : null
   const lastRank     = ranked[n - 1].rank
-  const isUniqueLast = !isG112 && ranked.filter(r => r.rank === lastRank).length === 1
+  const isUniqueLast = !isCompact && ranked.filter(r => r.rank === lastRank).length === 1
 
   function zoneOf(r: ExportRow): Zone {
-    if (!isG112 && isUniqueLast && r.rank === lastRank)    return 'last'
-    if (r.pts >= premioLine)                               return 'premio'
-    if (cut2Line !== null && r.pts >= cut2Line)            return 'corte2'
-    if (!isG112 && cut1Line !== null && r.pts >= cut1Line) return 'corte1'
+    if (!isCompact && isUniqueLast && r.rank === lastRank)    return 'last'
+    if (r.pts >= premioLine)                                  return 'premio'
+    if (cut2Line !== null && r.pts >= cut2Line)               return 'corte2'
+    if (!isCompact && cut1Line !== null && r.pts >= cut1Line) return 'corte1'
     return 'out'
   }
 
-  const showLast = isG112 && showLastMatch
-  const showNext = isG112 && showNextMatch
+  const showLast = isCompact && showLastMatch
+  const showNext = isCompact && showNextMatch
   const colsGrid = showLast && showNext
     ? 'grid grid-cols-[1.5rem_1fr_2rem_3.5rem_3.5rem]'
     : showLast || showNext
@@ -114,12 +119,12 @@ export function ExportableRankingBoard({
 
   const legendItems: { zone: Zone; label: string }[] = [
     { zone: 'premio', label: `Premiação (top ${premioSpots})` },
-    ...(cut2 > premioSpots ? [{ zone: 'corte2' as Zone, label: `2º corte (top ${cut2})` }] : []),
-    ...(!isG112 && cut1 > cut2 ? [{ zone: 'corte1' as Zone, label: `1º corte (top ${cut1})` }] : []),
-    ...(!isG112 && isUniqueLast ? [{ zone: 'last' as Zone, label: 'Lanterna' }] : []),
+    ...(!isG56 && cut2 > premioSpots ? [{ zone: 'corte2' as Zone, label: `2º corte (top ${cut2})` }] : []),
+    ...(!isCompact && cut1 > cut2 ? [{ zone: 'corte1' as Zone, label: `1º corte (top ${cut1})` }] : []),
+    ...(!isCompact && isUniqueLast ? [{ zone: 'last' as Zone, label: 'Lanterna' }] : []),
   ]
 
-  const title = isG112 ? 'Classificação G112' : 'Classificação Melhor Bolão'
+  const title = isG112 ? 'Classificação G112' : isG56 ? 'Classificação G56' : 'Classificação Melhor Bolão'
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white">
@@ -133,7 +138,7 @@ export function ExportableRankingBoard({
               {lastMatch && (
                 <> · último {lastMatch.abbr_home} {lastMatch.score_home}×{lastMatch.score_away}{lastMatch.penalty_winner ? 'P' : ''} {lastMatch.abbr_away}</>
               )}
-              {!isG112 && <>{' · '}{groupsDefined}/12 grupos definidos</>}
+              {!isCompact && <>{' · '}{groupsDefined}/12 grupos definidos</>}
             </>
           )}
         </p>
@@ -160,16 +165,18 @@ export function ExportableRankingBoard({
                 (highlightMode === 'panela' && (isActive || isPanela)) ||
                 (highlightMode === 'tribo'  && (tribeMemberSet?.has(r.id) ?? false))
               )
+              const isLeader = isG56 && r.rank === 1
               const highlightRing = shouldHighlight ? 'ring-1 ring-inset ring-red-500' : ''
-              const textCls = shouldHighlight ? 'text-red-600 font-semibold' : ZONE_TEXT[z]
+              const textCls = shouldHighlight ? 'text-red-600 font-semibold' : isLeader ? 'text-amber-900 font-extrabold' : ZONE_TEXT[z]
+              const rowBg = isLeader ? 'bg-amber-200' : ZONE_ROW[z]
 
               return (
                 <div
                   key={r.id}
-                  className={`${colsGrid} px-2 py-[3px] text-[12px] ${ZONE_ROW[z]} ${boundary ? 'border-t border-gray-200' : ''} ${highlightRing}`}
+                  className={`${colsGrid} px-2 py-[3px] text-[12px] ${rowBg} ${boundary ? 'border-t border-gray-200' : ''} ${highlightRing}`}
                 >
                   <span className={`text-right pr-0.5 tabular-nums ${textCls}`}>{r.rank}</span>
-                  <span className={`pl-1 truncate ${textCls}`}>{r.apelido}{!isG112 && z === 'last' && ' 🔦'}</span>
+                  <span className={`pl-1 truncate ${textCls}`}>{r.apelido}{!isCompact && z === 'last' && ' 🔦'}{isLeader && ' 👑'}</span>
                   <span className={`text-right tabular-nums font-bold ${textCls}`}>{r.pts}</span>
                   {showLast && (
                     <span className="text-center font-mono tabular-nums text-gray-600">

@@ -132,6 +132,8 @@ export default async function ClassificacaoMBPage() {
   let sobeDesceVisible = true
   let artillaryPointsActive = false
   let lastDataDate: string | null = null
+  let corte1Executado = false
+  let corte2Executado = false
   const colVisibility: Record<string, boolean> = {
     premio:        false,
     last_match:    true,
@@ -162,7 +164,7 @@ export default async function ClassificacaoMBPage() {
       'classif_col_delta_premio', 'classif_col_delta_corte1', 'classif_col_delta_corte2',
       'classif_col_pts_jg', 'classif_col_pts_cl', 'classif_col_pts_g4',
     ]
-    const [scorerRes, scorerSetting, settingsRes, premioSpotsRes, colSettingsRes, sobeDesceRow, dailyRunRow, artillaryRow] = await Promise.all([
+    const [scorerRes, scorerSetting, settingsRes, premioSpotsRes, colSettingsRes, sobeDesceRow, dailyRunRow, artillaryRow, cortesRow] = await Promise.all([
       admin.from('top_scorer_mapping').select('raw_name, standardized_name, is_eliminated'),
       admin.from('tournament_settings').select('value').eq('key', 'official_top_scorer').maybeSingle(),
       admin.from('tournament_settings').select('value').eq('key', 'prize_spots').maybeSingle(),
@@ -171,10 +173,22 @@ export default async function ClassificacaoMBPage() {
       admin.from('tournament_settings').select('value').eq('key', 'sobe_desce_visible').maybeSingle(),
       admin.from('tournament_settings').select('value').eq('key', 'daily_points_last_run').maybeSingle(),
       admin.from('tournament_settings').select('value').eq('key', 'artillary_points_active').maybeSingle(),
+      admin.from('tournament_settings').select('key, value').in('key', ['corte1_participantes', 'corte2_participantes']),
     ])
     // padrão: visível (true) se a chave ainda não existir
     sobeDesceVisible = sobeDesceRow?.data?.value !== 'false'
     artillaryPointsActive = artillaryRow?.data?.value === 'true'
+
+    // Corte "executado" = admin já congelou a lista de qualificados (ver getQualifiedSets em phase-availability.ts)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const r of (cortesRow.data ?? []) as any[]) {
+      try {
+        const arr = JSON.parse(r.value ?? '[]')
+        const executado = Array.isArray(arr) && arr.length > 0
+        if (r.key === 'corte1_participantes') corte1Executado = executado
+        if (r.key === 'corte2_participantes') corte2Executado = executado
+      } catch { /* ignore */ }
+    }
 
     // ── Auto-recalc de pontos diários ────────────────────────────────────────
     // UTC-6: consistente com daily-points.ts — dia bolão começa às 06:00 UTC
@@ -600,6 +614,7 @@ export default async function ClassificacaoMBPage() {
         lastDataDate={lastDataDate}
         minhaPanelaEnabled={minhaPanelaEnabled}
         tribes={tribes}
+        cutsExecuted={{ corte1: corte1Executado, corte2: corte2Executado }}
       />
     </>
   )
