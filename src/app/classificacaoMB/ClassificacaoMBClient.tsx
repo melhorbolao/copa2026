@@ -484,24 +484,20 @@ function GCompactRanking({
   // Colunas montadas dinamicamente (largura via style, não classe Tailwind literal,
   // pois o nº de colunas opcionais — Prêmio/Últ./Próx. — varia por combinação).
   // Prêmio só aparece no 1º bloco, então há duas larguras de coluna possíveis.
+  // Participante usa largura fixa (não '1fr'): com poucos blocos (ex.: G56 com
+  // apenas 2), um '1fr' herda toda a sobra da tela e deixa o nome enorme. Cada
+  // bloco fica com a largura do seu próprio conteúdo (ver blocos como flex
+  // shrink-0 abaixo), então o espaço sobrando vira uma margem em branco no
+  // fim da linha em vez de inflar a coluna do nome.
   const baseColWidths: string[] = ['1.5rem']
   if (sdActive) baseColWidths.push('1.6rem')
-  baseColWidths.push('1fr', '2rem')
+  baseColWidths.push('7rem', '2rem')
   if (sdActive) baseColWidths.push('2.5rem')
   if (showLastMatch) baseColWidths.push('3.5rem')
   if (showNextMatch) baseColWidths.push('3.5rem')
-  if (showG4) baseColWidths.push('2.25rem', '2.25rem', '2.25rem', '2.25rem', '4rem')
+  if (showG4) baseColWidths.push('2.25rem', '2.25rem', '2.25rem', '2.25rem', '6rem')
   const rowStyle: CSSProperties = { gridTemplateColumns: baseColWidths.join(' ') }
   const rowStyleWithPremio: CSSProperties = { gridTemplateColumns: ['4.75rem', ...baseColWidths].join(' ') }
-  // +30% na largura base (coluna Participante, que é '1fr', absorve o ganho).
-  // A coluna Prêmio some no 1º bloco: como a largura total é dividida igualmente
-  // entre os `numBlocks` blocos (grid-cols-N), multiplicamos seu custo por numBlocks
-  // para que o 1º bloco não perca espaço da coluna Participante para os demais.
-  // As colunas G4 aparecem em todos os blocos, então seu custo também é multiplicado.
-  const minW = Math.round((sdActive ? 1408 : 1152) * 1.3)
-    + (showPremio ? 76 * numBlocks : 0)
-    + (showG4 ? 169 * numBlocks : 0)
-  const gridColsCls = numBlocks === 2 ? 'grid-cols-2' : numBlocks === 3 ? 'grid-cols-3' : 'grid-cols-4'
   const BLOCK_SIZE = Math.ceil(sliceSize / numBlocks)
   const blocks = Array.from({ length: numBlocks }, (_, i) =>
     rankedSlice.slice(i * BLOCK_SIZE, (i + 1) * BLOCK_SIZE),
@@ -533,14 +529,14 @@ function GCompactRanking({
         </p>
       </div>
 
-      {/* blocos lado a lado — scroll horizontal no mobile */}
+      {/* blocos lado a lado — cada um com a largura do seu conteúdo; scroll horizontal no mobile */}
       <div className="overflow-x-auto">
-        <div className={`grid ${gridColsCls} divide-x divide-gray-100`} style={{ minWidth: `${minW}px` }}>
+        <div className="flex divide-x divide-gray-100">
           {blocks.map((block, bi) => {
             const showPremioInBlock = showPremio && bi === 0
             const blockStyle = showPremioInBlock ? rowStyleWithPremio : rowStyle
             return (
-              <div key={bi}>
+              <div key={bi} className="shrink-0">
                 {/* cabeçalho do bloco */}
                 <div className="grid border-b border-gray-100 bg-gray-50 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-gray-400" style={blockStyle}>
                   {showPremioInBlock && <span className="text-right pr-0.5" title="Valor do prêmio">Prêmio</span>}
