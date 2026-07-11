@@ -410,6 +410,7 @@ function GCompactRanking({
   showLastMatch, showNextMatch, showPremio, prizeMap,
   deltaMap, highlights, sdActive,
   highlightMode, activeParticipantId, panelaSet, tribeMemberSet,
+  showG4, teamAbbrs, elTeams, elStd, scorerMapping,
 }: {
   title: string
   sliceSize: number
@@ -436,6 +437,12 @@ function GCompactRanking({
   activeParticipantId: string
   panelaSet: Set<string>
   tribeMemberSet: Set<string>
+  /** Colunas de palpites G4 (1º/2º/3º/4º + artilheiro) — exibidas em todos os blocos */
+  showG4?: boolean
+  teamAbbrs?: Record<string, string>
+  elTeams?: Set<string>
+  elStd?: Set<string>
+  scorerMapping?: Record<string, string>
 }) {
   const n = ranked.length
   if (n === 0) return null
@@ -483,13 +490,18 @@ function GCompactRanking({
   if (sdActive) baseColWidths.push('2.5rem')
   if (showLastMatch) baseColWidths.push('3.5rem')
   if (showNextMatch) baseColWidths.push('3.5rem')
+  if (showG4) baseColWidths.push('2.25rem', '2.25rem', '2.25rem', '2.25rem', '4rem')
   const rowStyle: CSSProperties = { gridTemplateColumns: baseColWidths.join(' ') }
   const rowStyleWithPremio: CSSProperties = { gridTemplateColumns: ['4.75rem', ...baseColWidths].join(' ') }
   // +30% na largura base (coluna Participante, que é '1fr', absorve o ganho).
   // A coluna Prêmio some no 1º bloco: como a largura total é dividida igualmente
-  // entre os `numBlocks` blocos (grid-cols-4), multiplicamos seu custo por numBlocks
+  // entre os `numBlocks` blocos (grid-cols-N), multiplicamos seu custo por numBlocks
   // para que o 1º bloco não perca espaço da coluna Participante para os demais.
-  const minW = Math.round((sdActive ? 1408 : 1152) * 1.3) + (showPremio ? 76 * numBlocks : 0)
+  // As colunas G4 aparecem em todos os blocos, então seu custo também é multiplicado.
+  const minW = Math.round((sdActive ? 1408 : 1152) * 1.3)
+    + (showPremio ? 76 * numBlocks : 0)
+    + (showG4 ? 169 * numBlocks : 0)
+  const gridColsCls = numBlocks === 2 ? 'grid-cols-2' : numBlocks === 3 ? 'grid-cols-3' : 'grid-cols-4'
   const BLOCK_SIZE = Math.ceil(sliceSize / numBlocks)
   const blocks = Array.from({ length: numBlocks }, (_, i) =>
     rankedSlice.slice(i * BLOCK_SIZE, (i + 1) * BLOCK_SIZE),
@@ -523,7 +535,7 @@ function GCompactRanking({
 
       {/* blocos lado a lado — scroll horizontal no mobile */}
       <div className="overflow-x-auto">
-        <div className="grid grid-cols-4 divide-x divide-gray-100" style={{ minWidth: `${minW}px` }}>
+        <div className={`grid ${gridColsCls} divide-x divide-gray-100`} style={{ minWidth: `${minW}px` }}>
           {blocks.map((block, bi) => {
             const showPremioInBlock = showPremio && bi === 0
             const blockStyle = showPremioInBlock ? rowStyleWithPremio : rowStyle
@@ -539,6 +551,15 @@ function GCompactRanking({
                   {sdActive && <span className="text-right" title="Pontos no período">↗</span>}
                   {showLastMatch && <span className="text-center truncate md:text-[10px]" title="Palpite no último jogo">{lastMatch ? `${lastMatch.abbr_home}×${lastMatch.abbr_away}` : 'Últ'}</span>}
                   {showNextMatch && <span className="text-center truncate md:text-[10px]" title="Palpite no próximo jogo">{nextMatch ? `${nextMatch.abbr_home}×${nextMatch.abbr_away}` : 'Próx'}</span>}
+                  {showG4 && (
+                    <>
+                      <span className="text-center truncate" title="Aposta: Campeão">1º</span>
+                      <span className="text-center truncate" title="Aposta: Vice-campeão">2º</span>
+                      <span className="text-center truncate" title="Aposta: 3º Lugar">3º</span>
+                      <span className="text-center truncate" title="Aposta: 4º Lugar">4º</span>
+                      <span className="text-left truncate" title="Aposta: Artilheiro">⚽</span>
+                    </>
+                  )}
                 </div>
                 {/* linhas */}
                 {block.map((r, ri) => {
@@ -594,6 +615,16 @@ function GCompactRanking({
 
                       {showLastMatch && <span className="text-center font-mono tabular-nums text-gray-600 md:text-[13px]"><BetCell bet={r.lastMatchBet} /></span>}
                       {showNextMatch && <span className="text-center font-mono tabular-nums text-gray-600 md:text-[13px]"><BetCell bet={r.nextMatchBet} /></span>}
+
+                      {showG4 && (
+                        <>
+                          <span className="text-center truncate"><TeamCell team={r.tournamentBet?.champion} abbrs={teamAbbrs!} elTeams={elTeams!} /></span>
+                          <span className="text-center truncate"><TeamCell team={r.tournamentBet?.runner_up} abbrs={teamAbbrs!} elTeams={elTeams!} /></span>
+                          <span className="text-center truncate"><TeamCell team={r.tournamentBet?.semi1} abbrs={teamAbbrs!} elTeams={elTeams!} /></span>
+                          <span className="text-center truncate"><TeamCell team={r.tournamentBet?.semi2} abbrs={teamAbbrs!} elTeams={elTeams!} /></span>
+                          <span className="text-left truncate"><ScorerCell raw={r.tournamentBet?.top_scorer} mapping={scorerMapping!} elStd={elStd!} /></span>
+                        </>
+                      )}
                     </div>
                   )
                 })}
@@ -995,7 +1026,7 @@ export function ClassificacaoMBClient({
       <GCompactRanking
         title="Classificação G56"
         sliceSize={56}
-        numBlocks={4}
+        numBlocks={2}
         hasCut2={false}
         highlightLeader={true}
         ranked={ranked}
@@ -1015,6 +1046,11 @@ export function ClassificacaoMBClient({
         activeParticipantId={activeParticipantId}
         panelaSet={panelaSet}
         tribeMemberSet={tribeMemberSet}
+        showG4={true}
+        teamAbbrs={teamAbbrs}
+        elTeams={elTeams}
+        elStd={elStd}
+        scorerMapping={scorerMapping}
       />
 
       {/* Classificação G112 — tabela compacta top 112, com Sobe e Desce */}
