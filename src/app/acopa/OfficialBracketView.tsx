@@ -36,6 +36,16 @@ function matchTop(r: number, i: number): number {
 const CONTAINER_H  = 16 * MATCH_H
 const ROUND_LABELS = ['16avos', 'Oitavas', 'Quartas', 'Semi', 'Final']
 
+// ── Ordem visual de 16avos/Oitavas ───────────────────────────────────────────
+// As Quartas usam o cruzamento oficial real (QF_PAIRS: Bloco1, Bloco3, Bloco2,
+// Bloco4 — ver engine.ts), então as linhas de 16avos/Oitavas precisam seguir
+// essa MESMA ordem visual para que cada card de Quartas fique alinhado com o
+// bloco de Oitavas que realmente o alimenta. Isso é só reposicionamento na
+// tela: os índices continuam apontando para os dados reais (picks.r32/r16),
+// nenhum placar, palpite ou cálculo é alterado.
+const R32_VISUAL_ORDER = [0, 1, 2, 3, 8, 9, 10, 11, 4, 5, 6, 7, 12, 13, 14, 15]
+const R16_VISUAL_ORDER = [0, 1, 4, 5, 2, 3, 6, 7]
+
 // ── Derivação do vencedor de cada jogo ───────────────────────────────────────
 
 function getWinner(
@@ -179,35 +189,39 @@ export function OfficialBracketView({ r32Slots, knockoutMatches }: Props) {
         <div className="relative" style={{ height: Math.max(CONTAINER_H, thirdTop + MATCH_H + 8), width: totalWidth }}>
 
           {/* ── R32 ── */}
-          {r32Slots.map((slot, i) => (
-            <div key={slot.matchNum}>
-              {i > 0 && (
-                <div style={{
-                  position: 'absolute', left: -4, top: matchTop(0, i) - 6,
-                  width: MATCH_W + 8, height: 2,
-                  background: 'linear-gradient(to right, #e5e7eb, #9ca3af, #e5e7eb)',
-                  borderRadius: 1,
-                }} />
-              )}
-              <OfficialMatchCard
-                style={{ position: 'absolute', left: 0, top: matchTop(0, i) }}
-                teamA={slot.teamA}
-                teamB={slot.teamB}
-                winner={picks.r32[i]}
-                labelA={slot.labelA}
-                labelB={slot.labelB}
-              />
-            </div>
-          ))}
+          {R32_VISUAL_ORDER.map((slotIdx, visRow) => {
+            const slot = r32Slots[slotIdx]
+            if (!slot) return null
+            return (
+              <div key={slot.matchNum}>
+                {visRow > 0 && (
+                  <div style={{
+                    position: 'absolute', left: -4, top: matchTop(0, visRow) - 6,
+                    width: MATCH_W + 8, height: 2,
+                    background: 'linear-gradient(to right, #e5e7eb, #9ca3af, #e5e7eb)',
+                    borderRadius: 1,
+                  }} />
+                )}
+                <OfficialMatchCard
+                  style={{ position: 'absolute', left: 0, top: matchTop(0, visRow) }}
+                  teamA={slot.teamA}
+                  teamB={slot.teamB}
+                  winner={picks.r32[slotIdx]}
+                  labelA={slot.labelA}
+                  labelB={slot.labelB}
+                />
+              </div>
+            )
+          })}
 
           {/* ── R16 ── */}
-          {Array.from({ length: 8 }, (_, i) => (
+          {R16_VISUAL_ORDER.map((r16Idx, visRow) => (
             <OfficialMatchCard
-              key={i}
-              style={{ position: 'absolute', left: COL_STEP, top: matchTop(1, i) }}
-              teamA={getTeam(picks.r32[i * 2])}
-              teamB={getTeam(picks.r32[i * 2 + 1])}
-              winner={picks.r16[i]}
+              key={r16Idx}
+              style={{ position: 'absolute', left: COL_STEP, top: matchTop(1, visRow) }}
+              teamA={getTeam(picks.r32[r16Idx * 2])}
+              teamB={getTeam(picks.r32[r16Idx * 2 + 1])}
+              winner={picks.r16[r16Idx]}
             />
           ))}
 
