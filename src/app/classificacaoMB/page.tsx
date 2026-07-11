@@ -122,10 +122,10 @@ export default async function ClassificacaoMBPage() {
   const pagos = ((paidParticipantsRes.data ?? []) as any[]).filter(p => p.paid).length
 
   // ── Fetch #2: dados auxiliares ─────────────────────────────────────────────
-  let teamAbbrs: Record<string, string> = {}
-  let eliminatedTeams: string[] = []
-  let scorerMapping: Record<string, string> = {}
-  let eliminatedStdScorers: string[] = []
+  const teamAbbrs: Record<string, string> = {}
+  const eliminatedTeams: string[] = []
+  const scorerMapping: Record<string, string> = {}
+  const eliminatedStdScorers: string[] = []
   let officialScorers: string[] = []
   let prizeSpots = 8
   let premioSpots = 10
@@ -462,7 +462,6 @@ export default async function ClassificacaoMBPage() {
     const official = matchResultMap[bet.match_id]
 
     if (official) {
-      const match = matches.find(m => m.id === bet.match_id)
       const pts = scoreMatchBet(
         bet.score_home, bet.score_away,
         official.score_home, official.score_away,
