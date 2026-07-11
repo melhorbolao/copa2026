@@ -11,7 +11,7 @@ import { TEAM_CODES } from '@/lib/team-flags'
 import { ImportButton } from './ImportButton'
 import {
   scoreMatchBet, scoreGroupBet, scoreTournamentBet,
-  detectMatchZebra, detectGroupZebra, getMatchResult,
+  detectMatchZebra, detectGroupZebra, detectG4ZebraTeams, getMatchResult,
   type RuleMap, type TournamentResults,
 } from '@/lib/scoring/engine'
 import { calcGroupStandings, rankThirds } from '@/lib/bracket/engine'
@@ -38,7 +38,7 @@ type Match = {
 
 type RealBet        = { match_id: string; score_home: number; score_away: number }
 type RealGroupBet   = { group_name: string; first_place: string }
-type RealTournamentBet = { champion: string }
+type RealTournamentBet = { champion: string; runner_up: string; semi1: string; semi2: string }
 
 type MyBet          = { match_id: string; score_home: number; score_away: number }
 type MyGroupBet     = { group_name: string; first_place: string; second_place: string }
@@ -151,9 +151,8 @@ function calcAiScore(
       results.runnerUp = w ? (w === finalMatch.team_home ? finalMatch.team_away : finalMatch.team_home) : null
     }
     if (results.champion) {
-      const isZebraChampion = realTournamentBets.length > 0 &&
-        (realTournamentBets.filter(b => b.champion === results.champion).length / realTournamentBets.length) * 100 <= threshold
-      tournamentPts = scoreTournamentBet(model.palpites.tournament_bet, results, rules, isZebraChampion, scorerMapping)
+      const zebraTeams = detectG4ZebraTeams(realTournamentBets, threshold)
+      tournamentPts = scoreTournamentBet(model.palpites.tournament_bet, results, rules, zebraTeams, scorerMapping)
     }
   }
 
@@ -305,7 +304,7 @@ export default async function IaNoMbPage() {
     supabase.from('scoring_rules').select('key, points'),
     admin.from('participant_scores').select('pts_total').limit(10000),
     fetchAllGroupBets(),
-    admin.from('tournament_bets').select('champion').limit(10000),
+    admin.from('tournament_bets').select('champion, runner_up, semi1, semi2').limit(10000),
     admin.from('top_scorer_mapping').select('raw_name, standardized_name'),
     fetchAllRealBets(admin),
     participantId

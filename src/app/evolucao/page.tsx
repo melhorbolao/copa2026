@@ -8,7 +8,7 @@ import { getServerNow } from '@/lib/production-mode'
 import { Navbar } from '@/components/layout/Navbar'
 import { EvolucaoClient } from './EvolucaoClient'
 import { recalculateDailyPoints } from '@/lib/scoring/daily-points'
-import { scoreTournamentBet, scoreMatchBet, detectMatchZebra, getMatchResult } from '@/lib/scoring/engine'
+import { scoreTournamentBet, scoreMatchBet, detectMatchZebra, detectG4ZebraTeams, getMatchResult } from '@/lib/scoring/engine'
 import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap, computeGroupCompletion } from '@/lib/bracket/engine'
 import type { BetSlim, MatchSlim, KnockoutTeamOverride } from '@/lib/bracket/engine'
 
@@ -244,10 +244,13 @@ export default async function EvolucaoPage() {
     semi1: string | null; semi2: string | null; top_scorer: string | null; points: number | null
   }[]
   const zebraThreshold = rules['percentual_zebra'] ?? 15
-  const chamBetsWithPick = fullTourBets.filter(b => b.champion && b.champion === champion)
-  const chamBetsTotal    = fullTourBets.filter(b => b.champion).length
-  const isZebraChampion  = chamBetsTotal > 0 && champion !== null
-    && (chamBetsWithPick.length / chamBetsTotal) * 100 <= zebraThreshold
+  const zebraTeams = detectG4ZebraTeams(
+    fullTourBets.map(b => ({
+      champion: b.champion ?? '', runner_up: b.runner_up ?? '',
+      semi1: b.semi1 ?? '', semi2: b.semi2 ?? '',
+    })),
+    zebraThreshold,
+  )
 
   // Pontos G4 ao vivo por participante
   const liveG4PtsMap: Record<string, number> = {}
@@ -262,7 +265,7 @@ export default async function EvolucaoPage() {
       },
       tournamentResults,
       rules,
-      isZebraChampion,
+      zebraTeams,
       scorerMapping,
     )
   }

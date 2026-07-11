@@ -11,6 +11,7 @@ import {
   scoreTournamentBet,
   detectMatchZebra,
   detectGroupZebra,
+  detectG4ZebraTeams,
   getMatchResult,
   type RuleMap,
   type TournamentResults,
@@ -434,11 +435,14 @@ async function _updateTournamentBetPoints(
 
   if (!tournamentBets?.length) return []
 
-  const threshold = rules['percentual_zebra'] ?? 15
-  const isZebraChampion = results.champion
-    ? tournamentBets.length > 0 &&
-      (tournamentBets.filter(b => b.champion === results.champion).length / tournamentBets.length) * 100 <= threshold
-    : false
+  const threshold  = rules['percentual_zebra'] ?? 15
+  const zebraTeams = detectG4ZebraTeams(
+    tournamentBets.map(b => ({
+      champion: b.champion ?? '', runner_up: b.runner_up ?? '',
+      semi1: b.semi1 ?? '', semi2: b.semi2 ?? '',
+    })),
+    threshold,
+  )
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (admin as any).from('tournament_bets').upsert(
@@ -452,7 +456,7 @@ async function _updateTournamentBetPoints(
       top_scorer:     bet.top_scorer,
       points: scoreTournamentBet(
         { champion: bet.champion, runner_up: bet.runner_up, semi1: bet.semi1, semi2: bet.semi2, top_scorer: bet.top_scorer },
-        results, rules, isZebraChampion, scorerMapping,
+        results, rules, zebraTeams, scorerMapping,
       ),
     })),
     { onConflict: 'id' },

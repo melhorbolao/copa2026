@@ -12,7 +12,7 @@ import {
   isParticipantEliminated, STAGE_KEYS,
 } from '@/lib/phase-availability'
 import type { StageKey as PhaseStageKey } from '@/lib/phase-availability'
-import { scoreTournamentBet, scoreMatchBet, detectMatchZebra, getMatchResult } from '@/lib/scoring/engine'
+import { scoreTournamentBet, scoreMatchBet, detectMatchZebra, detectG4ZebraTeams, getMatchResult } from '@/lib/scoring/engine'
 import type { TournamentResults } from '@/lib/scoring/engine'
 import {
   calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap,
@@ -279,12 +279,14 @@ export default async function ControlePage({
     } catch { /* tabela não populada */ }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const chamBetsTotal    = (trnBets ?? []).filter((b: any) => b.champion).length
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const chamBetsWithPick = (trnBets ?? []).filter((b: any) => b.champion && b.champion === champion).length
-  const isZebraChampion  = champion !== null && chamBetsTotal > 0 &&
-    (chamBetsWithPick / chamBetsTotal) * 100 <= zebraThreshold
+  const zebraTeams = detectG4ZebraTeams(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (trnBets ?? []).map((b: any) => ({
+      champion: b.champion ?? '', runner_up: b.runner_up ?? '',
+      semi1: b.semi1 ?? '', semi2: b.semi2 ?? '',
+    })),
+    zebraThreshold,
+  )
 
   const tournamentResults: TournamentResults = {
     semifinalists, finalists,
@@ -304,7 +306,7 @@ export default async function ControlePage({
         semi2:      tb.semi2      ?? '',
         top_scorer: artillaryActive ? (tb.top_scorer ?? '') : '',
       },
-      tournamentResults, rulesMap, isZebraChampion, scorerMapping,
+      tournamentResults, rulesMap, zebraTeams, scorerMapping,
     ))
   }
 

@@ -8,7 +8,7 @@ import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { JogosDashboard } from './JogosDashboard'
 import { filterBetsByDeadline, getServerNow } from '@/lib/production-mode'
-import { scoreTournamentBet } from '@/lib/scoring/engine'
+import { scoreTournamentBet, detectG4ZebraTeams } from '@/lib/scoring/engine'
 import type { TournamentResults } from '@/lib/scoring/engine'
 import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap, computeGroupCompletion } from '@/lib/bracket/engine'
 import type { KnockoutTeamOverride } from '@/lib/bracket/engine'
@@ -234,10 +234,13 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
     semi1: string; semi2: string; top_scorer: string
   }[]
 
-  const chamBetsWithPick = allTBets.filter(b => b.champion && b.champion === champion)
-  const chamBetsTotal    = allTBets.filter(b => b.champion).length
-  const isZebraChampion  = chamBetsTotal > 0 && champion !== null
-    && (chamBetsWithPick.length / chamBetsTotal) * 100 <= zebraThreshold
+  const zebraTeams = detectG4ZebraTeams(
+    allTBets.map(b => ({
+      champion: b.champion ?? '', runner_up: b.runner_up ?? '',
+      semi1: b.semi1 ?? '', semi2: b.semi2 ?? '',
+    })),
+    zebraThreshold,
+  )
 
   const ptsG4Map: Record<string, number> = {}
   for (const tb of allTBets) {
@@ -251,7 +254,7 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
       },
       tournamentResults,
       rules,
-      isZebraChampion,
+      zebraTeams,
       scorerMapping,
     )
   }

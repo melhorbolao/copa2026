@@ -8,7 +8,7 @@ import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { ComparadorClient } from './ComparadorClient'
 import type { Snapshot } from './DiaDiaSection'
-import { getMatchResult, scoreMatchBet, scoreTournamentBet } from '@/lib/scoring/engine'
+import { getMatchResult, scoreMatchBet, scoreTournamentBet, detectG4ZebraTeams } from '@/lib/scoring/engine'
 import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap, computeGroupCompletion } from '@/lib/bracket/engine'
 import type { BetSlim, MatchSlim, KnockoutTeamOverride } from '@/lib/bracket/engine'
 import { getVisibilitySettings, isBonusVisible, isMatchBetsVisible, getServerNow } from '@/lib/production-mode'
@@ -441,10 +441,13 @@ export default async function ComparadorPage({
   const fourth    = tpResolved?.loser   ?? null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const allTBetsFull = allTBets as any[]
-  const chamBetsTotal    = allTBetsFull.filter((b: any) => b.champion).length
-  const chamBetsWithPick = allTBetsFull.filter((b: any) => b.champion && b.champion === champion)
-  const isZebraChampion  = chamBetsTotal > 0 && champion !== null
-    && (chamBetsWithPick.length / chamBetsTotal) * 100 <= zebraThreshold
+  const zebraTeams = detectG4ZebraTeams(
+    allTBetsFull.map((b: any) => ({
+      champion: b.champion ?? '', runner_up: b.runner_up ?? '',
+      semi1: b.semi1 ?? '', semi2: b.semi2 ?? '',
+    })),
+    zebraThreshold,
+  )
   const liveTournamentResults = { semifinalists, finalists, champion, runnerUp, third, fourth, officialScorers: liveOfficialScorers }
   const livePtsG4Map: Record<string, number> = {}
   for (const tb of filter.map(pid => allTBetsFull.find((b: any) => b.participant_id === pid)).filter(Boolean)) {
@@ -458,7 +461,7 @@ export default async function ComparadorPage({
       },
       liveTournamentResults,
       rulesMap,
-      isZebraChampion,
+      zebraTeams,
       scorerMapping,
     )
   }

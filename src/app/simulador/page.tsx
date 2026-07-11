@@ -9,7 +9,7 @@ import { Navbar } from '@/components/layout/Navbar'
 import { SimuladorClient } from './SimuladorClient'
 import {
   getMatchResult, detectMatchZebra, scoreMatchBet, scoreTournamentBet,
-  scoreGroupBet, detectGroupZebra,
+  scoreGroupBet, detectGroupZebra, detectG4ZebraTeams,
 } from '@/lib/scoring/engine'
 import type { TournamentResults } from '@/lib/scoring/engine'
 import {
@@ -258,16 +258,19 @@ export default async function SimuladorPage() {
     officialScorers: officialTopScorers,
   }
 
-  const chamTotal    = allTBets.filter((b: any) => b.champion).length
-  const chamWithPick = allTBets.filter((b: any) => b.champion && b.champion === champion).length
-  const isZebraChamp = chamTotal > 0 && champion !== null
-    && (chamWithPick / chamTotal) * 100 <= zebraThreshold
+  const zebraTeams = detectG4ZebraTeams(
+    allTBets.map((b: any) => ({
+      champion: b.champion ?? '', runner_up: b.runner_up ?? '',
+      semi1: b.semi1 ?? '', semi2: b.semi2 ?? '',
+    })),
+    zebraThreshold,
+  )
 
   const ptsG4Map: Record<string, number> = {}
   for (const tb of allTBets) {
     ptsG4Map[tb.participant_id] = scoreTournamentBet(
       { champion: tb.champion ?? '', runner_up: tb.runner_up ?? '', semi1: tb.semi1 ?? '', semi2: tb.semi2 ?? '', top_scorer: tb.top_scorer ?? '' },
-      tournamentResults, rules, isZebraChamp, scorerMapping,
+      tournamentResults, rules, zebraTeams, scorerMapping,
     )
   }
 

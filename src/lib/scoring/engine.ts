@@ -109,6 +109,33 @@ export function detectGroupZebra(
   return (matching / groupBets.length) * 100 <= threshold
 }
 
+// Times "indicados no G4" (em qualquer um dos 4 slots: campeão/vice/semi1/semi2) por
+// 15% ou menos dos participantes — conforme regulamento item 18. Cada bet conta uma
+// única vez por time, mesmo que o time apareça em mais de um slot do mesmo palpite.
+export function detectG4ZebraTeams(
+  tournamentBets: Array<{ champion: string; runner_up: string; semi1: string; semi2: string }>,
+  threshold: number,
+): Set<string> {
+  const total = tournamentBets.length
+  const zebraTeams = new Set<string>()
+  if (total === 0) return zebraTeams
+
+  const counts = new Map<string, number>()
+  for (const bet of tournamentBets) {
+    const seen = new Set<string>()
+    for (const team of [bet.champion, bet.runner_up, bet.semi1, bet.semi2]) {
+      if (team && !seen.has(team)) {
+        seen.add(team)
+        counts.set(team, (counts.get(team) ?? 0) + 1)
+      }
+    }
+  }
+  for (const [team, count] of counts) {
+    if ((count / total) * 100 <= threshold) zebraTeams.add(team)
+  }
+  return zebraTeams
+}
+
 // ── Tournament (G4 + artilheiro) scoring ─────────────────────────────────────
 // Progressive and cumulative per the regulation:
 //   champion pick:  semifinalista + bonus_finalista + bonus_campeao (if all correct)
@@ -137,7 +164,7 @@ export function scoreTournamentBetBreakdown(
   bet: { champion: string; runner_up: string; semi1: string; semi2: string; top_scorer: string },
   results: TournamentResults,
   rules: RuleMap,
-  isZebraChampion: boolean,
+  zebraTeams: Set<string>,
   scorerMapping: Record<string, string>,
 ): TournamentBetBreakdown {
   const r = {
@@ -153,30 +180,39 @@ export function scoreTournamentBetBreakdown(
 
   let champion = 0
   if (bet.champion) {
-    if (results.semifinalists.includes(bet.champion)) champion += r.semis
-    if (results.finalists.includes(bet.champion))     champion += r.finalist
-    if (results.champion === bet.champion) {
-      champion += r.campeao
-      if (isZebraChampion) champion += r.zebraG4
+    if (results.semifinalists.includes(bet.champion)) {
+      champion += r.semis
+      if (zebraTeams.has(bet.champion)) champion += r.zebraG4
     }
+    if (results.finalists.includes(bet.champion))     champion += r.finalist
+    if (results.champion === bet.champion)            champion += r.campeao
   }
 
   let runner_up = 0
   if (bet.runner_up) {
-    if (results.semifinalists.includes(bet.runner_up)) runner_up += r.semis
+    if (results.semifinalists.includes(bet.runner_up)) {
+      runner_up += r.semis
+      if (zebraTeams.has(bet.runner_up)) runner_up += r.zebraG4
+    }
     if (results.finalists.includes(bet.runner_up))     runner_up += r.finalist
     if (results.runnerUp === bet.runner_up)             runner_up += r.vice
   }
 
   let semi1 = 0
   if (bet.semi1) {
-    if (results.semifinalists.includes(bet.semi1)) semi1 += r.semis
+    if (results.semifinalists.includes(bet.semi1)) {
+      semi1 += r.semis
+      if (zebraTeams.has(bet.semi1)) semi1 += r.zebraG4
+    }
     if (results.third === bet.semi1)               semi1 += r.terceiro
   }
 
   let semi2 = 0
   if (bet.semi2) {
-    if (results.semifinalists.includes(bet.semi2)) semi2 += r.semis
+    if (results.semifinalists.includes(bet.semi2)) {
+      semi2 += r.semis
+      if (zebraTeams.has(bet.semi2)) semi2 += r.zebraG4
+    }
     if (results.fourth === bet.semi2)              semi2 += r.quarto
   }
 
@@ -194,10 +230,10 @@ export function scoreTournamentBet(
   bet: { champion: string; runner_up: string; semi1: string; semi2: string; top_scorer: string },
   results: TournamentResults,
   rules: RuleMap,
-  isZebraChampion: boolean,
+  zebraTeams: Set<string>,
   // scorerMapping: raw_name → standardized_name (pass {} if not needed)
   scorerMapping: Record<string, string>,
 ): number {
-  const b = scoreTournamentBetBreakdown(bet, results, rules, isZebraChampion, scorerMapping)
+  const b = scoreTournamentBetBreakdown(bet, results, rules, zebraTeams, scorerMapping)
   return b.champion + b.runner_up + b.semi1 + b.semi2 + b.top_scorer
 }

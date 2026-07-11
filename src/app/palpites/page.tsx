@@ -284,7 +284,7 @@ async function PalpitesData({ participantId }: { participantId: string }) {
   let liveBreakdown: TournamentBetBreakdown | null = null
   if (tBet && (knockoutResults.semifinalists.length > 0 || knockoutResults.officialScorers.length > 0)) {
     const betInput = { champion: tBet.champion ?? '', runner_up: tBet.runner_up ?? '', semi1: tBet.semi1 ?? '', semi2: tBet.semi2 ?? '', top_scorer: tBet.top_scorer ?? '' }
-    liveBreakdown = scoreTournamentBetBreakdown(betInput, knockoutResults, rulesMap, false, scorerMapping)
+    liveBreakdown = scoreTournamentBetBreakdown(betInput, knockoutResults, rulesMap, new Set<string>(), scorerMapping)
     liveScore = liveBreakdown.champion + liveBreakdown.runner_up + liveBreakdown.semi1 + liveBreakdown.semi2 + liveBreakdown.top_scorer
   }
 

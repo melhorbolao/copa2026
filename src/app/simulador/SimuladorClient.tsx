@@ -6,7 +6,7 @@ import {
 import { getWatchStore } from '@/lib/watchStore'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { createClient } from '@/lib/supabase/client'
-import { scoreMatchBet, scoreGroupBet, detectMatchZebra, detectGroupZebra, getMatchResult, scoreTournamentBet } from '@/lib/scoring/engine'
+import { scoreMatchBet, scoreGroupBet, detectMatchZebra, detectGroupZebra, detectG4ZebraTeams, getMatchResult, scoreTournamentBet } from '@/lib/scoring/engine'
 import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap, computeGroupCompletion } from '@/lib/bracket/engine'
 import { Flag } from '@/components/ui/Flag'
 import type { RuleMap, TournamentResults, MatchResult } from '@/lib/scoring/engine'
@@ -267,7 +267,7 @@ function scoreG4FieldBet(
   betValue: string,
   results: TournamentResults,
   rules: RuleMap,
-  isZebraChampion: boolean,
+  zebraTeams: Set<string>,
 ): number {
   if (!betValue) return 0
   const r = {
@@ -281,18 +281,30 @@ function scoreG4FieldBet(
   }
   let pts = 0
   if (field === 'champion') {
-    if (results.semifinalists.includes(betValue)) pts += r.semis
+    if (results.semifinalists.includes(betValue)) {
+      pts += r.semis
+      if (zebraTeams.has(betValue)) pts += r.zebraG4
+    }
     if (results.finalists.includes(betValue))     pts += r.finalist
-    if (results.champion === betValue) { pts += r.campeao; if (isZebraChampion) pts += r.zebraG4 }
+    if (results.champion === betValue)            pts += r.campeao
   } else if (field === 'runner_up') {
-    if (results.semifinalists.includes(betValue)) pts += r.semis
+    if (results.semifinalists.includes(betValue)) {
+      pts += r.semis
+      if (zebraTeams.has(betValue)) pts += r.zebraG4
+    }
     if (results.finalists.includes(betValue))     pts += r.finalist
     if (results.runnerUp === betValue)            pts += r.vice
   } else if (field === 'semi1') {
-    if (results.semifinalists.includes(betValue)) pts += r.semis
+    if (results.semifinalists.includes(betValue)) {
+      pts += r.semis
+      if (zebraTeams.has(betValue)) pts += r.zebraG4
+    }
     if (results.third === betValue)               pts += r.terceiro
   } else {
-    if (results.semifinalists.includes(betValue)) pts += r.semis
+    if (results.semifinalists.includes(betValue)) {
+      pts += r.semis
+      if (zebraTeams.has(betValue)) pts += r.zebraG4
+    }
     if (results.fourth === betValue)              pts += r.quarto
   }
   return pts
@@ -304,14 +316,14 @@ function g4FieldStats(
   tournamentBetMap: Map<string, TournamentBetRaw>,
   results: TournamentResults,
   rules: RuleMap,
-  isZebraChampion: boolean,
+  zebraTeams: Set<string>,
 ): EventStats {
   const official = field === 'champion' ? results.champion : field === 'runner_up' ? results.runnerUp : field === 'semi1' ? results.third : results.fourth
   let pontuaram = 0, cravaram = 0, total = 0
   for (const p of parts) {
     const bet = tournamentBetMap.get(p.id)
     const val = bet?.[field] ?? ''
-    const pts = scoreG4FieldBet(field, val, results, rules, isZebraChampion)
+    const pts = scoreG4FieldBet(field, val, results, rules, zebraTeams)
     if (pts > 0) pontuaram++
     if (val && official && val === official) cravaram++
     total += pts
@@ -1010,23 +1022,10 @@ export function SimuladorClient({
     return { semifinalists: effSemis, finalists: effFinalists, champion: effChampion, runnerUp: effRunnerUp, third: effThird, fourth: effFourth, officialScorers: effScorers }
   }, [knockoutResults, simTournament])
 
-  const isZebraChampion = useMemo(() => {
-    if (!effectiveKnockoutResults.champion || tournamentBetMap.size === 0) return false
+  const zebraTeams = useMemo(() => {
     const threshold = rules['percentual_zebra'] ?? 15
-    const correct = [...tournamentBetMap.values()].filter(b => b.champion === effectiveKnockoutResults.champion).length
-    return (correct / tournamentBetMap.size) * 100 <= threshold
-  }, [effectiveKnockoutResults.champion, tournamentBetMap, rules])
-
-  const potentialZebraChampions = useMemo(() => {
-    const threshold = rules['percentual_zebra'] ?? 15
-    const allPicks = participants.map(p => tournamentBetMap.get(p.id)?.champion).filter((x): x is string => !!x)
-    if (!allPicks.length) return new Set<string>()
-    const result = new Set<string>()
-    for (const team of new Set(allPicks)) {
-      if (detectGroupZebra(allPicks.map(fp => ({ first_place: fp })), team, threshold)) result.add(team)
-    }
-    return result
-  }, [rules, participants, tournamentBetMap])
+    return detectG4ZebraTeams([...tournamentBetMap.values()], threshold)
+  }, [tournamentBetMap, rules])
 
   const groupPotentialZebraTeams = useMemo(() => {
     const threshold = rules['percentual_zebra'] ?? 15
@@ -1311,11 +1310,11 @@ export function SimuladorClient({
         }
       })
       const tb = tournamentBetMap.get(p.id)
-      if (tb) sum += scoreTournamentBet(tb, effectiveKnockoutResults, rules, isZebraChampion, scorerMapping)
+      if (tb) sum += scoreTournamentBet(tb, effectiveKnockoutResults, rules, zebraTeams, scorerMapping)
       totals[p.id] = sum
     }
     return totals
-  }, [participants, matches, betMap, groupBetMap, thirdBetMap, rules, tournamentBetMap, effectiveKnockoutResults, isZebraChampion, scorerMapping, effFirstMap, effSecondMap, effThirdMap])
+  }, [participants, matches, betMap, groupBetMap, thirdBetMap, rules, tournamentBetMap, effectiveKnockoutResults, zebraTeams, scorerMapping, effFirstMap, effSecondMap, effThirdMap])
 
   const leaderId = useMemo(() => {
     let best = -Infinity, bestId = ''
@@ -2090,10 +2089,10 @@ export function SimuladorClient({
                   const FULL:   Record<typeof field, string> = { champion: '🏆 Campeão', runner_up: '🥈 Vice', semi1: '3º Lugar', semi2: '4º Lugar' }
                   const official = field === 'champion' ? effectiveKnockoutResults.champion : field === 'runner_up' ? effectiveKnockoutResults.runnerUp : field === 'semi1' ? effectiveKnockoutResults.third : effectiveKnockoutResults.fourth
                   const officialIsReal = field === 'champion' ? knockoutResults.champion !== null : field === 'runner_up' ? knockoutResults.runnerUp !== null : field === 'semi1' ? knockoutResults.third !== null : knockoutResults.fourth !== null
-                  const stats = g4FieldStats(field, participants, tournamentBetMap, effectiveKnockoutResults, rules, isZebraChampion)
+                  const stats = g4FieldStats(field, participants, tournamentBetMap, effectiveKnockoutResults, rules, zebraTeams)
                   const lb = tournamentBetMap.get(effectiveLeaderId)
                   const lbVal = lb?.[field] ?? ''
-                  const lbPts = lbVal ? scoreG4FieldBet(field, lbVal, effectiveKnockoutResults, rules, isZebraChampion) : null
+                  const lbPts = lbVal ? scoreG4FieldBet(field, lbVal, effectiveKnockoutResults, rules, zebraTeams) : null
                   const lbBg  = lbPts !== null ? (lbPts > 0 ? '#d1fae5' : '#fff1f2') : '#fffbeb'
                   const media = stats.media > 0 ? stats.media.toFixed(1) : '—'
                   const s0 = !isMobile ? { position: 'sticky' as const, zIndex: 20, background: '#fffbeb' } : {}
@@ -2107,7 +2106,7 @@ export function SimuladorClient({
                           {official ? (
                             <>
                               <span className="truncate">{a(official)}</span>
-                              {field === 'champion' && isZebraChampion && (
+                              {official && zebraTeams.has(official) && (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img src="/zebra.png" alt="🦓" width={isMobile ? 18 : 24} height={isMobile ? 18 : 24} className="shrink-0 object-contain ml-auto" />
                               )}
@@ -2152,7 +2151,7 @@ export function SimuladorClient({
                         className={`border-r border-amber-50 text-center ${isMobile ? (lbPts !== null ? (lbPts > 0 ? 'bg-emerald-100' : 'bg-rose-50') : '') : ''}`}>
                         {lbVal ? (
                           <div className="flex flex-col items-center leading-none gap-px">
-                            <span className={`text-[9px] font-medium truncate ${field === 'champion' && potentialZebraChampions.has(lbVal) ? 'bg-gray-900 text-white rounded px-0.5' : 'text-gray-700'}`} style={{ maxWidth: STAT_COL_W - 4 }}>{a(lbVal)}</span>
+                            <span className={`text-[9px] font-medium truncate ${zebraTeams.has(lbVal) ? 'bg-gray-900 text-white rounded px-0.5' : 'text-gray-700'}`} style={{ maxWidth: STAT_COL_W - 4 }}>{a(lbVal)}</span>
                             {lbPts !== null && <span className={`text-[10px] font-bold ${lbPts > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>{lbPts > 0 ? `+${lbPts}` : '0'}</span>}
                           </div>
                         ) : <span className="text-gray-200">—</span>}
@@ -2175,7 +2174,7 @@ export function SimuladorClient({
                         )
                         const bet = tournamentBetMap.get(dataId!)
                         const betVal = bet?.[field] ?? ''
-                        const pts = betVal ? scoreG4FieldBet(field, betVal, effectiveKnockoutResults, rules, isZebraChampion) : null
+                        const pts = betVal ? scoreG4FieldBet(field, betVal, effectiveKnockoutResults, rules, zebraTeams) : null
                         const isExact = !!betVal && !!official && betVal === official
                         const isPartial = pts !== null && pts > 0 && !isExact
                         const isWrong = pts !== null && pts === 0
@@ -2187,7 +2186,7 @@ export function SimuladorClient({
                             className={`border-r border-amber-50 text-center ${isExact ? 'bg-emerald-100' : isPartial ? 'bg-sky-100' : isWrong ? 'bg-rose-50' : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
                             {betVal ? (
                               <div className="flex flex-col items-center leading-none gap-px">
-                                <span className={`text-[9px] font-medium truncate ${field === 'champion' && potentialZebraChampions.has(betVal) ? 'bg-gray-900 text-white rounded px-0.5' : 'text-gray-700'}`} style={{ maxWidth: PART_COL_W - 4 }}>{a(betVal)}</span>
+                                <span className={`text-[9px] font-medium truncate ${zebraTeams.has(betVal) ? 'bg-gray-900 text-white rounded px-0.5' : 'text-gray-700'}`} style={{ maxWidth: PART_COL_W - 4 }}>{a(betVal)}</span>
                                 {pts !== null && <span className={`text-[10px] font-bold ${pts > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>{pts > 0 ? `+${pts}` : '0'}</span>}
                               </div>
                             ) : <span className="text-gray-200">—</span>}
