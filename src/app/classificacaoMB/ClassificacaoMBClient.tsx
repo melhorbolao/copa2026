@@ -491,7 +491,7 @@ function GCompactRanking({
   // fim da linha em vez de inflar a coluna do nome.
   const baseColWidths: string[] = ['1.5rem']
   if (sdActive) baseColWidths.push('1.6rem')
-  baseColWidths.push('7rem', '2rem')
+  baseColWidths.push('10.5rem', '2rem')
   if (sdActive) baseColWidths.push('2.5rem')
   if (showLastMatch) baseColWidths.push('3.5rem')
   if (showNextMatch) baseColWidths.push('3.5rem')
