@@ -1008,11 +1008,23 @@ export function SimuladorClient({
       outOfTitleRace.add(w === h ? aw : h)
     }
 
-    const teamNames    = allTeams.map(t => t.name)
+    // Times que nem se classificaram para os 16avos (eliminados ainda na fase de grupos) também
+    // precisam sair das opções — só dá para saber isso depois que todos os grupos terminam e o
+    // chaveamento dos 16avos é resolvido; até lá mantém a base cheia (allTeams) por segurança.
+    const qualifiedR32 = new Set<string>()
+    if (allGroupsComplete) {
+      for (const m of matches) {
+        if (m.phase !== 'round_of_32') continue
+        const ov = knockoutTeamMap.get(m.id)
+        if (ov?.team_home) qualifiedR32.add(ov.team_home)
+        if (ov?.team_away) qualifiedR32.add(ov.team_away)
+      }
+    }
+    const teamNames    = qualifiedR32.size > 0 ? [...qualifiedR32] : allTeams.map(t => t.name)
     const championVice = teamNames.filter(n => !eliminated.has(n) && !outOfTitleRace.has(n))
     const thirdFourth  = teamNames.filter(n => !eliminated.has(n) && !outOf3rd4th.has(n))
     return { champion: championVice, runner_up: championVice, semi1: thirdFourth, semi2: thirdFourth }
-  }, [matches, knockoutTeamMap, allTeams])
+  }, [matches, knockoutTeamMap, allTeams, allGroupsComplete])
 
   const knockoutResults = useMemo((): TournamentResults => {
     const resolved = (m: MatchFull, side: 'home' | 'away') => {
