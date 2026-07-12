@@ -4,6 +4,7 @@ import { getActiveParticipantId } from '@/lib/participant'
 import { requirePageAccess } from '@/lib/page-visibility'
 import { Navbar } from '@/components/layout/Navbar'
 import { ACopaClient } from './ACopaClient'
+import { computeBlockedScorers } from '@/lib/scoring/eligibleScorers'
 
 export const metadata = {}
 
@@ -26,21 +27,30 @@ export default async function ACopaPage() {
   const isAdmin = profile?.is_admin ?? false
   await requirePageAccess('acopa', profile?.role ?? 'user')
 
-  const [{ data: rawMatches }, settingRow, mappings, scoringRows] = await Promise.all([
+  const [{ data: rawMatches }, settingRow, mappings, scoringRows, topScorers] = await Promise.all([
     supabase
       .from('matches')
       .select('id, match_number, phase, group_name, round, team_home, team_away, flag_home, flag_away, match_datetime, city, betting_deadline, score_home, score_away, penalty_winner, is_brazil')
       .order('match_datetime', { ascending: true }),
     supabase.from('tournament_settings').select('value').eq('key', 'official_top_scorer').maybeSingle().then(r => r.data, () => null),
-    supabase.from('top_scorer_mapping').select('standardized_name').then(r => r.data ?? [], () => []),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any).from('top_scorer_mapping').select('standardized_name, is_eliminated').then((r: { data: unknown }) => r.data ?? [], () => []),
     supabase.from('third_place_scoring').select('group_name, enabled').then(r => r.data ?? [], () => []),
+    supabase.from('top_scorers').select('player_name, goals_count').then(r => r.data ?? [], () => []),
   ])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const matches = (rawMatches ?? []) as any[]
   const officialTopScorer = (settingRow as { value: string } | null)?.value ?? null
+  const blockedScorers = computeBlockedScorers(
+    mappings as { standardized_name: string | null; is_eliminated?: boolean | null }[],
+    topScorers as { player_name: string; goals_count: number | null }[],
+  )
   const standardizedNames = [...new Set(
-    (mappings as { standardized_name: string }[]).map(m => m.standardized_name).filter(Boolean)
+    (mappings as { standardized_name: string }[])
+      .map(m => m.standardized_name)
+      .filter(Boolean)
+      .filter(n => !blockedScorers.has(n.trim().toLowerCase()))
   )].sort() as string[]
   const initialThirdScoring = Object.fromEntries(
     (scoringRows as { group_name: string; enabled: boolean }[]).map(r => [r.group_name, r.enabled])

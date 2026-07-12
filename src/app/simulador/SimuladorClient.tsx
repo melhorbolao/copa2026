@@ -81,6 +81,7 @@ interface Props {
   teamAbbrs: Record<string, string>
   officialTopScorers: string[]
   scorerMapping: Record<string, string>
+  blockedScorers?: string[]
   lockedMatchIds?: string[]
   bonusIsLocked?: boolean
   existingSimulations: { match_id: string; score_home: number | null; score_away: number | null }[]
@@ -621,7 +622,7 @@ function buildBetMap(bets: BetRaw[]): BetMap {
 export function SimuladorClient({
   initialMatches, participants, initialBets, initialGroupBets, initialThirdBets,
   initialTournamentBets, participantTotals, rules, isAdmin: _isAdmin, activeParticipantId,
-  teamAbbrs, officialTopScorers, scorerMapping,
+  teamAbbrs, officialTopScorers, scorerMapping, blockedScorers = [],
   lockedMatchIds, bonusIsLocked = false,
   existingSimulations, userId,
   existingGroupSims, existingThirdSims, existingTournamentSim,
@@ -749,15 +750,17 @@ export function SimuladorClient({
   }, [initialTournamentBets])
 
   const allBettedScorers = useMemo(() => {
+    const blocked = new Set(blockedScorers.map(n => n.toLowerCase().trim()))
     const seen = new Set<string>()
     const result: string[] = []
     for (const bet of tournamentBetMap.values()) {
       if (!bet.top_scorer) continue
       const norm = scorerMapping[bet.top_scorer.toLowerCase().trim()] ?? bet.top_scorer
+      if (blocked.has(norm.toLowerCase().trim())) continue
       if (!seen.has(norm)) { seen.add(norm); result.push(norm) }
     }
     return result.sort((a, b) => a.localeCompare(b, 'pt-BR'))
-  }, [tournamentBetMap, scorerMapping])
+  }, [tournamentBetMap, scorerMapping, blockedScorers])
 
   // Mobile breakpoint (< 640px)
   useEffect(() => {

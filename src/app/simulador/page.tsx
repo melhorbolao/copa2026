@@ -18,6 +18,7 @@ import {
 } from '@/lib/bracket/engine'
 import type { MatchSlim, BetSlim } from '@/lib/bracket/engine'
 import { getVisibilitySettings, filterBetsByDeadline, isBonusVisible, getServerNow } from '@/lib/production-mode'
+import { computeBlockedScorers } from '@/lib/scoring/eligibleScorers'
 
 export const metadata = {}
 
@@ -73,7 +74,7 @@ export default async function SimuladorPage() {
   const [
     participantsRes, matchesRes, betsRes, groupBetsRes, tournamentBetsRes,
     thirdBetsRes, rulesRes, teamAbbrRes,
-    scorerRes, scorerSettingRes, simRes,
+    scorerRes, scorerSettingRes, topScorersGoalsRes, simRes,
     groupSimRes, thirdSimRes, tournamentSimRes,
   ] = await Promise.all([
     supabase.from('participants').select('id, apelido').order('apelido'),
@@ -86,8 +87,9 @@ export default async function SimuladorPage() {
     fetchAll('third_place_bets', 'participant_id, group_name, team'),
     supabase.from('scoring_rules').select('key, points'),
     admin.from('teams').select('name, abbr_br, group_name'),
-    admin.from('top_scorer_mapping').select('raw_name, standardized_name'),
+    admin.from('top_scorer_mapping').select('raw_name, standardized_name, is_eliminated'),
     admin.from('tournament_settings').select('value').eq('key', 'official_top_scorer').maybeSingle(),
+    admin.from('top_scorers').select('player_name, goals_count'),
     (supabase as any).from('user_simulations')
       .select('match_id, score_home, score_away')
       .eq('user_id', user.id),
@@ -245,6 +247,11 @@ export default async function SimuladorPage() {
   for (const row of (scorerRes.data ?? []) as any[])
     if (row.standardized_name) scorerMapping[row.raw_name.toLowerCase().trim()] = row.standardized_name
 
+  const blockedScorers = [...computeBlockedScorers(
+    (scorerRes.data ?? []) as { standardized_name: string | null; is_eliminated?: boolean | null }[],
+    (topScorersGoalsRes.data ?? []) as { player_name: string; goals_count: number | null }[],
+  )]
+
   let officialTopScorers: string[] = []
   if (scorerSettingRes.data?.value) {
     try { officialTopScorers = JSON.parse(scorerSettingRes.data.value) }
@@ -357,6 +364,7 @@ export default async function SimuladorPage() {
         existingTournamentSim={tournamentSimRes.data ?? null}
         officialTopScorers={officialTopScorers}
         scorerMapping={scorerMapping}
+        blockedScorers={blockedScorers}
         prizeSpots={prizeSpots}
         premioSpots={premioSpots}
       />
