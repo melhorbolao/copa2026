@@ -1006,19 +1006,25 @@ export function SimuladorClient({
 
   const effectiveKnockoutResults = useMemo((): TournamentResults => {
     const kr = knockoutResults
-    // Simulação tem prioridade sobre oficial — permite simular mesmo com resultado conhecido
-    const hasAnySim   = !!(simTournament.champion || simTournament.runner_up || simTournament.semi1 || simTournament.semi2)
+    // Simulação tem prioridade sobre oficial para os slots únicos (campeão/vice/3º/4º) —
+    // permite simular mesmo com resultado parcial conhecido.
     const effChampion = simTournament.champion   || kr.champion  || null
     const effRunnerUp = simTournament.runner_up  || kr.runnerUp  || null
     const effThird    = simTournament.semi1       || kr.third     || null
     const effFourth   = simTournament.semi2       || kr.fourth    || null
-    // Se há qualquer sim de G4, deriva estágios dos valores efetivos para manter coerência
-    const effFinalists = hasAnySim
-      ? [effChampion, effRunnerUp].filter((t): t is string => !!t)
-      : (kr.finalists.length > 0 ? kr.finalists : [effChampion, effRunnerUp].filter((t): t is string => !!t))
-    const effSemis = hasAnySim
-      ? [...new Set([effChampion, effRunnerUp, effThird, effFourth].filter((t): t is string => !!t))]
-      : (kr.semifinalists.length > 0 ? kr.semifinalists : [...new Set([effChampion, effRunnerUp, effThird, effFourth].filter((t): t is string => !!t))])
+    // Finalistas/semifinalistas já confirmados oficialmente NUNCA podem ser descartados por uma
+    // simulação parcial — por isso a lista efetiva é a UNIÃO do que já é oficial com o que foi
+    // derivado da simulação, nunca uma substituição. Caso contrário, simular apenas o campeão
+    // apagaria os pontos de semifinalista/finalista já garantidos por outro time (ex.: um
+    // participante que apostou em outro semifinalista real perderia os pontos já computados).
+    const effFinalists = [...new Set([
+      ...kr.finalists,
+      ...[effChampion, effRunnerUp].filter((t): t is string => !!t),
+    ])]
+    const effSemis = [...new Set([
+      ...kr.semifinalists,
+      ...[effChampion, effRunnerUp, effThird, effFourth].filter((t): t is string => !!t),
+    ])]
     const effScorers = simTournament.top_scorer.length > 0
       ? simTournament.top_scorer.split('|').filter(Boolean)
       : kr.officialScorers
