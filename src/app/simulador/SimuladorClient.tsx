@@ -973,6 +973,47 @@ export function SimuladorClient({
     return buildKnockoutTeamMap(r32Slots, knockoutMatches)
   }, [officialStandings, officialThirds, matches, officialContext.completion])
 
+  // Times ainda na disputa por posição do G4, com base apenas no resultado oficial (nunca simulado):
+  // times eliminados nas fases anteriores às semis saem de todas as opções; quem perde a semifinal
+  // só concorre a 3º/4º; quem vence a semifinal só concorre a campeão/vice.
+  const g4TeamOptions = useMemo(() => {
+    const resolved = (m: MatchFull, side: 'home' | 'away') => {
+      const ov = knockoutTeamMap.get(m.id)
+      return side === 'home' ? (ov?.team_home ?? m.team_home) : (ov?.team_away ?? m.team_away)
+    }
+    const winnerOf = (m: MatchFull): string | null => {
+      if (m.score_home === null || m.score_away === null) return null
+      const h = resolved(m, 'home'), aw = resolved(m, 'away')
+      if (m.score_home > m.score_away) return h
+      if (m.score_away > m.score_home) return aw
+      return m.penalty_winner ?? null
+    }
+
+    const eliminated     = new Set<string>() // perdeu antes das semis — fora de tudo
+    const outOfTitleRace = new Set<string>() // perdeu a semifinal — só 3º/4º
+    const outOf3rd4th    = new Set<string>() // venceu a semifinal — só campeão/vice
+
+    for (const m of matches) {
+      if (m.phase !== 'round_of_32' && m.phase !== 'round_of_16' && m.phase !== 'quarterfinal') continue
+      const w = winnerOf(m)
+      if (!w) continue
+      const h = resolved(m, 'home'), aw = resolved(m, 'away')
+      eliminated.add(w === h ? aw : h)
+    }
+    for (const m of matches.filter(m => m.phase === 'semifinal')) {
+      const w = winnerOf(m)
+      if (!w) continue
+      const h = resolved(m, 'home'), aw = resolved(m, 'away')
+      outOf3rd4th.add(w)
+      outOfTitleRace.add(w === h ? aw : h)
+    }
+
+    const teamNames    = allTeams.map(t => t.name)
+    const championVice = teamNames.filter(n => !eliminated.has(n) && !outOfTitleRace.has(n))
+    const thirdFourth  = teamNames.filter(n => !eliminated.has(n) && !outOf3rd4th.has(n))
+    return { champion: championVice, runner_up: championVice, semi1: thirdFourth, semi2: thirdFourth }
+  }, [matches, knockoutTeamMap, allTeams])
+
   const knockoutResults = useMemo((): TournamentResults => {
     const resolved = (m: MatchFull, side: 'home' | 'away') => {
       const ov = knockoutTeamMap.get(m.id)
@@ -2143,7 +2184,7 @@ export function SimuladorClient({
                                 }}
                                 className={`w-full rounded border text-[9px] px-0.5 py-px text-gray-700 focus:outline-none ${div ? 'border-red-400 bg-red-50' : 'border-amber-200 bg-amber-50'}`}>
                                 <option value="">?</option>
-                                {allTeams.map(t => <option key={t.name} value={t.name}>{teamAbbrs[t.name] ?? abbr(t.name, 5)}</option>)}
+                                {g4TeamOptions[key].map(name => <option key={name} value={name}>{teamAbbrs[name] ?? abbr(name, 5)}</option>)}
                               </select>
                               {div && <span className="text-[7px] text-red-600 font-bold leading-none">≠ oficial</span>}
                             </div>
