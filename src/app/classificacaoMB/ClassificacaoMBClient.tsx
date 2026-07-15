@@ -70,6 +70,10 @@ interface Props {
   tribes: { id: string; name: string }[]
   /** Se os cortes já foram executados (listas congeladas) — define qual tabela usar em "Compartilhar Tabela" */
   cutsExecuted: { corte1: boolean; corte2: boolean }
+  /** IDs congelados dos participantes que passaram no 1º corte (G112) — vazio se corte ainda não executado */
+  qualifiedCutoff1Ids: string[]
+  /** IDs congelados dos participantes que passaram no 2º corte (G56) — vazio se corte ainda não executado */
+  qualifiedCutoff2Ids: string[]
 }
 
 type RankedRow = ParticipantRow & { rank: number; diffLider: number; diffPremio: number | null; diffCorte1: number | null; diffCorte2: number | null }
@@ -411,12 +415,21 @@ function GCompactRanking({
   deltaMap, highlights, sdActive,
   highlightMode, activeParticipantId, panelaSet, tribeMemberSet,
   showG4, teamAbbrs, elTeams, elStd, scorerMapping,
+  qualifiedIds,
 }: {
   title: string
   sliceSize: number
   numBlocks: number
   /** Se há um 2º corte de eliminação dentro deste recorte (ex.: G112 → G56). O G56 não tem próximo corte — todos avançam até o final. */
   hasCut2: boolean
+  /**
+   * IDs congelados dos participantes que efetivamente passaram no corte correspondente
+   * a esta tabela. Quando presente (corte já executado), a listagem mostra exatamente
+   * esses participantes — em vez de um "top N" por pontos totais, que ficaria estranho
+   * ao incluir participantes já eliminados que subiram de posição por bônus de G4/artilheiro
+   * preenchidos após o corte. `null` = corte ainda não executado, usa o "top N" como preview.
+   */
+  qualifiedIds?: Set<string> | null
   /** Destaca a linha inteira do 1º colocado com uma cor diferenciada */
   highlightLeader: boolean
   ranked: RankedRow[]
@@ -447,12 +460,18 @@ function GCompactRanking({
   const n = ranked.length
   if (n === 0) return null
 
-  const rankedSlice = ranked.slice(0, sliceSize)
+  // Com corte já executado (qualifiedIds presente), mostra exatamente quem passou —
+  // não um "top N" por pontos totais, que pode incluir eliminados que subiram por
+  // bônus de G4/artilheiro preenchidos depois do corte. Sem corte executado ainda,
+  // usa o "top N" como preview (comportamento anterior).
+  const rankedSlice = qualifiedIds
+    ? ranked.filter(r => qualifiedIds.has(r.id))
+    : ranked.slice(0, sliceSize)
 
   // Top metade do bloco avança para a próxima fase de corte (não se aplica ao G56)
   const cut2 = hasCut2 ? Math.ceil(rankedSlice.length / 2) : 0
   const premioLine = ranked[Math.min(premioSpots, n) - 1]?.pts ?? Infinity
-  const cut2Line   = hasCut2 && cut2 > premioSpots ? (ranked[cut2 - 1]?.pts ?? null) : null
+  const cut2Line   = hasCut2 && cut2 > premioSpots ? (rankedSlice[cut2 - 1]?.pts ?? null) : null
 
   type G112Zone = 'premio' | 'corte2' | 'out'
 
@@ -498,7 +517,7 @@ function GCompactRanking({
   if (showG4) baseColWidths.push('2.25rem', '2.25rem', '2.25rem', '2.25rem', '6rem')
   const rowStyle: CSSProperties = { gridTemplateColumns: baseColWidths.join(' ') }
   const rowStyleWithPremio: CSSProperties = { gridTemplateColumns: ['4.75rem', ...baseColWidths].join(' ') }
-  const BLOCK_SIZE = Math.ceil(sliceSize / numBlocks)
+  const BLOCK_SIZE = Math.ceil(rankedSlice.length / numBlocks)
   const blocks = Array.from({ length: numBlocks }, (_, i) =>
     rankedSlice.slice(i * BLOCK_SIZE, (i + 1) * BLOCK_SIZE),
   ).filter(b => b.length > 0)
@@ -650,12 +669,14 @@ export function ClassificacaoMBClient({
   activeParticipantId, panelaMemberIds, colVisibility, renderedAt, matchesRegistered, groupsDefined,
   lastResultDate, currentPhaseStartDate,
   sobeDesceVisible, isAdmin, lastDataDate, minhaPanelaEnabled,
-  tribes, cutsExecuted,
+  tribes, cutsExecuted, qualifiedCutoff1Ids, qualifiedCutoff2Ids,
 }: Props) {
   const router = useRouter()
   const elTeams    = useMemo(() => new Set(eliminatedTeams),   [eliminatedTeams])
   const elStd      = useMemo(() => new Set(eliminatedStdScorers), [eliminatedStdScorers])
   const panelaSet  = useMemo(() => new Set(panelaMemberIds),   [panelaMemberIds])
+  const cutoff1Set = useMemo(() => new Set(qualifiedCutoff1Ids), [qualifiedCutoff1Ids])
+  const cutoff2Set = useMemo(() => new Set(qualifiedCutoff2Ids), [qualifiedCutoff2Ids])
   const [highlightMode, setHighlightMode] = useState<HighlightMode>('me')
   const showPanelaOption = minhaPanelaEnabled && panelaMemberIds.length > 0
   const [sortKey, setSortKey] = useState<string | null>(null)
@@ -819,12 +840,20 @@ export function ClassificacaoMBClient({
 
   // Compartilhar Tabela: usa sempre a classificação com menos participantes já
   // disponível — G56 se o 2º corte foi executado, senão G112 se o 1º corte foi
-  // executado, senão a lista completa (nenhum corte ainda disponível).
-  const exportConfig = useMemo((): { size: number; mode: 'full' | 'g112' | 'g56' } => {
-    if (cutsExecuted.corte2) return { size: 56, mode: 'g56' }
-    if (cutsExecuted.corte1) return { size: 112, mode: 'g112' }
-    return { size: ranked.length, mode: 'full' }
-  }, [cutsExecuted, ranked.length])
+  // executado, senão a lista completa (nenhum corte ainda disponível). Quando o
+  // corte já foi executado, filtra por quem de fato passou (não um "top N" por
+  // pontos totais) — mesmo motivo das tabelas G56/G112 acima.
+  const exportConfig = useMemo((): { mode: 'full' | 'g112' | 'g56' } => {
+    if (cutsExecuted.corte2) return { mode: 'g56' }
+    if (cutsExecuted.corte1) return { mode: 'g112' }
+    return { mode: 'full' }
+  }, [cutsExecuted])
+
+  const exportRows = useMemo(() => {
+    if (exportConfig.mode === 'g56')  return ranked.filter(r => cutoff2Set.has(r.id))
+    if (exportConfig.mode === 'g112') return ranked.filter(r => cutoff1Set.has(r.id))
+    return ranked
+  }, [ranked, exportConfig.mode, cutoff1Set, cutoff2Set])
 
   // Valor de prêmio por participante — rateado entre empatados dentro da zona
   // premiada (Regulamento item 33: soma-se as faixas empatadas e divide-se igualmente).
@@ -1047,6 +1076,7 @@ export function ClassificacaoMBClient({
         elTeams={elTeams}
         elStd={elStd}
         scorerMapping={scorerMapping}
+        qualifiedIds={cutsExecuted.corte2 ? cutoff2Set : null}
       />
 
       {/* Classificação G112 — tabela compacta top 112, com Sobe e Desce */}
@@ -1073,6 +1103,7 @@ export function ClassificacaoMBClient({
         activeParticipantId={activeParticipantId}
         panelaSet={panelaSet}
         tribeMemberSet={tribeMemberSet}
+        qualifiedIds={cutsExecuted.corte1 ? cutoff1Set : null}
       />
 
       {/* Classificação Melhor Bolão — tabela compacta com Sobe e Desce */}
@@ -1339,7 +1370,7 @@ export function ClassificacaoMBClient({
       >
         <div ref={exportRef} style={{ width: '1600px' }}>
           <ExportableRankingBoard
-            ranked={ranked.slice(0, exportConfig.size)}
+            ranked={exportRows}
             premioSpots={premioSpots}
             renderedAt={renderedAt}
             matchesRegistered={matchesRegistered}

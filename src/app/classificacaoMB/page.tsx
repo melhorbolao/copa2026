@@ -134,6 +134,8 @@ export default async function ClassificacaoMBPage() {
   let lastDataDate: string | null = null
   let corte1Executado = false
   let corte2Executado = false
+  let corte1Ids: string[] = []
+  let corte2Ids: string[] = []
   const colVisibility: Record<string, boolean> = {
     premio:        false,
     last_match:    true,
@@ -185,8 +187,8 @@ export default async function ClassificacaoMBPage() {
       try {
         const arr = JSON.parse(r.value ?? '[]')
         const executado = Array.isArray(arr) && arr.length > 0
-        if (r.key === 'corte1_participantes') corte1Executado = executado
-        if (r.key === 'corte2_participantes') corte2Executado = executado
+        if (r.key === 'corte1_participantes') { corte1Executado = executado; if (executado) corte1Ids = arr }
+        if (r.key === 'corte2_participantes') { corte2Executado = executado; if (executado) corte2Ids = arr }
       } catch { /* ignore */ }
     }
 
@@ -614,6 +616,8 @@ export default async function ClassificacaoMBPage() {
         minhaPanelaEnabled={minhaPanelaEnabled}
         tribes={tribes}
         cutsExecuted={{ corte1: corte1Executado, corte2: corte2Executado }}
+        qualifiedCutoff1Ids={corte1Ids}
+        qualifiedCutoff2Ids={corte2Ids}
       />
     </>
   )
