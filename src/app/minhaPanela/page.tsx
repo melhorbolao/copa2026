@@ -117,21 +117,6 @@ export default async function MinhaPanelaPage() {
     isZebraMatch[m.id] = detectMatchZebra(betsByMatch[m.id] ?? [], actual, zebraThreshold)
   }
 
-  // Pontos de jogos por participante
-  const ptsMatchesMap: Record<string, number> = {}
-  for (const b of allBetsRaw) {
-    const m = scoredById.get(b.match_id)
-    if (!m) continue
-    const pts = scoreMatchBet(
-      b.score_home, b.score_away,
-      m.score_home, m.score_away,
-      isZebraMatch[b.match_id] ?? false,
-      m.is_brazil ?? false,
-      rules,
-    )
-    ptsMatchesMap[b.participant_id] = (ptsMatchesMap[b.participant_id] ?? 0) + pts
-  }
-
   // ptsGroups (pontos já armazenados em group_bets.points)
   const ptsGroupsMap: Record<string, number> = {}
   for (const b of groupBetsRaw) {
@@ -181,6 +166,33 @@ export default async function MinhaPanelaPage() {
       penalty_winner: m.penalty_winner as string | null,
     }))
   const knockoutTeamMap = buildKnockoutTeamMap(knockoutR32Slots, knockoutMatchesForMap)
+
+  // is_brazil resolvido via chaveamento (mesma lógica da classificacaoMB): a coluna
+  // is_brazil só fica correta quando o admin atualiza manualmente team_home/team_away
+  // para "Brasil" nos jogos de mata-mata, que ficam como placeholder até lá.
+  const isBrazilByMatchId = new Map<string, boolean>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const m of allMatches as any[]) {
+    const ov = knockoutTeamMap.get(m.id)
+    const effHome = ov?.team_home || m.team_home
+    const effAway = ov?.team_away || m.team_away
+    isBrazilByMatchId.set(m.id, m.is_brazil || effHome === 'Brasil' || effAway === 'Brasil')
+  }
+
+  // Pontos de jogos por participante
+  const ptsMatchesMap: Record<string, number> = {}
+  for (const b of allBetsRaw) {
+    const m = scoredById.get(b.match_id)
+    if (!m) continue
+    const pts = scoreMatchBet(
+      b.score_home, b.score_away,
+      m.score_home, m.score_away,
+      isZebraMatch[b.match_id] ?? false,
+      isBrazilByMatchId.get(b.match_id) ?? false,
+      rules,
+    )
+    ptsMatchesMap[b.participant_id] = (ptsMatchesMap[b.participant_id] ?? 0) + pts
+  }
 
   const actualThirdByGroup = new Map<string, string>()
   for (const standing of officialGroupStandings) {
@@ -343,7 +355,7 @@ export default async function MinhaPanelaPage() {
           b.score_home, b.score_away,
           m.score_home, m.score_away,
           isZebraMatch[b.match_id] ?? false,
-          m.is_brazil ?? false,
+          isBrazilByMatchId.get(b.match_id) ?? false,
           rules,
         )
       : null  // jogo ainda não realizado
