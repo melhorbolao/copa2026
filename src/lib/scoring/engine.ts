@@ -218,8 +218,13 @@ export function scoreTournamentBetBreakdown(
 
   let top_scorer = 0
   if (bet.top_scorer && results.officialScorers.length > 0) {
-    const normalized = (scorerMapping[bet.top_scorer.toLowerCase().trim()] ?? bet.top_scorer).trim().toLowerCase()
-    const isCorrect  = results.officialScorers.some(s => s.trim().toLowerCase() === normalized)
+    // Ambos os lados passam pelo mesmo mapeamento raw→padronizado antes de comparar:
+    // results.officialScorers às vezes vem direto de top_scorers.player_name (não
+    // padronizado), o que pode divergir do nome padronizado por acentuação/grafia
+    // (ex.: "Kylian Mbappe" vs "Kylian Mbappé").
+    const normalize = (name: string) => (scorerMapping[name.toLowerCase().trim()] ?? name).trim().toLowerCase()
+    const normalized = normalize(bet.top_scorer)
+    const isCorrect  = results.officialScorers.some(s => normalize(s) === normalized)
     if (isCorrect) top_scorer += r.artilh
   }
 
