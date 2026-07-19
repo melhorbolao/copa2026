@@ -360,9 +360,14 @@ export function RadialBracket({ r32Slots, knockoutMatches }: Props) {
             <BracketNodeCell key={key} {...n} />
           ))}
 
-          {/* Bandeira do campeão abaixo da taça */}
+          {/* Bandeira do campeão acima da taça — a taça (258×485px, 11% de
+              largura) ocupa cerca de ±103 unidades do viewBox a partir do
+              centro; um badge abaixo (CY+66) ficava coberto pela <img> da
+              taça, que é pintada por cima do <svg> por vir depois no DOM.
+              CY-140 fica fora do alcance da taça e de qualquer nó/linha do
+              anel de semifinalistas. */}
           {champion && (
-            <foreignObject x={CX - 28} y={CY + 66} width={56} height={22} overflow="visible">
+            <foreignObject x={CX - 32} y={CY - 140} width={64} height={26} overflow="visible">
               <div className="flex items-center justify-center gap-1 h-full w-full rounded border-2 border-amarelo-400 bg-amarelo-50 shadow-sm">
                 <Flag code={champFlag} size="xs" />
               </div>
