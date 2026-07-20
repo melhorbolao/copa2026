@@ -1176,15 +1176,15 @@ export function ClassificacaoMBClient({
                 {sth('🦓 Pont.', 'zebraPontuada', '🦓 Pontuada — zebras reais em que acertou o resultado', 'table-cell w-14')}
 
                 {/* Diferenças */}
-                {sth('∆ Líder', 'diffLider', 'Diferença pro Líder', 'hidden md:table-cell w-14')}
-                {showDeltaPremio && sth('∆ Prêmio', 'diffPremio', `Diferença pro ${premioSpots}º colocado (1º premiado)`, 'hidden md:table-cell w-16')}
+                {sth('∆ Líder', 'diffLider', 'Diferença pro Líder', 'table-cell w-14')}
+                {showDeltaPremio && sth('∆ Prêmio', 'diffPremio', `Diferença pro ${premioSpots}º colocado (1º premiado)`, 'table-cell w-16')}
                 {showDeltaCorte1 && sth('∆ Corte 1', 'diffCorte1', 'Diferença para o 1º corte (≈ posição 112)', 'w-16')}
                 {showDeltaCorte2 && sth('∆ Corte 2', 'diffCorte2', 'Diferença para o 2º corte (≈ posição 56)', 'w-16')}
 
                 {/* Breakdown de pontos */}
-                {showPtsJg && sth('Pts Jg', 'ptsMatches', 'Pontos com Jogos', 'hidden md:table-cell w-12')}
-                {showPtsCl && sth('Pts Cl', 'ptsClassif', 'Pontos com Classificação de Grupos + 3os Lugares', 'hidden md:table-cell w-12')}
-                {showPtsG4 && sth('Pts G4 + Art', 'ptsG4', 'Pontos com G4 + Artilheiro', 'hidden md:table-cell w-16')}
+                {showPtsJg && sth('Pts Jg', 'ptsMatches', 'Pontos com Jogos', 'table-cell w-12')}
+                {showPtsCl && sth('Pts Cl', 'ptsClassif', 'Pontos com Classificação de Grupos + 3os Lugares', 'table-cell w-12')}
+                {showPtsG4 && sth('Pts G4 + Art', 'ptsG4', 'Pontos com G4 + Artilheiro', 'table-cell w-16')}
 
                 {/* G4 picks */}
                 {th('1º', 'Aposta: Campeão', 'w-11')}
@@ -1280,11 +1280,11 @@ export function ClassificacaoMBClient({
                     </td>
 
                     {/* Diferenças */}
-                    <td className="hidden md:table-cell px-1.5 py-1 text-right">
+                    <td className="table-cell px-1.5 py-1 text-right">
                       <Diff v={row.diffLider} />
                     </td>
                     {showDeltaPremio && (
-                      <td className="hidden md:table-cell px-1.5 py-1 text-right">
+                      <td className="table-cell px-1.5 py-1 text-right">
                         <Diff v={row.diffPremio} />
                       </td>
                     )}
@@ -1301,17 +1301,17 @@ export function ClassificacaoMBClient({
 
                     {/* Breakdown de pontos */}
                     {showPtsJg && (
-                      <td className={`hidden md:table-cell px-1.5 py-1 text-right font-mono tabular-nums ${z === 'last' ? 'text-white' : 'text-gray-600'}`}>
+                      <td className={`table-cell px-1.5 py-1 text-right font-mono tabular-nums ${z === 'last' ? 'text-white' : 'text-gray-600'}`}>
                         {row.ptsMatches}
                       </td>
                     )}
                     {showPtsCl && (
-                      <td className={`hidden md:table-cell px-1.5 py-1 text-right font-mono tabular-nums ${z === 'last' ? 'text-white' : 'text-gray-600'}`}>
+                      <td className={`table-cell px-1.5 py-1 text-right font-mono tabular-nums ${z === 'last' ? 'text-white' : 'text-gray-600'}`}>
                         {row.ptsClassif}
                       </td>
                     )}
                     {showPtsG4 && (
-                      <td className={`hidden md:table-cell px-1.5 py-1 text-right font-mono tabular-nums ${z === 'last' ? 'text-white' : 'text-gray-600'}`}>
+                      <td className={`table-cell px-1.5 py-1 text-right font-mono tabular-nums ${z === 'last' ? 'text-white' : 'text-gray-600'}`}>
                         {row.ptsG4}
                       </td>
                     )}
