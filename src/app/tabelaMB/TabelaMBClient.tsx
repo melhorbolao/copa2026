@@ -266,13 +266,18 @@ function scoreG4FieldBet(
     }
     if (results.finalists.includes(betValue))     pts += r.finalist
     if (results.runnerUp === betValue)            pts += r.vice
-  } else { // semi1 / semi2 — same logic
+  } else if (field === 'semi1') {
     if (results.semifinalists.includes(betValue)) {
       pts += r.semis
       if (zebraTeams.has(betValue)) pts += r.zebraG4
     }
-    if (results.third  === betValue)              pts += r.terceiro
-    else if (results.fourth === betValue)         pts += r.quarto
+    if (results.third === betValue)               pts += r.terceiro
+  } else { // semi2
+    if (results.semifinalists.includes(betValue)) {
+      pts += r.semis
+      if (zebraTeams.has(betValue)) pts += r.zebraG4
+    }
+    if (results.fourth === betValue)              pts += r.quarto
   }
   return pts
 }
