@@ -1088,7 +1088,14 @@ export function TabelaMBClient({
                 const s = scorerEventStats(participants, tournamentBetMap, localScorers, artPts, scorerMapping)
                 ws.addRow(['Artilheiro', 'Top scorer', localScorers.join(', ') || '–',
                   s.pontuaram, s.cravaram, s.media > 0 ? +s.media.toFixed(1) : '–',
-                  ...sortedParts.map(p => { const b = tournamentBetMap.get(p.id); const raw = b?.top_scorer ?? ''; return raw ? (scorerMapping[raw.toLowerCase().trim()] ?? raw) : '–' })])
+                  ...sortedParts.map(p => {
+                    const b = tournamentBetMap.get(p.id); const raw = b?.top_scorer ?? ''
+                    if (!raw) return '–'
+                    const display = scorerMapping[raw.toLowerCase().trim()] ?? raw
+                    const isCorrect = localScorers.length > 0 && localScorers.some(sc => sc.trim().toLowerCase() === display.trim().toLowerCase())
+                    const pts = isCorrect ? artPts : 0
+                    return `${display}${pts > 0 ? ` (+${pts})` : ''}`
+                  })])
               }
             }
 
