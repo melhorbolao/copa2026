@@ -8,6 +8,7 @@ export const maxDuration = 30
 import { NextResponse } from 'next/server'
 import { createAuthAdminClient } from '@/lib/supabase/server'
 import { getVisibilitySettings } from '@/lib/production-mode'
+import { COPA2026_ARCHIVED } from '@/lib/tournament-lock'
 
 function todayBR(): string {
   return new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
@@ -17,6 +18,9 @@ export async function GET(req: Request) {
   const auth = req.headers.get('authorization')
   if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  if (COPA2026_ARCHIVED) {
+    return NextResponse.json({ skipped: true, reason: 'Copa 2026 arquivada' })
   }
 
   const settings = await getVisibilitySettings()

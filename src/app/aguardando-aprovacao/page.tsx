@@ -13,7 +13,7 @@ export default async function AguardandoAprovacaoPage() {
     .eq('id', user.id)
     .single()
 
-  if (profile?.approved) redirect('/jogos')
+  if (profile?.approved) redirect('/copa2026/jogos')
 
   return (
     <main

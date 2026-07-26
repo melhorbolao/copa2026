@@ -23,7 +23,7 @@ export async function updateClassifColVisibility(
       .from('tournament_settings')
       .upsert({ key, value: enabled ? 'true' : 'false' }, { onConflict: 'key' })
     if (error) return { error: error.message }
-    revalidatePath('/classificacaoMB')
+    revalidatePath('/copa2026/classificacaoMB')
     revalidatePath('/admin/classificacao')
     return {}
   } catch (err) {
@@ -42,7 +42,7 @@ export async function updateSobeDesceVisible(
       .from('tournament_settings')
       .upsert({ key: 'sobe_desce_visible', value: visible ? 'true' : 'false' }, { onConflict: 'key' })
     if (error) return { error: error.message }
-    revalidatePath('/classificacaoMB')
+    revalidatePath('/copa2026/classificacaoMB')
     revalidatePath('/admin/classificacao')
     return {}
   } catch (err) {

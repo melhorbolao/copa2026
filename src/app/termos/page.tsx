@@ -48,7 +48,7 @@ export default function TermosPage() {
             <h2 className="mb-2 font-bold text-gray-900">5. Prêmios</h2>
             <p>
               A distribuição dos prêmios segue o regulamento vigente, disponível em{' '}
-              <a href="/regulamento" className="font-medium text-blue-600 hover:underline">
+              <a href="/copa2026/regulamento" className="font-medium text-blue-600 hover:underline">
                 melhorbolao.app.br/regulamento
               </a>
               . Os organizadores se reservam o direito de ajustar o regulamento mediante comunicação

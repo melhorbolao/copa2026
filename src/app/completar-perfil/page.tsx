@@ -16,7 +16,7 @@ export default async function CompletarPerfilPage() {
     .single()
 
   // Já tem perfil completo → redireciona
-  if (profile?.whatsapp && profile?.padrinho) redirect('/jogos')
+  if (profile?.whatsapp && profile?.padrinho) redirect('/copa2026/jogos')
 
   const initialName = profile?.name
     ?? user.user_metadata?.full_name

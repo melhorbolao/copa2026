@@ -24,7 +24,7 @@ export function NavbarLinks({ isAdmin, isMaster = false, visibility }: Props) {
   })
 
   const links = [
-    ...visiblePages.map(row => ({ href: `/${row.page_name}`, label: row.label })),
+    ...visiblePages.map(row => ({ href: `/copa2026/${row.page_name}`, label: row.label })),
     ...(effectiveAdmin ? [{ href: '/admin', label: 'Admin', highlight: true }] : []),
   ]
 

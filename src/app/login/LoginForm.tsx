@@ -51,7 +51,7 @@ export function LoginForm() {
       setLoading(false)
     } else {
       // Hard navigation: evita cadeia de redirecionamentos RSC que causa ERR_TOO_MANY_REDIRECTS
-      window.location.assign('/palpites')
+      window.location.assign('/copa2026/palpites')
     }
   }
 

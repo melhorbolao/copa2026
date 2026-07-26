@@ -6,6 +6,7 @@ import { AdminViewProvider } from '@/contexts/AdminViewContext'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { AlertBannerWrapper } from '@/components/AlertBannerWrapper'
 import { PageTracker } from '@/components/analytics/PageTracker'
+import { COPA2026_ARCHIVED } from '@/lib/tournament-lock'
 import './globals.css'
 
 const font = Plus_Jakarta_Sans({
@@ -47,9 +48,11 @@ export default function RootLayout({
           <PageTracker />
           <Sidebar />
           <div className="sm:pl-48">
-            <div className="hidden sm:block sticky top-0 z-40">
-              <AlertBannerWrapper />
-            </div>
+            {!COPA2026_ARCHIVED && (
+              <div className="hidden sm:block sticky top-0 z-40">
+                <AlertBannerWrapper />
+              </div>
+            )}
             {children}
           </div>
         </AdminViewProvider>

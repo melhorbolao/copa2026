@@ -1,0 +1,1907 @@
+'use client'
+
+import {
+  useState, useEffect, useRef, useCallback, useTransition, memo, useMemo, useSyncExternalStore,
+} from 'react'
+import { getWatchStore } from '@/lib/watchStore'
+import { toast } from 'react-hot-toast'
+import { downloadExcel } from '@/utils/downloadExcel'
+import { useVirtualizer } from '@tanstack/react-virtual'
+import { saveOfficialScore, saveOfficialTopScorer } from '@/app/copa2026/acopa/actions'
+import { scoreMatchBet, detectMatchZebra, detectGroupZebra, detectG4ZebraTeams, getMatchResult, scoreTournamentBet } from '@/lib/scoring/engine'
+import { calcGroupStandings, rankThirds, resolveThirdSlots, buildR32Teams, buildKnockoutTeamMap, computeGroupCompletion } from '@/lib/bracket/engine'
+import type { KnockoutTeamOverride } from '@/lib/bracket/engine'
+import { useAdminView } from '@/contexts/AdminViewContext'
+import { Flag } from '@/components/ui/Flag'
+import type { RuleMap, TournamentResults, MatchResult } from '@/lib/scoring/engine'
+import type { MatchSlim, BetSlim } from '@/lib/bracket/engine'
+
+// ── Types ──────────────────────────────────────────────────────────────────────
+
+export interface MatchFull {
+  id: string
+  match_number: number
+  phase: string
+  group_name: string | null
+  round: number | null
+  team_home: string
+  team_away: string
+  flag_home: string
+  flag_away: string
+  match_datetime: string
+  city: string
+  score_home: number | null
+  score_away: number | null
+  penalty_winner: string | null
+  is_brazil: boolean
+  betting_deadline: string
+}
+
+export interface Participant { id: string; apelido: string }
+
+export interface BetRaw {
+  participant_id: string
+  match_id: string
+  score_home: number
+  score_away: number
+  points: number | null
+}
+
+export interface GroupBetRaw {
+  participant_id: string
+  group_name: string
+  first_place: string
+  second_place: string
+  points: number | null
+}
+
+export interface ThirdBetRaw {
+  participant_id: string
+  group_name: string
+  team: string
+}
+
+export interface TournamentBetRaw {
+  participant_id: string
+  champion: string
+  runner_up: string
+  semi1: string
+  semi2: string
+  top_scorer: string
+  points: number | null
+}
+
+interface Props {
+  initialMatches: MatchFull[]
+  participants: Participant[]
+  initialBets: BetRaw[]
+  initialGroupBets: GroupBetRaw[]
+  initialThirdBets: ThirdBetRaw[]
+  initialTournamentBets: TournamentBetRaw[]
+  participantTotals: Record<string, number>
+  rules: RuleMap
+  isAdmin: boolean
+  activeParticipantId: string
+  teamAbbrs: Record<string, string>
+  officialTopScorers: string[]
+  scorerMapping: Record<string, string>
+  productionMode?: boolean
+  /** IDs de partidas cujo prazo de aposta ainda não passou (computados via serverNow no SSR) */
+  lockedMatchIds?: string[]
+  /** Verdadeiro quando o prazo do bônus (R1) ainda não passou */
+  bonusIsLocked?: boolean
+  /** Quais grupos têm pontuação de terceiros habilitada pelo admin */
+  thirdScoring?: Record<string, boolean>
+}
+
+// ── Constants ──────────────────────────────────────────────────────────────────
+
+const EDIT_WINDOW_MS = 4 * 60 * 60 * 1000
+
+const GROUP_ORDER = ['A','B','C','D','E','F','G','H','I','J','K','L']
+
+const PHASE_FILTERS = [
+  { value: 'group', label: 'Grupos',  phases: ['group'] },
+  { value: 'r32',   label: '16avos',  phases: ['round_of_32'] },
+  { value: 'r16',   label: 'Oitavas', phases: ['round_of_16'] },
+  { value: 'qf',    label: 'Quartas', phases: ['quarterfinal'] },
+  { value: 'sf',    label: 'Semis',   phases: ['semifinal'] },
+  { value: 'final', label: 'Final',   phases: ['third_place', 'final'] },
+] as const
+
+const ROW_H       = 44
+const ROW_H_BONUS = 38
+const ROW_H_SEC   = 26
+
+// Frozen column pixel offsets (desktop)
+const COL_DATE_DESKTOP  = 48
+const COL_TEAMS_DESKTOP = 148
+const COL_TEAMS_MOBILE  = 60
+const COL_SCORE_W       = 96
+const PART_COL_W        = 80
+const STAT_COL_W        = 52  // 4 colunas de estatísticas × 52px = 208px
+
+// ── Row types ──────────────────────────────────────────────────────────────────
+
+type TableRow =
+  | { kind: 'match';      match: MatchFull }
+  | { kind: 'section';    label: string; color: string }
+  | { kind: 'group_bet';  groupName: string }
+  | { kind: 'third_bet';  groupName: string }
+  | { kind: 'g4_field'; field: 'champion' | 'runner_up' | 'semi1' | 'semi2' }
+  | { kind: 'scorer_row' }
+
+// ── Cell classification ────────────────────────────────────────────────────────
+
+type CellKind = 'exact' | 'winner' | 'wrong' | 'pending' | 'no_bet'
+
+const CELL_BG: Record<CellKind, string> = {
+  exact:   'bg-emerald-100',
+  winner:  'bg-sky-100',
+  wrong:   'bg-rose-50',
+  pending: 'bg-white',
+  no_bet:  '',
+}
+
+// Hex equivalents used for sticky (frozen) cells that need an opaque inline background
+const CELL_KIND_BG_HEX: Record<CellKind, string> = {
+  exact:   '#d1fae5',
+  winner:  '#e0f2fe',
+  wrong:   '#fff1f2',
+  pending: '#ffffff',
+  no_bet:  '',      // caller must supply fallback row colour
+}
+
+function matchCellKind(
+  bet: { score_home: number; score_away: number } | undefined,
+  sh: number | null, sa: number | null,
+): CellKind {
+  if (!bet) return 'no_bet'
+  if (sh === null || sa === null) return 'pending'
+  if (bet.score_home === sh && bet.score_away === sa) return 'exact'
+  if (getMatchResult(bet.score_home, bet.score_away) === getMatchResult(sh, sa)) return 'winner'
+  return 'wrong'
+}
+
+function groupCellKind(
+  bet: { first_place: string; second_place: string } | undefined,
+  off1: string, off2: string,
+): CellKind {
+  if (!bet || !bet.first_place || !bet.second_place) return 'no_bet'
+  if (!off1) return 'pending'
+  if (bet.first_place === off1 && bet.second_place === off2) return 'exact'
+  const betSet = new Set([bet.first_place, bet.second_place])
+  if (betSet.has(off1) || betSet.has(off2)) return 'winner'
+  return 'wrong'
+}
+
+function thirdCellKind(
+  team: string | undefined, offTeam: string,
+): CellKind {
+  if (!team) return 'no_bet'
+  if (!offTeam) return 'pending'
+  return team === offTeam ? 'exact' : 'wrong'
+}
+
+// ── Abbreviate team name ───────────────────────────────────────────────────────
+
+const abbr = (name: string, max = 7) =>
+  name.length <= max ? name : name.slice(0, max - 1) + '…'
+
+// ── Per-event aggregate stats ──────────────────────────────────────────────────
+
+interface EventStats { pontuaram: number; cravaram: number; media: number }
+
+function matchEventStats(matchId: string, sh: number | null, sa: number | null, parts: Participant[], betMap: BetMap): EventStats {
+  if (sh === null || sa === null) return { pontuaram: 0, cravaram: 0, media: 0 }
+  let pontuaram = 0, cravaram = 0, total = 0
+  for (const p of parts) {
+    const bet = betMap.get(`${p.id}:${matchId}`)
+    if (!bet) continue
+    const kind = matchCellKind(bet, sh, sa)
+    const pts  = bet.livePoints !== undefined ? bet.livePoints : (bet.storedPoints ?? 0)
+    if ((pts ?? 0) > 0) pontuaram++
+    if (kind === 'exact') cravaram++
+    total += pts ?? 0
+  }
+  return { pontuaram, cravaram, media: parts.length > 0 ? total / parts.length : 0 }
+}
+
+function groupEventStats(g: string, of1: string, of2: string, parts: Participant[], groupBetMap: Map<string, { first_place: string; second_place: string; points: number | null }>): EventStats {
+  let pontuaram = 0, cravaram = 0, total = 0
+  for (const p of parts) {
+    const bet = groupBetMap.get(`${p.id}:${g}`)
+    const kind = groupCellKind(bet, of1, of2)
+    const pts  = bet?.points ?? 0
+    if ((pts ?? 0) > 0) pontuaram++
+    if (kind === 'exact') cravaram++
+    total += pts ?? 0
+  }
+  return { pontuaram, cravaram, media: parts.length > 0 ? total / parts.length : 0 }
+}
+
+function thirdEventStats(g: string, ot: string, thirdPts: number, parts: Participant[], thirdBetMap: Map<string, { team: string }>): EventStats {
+  let pontuaram = 0, cravaram = 0, total = 0
+  for (const p of parts) {
+    const bet  = thirdBetMap.get(`${p.id}:${g}`)
+    const kind = thirdCellKind(bet?.team, ot)
+    const pts  = kind === 'exact' ? thirdPts : 0
+    if (pts > 0) pontuaram++
+    if (kind === 'exact') cravaram++
+    total += pts
+  }
+  return { pontuaram, cravaram, media: parts.length > 0 ? total / parts.length : 0 }
+}
+
+function scoreG4FieldBet(
+  field: 'champion' | 'runner_up' | 'semi1' | 'semi2',
+  betValue: string,
+  results: TournamentResults,
+  rules: RuleMap,
+  zebraTeams: Set<string>,
+): number {
+  if (!betValue) return 0
+  const r = {
+    semis:    rules['semifinalista']   ?? 4,
+    finalist: rules['bonus_finalista'] ?? 8,
+    campeao:  rules['bonus_campeao']   ?? 12,
+    vice:     rules['bonus_vice']      ?? 8,
+    terceiro: rules['bonus_terceiro']  ?? 6,
+    quarto:   rules['bonus_quarto']    ?? 4,
+    zebraG4:  rules['bonus_zebra_g4']  ?? 0,
+  }
+  let pts = 0
+  if (field === 'champion') {
+    if (results.semifinalists.includes(betValue)) {
+      pts += r.semis
+      if (zebraTeams.has(betValue)) pts += r.zebraG4
+    }
+    if (results.finalists.includes(betValue))     pts += r.finalist
+    if (results.champion === betValue)            pts += r.campeao
+  } else if (field === 'runner_up') {
+    if (results.semifinalists.includes(betValue)) {
+      pts += r.semis
+      if (zebraTeams.has(betValue)) pts += r.zebraG4
+    }
+    if (results.finalists.includes(betValue))     pts += r.finalist
+    if (results.runnerUp === betValue)            pts += r.vice
+  } else if (field === 'semi1') {
+    if (results.semifinalists.includes(betValue)) {
+      pts += r.semis
+      if (zebraTeams.has(betValue)) pts += r.zebraG4
+    }
+    if (results.third === betValue)               pts += r.terceiro
+  } else { // semi2
+    if (results.semifinalists.includes(betValue)) {
+      pts += r.semis
+      if (zebraTeams.has(betValue)) pts += r.zebraG4
+    }
+    if (results.fourth === betValue)              pts += r.quarto
+  }
+  return pts
+}
+
+function g4FieldStats(
+  field: 'champion' | 'runner_up' | 'semi1' | 'semi2',
+  parts: Participant[],
+  tournamentBetMap: Map<string, TournamentBetRaw>,
+  results: TournamentResults,
+  rules: RuleMap,
+  zebraTeams: Set<string>,
+): EventStats {
+  const official = field === 'champion' ? results.champion : field === 'runner_up' ? results.runnerUp : field === 'semi1' ? results.third : results.fourth
+  let pontuaram = 0, cravaram = 0, total = 0
+  for (const p of parts) {
+    const bet = tournamentBetMap.get(p.id)
+    const val = bet?.[field] ?? ''
+    const pts = scoreG4FieldBet(field, val, results, rules, zebraTeams)
+    if (pts > 0) pontuaram++
+    if (val && official && val === official) cravaram++
+    total += pts
+  }
+  return { pontuaram, cravaram, media: parts.length > 0 ? total / parts.length : 0 }
+}
+
+function scorerEventStats(parts: Participant[], tournamentBetMap: Map<string, TournamentBetRaw>, localScorers: string[], artilhPts: number, scorerMapping: Record<string, string>): EventStats {
+  let pontuaram = 0, cravaram = 0, total = 0
+  for (const p of parts) {
+    const bet = tournamentBetMap.get(p.id)
+    if (!bet?.top_scorer) continue
+    const norm      = (scorerMapping[bet.top_scorer.toLowerCase().trim()] ?? bet.top_scorer).trim().toLowerCase()
+    const isCorrect = localScorers.length > 0 && localScorers.some(s => s.trim().toLowerCase() === norm)
+    const pts       = localScorers.length > 0 ? (isCorrect ? artilhPts : 0) : 0
+    if (pts > 0) pontuaram++
+    if (isCorrect) cravaram++
+    total += pts
+  }
+  return { pontuaram, cravaram, media: parts.length > 0 ? total / parts.length : 0 }
+}
+
+// ── Format match datetime (Brasília UTC-3) ─────────────────────────────────────
+
+function fmtMatchDate(dt: string) {
+  const d = new Date(dt)
+  const date = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' })
+  const time = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
+  return { date, time }
+}
+
+
+// ── ScoreInput ─────────────────────────────────────────────────────────────────
+
+const ScoreInput = memo(function ScoreInput({
+  match, canEdit, possibleZebras, isActualZebra, isActualZebraBet, onSaved,
+}: {
+  match: MatchFull
+  canEdit: boolean
+  possibleZebras?: { H: ZebraOutcome; D: ZebraOutcome; A: ZebraOutcome }
+  isActualZebra?: boolean
+  isActualZebraBet?: boolean
+  onSaved: (sh: number, sa: number) => void
+}) {
+  const [home, setHome] = useState(match.score_home?.toString() ?? '')
+  const [away, setAway] = useState(match.score_away?.toString() ?? '')
+  const [pending, startTransition] = useTransition()
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const homeRef  = useRef(home)
+  const awayRef  = useRef(away)
+
+  useEffect(() => {
+    const h = match.score_home?.toString() ?? ''
+    const a = match.score_away?.toString() ?? ''
+    setHome(h); homeRef.current = h
+    setAway(a); awayRef.current = a
+  }, [match.score_home, match.score_away])
+
+  const triggerSave = useCallback((h: string, a: string) => {
+    clearTimeout(timerRef.current)
+    const hNum = parseInt(h, 10)
+    const aNum = parseInt(a, 10)
+    if (isNaN(hNum) || isNaN(aNum) || hNum < 0 || aNum < 0) return
+    timerRef.current = setTimeout(() => {
+      startTransition(async () => {
+        const res = await saveOfficialScore(match.id, hNum, aNum)
+        if (!res.error) onSaved(hNum, aNum)
+      })
+    }, 800)
+  }, [match.id, onSaved])
+
+  const hasScore = match.score_home !== null && match.score_away !== null
+
+  // Resultado já conhecido: sempre mostra display read-only com distinção de cores de zebra
+  if (hasScore) {
+    const result = getMatchResult(match.score_home!, match.score_away!)
+    const zebraScoreCls = isActualZebraBet ? 'bg-gray-900 text-white' : 'bg-gray-500 text-white'
+    const zebraDrawCls  = isActualZebraBet ? 'rounded bg-gray-900 text-white px-0.5' : 'rounded bg-gray-500 text-white px-0.5'
+    return (
+      <div className="inline-flex items-center gap-0.5">
+        <span className={`inline-flex items-center justify-center min-w-[18px] rounded px-0.5 text-xs font-bold tabular-nums ${isActualZebra && result === 'H' ? zebraScoreCls : 'text-gray-700'}`}>
+          {match.score_home}
+        </span>
+        <span className={`text-[9px] font-bold ${isActualZebra && result === 'D' ? zebraDrawCls : 'text-gray-300'}`}>×</span>
+        <span className={`inline-flex items-center justify-center min-w-[18px] rounded px-0.5 text-xs font-bold tabular-nums ${isActualZebra && result === 'A' ? zebraScoreCls : 'text-gray-700'}`}>
+          {match.score_away}
+        </span>
+      </div>
+    )
+  }
+
+  if (!canEdit) {
+    // Sem resultado ainda, modo leitura: mostra indicadores de possível zebra
+    const pz = possibleZebras
+    if (!pz || (!pz.H && !pz.D && !pz.A)) return <span className="text-gray-300 text-xs">–</span>
+    return (
+      <div className="inline-flex items-center gap-0.5">
+        <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[9px] ${pz.H === 'apostada' ? 'bg-gray-900' : pz.H === 'sem_aposta' ? 'bg-gray-500' : 'bg-gray-100 border border-gray-200'}`} />
+        <span className={`text-[9px] font-bold ${pz.D === 'apostada' ? 'rounded bg-gray-900 text-white px-0.5' : pz.D === 'sem_aposta' ? 'rounded bg-gray-500 text-white px-0.5' : 'text-gray-300'}`}>×</span>
+        <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[9px] ${pz.A === 'apostada' ? 'bg-gray-900' : pz.A === 'sem_aposta' ? 'bg-gray-500' : 'bg-gray-100 border border-gray-200'}`} />
+      </div>
+    )
+  }
+
+  const currentH = parseInt(home, 10)
+  const currentA = parseInt(away, 10)
+  const currentResult = (!isNaN(currentH) && !isNaN(currentA)) ? getMatchResult(currentH, currentA) : null
+
+  return (
+    <div className="flex items-center justify-center gap-0.5">
+      <input type="text" inputMode="numeric" pattern="[0-9]*" value={home}
+        onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0,2); setHome(v); homeRef.current = v; triggerSave(v, awayRef.current) }}
+        placeholder="–"
+        className={`w-7 rounded border text-center text-xs font-bold py-0.5 focus:outline-none ${
+          possibleZebras?.H === 'apostada'
+            ? 'border-gray-700 bg-gray-900 text-white placeholder-gray-500 focus:border-gray-600'
+            : possibleZebras?.H === 'sem_aposta'
+              ? 'border-gray-500 bg-gray-500 text-white placeholder-gray-300 focus:border-gray-400'
+              : 'border-gray-200 bg-white focus:border-verde-400'
+        }`}
+      />
+      <span className={`text-[9px] font-bold ${possibleZebras?.D === 'apostada' ? 'rounded bg-gray-900 text-white px-0.5' : possibleZebras?.D === 'sem_aposta' ? 'rounded bg-gray-500 text-white px-0.5' : 'text-gray-300'}`}>×</span>
+      <input type="text" inputMode="numeric" pattern="[0-9]*" value={away}
+        onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0,2); setAway(v); awayRef.current = v; triggerSave(homeRef.current, v) }}
+        placeholder="–"
+        className={`w-7 rounded border text-center text-xs font-bold py-0.5 focus:outline-none ${
+          possibleZebras?.A === 'apostada'
+            ? 'border-gray-700 bg-gray-900 text-white placeholder-gray-500 focus:border-gray-600'
+            : possibleZebras?.A === 'sem_aposta'
+              ? 'border-gray-500 bg-gray-500 text-white placeholder-gray-300 focus:border-gray-400'
+              : 'border-gray-200 bg-white focus:border-verde-400'
+        }`}
+      />
+      {pending && <span className="text-[9px] text-gray-400 ml-0.5">…</span>}
+    </div>
+  )
+})
+
+// ── Zebra helpers ──────────────────────────────────────────────────────────────
+
+// 'apostada' = zebra (≤threshold%) com ≥1 aposta; 'sem_aposta' = zebra mas 0 apostas; false = não é zebra
+type ZebraOutcome = 'apostada' | 'sem_aposta' | false
+
+function collectMatchBets(matchId: string, participants: Participant[], betMap: BetMap) {
+  const bets: Array<{ score_home: number; score_away: number }> = []
+  for (const p of participants) {
+    const bet = betMap.get(`${p.id}:${matchId}`)
+    if (bet) bets.push(bet)
+  }
+  return bets
+}
+
+function zebraOutcome(
+  betsList: Array<{ score_home: number; score_away: number }>,
+  result: MatchResult,
+  threshold: number,
+): ZebraOutcome {
+  if (!detectMatchZebra(betsList, result, threshold)) return false
+  const count = betsList.filter(b => getMatchResult(b.score_home, b.score_away) === result).length
+  return count > 0 ? 'apostada' : 'sem_aposta'
+}
+
+function detectPossibleZebras(
+  matchId: string, participants: Participant[], betMap: BetMap, threshold: number,
+): { H: ZebraOutcome; D: ZebraOutcome; A: ZebraOutcome } | undefined {
+  const bets = collectMatchBets(matchId, participants, betMap)
+  if (bets.length === 0) return undefined
+  return {
+    H: zebraOutcome(bets, 'H', threshold),
+    D: zebraOutcome(bets, 'D', threshold),
+    A: zebraOutcome(bets, 'A', threshold),
+  }
+}
+
+// ── Bet map helpers ────────────────────────────────────────────────────────────
+
+type BetEntry = { score_home: number; score_away: number; storedPoints: number | null; livePoints?: number }
+type BetMap = Map<string, BetEntry>
+
+function buildBetMap(bets: BetRaw[]): BetMap {
+  const m = new Map<string, BetEntry>()
+  for (const b of bets) {
+    m.set(`${b.participant_id}:${b.match_id}`, {
+      score_home: b.score_home, score_away: b.score_away, storedPoints: b.points,
+    })
+  }
+  return m
+}
+
+// ── Main component ─────────────────────────────────────────────────────────────
+
+export function TabelaMBClient({
+  initialMatches, participants, initialBets, initialGroupBets, initialThirdBets,
+  initialTournamentBets, participantTotals, rules, isAdmin, activeParticipantId,
+  teamAbbrs, officialTopScorers, scorerMapping, productionMode = false,
+  lockedMatchIds, bonusIsLocked = false, thirdScoring = {},
+}: Props) {
+  const [matches, setMatches] = useState<MatchFull[]>(initialMatches)
+  const [betMap,  setBetMap]  = useState<BetMap>(() => buildBetMap(initialBets))
+  const [phase,   setPhase]   = useState('group')
+  const [now,     setNow]     = useState(Date.now())
+  const [isMobile, setIsMobile] = useState(false)
+  const watchStore = getWatchStore(`sim_watch_${activeParticipantId}`)
+  const watchParticipantId = useSyncExternalStore(
+    watchStore.subscribe,
+    watchStore.getSnapshot,
+    watchStore.getServerSnapshot,
+  )
+  const [showWatchSelector, setShowWatchSelector] = useState(false)
+  const [watchQuery, setWatchQuery] = useState('')
+
+  // Admin: gestão de artilheiros oficiais
+  const [localScorers, setLocalScorers] = useState<string[]>(officialTopScorers)
+  const [scorerInput,    setScorerInput]    = useState('')
+  const [scorerSelectVal, setScorerSelectVal] = useState('')
+  const [scorerPending, startScorerTransition] = useTransition()
+  const [scorerError,  setScorerError]  = useState('')
+
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Conjunto de match IDs com prazo aberto — palpites alheios mostram 🔒
+  const lockedSet = useMemo(() => new Set(lockedMatchIds ?? []), [lockedMatchIds])
+
+  // Group / third bet maps (static — refreshed on page load)
+  const groupBetMap = useMemo(() => {
+    const m = new Map<string, { first_place: string; second_place: string; points: number | null }>()
+    for (const b of initialGroupBets) {
+      m.set(`${b.participant_id}:${b.group_name}`, { first_place: b.first_place, second_place: b.second_place, points: b.points })
+    }
+    return m
+  }, [initialGroupBets])
+
+  const thirdBetMap = useMemo(() => {
+    const m = new Map<string, { team: string }>()
+    for (const b of initialThirdBets) {
+      m.set(`${b.participant_id}:${b.group_name}`, { team: b.team })
+    }
+    return m
+  }, [initialThirdBets])
+
+  const tournamentBetMap = useMemo(() => {
+    const m = new Map<string, TournamentBetRaw>()
+    for (const b of initialTournamentBets) m.set(b.participant_id, b)
+    return m
+  }, [initialTournamentBets])
+
+  // Clock
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30_000)
+    return () => clearInterval(t)
+  }, [])
+
+  // Mobile breakpoint (< 640px)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+
+  const recomputeForMatch = useCallback((matchId: string, sh: number, sa: number, isBrazil: boolean) => {
+    setBetMap(prev => {
+      const allBets: Array<{ score_home: number; score_away: number }> = []
+      for (const [key, bet] of prev) {
+        if (key.endsWith(`:${matchId}`)) allBets.push(bet)
+      }
+      const isZebra = detectMatchZebra(allBets, getMatchResult(sh, sa), rules['percentual_zebra'] ?? 15)
+      const next = new Map(prev)
+      for (const p of participants) {
+        const key = `${p.id}:${matchId}`
+        const bet = prev.get(key)
+        if (bet) {
+          next.set(key, { ...bet, livePoints: scoreMatchBet(bet.score_home, bet.score_away, sh, sa, isZebra, isBrazil, rules) })
+        }
+      }
+      return next
+    })
+  }, [participants, rules])
+
+  // Bulk-recompute livePoints for all completed matches on initial mount
+  useEffect(() => {
+    setBetMap(prev => {
+      let changed = false
+      const next = new Map(prev)
+      for (const m of matches) {
+        if (m.score_home === null || m.score_away === null) continue
+        const allBetsForMatch: Array<{ score_home: number; score_away: number }> = []
+        for (const [key, bet] of prev) {
+          if (key.endsWith(`:${m.id}`)) allBetsForMatch.push(bet)
+        }
+        const isZebra = detectMatchZebra(allBetsForMatch, getMatchResult(m.score_home, m.score_away), rules['percentual_zebra'] ?? 15)
+        for (const p of participants) {
+          const key = `${p.id}:${m.id}`
+          const bet = prev.get(key)
+          if (bet) {
+            next.set(key, { ...bet, livePoints: scoreMatchBet(bet.score_home, bet.score_away, m.score_home, m.score_away, isZebra, m.is_brazil, rules) })
+            changed = true
+          }
+        }
+      }
+      return changed ? next : prev
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Official group standings (computed from match scores via bracket engine)
+  const officialContext = useMemo(() => {
+    const gms = matches.filter(m => m.phase === 'group')
+    const scoreMap = new Map<string, BetSlim>()
+    for (const m of gms) {
+      if (m.score_home !== null && m.score_away !== null) {
+        scoreMap.set(m.id, { match_id: m.id, score_home: m.score_home, score_away: m.score_away })
+      }
+    }
+    const slim: MatchSlim[] = gms.map(m => ({
+      id: m.id, group_name: m.group_name, phase: m.phase,
+      team_home: m.team_home, team_away: m.team_away,
+      flag_home: m.flag_home, flag_away: m.flag_away,
+    }))
+    const standings = calcGroupStandings(slim, scoreMap)
+    const completion = computeGroupCompletion(slim, scoreMap)
+    return { standings, completion }
+  }, [matches])
+
+  const officialStandings = officialContext.standings
+  const officialThirds = useMemo(() => rankThirds(officialStandings), [officialStandings])
+  const completeGroupsSet = officialContext.completion.completeGroups
+  const allGroupsComplete = officialContext.completion.allGroupsComplete
+
+  const knockoutTeamMap = useMemo(() => {
+    const thirdSlots = resolveThirdSlots(officialThirds)
+    if (!thirdSlots) return new Map<string, KnockoutTeamOverride>()
+    const r32Slots = buildR32Teams(
+      officialStandings, officialThirds, thirdSlots, undefined,
+      officialContext.completion.completeGroups,
+      officialContext.completion.allGroupsComplete,
+    )
+    const knockoutMatches = matches.filter(m => m.phase !== 'group')
+    return buildKnockoutTeamMap(r32Slots, knockoutMatches)
+  }, [officialStandings, officialThirds, matches, officialContext.completion])
+
+  // Tournament results derived from actual match scores
+  const knockoutResults = useMemo((): TournamentResults => {
+    const resolved = (m: MatchFull, side: 'home' | 'away') => {
+      const ov = knockoutTeamMap.get(m.id)
+      return side === 'home' ? (ov?.team_home ?? m.team_home) : (ov?.team_away ?? m.team_away)
+    }
+    const mWinner = (m: MatchFull): string | null => {
+      if (m.score_home === null || m.score_away === null) return null
+      const h = resolved(m, 'home'), a = resolved(m, 'away')
+      if (m.score_home > m.score_away) return h
+      if (m.score_away > m.score_home) return a
+      return m.penalty_winner ?? null
+    }
+    const qf = matches.filter(m => m.phase === 'quarterfinal').sort((a, b) => a.match_number - b.match_number)
+    const sf = matches.filter(m => m.phase === 'semifinal').sort((a, b) => a.match_number - b.match_number)
+    const fin  = matches.find(m => m.phase === 'final')
+    const thr  = matches.find(m => m.phase === 'third_place')
+    const semifinalists = qf.map(mWinner).filter((t): t is string => !!t)
+    const finalists     = sf.map(mWinner).filter((t): t is string => !!t)
+    let champion: string | null = null, runnerUp: string | null = null
+    if (fin) {
+      champion = mWinner(fin)
+      if (champion) runnerUp = resolved(fin, champion === resolved(fin, 'home') ? 'away' : 'home')
+    }
+    let third: string | null = null, fourth: string | null = null
+    if (thr) {
+      third = mWinner(thr)
+      if (third) fourth = resolved(thr, third === resolved(thr, 'home') ? 'away' : 'home')
+    }
+    return { semifinalists, finalists, champion, runnerUp, third, fourth, officialScorers: officialTopScorers }
+  }, [matches, knockoutTeamMap, officialTopScorers])
+
+  const zebraTeams = useMemo(() => {
+    const threshold = rules['percentual_zebra'] ?? 15
+    return detectG4ZebraTeams([...tournamentBetMap.values()], threshold)
+  }, [tournamentBetMap, rules])
+
+  // Per-group: which first-place picks are potential zebras?
+  const groupPotentialZebraTeams = useMemo(() => {
+    const threshold = rules['percentual_zebra'] ?? 15
+    const result = new Map<string, Set<string>>()
+    for (const g of GROUP_ORDER) {
+      const allPicks = participants.map(p => groupBetMap.get(`${p.id}:${g}`)?.first_place).filter((x): x is string => !!x)
+      const zebraTeams = new Set<string>()
+      if (allPicks.length) {
+        for (const team of new Set(allPicks)) {
+          if (detectGroupZebra(allPicks.map(fp => ({ first_place: fp })), team, threshold)) zebraTeams.add(team)
+        }
+      }
+      result.set(g, zebraTeams)
+    }
+    return result
+  }, [rules, participants, groupBetMap])
+
+  // Per-group: is the official first place a zebra?
+  const groupActualZebras = useMemo(() => {
+    const threshold = rules['percentual_zebra'] ?? 15
+    const result = new Set<string>()
+    for (const g of GROUP_ORDER) {
+      const of1 = officialStandings.find(s => s.group === g)?.teams[0]?.team ?? ''
+      if (!of1) continue
+      const allPicks = participants.map(p => groupBetMap.get(`${p.id}:${g}`)?.first_place).filter((x): x is string => !!x)
+      if (allPicks.length && detectGroupZebra(allPicks.map(fp => ({ first_place: fp })), of1, threshold)) result.add(g)
+    }
+    return result
+  }, [rules, participants, groupBetMap, officialStandings])
+
+  const offFirstMap  = useMemo(() => new Map(GROUP_ORDER.map(g => [g, completeGroupsSet.has(g) ? (officialStandings.find(s => s.group === g)?.teams[0]?.team ?? '') : ''])), [officialStandings, completeGroupsSet])
+  const offSecondMap = useMemo(() => new Map(GROUP_ORDER.map(g => [g, completeGroupsSet.has(g) ? (officialStandings.find(s => s.group === g)?.teams[1]?.team ?? '') : ''])), [officialStandings, completeGroupsSet])
+  const offThirdMap  = useMemo(() => new Map(GROUP_ORDER.map(g => {
+    if (!thirdScoring[g]) return [g, ''] as [string, string]
+    if (!completeGroupsSet.has(g)) return [g, ''] as [string, string]
+    const team = officialThirds.find(t => t.group === g)?.team ?? ''
+    return [g, team] as [string, string]
+  })), [officialThirds, thirdScoring, completeGroupsSet])
+
+  const teamFlagMap = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const match of matches) {
+      if (match.flag_home) m.set(match.team_home, match.flag_home)
+      if (match.flag_away) m.set(match.team_away, match.flag_away)
+    }
+    return m
+  }, [matches])
+
+  const { viewMode } = useAdminView()
+  const effectiveIsAdmin = isAdmin && viewMode === 'admin'
+
+  const canEdit = useCallback((match: MatchFull) => {
+    if (lockedSet.has(match.id)) return false
+    if (effectiveIsAdmin) return true
+    const start = new Date(match.match_datetime).getTime()
+    return now >= start && now <= start + EDIT_WINDOW_MS
+  }, [effectiveIsAdmin, now, lockedSet])
+
+  const phaseConfig = PHASE_FILTERS.find(f => f.value === phase) ?? PHASE_FILTERS[0]
+  const filteredMatches = useMemo(
+    () => matches
+      .filter(m => (phaseConfig.phases as readonly string[]).includes(m.phase))
+      .sort((a, b) => new Date(a.match_datetime).getTime() - new Date(b.match_datetime).getTime()),
+    [matches, phaseConfig],
+  )
+
+  // Build unified row list
+  const allRows = useMemo((): TableRow[] => {
+    const rows: TableRow[] = filteredMatches.map(m => ({ kind: 'match', match: m }))
+    if (phase === 'group') {
+      rows.push({ kind: 'section', label: '1º e 2º Classificados por Grupo', color: '#1e3a5f' })
+      GROUP_ORDER.forEach(g => rows.push({ kind: 'group_bet', groupName: g }))
+      rows.push({ kind: 'section', label: 'Melhores Terceiros Classificados', color: '#3b0764' })
+      GROUP_ORDER.forEach(g => rows.push({ kind: 'third_bet', groupName: g }))
+    }
+    if (phase === 'final') {
+      rows.push({ kind: 'section', label: 'G4 — Bônus por Posição', color: '#78350f' })
+      rows.push({ kind: 'g4_field', field: 'champion' })
+      rows.push({ kind: 'g4_field', field: 'runner_up' })
+      rows.push({ kind: 'g4_field', field: 'semi1' })
+      rows.push({ kind: 'g4_field', field: 'semi2' })
+      rows.push({ kind: 'section', label: 'Artilheiro', color: '#78350f' })
+      rows.push({ kind: 'scorer_row' })
+    }
+    return rows
+  }, [phase, filteredMatches])
+
+  // Virtualizer with variable row heights
+  const rowVirtualizer = useVirtualizer({
+    count: allRows.length,
+    getScrollElement: () => containerRef.current,
+    estimateSize: i => {
+      const r = allRows[i]
+      if (r.kind === 'section') return ROW_H_SEC
+      if (r.kind === 'group_bet' || r.kind === 'third_bet' || r.kind === 'g4_field' || r.kind === 'scorer_row') return ROW_H_BONUS
+      return ROW_H
+    },
+    overscan: 8,
+  })
+
+  const colDateW     = isMobile ? 0 : COL_DATE_DESKTOP
+  const colTeamsW    = isMobile ? COL_TEAMS_MOBILE : COL_TEAMS_DESKTOP
+  const colTeamsLeft = colDateW
+  const colScoreLeft = colTeamsLeft + colTeamsW
+  const frozenTotal  = colScoreLeft + COL_SCORE_W
+
+  // On desktop, the active participant's column is frozen right after Oficial
+  const activePart   = participants.find(p => p.id === activeParticipantId)
+  const otherParts   = participants.filter(p => p.id !== activeParticipantId)
+  const frozenPartLeft = activePart
+    ? (isMobile ? frozenTotal : frozenTotal + 3 * STAT_COL_W + PART_COL_W)
+    : null
+
+  // Compute totals client-side so match livePoints + group + third bets are all included.
+  // Third-place points are computed live (DB only stores them after all 72 group matches finish).
+  const computedTotals = useMemo(() => {
+    const thirdPts = rules['terceiro_classificado'] ?? 3
+    const totals: Record<string, number> = {}
+    for (const p of participants) {
+      let sum = 0
+      for (const m of matches) {
+        if (m.score_home === null || m.score_away === null) continue
+        const e = betMap.get(`${p.id}:${m.id}`)
+        if (e) {
+          const pts = e.livePoints !== undefined ? e.livePoints : e.storedPoints
+          if (pts) sum += pts
+        }
+      }
+      GROUP_ORDER.forEach(g => {
+        const gb = groupBetMap.get(`${p.id}:${g}`)
+        if (gb?.points) sum += gb.points
+        const tb = thirdBetMap.get(`${p.id}:${g}`)
+        if (tb?.team && thirdScoring[g] && completeGroupsSet.has(g)) {
+          const actualThird = officialThirds.find(t => t.group === g)?.team ?? ''
+          if (actualThird && tb.team === actualThird) sum += thirdPts
+        }
+      })
+      const tb = tournamentBetMap.get(p.id)
+      if (tb) sum += scoreTournamentBet(tb, knockoutResults, rules, zebraTeams, scorerMapping)
+      totals[p.id] = sum
+    }
+    return totals
+  }, [participants, matches, betMap, groupBetMap, thirdBetMap, officialThirds, allGroupsComplete, completeGroupsSet, thirdScoring, rules, tournamentBetMap, knockoutResults, zebraTeams, scorerMapping])
+
+  const matchById = useMemo(() => new Map<string, MatchFull>(matches.map(m => [m.id, m])), [matches])
+
+  const leaderId = useMemo(() => {
+    let best = -Infinity, bestId = ''
+    for (const p of participants) {
+      const pts = computedTotals[p.id] ?? 0
+      if (pts > best) { best = pts; bestId = p.id }
+    }
+    return bestId
+  }, [participants, computedTotals])
+
+  const hasAnyResult = useMemo(() => matches.some(m => m.score_home !== null), [matches])
+  const effectiveLeaderId = hasAnyResult ? leaderId : ''
+
+  // If the logged-in user is leading, their column is already the frozen Líder column — don't show twice
+  const isActiveLeader = !!activeParticipantId && activeParticipantId === leaderId
+
+  const watchPart = watchParticipantId ? (participants.find(p => p.id === watchParticipantId) ?? null) : null
+
+  // Sentinel: watch column is always visible; sentinel holds the slot even when no participant is selected
+  const WATCH_ID = '__watch__'
+  const watchSentinel: Participant = { id: WATCH_ID, apelido: watchPart?.apelido ?? '' }
+
+  const scrollable = otherParts.filter(p =>
+    p.id !== effectiveLeaderId &&
+    p.id !== watchParticipantId
+  )
+  const displayParts: Participant[] = isActiveLeader
+    ? [watchSentinel, ...scrollable]
+    : (activePart ? [activePart, watchSentinel, ...scrollable] : [watchSentinel, ...scrollable])
+
+  const displayFrozenLeft = isActiveLeader ? null : frozenPartLeft
+  const watchFrozenLeft = isMobile
+    ? frozenTotal + (isActiveLeader ? 0 : PART_COL_W)
+    : frozenTotal + 3 * STAT_COL_W + (isActiveLeader ? 1 : 2) * PART_COL_W
+
+  // Unique scorer names bet by participants (standardized), for the admin dropdown
+  const betScorerOptions = useMemo(() => {
+    const seen = new Set<string>()
+    const opts: string[] = []
+    for (const b of tournamentBetMap.values()) {
+      if (!b.top_scorer) continue
+      const display = (scorerMapping[b.top_scorer.toLowerCase().trim()] ?? b.top_scorer).trim()
+      if (display && !seen.has(display.toLowerCase())) {
+        seen.add(display.toLowerCase())
+        opts.push(display)
+      }
+    }
+    return opts.sort()
+  }, [tournamentBetMap, scorerMapping])
+
+  // ── Pre-computed stats Maps — eliminam O(n) loops do render loop ──────────────
+
+  const matchStatsMap = useMemo(() => {
+    const m = new Map<string, EventStats>()
+    for (const match of matches)
+      m.set(match.id, matchEventStats(match.id, match.score_home, match.score_away, participants, betMap))
+    return m
+  }, [matches, betMap, participants])
+
+  const groupStatsMap = useMemo(() => {
+    const m = new Map<string, EventStats>()
+    for (const g of GROUP_ORDER)
+      m.set(g, groupEventStats(g, offFirstMap.get(g) ?? '', offSecondMap.get(g) ?? '', participants, groupBetMap))
+    return m
+  }, [offFirstMap, offSecondMap, participants, groupBetMap])
+
+  const thirdStatsMap = useMemo(() => {
+    const thirdPts = rules['terceiro_classificado'] ?? 3
+    const m = new Map<string, EventStats>()
+    for (const g of GROUP_ORDER)
+      m.set(g, thirdEventStats(g, offThirdMap.get(g) ?? '', thirdPts, participants, thirdBetMap))
+    return m
+  }, [offThirdMap, participants, thirdBetMap, rules])
+
+  const matchZebraMap = useMemo(() => {
+    const threshold = rules['percentual_zebra'] ?? 15
+    const possible  = new Map<string, { H: ZebraOutcome; D: ZebraOutcome; A: ZebraOutcome } | undefined>()
+    const actual    = new Map<string, boolean>()
+    const actualBet = new Map<string, boolean>()
+    for (const m of matches) {
+      const betsList  = collectMatchBets(m.id, participants, betMap)
+      const hasResult = m.score_home !== null && m.score_away !== null
+      possible.set(m.id, betsList.length > 0 ? {
+        H: zebraOutcome(betsList, 'H', threshold),
+        D: zebraOutcome(betsList, 'D', threshold),
+        A: zebraOutcome(betsList, 'A', threshold),
+      } : undefined)
+      const isZebra = hasResult && betsList.length > 0
+        ? detectMatchZebra(betsList, getMatchResult(m.score_home!, m.score_away!), threshold)
+        : false
+      actual.set(m.id, isZebra)
+      if (isZebra && hasResult) {
+        const res = getMatchResult(m.score_home!, m.score_away!)
+        // apostada = ao menos 1 palpite neste desfecho (mesmo sendo ≤15%)
+        const countOnResult = betsList.filter(b => getMatchResult(b.score_home, b.score_away) === res).length
+        actualBet.set(m.id, countOnResult > 0)
+      } else {
+        actualBet.set(m.id, false)
+      }
+    }
+    return { possible, actual, actualBet }
+  }, [matches, betMap, participants, rules])
+
+  // Funções de save do artilheiro (admin)
+  const handleScorerSave = useCallback((names: string[]) => {
+    setLocalScorers(names)
+    setScorerError('')
+    startScorerTransition(async () => {
+      const r = await saveOfficialTopScorer(JSON.stringify(names))
+      if (r.error) setScorerError(r.error)
+    })
+  }, [])
+
+  const handleScorerAddDirect = useCallback((name: string) => {
+    if (!name || localScorers.some(s => s.trim().toLowerCase() === name.trim().toLowerCase())) return
+    handleScorerSave([...localScorers, name])
+    setScorerSelectVal('')
+  }, [localScorers, handleScorerSave])
+
+  const handleScorerAdd = useCallback(() => {
+    const t = scorerInput.trim()
+    if (!t || localScorers.some(s => s.trim().toLowerCase() === t.toLowerCase())) return
+    handleScorerSave([...localScorers, t])
+    setScorerInput('')
+    setScorerSelectVal('')
+  }, [scorerInput, localScorers, handleScorerSave])
+
+  const saveWatchPart = useCallback((id: string | null) => {
+    watchStore.set(id)
+  }, [watchStore])
+
+  const vItems    = rowVirtualizer.getVirtualItems()
+  const totalSize = rowVirtualizer.getTotalSize()
+  const padTop    = vItems.length > 0 ? vItems[0].start : 0
+  const padBot    = vItems.length > 0 ? totalSize - vItems[vItems.length - 1].end : 0
+  const tableW    = frozenTotal + 3 * STAT_COL_W + (displayParts.length + 1) * PART_COL_W
+
+  const getMatchPts = (pid: string, mid: string) => {
+    const e = betMap.get(`${pid}:${mid}`)
+    if (!e) return null
+    if (e.livePoints !== undefined) return e.livePoints
+    // Nunca exibir storedPoints de uma partida sem placar oficial registrado
+    const m = matchById.get(mid)
+    if (!m || m.score_home === null || m.score_away === null) return null
+    return e.storedPoints
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+
+  return (
+    <div className="flex flex-col" style={{ height: 'calc(100dvh - 56px)' }}>
+
+      {/* Filter bar */}
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-gray-200 bg-white px-3 py-2 shrink-0">
+        <span className="text-[11px] font-semibold text-gray-400">Fase:</span>
+        {PHASE_FILTERS.map(f => (
+          <button key={f.value} onClick={() => setPhase(f.value)}
+            className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition ${
+              phase === f.value ? 'bg-verde-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >{f.label}</button>
+        ))}
+        <span className="ml-auto text-[10px] text-gray-400">
+          {filteredMatches.length} jogos · {participants.length} part.
+        </span>
+        {/* Botão de exportação Excel — apenas desktop */}
+        <button
+          className="hidden sm:inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition"
+          onClick={async () => {
+            const ExcelJS = (await import('exceljs')).default
+            const wb = new ExcelJS.Workbook()
+            const ws = wb.addWorksheet('TabelaMB')
+            const artPts = rules['artilheiro'] ?? 18
+            const thPts  = rules['terceiro_classificado'] ?? 3
+
+            // Participants in alphabetical order — same for everyone
+            const sortedParts = [...participants]
+
+            ws.addRow(['Data', 'Jogo', 'Oficial', 'Pont.', 'Crav.', 'Méd.', ...sortedParts.map(p => p.apelido)])
+
+            // Build all-phase rows regardless of current UI filter
+            const C = '' // section color placeholder
+            const exportRows: TableRow[] = []
+            const gMatches  = matches.filter(m => m.phase === 'group')
+            const r32       = matches.filter(m => m.phase === 'round_of_32')
+            const r16       = matches.filter(m => m.phase === 'round_of_16')
+            const qf        = matches.filter(m => m.phase === 'quarterfinal')
+            const sf        = matches.filter(m => m.phase === 'semifinal')
+            const fin       = matches.filter(m => m.phase === 'third_place' || m.phase === 'final')
+
+            if (gMatches.length) {
+              exportRows.push({ kind: 'section', label: 'Fase de Grupos', color: C })
+              gMatches.forEach(m => exportRows.push({ kind: 'match', match: m }))
+              exportRows.push({ kind: 'section', label: '1º e 2º Classificados por Grupo', color: C })
+              GROUP_ORDER.forEach(g => exportRows.push({ kind: 'group_bet', groupName: g }))
+              exportRows.push({ kind: 'section', label: 'Melhores Terceiros Classificados', color: C })
+              GROUP_ORDER.forEach(g => exportRows.push({ kind: 'third_bet', groupName: g }))
+            }
+            if (r32.length) { exportRows.push({ kind: 'section', label: '16 avos de Final', color: C }); r32.forEach(m => exportRows.push({ kind: 'match', match: m })) }
+            if (r16.length) { exportRows.push({ kind: 'section', label: 'Oitavas de Final',  color: C }); r16.forEach(m => exportRows.push({ kind: 'match', match: m })) }
+            if (qf.length)  { exportRows.push({ kind: 'section', label: 'Quartas de Final',  color: C }); qf.forEach(m  => exportRows.push({ kind: 'match', match: m })) }
+            if (sf.length)  { exportRows.push({ kind: 'section', label: 'Semifinais',         color: C }); sf.forEach(m  => exportRows.push({ kind: 'match', match: m })) }
+            if (fin.length) { exportRows.push({ kind: 'section', label: 'Final e 3º Lugar',   color: C }); fin.forEach(m => exportRows.push({ kind: 'match', match: m })) }
+            exportRows.push({ kind: 'section', label: 'G4 — Bônus por Posição', color: C })
+            exportRows.push({ kind: 'g4_field', field: 'champion' })
+            exportRows.push({ kind: 'g4_field', field: 'runner_up' })
+            exportRows.push({ kind: 'g4_field', field: 'semi1' })
+            exportRows.push({ kind: 'g4_field', field: 'semi2' })
+            exportRows.push({ kind: 'section', label: 'Artilheiro', color: C })
+            exportRows.push({ kind: 'scorer_row' })
+
+            for (const row of exportRows) {
+              if (row.kind === 'section') { ws.addRow([row.label]); continue }
+              if (row.kind === 'match') {
+                const m = row.match
+                const th = knockoutTeamMap.get(m.id)
+                const { date, time } = fmtMatchDate(m.match_datetime)
+                const s = matchEventStats(m.id, m.score_home, m.score_away, participants, betMap)
+                ws.addRow([`${date} ${time}`, `${th?.team_home ?? m.team_home} x ${th?.team_away ?? m.team_away}`,
+                  m.score_home !== null ? `${m.score_home}–${m.score_away}` : '–',
+                  s.pontuaram, s.cravaram, s.media > 0 ? +s.media.toFixed(1) : '–',
+                  ...sortedParts.map(p => { const b = betMap.get(`${p.id}:${m.id}`); const pts = getMatchPts(p.id, m.id); return b ? `${b.score_home}–${b.score_away}${pts !== null ? ` (${pts})` : ''}` : '–' })])
+                continue
+              }
+              if (row.kind === 'group_bet') {
+                const g = row.groupName; const of1 = offFirstMap.get(g) ?? ''; const of2 = offSecondMap.get(g) ?? ''
+                const s = groupStatsMap.get(g) ?? { pontuaram: 0, cravaram: 0, media: 0 }
+                ws.addRow([`Grupo ${g}`, '1º e 2º', of1 ? `${of1}/${of2}` : '–',
+                  s.pontuaram, s.cravaram, s.media > 0 ? +s.media.toFixed(1) : '–',
+                  ...sortedParts.map(p => { const b = groupBetMap.get(`${p.id}:${g}`); return b?.first_place ? `${b.first_place}/${b.second_place}${b.points !== null ? ` (${b.points})` : ''}` : '–' })])
+                continue
+              }
+              if (row.kind === 'third_bet') {
+                const g = row.groupName; const ot = offThirdMap.get(g) ?? ''
+                const s = thirdStatsMap.get(g) ?? { pontuaram: 0, cravaram: 0, media: 0 }
+                ws.addRow([`3º Gr.${g}`, 'Melhor 3º', ot || '–',
+                  s.pontuaram, s.cravaram, s.media > 0 ? +s.media.toFixed(1) : '–',
+                  ...sortedParts.map(p => { const b = thirdBetMap.get(`${p.id}:${g}`); if (!b?.team) return '–'; const pts = ot ? (b.team === ot ? thPts : 0) : null; return pts !== null ? `${b.team} (${pts > 0 ? `+${pts}` : '0'})` : b.team })])
+                continue
+              }
+              if (row.kind === 'g4_field') {
+                const f = row.field
+                const XLABELS: Record<typeof f, string> = { champion: '🏆 Campeão', runner_up: '🥈 Vice', semi1: '3º Lugar', semi2: '4º Lugar' }
+                const official = f === 'champion' ? knockoutResults.champion : f === 'runner_up' ? knockoutResults.runnerUp : f === 'semi1' ? knockoutResults.third : knockoutResults.fourth
+                const s = g4FieldStats(f, participants, tournamentBetMap, knockoutResults, rules, zebraTeams)
+                ws.addRow([XLABELS[f], 'G4', official ?? '–',
+                  s.pontuaram, s.cravaram, s.media > 0 ? +s.media.toFixed(1) : '–',
+                  ...sortedParts.map(p => { const b = tournamentBetMap.get(p.id); const val = b?.[f] ?? ''; const pts = val ? scoreG4FieldBet(f, val, knockoutResults, rules, zebraTeams) : 0; return val ? `${val}${pts > 0 ? ` (+${pts})` : ''}` : '–' })])
+                continue
+              }
+              if (row.kind === 'scorer_row') {
+                const s = scorerEventStats(participants, tournamentBetMap, localScorers, artPts, scorerMapping)
+                ws.addRow(['Artilheiro', 'Top scorer', localScorers.join(', ') || '–',
+                  s.pontuaram, s.cravaram, s.media > 0 ? +s.media.toFixed(1) : '–',
+                  ...sortedParts.map(p => {
+                    const b = tournamentBetMap.get(p.id); const raw = b?.top_scorer ?? ''
+                    if (!raw) return '–'
+                    const display = scorerMapping[raw.toLowerCase().trim()] ?? raw
+                    const isCorrect = localScorers.length > 0 && localScorers.some(sc => sc.trim().toLowerCase() === display.trim().toLowerCase())
+                    const pts = isCorrect ? artPts : 0
+                    return `${display}${pts > 0 ? ` (+${pts})` : ''}`
+                  })])
+              }
+            }
+
+            const buf = await wb.xlsx.writeBuffer()
+            const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+            const brNow = new Date(Date.now() - 3 * 60 * 60 * 1000)
+            const stamp = `${String(brNow.getUTCMonth()+1).padStart(2,'0')}${String(brNow.getUTCDate()).padStart(2,'0')}${String(brNow.getUTCHours()).padStart(2,'0')}${String(brNow.getUTCMinutes()).padStart(2,'0')}`
+            const fileName = `TabelaMB_${stamp}.xlsx`
+            const result = await downloadExcel(blob, fileName)
+            if (result === 'saved')
+              toast.success(`Arquivo salvo: ${fileName}`, { duration: 5000 })
+            else if (result === 'downloaded')
+              toast.success(`Download iniciado: ${fileName}\nVerifique sua pasta de Downloads.`, { duration: 5000 })
+          }}
+        >⬇ Excel</button>
+      </div>
+
+      {/* Admin: gestão de artilheiro oficial — só na fase Final */}
+      {effectiveIsAdmin && phase === 'final' && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-amber-200 bg-amber-50 px-3 py-1.5 shrink-0">
+          <span className="text-[11px] font-bold text-amber-700">⚽ Artilheiro oficial:</span>
+          {localScorers.map(n => (
+            <span key={n} className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+              {n}
+              <button onClick={() => handleScorerSave(localScorers.filter(x => x !== n))} className="text-amber-500 hover:text-red-500 leading-none">×</button>
+            </span>
+          ))}
+          <select
+            value={scorerSelectVal}
+            onChange={e => {
+              const v = e.target.value
+              setScorerSelectVal(v)
+              if (v && v !== 'outro') handleScorerAddDirect(v)
+            }}
+            className="rounded border border-amber-200 bg-white px-2 py-0.5 text-[11px] focus:outline-none focus:border-amber-400"
+          >
+            <option value="">Adicionar…</option>
+            {betScorerOptions
+              .filter(n => !localScorers.some(s => s.trim().toLowerCase() === n.trim().toLowerCase()))
+              .map(n => <option key={n} value={n}>{n}</option>)
+            }
+            <option value="outro">Outro…</option>
+          </select>
+          {scorerSelectVal === 'outro' && (
+            <>
+              <input
+                type="text" value={scorerInput} onChange={e => setScorerInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleScorerAdd()}
+                placeholder="Nome do artilheiro"
+                autoFocus
+                className="rounded border border-amber-200 bg-white px-2 py-0.5 text-[11px] focus:outline-none focus:border-amber-400 w-36"
+              />
+              <button onClick={handleScorerAdd} disabled={!scorerInput.trim() || scorerPending}
+                className="rounded bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white hover:bg-amber-600 disabled:opacity-40 transition">
+                +
+              </button>
+            </>
+          )}
+          {scorerError && <span className="text-[10px] text-red-500">{scorerError}</span>}
+          {scorerPending && <span className="text-[10px] text-gray-400">Salvando…</span>}
+        </div>
+      )}
+
+      {/* Production mode notice — per-phase */}
+      {productionMode && (
+        <div className="shrink-0 border-b border-amber-100 bg-amber-50 px-3 py-1 text-center text-[10px] font-medium text-amber-600">
+          🔒 palpites no prazo de envio/edição estão ocultos
+        </div>
+      )}
+
+      {/* Matrix */}
+      <div ref={containerRef} className="flex-1 overflow-auto" style={{ WebkitOverflowScrolling: 'touch' as const }}>
+        <table className="border-collapse" style={{ width: tableW, tableLayout: 'fixed', fontSize: 11 }}>
+          <colgroup>
+            <col style={{ width: colDateW }} />
+            <col style={{ width: colTeamsW }} />
+            <col style={{ width: COL_SCORE_W }} />
+            <col style={{ width: STAT_COL_W }} />
+            <col style={{ width: STAT_COL_W }} />
+            <col style={{ width: STAT_COL_W }} />
+            <col style={{ width: PART_COL_W }} />
+            {displayParts.map(p => <col key={p.id} style={{ width: PART_COL_W }} />)}
+          </colgroup>
+
+          {/* Header */}
+          <thead>
+            <tr style={{ height: 48, background: '#1f2937' }}>
+              <th style={{ position: 'sticky', top: 0, left: 0, zIndex: 50, background: '#1f2937', borderRight: '1px solid #374151' }}
+                className="text-center text-gray-300 font-semibold text-[10px]">Data</th>
+              <th style={{ position: 'sticky', top: 0, left: colTeamsLeft, zIndex: 50, background: '#1f2937', borderRight: '1px solid #374151' }}
+                className="text-left px-1.5 text-gray-300 font-semibold">Jogo</th>
+              <th style={{ position: 'sticky', top: 0, left: colScoreLeft, zIndex: 50, background: '#1f2937', borderRight: '1px solid #374151' }}
+                className="text-center text-gray-200 font-semibold">Oficial</th>
+              {/* Colunas de estatísticas */}
+              <th title="Pontuaram — acertaram ao menos o vencedor do evento" style={{ position: 'sticky', top: 0, ...(isMobile ? {} : { left: frozenTotal }), zIndex: isMobile ? 40 : 50, background: '#1f2937', borderRight: '1px solid #374151' }}
+                className="text-center text-[9px] font-semibold text-gray-400 px-0.5">Pontuou</th>
+              <th title="Cravaram — acertaram o placar exato" style={{ position: 'sticky', top: 0, ...(isMobile ? {} : { left: frozenTotal + STAT_COL_W }), zIndex: isMobile ? 40 : 50, background: '#1f2937', borderRight: '1px solid #374151' }}
+                className="text-center text-[9px] font-semibold text-gray-400 px-0.5">Cravou</th>
+              <th title="Média de pontos dos participantes" style={{ position: 'sticky', top: 0, ...(isMobile ? {} : { left: frozenTotal + 2 * STAT_COL_W }), zIndex: isMobile ? 40 : 50, background: '#1f2937', borderRight: '1px solid #374151' }}
+                className="text-center text-[9px] font-semibold text-gray-400 px-0.5">Méd.</th>
+              <th style={{ position: 'sticky', top: 0, ...(isMobile ? {} : { left: frozenTotal + 3 * STAT_COL_W }), zIndex: isMobile ? 40 : 50, background: '#1f2937', borderRight: '2px solid #6b7280' }}
+                className="text-center px-0.5">
+                <div className="flex items-center justify-center gap-0.5">
+                  <span className="text-[9px] leading-none">🥇</span>
+                  <span className="line-clamp-2 break-words font-semibold text-[9px] text-gray-300" style={{ maxWidth: PART_COL_W - 18 }}>
+                    {participants.find(p => p.id === effectiveLeaderId)?.apelido ?? 'Líder'}
+                  </span>
+                </div>
+                <span className="block text-[11px] font-semibold text-gray-500">
+                  {effectiveLeaderId && (computedTotals[effectiveLeaderId] ?? 0) > 0 ? computedTotals[effectiveLeaderId] : '–'}
+                </span>
+              </th>
+              {displayParts.map((p, idx) => {
+                const isMe = p.id === activeParticipantId
+                const isWatch = p.id === WATCH_ID
+                const isActiveFrozen = displayFrozenLeft !== null && idx === 0 && !isWatch
+                const isWatchFrozen  = isWatch
+                const isFrozen = isActiveFrozen || isWatchFrozen
+                const frozenLeft = isActiveFrozen ? displayFrozenLeft! : watchFrozenLeft
+                const displayId = isWatch ? (watchPart?.id ?? null) : p.id
+                const total = displayId ? (computedTotals[displayId] ?? 0) : 0
+                if (isWatch) {
+                  return (
+                    <th key={p.id}
+                      title={watchPart ? `Acompanhando: ${watchPart.apelido} — clique para alterar` : 'Clique para acompanhar'}
+                      style={{
+                        position: 'sticky', top: 0,
+                        left: frozenLeft, borderLeft: '2px solid #7c3aed',
+                        zIndex: 50, background: '#2e1065',
+                        borderRight: '1px solid #374151', cursor: 'pointer',
+                      }}
+                      className="text-center px-0.5 text-violet-200"
+                      onClick={() => { setShowWatchSelector(true); setWatchQuery('') }}
+                    >
+                      <div className="flex items-center justify-center gap-0.5">
+                        <span className="text-[9px] leading-none">👁</span>
+                        <span className="line-clamp-2 break-words font-semibold text-[9px]" style={{ maxWidth: PART_COL_W - 14 }}>
+                          {watchPart?.apelido ?? 'Acomp.'}
+                        </span>
+                      </div>
+                      <span className="block text-[11px] font-semibold text-violet-300">
+                        {total > 0 ? total : '–'}
+                      </span>
+                    </th>
+                  )
+                }
+                return (
+                  <th key={p.id} title={p.apelido}
+                    style={{
+                      position: 'sticky', top: 0,
+                      ...(isFrozen ? { left: frozenLeft, borderLeft: '2px solid #6b7280' } : {}),
+                      zIndex: isFrozen ? 50 : 40,
+                      background: isMe ? '#14532d' : '#1f2937',
+                      borderRight: '1px solid #374151',
+                    }}
+                    className={`text-center px-0.5 ${isMe ? 'text-verde-200' : 'text-gray-300'}`}
+                  >
+                    <div className="flex items-center justify-center gap-0.5">
+                      {p.id === effectiveLeaderId && <span className="text-[9px] leading-none">🥇</span>}
+                      <span className="line-clamp-2 break-words font-semibold" style={{ maxWidth: PART_COL_W - (p.id === effectiveLeaderId ? 16 : 4) }}>{p.apelido}</span>
+                    </div>
+                    <span className={`block text-[11px] font-semibold ${isMe ? 'text-verde-300' : 'text-gray-500'}`}>
+                      {total > 0 ? total : '–'}
+                    </span>
+                  </th>
+                )
+              })}
+            </tr>
+          </thead>
+
+          {/* Body */}
+          <tbody>
+            {padTop > 0 && <tr style={{ height: padTop }}><td colSpan={7 + participants.length} /></tr>}
+
+            {vItems.map(vRow => {
+              const row = allRows[vRow.index]
+              const odd = vRow.index % 2 === 1
+              const bg  = odd ? '#e5e7eb' : '#ffffff'
+
+              // ── Section header ──────────────────────────────────────────────
+              if (row.kind === 'section') {
+                const sectionBg = row.color === '#1e3a5f' ? '#dbeafe' : row.color === '#78350f' ? '#fef3c7' : '#ede9fe'
+                const textCls   = row.color === '#1e3a5f' ? 'text-blue-700' : row.color === '#78350f' ? 'text-amber-800' : 'text-violet-700'
+                const borderClr = row.color === '#1e3a5f' ? '#93c5fd' : row.color === '#78350f' ? '#fde68a' : '#c4b5fd'
+                return (
+                  <tr key={`sec-${row.label}`} style={{ height: ROW_H_SEC }}>
+                    <td colSpan={7 + participants.length}
+                      style={{ position: 'sticky', left: 0, zIndex: 30, background: sectionBg, borderTop: `2px solid ${borderClr}`, borderBottom: `1px solid ${borderClr}` }}
+                      className={`px-3 text-[10px] font-bold uppercase tracking-widest ${textCls}`}
+                    >{row.label}</td>
+                  </tr>
+                )
+              }
+
+              // ── Group bet row ───────────────────────────────────────────────
+              if (row.kind === 'group_bet') {
+                const g    = row.groupName
+                const of1  = offFirstMap.get(g) ?? ''
+                const of2  = offSecondMap.get(g) ?? ''
+                return (
+                  <tr key={`gb-${g}`} style={{ height: ROW_H_BONUS, background: '#eff6ff' }}>
+                    <td style={{ position: 'sticky', left: 0, zIndex: 30, background: '#eff6ff', borderRight: '1px solid #bfdbfe' }}
+                      className="text-center font-bold text-blue-700 text-xs">{g}</td>
+                    <td style={{ position: 'sticky', left: colTeamsLeft, zIndex: 30, background: '#eff6ff', borderRight: '1px solid #bfdbfe' }}
+                      className="px-1.5 text-[10px] font-semibold text-blue-600">
+                      {isMobile ? (
+                        <div className="leading-none flex flex-col gap-0.5">
+                          {of1 ? (
+                            <div className="flex items-center gap-1 w-full">
+                              <Flag code={teamFlagMap.get(of1) ?? ''} size="sm" className="shrink-0 w-4 h-3 rounded-[1px]" />
+                              <span className="font-bold text-[10px]">{teamAbbrs[of1] ?? abbr(of1, 4)}</span>
+                              {groupActualZebras.has(g) && (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src="/zebra.png" alt="🦓" width={18} height={18} className="shrink-0 object-contain ml-auto" />
+                              )}
+                            </div>
+                          ) : <span className="text-gray-300">–</span>}
+                          {of2 ? (
+                            <div className="flex items-center gap-1">
+                              <Flag code={teamFlagMap.get(of2) ?? ''} size="sm" className="shrink-0 w-4 h-3 rounded-[1px]" />
+                              <span className="font-bold text-[10px]">{teamAbbrs[of2] ?? abbr(of2, 4)}</span>
+                            </div>
+                          ) : <span className="text-gray-300">–</span>}
+                        </div>
+                      ) : (
+                        <div className="leading-none">
+                          <div className="flex items-center gap-1 w-full" style={{ maxWidth: colTeamsW - 8 }}>
+                            <span className="truncate">🥇 {of1 || '–'}</span>
+                            {groupActualZebras.has(g) && of1 && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src="/zebra.png" alt="🦓" width={24} height={24} className="shrink-0 object-contain ml-auto" />
+                            )}
+                          </div>
+                          <span className="block truncate" style={{ maxWidth: colTeamsW - 8 }}>🥈 {of2 || '–'}</span>
+                        </div>
+                      )}
+                    </td>
+                    <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: '#eff6ff', borderRight: '1px solid #bfdbfe' }}
+                      className="text-center text-[10px] font-semibold text-blue-800">
+                      {of1 ? `Gr. ${g}` : <span className="text-gray-300">–</span>}
+                    </td>
+                    {/* Colunas de stats */}
+                    {(() => {
+                      const stats  = groupStatsMap.get(g) ?? { pontuaram: 0, cravaram: 0, media: 0 }
+                      const lb     = groupBetMap.get(`${effectiveLeaderId}:${g}`)
+                      const lbKind = groupCellKind(lb, of1, of2)
+                      const lbBg   = CELL_KIND_BG_HEX[lbKind] || '#eff6ff'
+                      const media  = stats.media > 0 ? stats.media.toFixed(1) : '—'
+                      const s0 = !isMobile ? { position: 'sticky' as const, zIndex: 20, background: '#eff6ff' } : {}
+                      return (<>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal } : {}) }} className="border-r border-blue-50 text-center text-[10px]">{stats.pontuaram > 0 ? <span className="font-bold text-gray-700">{stats.pontuaram}</span> : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + STAT_COL_W } : {}) }} className="border-r border-blue-50 text-center text-[10px]">{stats.cravaram > 0 ? <span className="font-bold text-emerald-600">{stats.cravaram}</span> : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 2 * STAT_COL_W, borderRight: '2px solid #93c5fd' } : {}) }} className="border-r border-blue-50 text-center text-[10px] text-gray-500">{stats.media > 0 ? media : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 3 * STAT_COL_W, background: lbBg } : {}) }}
+                          className={`border-r border-blue-50 text-center ${isMobile ? CELL_BG[lbKind] : ''}`}>
+                          {lb?.first_place ? (
+                            <div className="flex flex-col items-center leading-none gap-px">
+                              <div className="flex items-center gap-px overflow-hidden" style={{ maxWidth: STAT_COL_W - 4 }}>
+                                <span className={`text-[9px] font-medium shrink-0 ${groupPotentialZebraTeams.get(g)?.has(lb.first_place) ? 'bg-gray-900 text-white rounded px-0.5' : 'text-gray-600'}`}>
+                                  {teamAbbrs[lb.first_place] ?? abbr(lb.first_place, 4)}
+                                </span>
+                                <span className="text-[9px] text-gray-400 shrink-0">/</span>
+                                <span className="text-[9px] text-gray-600 truncate font-medium">
+                                  {teamAbbrs[lb.second_place] ?? abbr(lb.second_place, 4)}
+                                </span>
+                              </div>
+                              {lb.points !== null && (
+                                <span className={`text-[10px] font-bold ${lb.points > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>
+                                  {lb.points > 0 ? `+${lb.points}` : '0'}
+                                </span>
+                              )}
+                            </div>
+                          ) : <span className="text-gray-200">—</span>}
+                        </td>
+                      </>)
+                    })()}
+                    {displayParts.map((p, idx) => {
+                      const isWatch = p.id === WATCH_ID
+                      const dataId = isWatch ? watchPart?.id ?? null : p.id
+                      const isMe = p.id === activeParticipantId
+                      const isActiveFrozen = displayFrozenLeft !== null && idx === 0 && !isWatch
+                      const isFrozen = isActiveFrozen || isWatch
+                      const frozenLeft = isActiveFrozen ? displayFrozenLeft! : watchFrozenLeft
+                      if (isWatch && !dataId) return (
+                        <td key={p.id}
+                          style={{ position: 'sticky', left: frozenLeft, zIndex: 20, background: '#eff6ff', borderLeft: '2px solid #7c3aed' }}
+                          className="border-r border-violet-100 text-center">
+                          <span className="text-gray-200">—</span>
+                        </td>
+                      )
+                      const bet  = groupBetMap.get(`${dataId!}:${g}`)
+                      const kind = groupCellKind(bet, of1, of2)
+                      const frozenBg = isFrozen ? (CELL_KIND_BG_HEX[kind] || '#eff6ff') : undefined
+                      return (
+                        <td key={p.id}
+                          style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: frozenBg, borderLeft: isWatch ? '2px solid #7c3aed' : '2px solid #bfdbfe' } : undefined}
+                          className={`border-r border-blue-50 text-center ${!isFrozen ? CELL_BG[kind] : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
+                          {bet?.first_place ? (
+                            <div className="flex flex-col items-center leading-none gap-px">
+                              <div className="flex items-center gap-px overflow-hidden" style={{ maxWidth: PART_COL_W - 4 }}>
+                                <span className={`text-[9px] font-medium shrink-0 ${groupPotentialZebraTeams.get(g)?.has(bet.first_place) ? 'bg-gray-900 text-white rounded px-0.5' : 'text-gray-600'}`}>
+                                  {teamAbbrs[bet.first_place] ?? abbr(bet.first_place, 5)}
+                                </span>
+                                <span className="text-[9px] text-gray-400 shrink-0">/</span>
+                                <span className="text-[9px] text-gray-600 truncate font-medium">
+                                  {teamAbbrs[bet.second_place] ?? abbr(bet.second_place, 5)}
+                                </span>
+                              </div>
+                              {bet.points !== null && (
+                                <span className={`text-[10px] font-bold ${bet.points > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>
+                                  {bet.points > 0 ? `+${bet.points}` : '0'}
+                                </span>
+                              )}
+                            </div>
+                          ) : bonusIsLocked && p.id !== activeParticipantId
+                            ? <span className="text-gray-300 text-[10px]" title="Prazo em aberto">🔒</span>
+                            : <span className="text-gray-200">—</span>
+                          }
+                        </td>
+                      )
+                    })}
+                  </tr>
+                )
+              }
+
+              // ── Third bet row ───────────────────────────────────────────────
+              if (row.kind === 'third_bet') {
+                const g  = row.groupName
+                const ot = offThirdMap.get(g) ?? ''
+                return (
+                  <tr key={`tb-${g}`} style={{ height: ROW_H_BONUS, background: '#faf5ff' }}>
+                    <td style={{ position: 'sticky', left: 0, zIndex: 30, background: '#faf5ff', borderRight: '1px solid #e9d5ff' }}
+                      className="text-center text-[9px] font-bold text-violet-600">3º<br/><span className="text-violet-400">{g}</span></td>
+                    <td style={{ position: 'sticky', left: colTeamsLeft, zIndex: 30, background: '#faf5ff', borderRight: '1px solid #e9d5ff' }}
+                      className="px-1.5 text-[10px] font-semibold text-violet-700">
+                      {isMobile ? (
+                        ot ? (
+                          <div className="flex items-center gap-1">
+                            <Flag code={teamFlagMap.get(ot) ?? ''} size="sm" className="shrink-0 w-4 h-3 rounded-[1px]" />
+                            <span className="font-bold text-[10px]">{teamAbbrs[ot] ?? abbr(ot, 4)}</span>
+                          </div>
+                        ) : <span className="text-gray-300">–</span>
+                      ) : (
+                        <span className="block truncate" style={{ maxWidth: colTeamsW - 8 }}>
+                          {ot || <span className="text-gray-300">–</span>}
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: '#faf5ff', borderRight: '1px solid #e9d5ff' }}
+                      className="text-center text-[10px] text-violet-600 font-semibold">
+                      {ot ? `Gr. ${g}` : <span className="text-gray-300">–</span>}
+                    </td>
+                    {/* Colunas de stats */}
+                    {(() => {
+                      const thirdPts = rules['terceiro_classificado'] ?? 3
+                      const stats    = thirdStatsMap.get(g) ?? { pontuaram: 0, cravaram: 0, media: 0 }
+                      const lb       = thirdBetMap.get(`${effectiveLeaderId}:${g}`)
+                      const lbKind   = thirdCellKind(lb?.team, ot)
+                      const lbPts    = lbKind === 'exact' ? thirdPts : lbKind === 'wrong' ? 0 : null
+                      const lbBg     = CELL_KIND_BG_HEX[lbKind] || '#faf5ff'
+                      const media    = stats.media > 0 ? stats.media.toFixed(1) : '—'
+                      const s0 = !isMobile ? { position: 'sticky' as const, zIndex: 20, background: '#faf5ff' } : {}
+                      return (<>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal } : {}) }} className="border-r border-violet-50 text-center text-[10px]">{stats.pontuaram > 0 ? <span className="font-bold text-gray-700">{stats.pontuaram}</span> : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + STAT_COL_W } : {}) }} className="border-r border-violet-50 text-center text-[10px]">{stats.cravaram > 0 ? <span className="font-bold text-emerald-600">{stats.cravaram}</span> : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 2 * STAT_COL_W, borderRight: '2px solid #c4b5fd' } : {}) }} className="border-r border-violet-50 text-center text-[10px] text-gray-500">{stats.media > 0 ? media : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 3 * STAT_COL_W, background: lbBg } : {}) }}
+                          className={`border-r border-violet-50 text-center ${isMobile ? CELL_BG[lbKind] : ''}`}>
+                          {lb?.team ? (
+                            <div className="flex flex-col items-center leading-none gap-px">
+                              <span className="text-[9px] text-gray-600 truncate font-medium" style={{ maxWidth: STAT_COL_W - 4 }}>
+                                {teamAbbrs[lb.team] ?? abbr(lb.team)}
+                              </span>
+                              {lbPts !== null && (
+                                <span className={`text-[10px] font-bold ${lbPts > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>
+                                  {lbPts > 0 ? `+${lbPts}` : '0'}
+                                </span>
+                              )}
+                            </div>
+                          ) : <span className="text-gray-200">—</span>}
+                        </td>
+                      </>)
+                    })()}
+                    {displayParts.map((p, idx) => {
+                      const isWatch = p.id === WATCH_ID
+                      const dataId = isWatch ? watchPart?.id ?? null : p.id
+                      const isMe = p.id === activeParticipantId
+                      const isActiveFrozen = displayFrozenLeft !== null && idx === 0 && !isWatch
+                      const isFrozen = isActiveFrozen || isWatch
+                      const frozenLeft = isActiveFrozen ? displayFrozenLeft! : watchFrozenLeft
+                      if (isWatch && !dataId) return (
+                        <td key={p.id}
+                          style={{ position: 'sticky', left: frozenLeft, zIndex: 20, background: '#faf5ff', borderLeft: '2px solid #7c3aed' }}
+                          className="border-r border-violet-100 text-center">
+                          <span className="text-gray-200">—</span>
+                        </td>
+                      )
+                      const bet  = thirdBetMap.get(`${dataId!}:${g}`)
+                      const kind = thirdCellKind(bet?.team, ot)
+                      const frozenBg = isFrozen ? (CELL_KIND_BG_HEX[kind] || '#faf5ff') : undefined
+                      return (
+                        <td key={p.id}
+                          style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: frozenBg, borderLeft: isWatch ? '2px solid #7c3aed' : '2px solid #e9d5ff' } : undefined}
+                          className={`border-r border-violet-50 text-center ${!isFrozen ? CELL_BG[kind] : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
+                          {bet?.team ? (
+                            <div className="flex flex-col items-center leading-none gap-px">
+                              <span className="text-[9px] text-gray-600 truncate font-medium" style={{ maxWidth: PART_COL_W - 4 }}>
+                                {teamAbbrs[bet.team] ?? abbr(bet.team)}
+                              </span>
+                              {kind !== 'pending' && kind !== 'no_bet' && (
+                                <span className={`text-[10px] font-bold ${kind === 'exact' ? 'text-emerald-600' : 'text-gray-300'}`}>
+                                  {kind === 'exact' ? `+${rules['terceiro_classificado'] ?? 3}` : '0'}
+                                </span>
+                              )}
+                            </div>
+                          ) : bonusIsLocked && p.id !== activeParticipantId
+                            ? <span className="text-gray-300 text-[10px]" title="Prazo em aberto">🔒</span>
+                            : <span className="text-gray-200">—</span>
+                          }
+                        </td>
+                      )
+                    })}
+                  </tr>
+                )
+              }
+
+              // ── G4 field rows (one per position) ───────────────────────
+              if (row.kind === 'g4_field') {
+                const field = row.field
+                const a = (name: string) => teamAbbrs[name] ?? abbr(name, 4)
+                const kr = knockoutResults
+                const LABELS: Record<typeof field, string> = { champion: '🏆', runner_up: '🥈', semi1: '3º', semi2: '4º' }
+                const FULL:   Record<typeof field, string> = { champion: '🏆 Campeão', runner_up: '🥈 Vice', semi1: '3º Lugar', semi2: '4º Lugar' }
+                const official = field === 'champion' ? kr.champion : field === 'runner_up' ? kr.runnerUp : field === 'semi1' ? kr.third : kr.fourth
+                const stats = g4FieldStats(field, participants, tournamentBetMap, knockoutResults, rules, zebraTeams)
+                const lb = tournamentBetMap.get(effectiveLeaderId)
+                const lbVal = lb?.[field] ?? ''
+                const lbPts = lbVal ? scoreG4FieldBet(field, lbVal, knockoutResults, rules, zebraTeams) : null
+                const lbBg  = lbPts !== null ? (lbPts > 0 ? '#d1fae5' : '#fff1f2') : '#fffbeb'
+                const media = stats.media > 0 ? stats.media.toFixed(1) : '—'
+                const s0 = !isMobile ? { position: 'sticky' as const, zIndex: 20, background: '#fffbeb' } : {}
+                return (
+                  <tr key={`g4_field_${field}`} style={{ height: ROW_H_BONUS, background: '#fffbeb' }}>
+                    <td style={{ position: 'sticky', left: 0, zIndex: 30, background: '#fffbeb', borderRight: '1px solid #fde68a' }}
+                      className="text-center text-[10px] font-bold text-amber-700">{LABELS[field]}</td>
+                    <td style={{ position: 'sticky', left: colTeamsLeft, zIndex: 30, background: '#fffbeb', borderRight: '1px solid #fde68a' }}
+                      className="px-1.5 text-[10px] text-amber-800 font-semibold">
+                      <div className="flex items-center gap-1 overflow-hidden w-full" style={{ maxWidth: colTeamsW - 8 }}>
+                        {official ? (
+                          <>
+                            <span className="truncate">{a(official)}</span>
+                            {official && zebraTeams.has(official) && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src="/zebra.png" alt="🦓" width={isMobile ? 18 : 24} height={isMobile ? 18 : 24} className="shrink-0 object-contain ml-auto" />
+                            )}
+                          </>
+                        ) : <span className="text-gray-300">–</span>}
+                      </div>
+                    </td>
+                    <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: '#fffbeb', borderRight: '1px solid #fde68a' }}
+                      className="text-center text-[9px] text-amber-600 font-semibold px-0.5 leading-tight">
+                      {FULL[field].replace(/^[^\s]+ /, '')}
+                    </td>
+                    {/* Stats */}
+                    <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal } : {}) }} className="border-r border-amber-50 text-center text-[10px]">{stats.pontuaram > 0 ? <span className="font-bold text-gray-700">{stats.pontuaram}</span> : <span className="text-gray-300">–</span>}</td>
+                    <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + STAT_COL_W } : {}) }} className="border-r border-amber-50 text-center text-[10px]">{stats.cravaram > 0 ? <span className="font-bold text-emerald-600">{stats.cravaram}</span> : <span className="text-gray-300">–</span>}</td>
+                    <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 2 * STAT_COL_W, borderRight: '2px solid #fde68a' } : {}) }} className="border-r border-amber-50 text-center text-[10px] text-gray-500">{stats.media > 0 ? media : <span className="text-gray-300">–</span>}</td>
+                    <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 3 * STAT_COL_W, background: lbBg } : {}) }}
+                      className={`border-r border-amber-50 text-center ${isMobile ? (lbPts !== null ? (lbPts > 0 ? 'bg-emerald-100' : 'bg-rose-50') : '') : ''}`}>
+                      {lbVal ? (
+                        <div className="flex flex-col items-center leading-none gap-px">
+                          <span className={`text-[9px] font-medium truncate ${zebraTeams.has(lbVal) ? 'bg-gray-900 text-white rounded px-0.5' : 'text-gray-700'}`} style={{ maxWidth: STAT_COL_W - 4 }}>{a(lbVal)}</span>
+                          {lbPts !== null && <span className={`text-[10px] font-bold ${lbPts > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>{lbPts > 0 ? `+${lbPts}` : '0'}</span>}
+                        </div>
+                      ) : <span className="text-gray-200">—</span>}
+                    </td>
+                    {/* Participant cells */}
+                    {displayParts.map((p, idx) => {
+                      const isWatch = p.id === WATCH_ID
+                      const dataId = isWatch ? watchPart?.id ?? null : p.id
+                      const isMe = p.id === activeParticipantId
+                      const isActiveFrozen = displayFrozenLeft !== null && idx === 0 && !isWatch
+                      const isFrozen = isActiveFrozen || isWatch
+                      const frozenLeft = isActiveFrozen ? displayFrozenLeft! : watchFrozenLeft
+                      if (isWatch && !dataId) return (
+                        <td key={p.id}
+                          style={{ position: 'sticky', left: frozenLeft, zIndex: 20, background: '#fffbeb', borderLeft: '2px solid #7c3aed' }}
+                          className="border-r border-violet-100 text-center">
+                          <span className="text-gray-200">—</span>
+                        </td>
+                      )
+                      const bet = tournamentBetMap.get(dataId!)
+                      const betVal = bet?.[field] ?? ''
+                      const pts = betVal ? scoreG4FieldBet(field, betVal, knockoutResults, rules, zebraTeams) : null
+                      const isExact = !!betVal && !!official && betVal === official
+                      const isPartial = pts !== null && pts > 0 && !isExact
+                      const isWrong = pts !== null && pts === 0
+                      const cellBg = !isMobile ? '#fffbeb' : undefined
+                      const frozenBg = isExact ? '#d1fae5' : isPartial ? '#e0f2fe' : isWrong ? '#fff1f2' : '#fffbeb'
+                      return (
+                        <td key={p.id}
+                          style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: frozenBg, borderLeft: isWatch ? '2px solid #7c3aed' : '2px solid #fde68a' } : { background: cellBg }}
+                          className={`border-r border-amber-50 text-center ${isExact ? 'bg-emerald-100' : isPartial ? 'bg-sky-100' : isWrong ? 'bg-rose-50' : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
+                          {betVal ? (
+                            <div className="flex flex-col items-center leading-none gap-px">
+                              <span className={`text-[9px] font-medium truncate ${zebraTeams.has(betVal) ? 'bg-gray-900 text-white rounded px-0.5' : 'text-gray-700'}`} style={{ maxWidth: PART_COL_W - 4 }}>{a(betVal)}</span>
+                              {pts !== null && <span className={`text-[10px] font-bold ${pts > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>{pts > 0 ? `+${pts}` : '0'}</span>}
+                            </div>
+                          ) : <span className="text-gray-200">—</span>}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                )
+              }
+
+              // ── Scorer row ──────────────────────────────────────────────────
+              if (row.kind === 'scorer_row') {
+                const artilhPts = rules['artilheiro'] ?? 18
+                const officialNames = localScorers.join(', ')
+                return (
+                  <tr key="scorer_row" style={{ height: ROW_H_BONUS, background: '#fffbeb' }}>
+                    <td style={{ position: 'sticky', left: 0, zIndex: 30, background: '#fffbeb', borderRight: '1px solid #fde68a' }}
+                      className="text-center text-[8px] font-bold text-amber-700">⚽<br/>Art.</td>
+                    <td style={{ position: 'sticky', left: colTeamsLeft, zIndex: 30, background: '#fffbeb', borderRight: '1px solid #fde68a' }}
+                      className="px-1.5 text-[10px] text-amber-800 font-semibold">
+                      <span className="block truncate" style={{ maxWidth: colTeamsW - 8 }}>
+                        {officialNames || <span className="text-gray-300">–</span>}
+                      </span>
+                    </td>
+                    <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: '#fffbeb', borderRight: '1px solid #fde68a' }}
+                      className="text-center text-[9px] text-amber-600 font-semibold">Art.</td>
+                    {/* Colunas de stats */}
+                    {(() => {
+                      const stats     = scorerEventStats(participants, tournamentBetMap, localScorers, artilhPts, scorerMapping)
+                      const lb        = tournamentBetMap.get(effectiveLeaderId)
+                      const rawLb     = lb?.top_scorer ?? ''
+                      const lbDisplay = rawLb ? (scorerMapping[rawLb.toLowerCase().trim()] ?? rawLb) : ''
+                      const lbCorrect = lbDisplay.length > 0 && localScorers.length > 0
+                        && localScorers.some(s => s.trim().toLowerCase() === lbDisplay.trim().toLowerCase())
+                      const lbPts     = localScorers.length > 0 && lbDisplay ? (lbCorrect ? artilhPts : 0) : null
+                      const lbBg      = lbCorrect ? '#d1fae5' : (lbPts !== null ? '#fff1f2' : '#fffbeb')
+                      const media     = stats.media > 0 ? stats.media.toFixed(1) : '—'
+                      const s0 = !isMobile ? { position: 'sticky' as const, zIndex: 20, background: '#fffbeb' } : {}
+                      return (<>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal } : {}) }} className="border-r border-amber-50 text-center text-[10px]">{stats.pontuaram > 0 ? <span className="font-bold text-gray-700">{stats.pontuaram}</span> : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + STAT_COL_W } : {}) }} className="border-r border-amber-50 text-center text-[10px]">{stats.cravaram > 0 ? <span className="font-bold text-emerald-600">{stats.cravaram}</span> : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 2 * STAT_COL_W, borderRight: '2px solid #fde68a' } : {}) }} className="border-r border-amber-50 text-center text-[10px] text-gray-500">{stats.media > 0 ? media : <span className="text-gray-300">–</span>}</td>
+                        <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 3 * STAT_COL_W, background: lbBg } : {}) }}
+                          className={`border-r border-amber-50 text-center ${isMobile ? (lbCorrect ? 'bg-emerald-100' : lbPts !== null ? 'bg-rose-50' : '') : ''}`}>
+                          {lbDisplay ? (
+                            <div className="flex flex-col items-center leading-none gap-px">
+                              <span className="text-[9px] text-gray-700 truncate font-medium" style={{ maxWidth: STAT_COL_W - 4 }}>{lbDisplay}</span>
+                              {lbPts !== null && (
+                                <span className={`text-[10px] font-bold ${lbCorrect ? 'text-emerald-600' : 'text-gray-300'}`}>
+                                  {lbCorrect ? `+${lbPts}` : '0'}
+                                </span>
+                              )}
+                            </div>
+                          ) : <span className="text-gray-200">—</span>}
+                        </td>
+                      </>)
+                    })()}
+                    {displayParts.map((p, idx) => {
+                      const isWatch = p.id === WATCH_ID
+                      const dataId = isWatch ? watchPart?.id ?? null : p.id
+                      const isMe = p.id === activeParticipantId
+                      const isActiveFrozen = displayFrozenLeft !== null && idx === 0 && !isWatch
+                      const isFrozen = isActiveFrozen || isWatch
+                      const frozenLeft = isActiveFrozen ? displayFrozenLeft! : watchFrozenLeft
+                      if (isWatch && !dataId) return (
+                        <td key={p.id}
+                          style={{ position: 'sticky', left: frozenLeft, zIndex: 20, background: '#fffbeb', borderLeft: '2px solid #7c3aed' }}
+                          className="border-r border-violet-100 text-center">
+                          <span className="text-gray-200">—</span>
+                        </td>
+                      )
+                      const bet  = tournamentBetMap.get(dataId!)
+                      if (!bet?.top_scorer) return (
+                        <td key={p.id}
+                          style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: '#fffbeb', borderLeft: isWatch ? '2px solid #7c3aed' : '2px solid #fde68a' } : undefined}
+                          className={`border-r border-amber-50 text-center ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
+                          <span className="text-gray-200">—</span>
+                        </td>
+                      )
+                      const displayName = scorerMapping[bet.top_scorer.toLowerCase().trim()] ?? bet.top_scorer
+                      const norm      = displayName.trim().toLowerCase()
+                      const isCorrect = localScorers.length > 0 && localScorers.some(s => s.trim().toLowerCase() === norm)
+                      const pts       = localScorers.length > 0 ? (isCorrect ? artilhPts : 0) : null
+                      return (
+                        <td key={p.id}
+                          style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: isCorrect ? '#d1fae5' : pts !== null ? '#fff1f2' : '#fffbeb', borderLeft: isWatch ? '2px solid #7c3aed' : '2px solid #fde68a' } : undefined}
+                          className={`border-r border-amber-50 text-center ${isCorrect ? 'bg-emerald-100' : pts !== null ? 'bg-rose-50' : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
+                          <div className="flex flex-col items-center leading-none gap-px">
+                            <span className="text-[9px] text-gray-700 truncate font-medium" style={{ maxWidth: PART_COL_W - 4 }}>
+                              {displayName}
+                            </span>
+                            {pts !== null && (
+                              <span className={`text-[10px] font-bold ${isCorrect ? 'text-emerald-600' : 'text-gray-300'}`}>
+                                {isCorrect ? `+${pts}` : '0'}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      )
+                    })}
+                  </tr>
+                )
+              }
+
+              // ── Match row ───────────────────────────────────────────────────
+              const match = row.match
+              const ktOverride = knockoutTeamMap.get(match.id)
+              const teamHome = ktOverride?.team_home ?? match.team_home
+              const teamAway = ktOverride?.team_away ?? match.team_away
+              const flagHome = ktOverride?.flag_home ?? match.flag_home
+              const flagAway = ktOverride?.flag_away ?? match.flag_away
+              const abbrHome = teamAbbrs[teamHome] ?? teamHome.slice(0, 3).toUpperCase()
+              const abbrAway = teamAbbrs[teamAway] ?? teamAway.slice(0, 3).toUpperCase()
+              const { date: mDate, time: mTime } = fmtMatchDate(match.match_datetime)
+              const hasResult      = match.score_home !== null && match.score_away !== null
+              const possibleZebras    = matchZebraMap.possible.get(match.id)
+              const isActualZebra    = matchZebraMap.actual.get(match.id) ?? false
+              // apostada = ao menos 1 participante apostou neste desfecho (mesmo sendo zebra ≤15%)
+              // não apostada = 0 palpites neste desfecho
+              const isActualZebraBet = matchZebraMap.actualBet.get(match.id) ?? false
+              const zebraImgW = isMobile ? 18 : 24
+              return (
+                <tr key={match.id} style={{ height: ROW_H }}>
+                  <td style={{ position: 'sticky', left: 0, zIndex: 30, background: bg, borderRight: '1px solid #f3f4f6', overflow: 'hidden' }}
+                    className="text-center text-gray-500">
+                    {!isMobile && (
+                      <div className="flex flex-col items-center leading-none gap-0.5">
+                        <span className="text-[9px] text-gray-600">{mDate}</span>
+                        <span className="text-[9px] font-semibold text-gray-800">{mTime}</span>
+                      </div>
+                    )}
+                  </td>
+                  <td style={{ position: 'sticky', left: colTeamsLeft, zIndex: 30, background: bg, borderRight: '1px solid #f3f4f6' }}
+                    className="px-1">
+                    {isMobile ? (
+                      <div className="flex flex-col leading-none gap-0.5 min-w-0">
+                        <span className="text-[8px] text-gray-400 leading-none">{mDate} {mTime}</span>
+                        <div className="flex items-center gap-1">
+                          <Flag code={flagHome} size="sm" className="shrink-0 w-4 h-3 rounded-[1px]" />
+                          <span className="font-bold text-[10px] text-gray-800 tracking-tight">{abbrHome}</span>
+                          {match.is_brazil && <span className="shrink-0 text-[7px] font-black text-verde-700 bg-verde-100 rounded-sm px-0.5">×2</span>}
+                        </div>
+                        <div className="flex items-center justify-between gap-1">
+                          <div className="flex items-center gap-1">
+                            <Flag code={flagAway} size="sm" className="shrink-0 w-4 h-3 rounded-[1px]" />
+                            <span className="font-bold text-[10px] text-gray-800 tracking-tight">{abbrAway}</span>
+                          </div>
+                          {isActualZebra && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src="/zebra.png" alt="🦓" width={zebraImgW} height={zebraImgW} className="shrink-0 object-contain" />
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between gap-1 min-w-0">
+                        <div className="flex flex-col leading-none gap-px min-w-0 flex-1">
+                          <div className="flex items-center gap-0.5 min-w-0">
+                            <span className="truncate font-semibold text-gray-800" style={{ maxWidth: colTeamsW - (isActualZebra ? 40 : 16) }}>{teamHome}</span>
+                            {match.is_brazil && <span className="shrink-0 text-[7px] font-black text-verde-700 bg-verde-100 rounded-sm px-0.5">×2</span>}
+                          </div>
+                          <span className="text-[8px] text-gray-300">vs</span>
+                          <span className="truncate font-semibold text-gray-800" style={{ maxWidth: colTeamsW - (isActualZebra ? 40 : 8) }}>{teamAway}</span>
+                        </div>
+                        {isActualZebra && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src="/zebra.png" alt="🦓" width={zebraImgW} height={zebraImgW} className="shrink-0 object-contain" />
+                        )}
+                      </div>
+                    )}
+                  </td>
+                  <td style={{ position: 'sticky', left: colScoreLeft, zIndex: 30, background: bg, borderRight: '1px solid #f3f4f6' }}
+                    className="text-center">
+                    <ScoreInput match={match} canEdit={canEdit(match)}
+                      possibleZebras={possibleZebras}
+                      isActualZebra={isActualZebra}
+                      isActualZebraBet={isActualZebraBet}
+                      onSaved={(sh, sa) => {
+                        setMatches(prev => prev.map(m => m.id === match.id ? { ...m, score_home: sh, score_away: sa } : m))
+                        recomputeForMatch(match.id, sh, sa, match.is_brazil)
+                      }}
+                    />
+                  </td>
+                  {/* Colunas de stats */}
+                  {(() => {
+                    const stats  = matchStatsMap.get(match.id) ?? { pontuaram: 0, cravaram: 0, media: 0 }
+                    const lb     = betMap.get(`${effectiveLeaderId}:${match.id}`)
+                    const lbKind = matchCellKind(lb, match.score_home, match.score_away)
+                    const lbPts  = getMatchPts(effectiveLeaderId, match.id)
+                    const lbBg   = CELL_KIND_BG_HEX[lbKind] || bg
+                    const media  = stats.media > 0 ? stats.media.toFixed(1) : '—'
+                    const s0 = !isMobile ? { position: 'sticky' as const, zIndex: 20, background: bg } : {}
+                    return (<>
+                      <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal } : {}) }} className="border-r border-gray-100 text-center text-[10px]">{stats.pontuaram > 0 ? <span className="font-bold text-gray-700">{stats.pontuaram}</span> : <span className="text-gray-300">–</span>}</td>
+                      <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + STAT_COL_W } : {}) }} className="border-r border-gray-100 text-center text-[10px]">{stats.cravaram > 0 ? <span className="font-bold text-emerald-600">{stats.cravaram}</span> : <span className="text-gray-300">–</span>}</td>
+                      <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 2 * STAT_COL_W, borderRight: '2px solid #d1d5db' } : {}) }} className="border-r border-gray-100 text-center text-[10px] text-gray-500">{stats.media > 0 ? media : <span className="text-gray-300">–</span>}</td>
+                      <td style={{ ...s0, ...(!isMobile ? { left: frozenTotal + 3 * STAT_COL_W, background: lbBg } : {}) }}
+                        className={`border-r border-gray-100 text-center ${isMobile ? CELL_BG[lbKind] : ''}`}>
+                        {lb ? (
+                          <div className="flex flex-col items-center leading-none gap-px">
+                            <span className="tabular-nums font-semibold text-[9px] text-gray-700">{lb.score_home}–{lb.score_away}</span>
+                            {lbPts !== null && (
+                              <span className={`tabular-nums font-bold text-[10px] ${lbPts > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>
+                                {lbPts > 0 ? `+${lbPts}` : '0'}
+                              </span>
+                            )}
+                          </div>
+                        ) : <span className="text-gray-200">—</span>}
+                      </td>
+                    </>)
+                  })()}
+                  {displayParts.map((p, idx) => {
+                    const isWatch = p.id === WATCH_ID
+                    const dataId = isWatch ? watchPart?.id ?? null : p.id
+                    const isMe = p.id === activeParticipantId
+                    const isActiveFrozen = displayFrozenLeft !== null && idx === 0 && !isWatch
+                    const isFrozen = isActiveFrozen || isWatch
+                    const frozenLeft = isActiveFrozen ? displayFrozenLeft! : watchFrozenLeft
+                    if (isWatch && !dataId) return (
+                      <td key={p.id}
+                        style={{ position: 'sticky', left: frozenLeft, zIndex: 20, background: bg, borderLeft: '2px solid #7c3aed' }}
+                        className="border-r border-violet-100 text-center">
+                        <span className="text-gray-200">—</span>
+                      </td>
+                    )
+                    const key  = `${dataId!}:${match.id}`
+                    const bet  = betMap.get(key)
+                    const kind = matchCellKind(bet, match.score_home, match.score_away)
+                    const pts  = getMatchPts(dataId!, match.id)
+                    const frozenBg = isFrozen ? (CELL_KIND_BG_HEX[kind] || bg) : undefined
+                    const betOutcome = bet ? getMatchResult(bet.score_home, bet.score_away) : null
+                    const isPotentialZebra = betOutcome !== null && !!possibleZebras?.[betOutcome]
+                    return (
+                      <td key={p.id}
+                        style={isFrozen ? { position: 'sticky', left: frozenLeft, zIndex: 20, background: frozenBg, borderLeft: isWatch ? '2px solid #7c3aed' : '2px solid #d1d5db' } : undefined}
+                        className={`border-r border-gray-100 text-center ${!isFrozen ? CELL_BG[kind] : ''} ${isMe ? 'ring-inset ring-1 ring-verde-300' : ''}`}>
+                        {bet ? (
+                          <div className="flex flex-col items-center leading-none gap-px">
+                            <span className={`tabular-nums font-semibold rounded px-0.5 ${isPotentialZebra ? 'bg-gray-900 text-white' : 'text-gray-700'}`}>
+                              {bet.score_home}–{bet.score_away}
+                            </span>
+                            {pts !== null && (
+                              <span className={`tabular-nums font-bold ${pts > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>
+                                {pts > 0 ? `+${pts}` : '0'}
+                              </span>
+                            )}
+                          </div>
+                        ) : lockedSet.has(match.id) && dataId !== activeParticipantId
+                          ? <span className="text-gray-300 text-[10px]" title="Prazo em aberto">🔒</span>
+                          : <span className="text-gray-200">—</span>
+                        }
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
+
+            {padBot > 0 && <tr style={{ height: padBot }}><td colSpan={7 + participants.length} /></tr>}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Watch selector modal */}
+      {showWatchSelector && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-xs rounded-xl bg-white shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+              <span className="font-semibold text-gray-700 text-sm">Acompanhar participante</span>
+              <button onClick={() => setShowWatchSelector(false)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
+            </div>
+            <div className="px-3 py-2 border-b border-gray-100">
+              <input
+                type="text"
+                placeholder="Buscar…"
+                value={watchQuery}
+                onChange={e => setWatchQuery(e.target.value)}
+                autoFocus
+                className="w-full rounded border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:border-violet-400"
+              />
+            </div>
+            <div className="overflow-y-auto">
+              {watchPart && (
+                <button
+                  onClick={() => { saveWatchPart(null); setShowWatchSelector(false) }}
+                  className="w-full px-4 py-2 text-left text-sm text-red-500 hover:bg-red-50 border-b border-gray-100"
+                >
+                  Remover acompanhamento
+                </button>
+              )}
+              {participants
+                .filter(p => p.id !== activeParticipantId && p.apelido.toLowerCase().includes(watchQuery.toLowerCase()))
+                .map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => { saveWatchPart(p.id); setShowWatchSelector(false) }}
+                    className={`w-full px-4 py-2 text-left text-sm hover:bg-violet-50 ${
+                      p.id === watchParticipantId ? 'bg-violet-100 text-violet-700 font-semibold' : 'text-gray-700'
+                    }`}
+                  >
+                    {p.apelido}
+                    {p.id === watchParticipantId && <span className="ml-1 text-violet-500">✓</span>}
+                  </button>
+                ))
+              }
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Legend */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-gray-100 bg-white px-3 py-1.5 text-[10px] text-gray-400 shrink-0">
+        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-emerald-100" />Cravada</span>
+        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-sky-100" />Vencedor/Parcial</span>
+        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-rose-50 border border-rose-200" />Errou</span>
+        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-gray-900" /><span className="text-gray-500">Zebra apostada (≤15%)</span></span>
+        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-gray-500" /><span className="text-gray-500">Zebra sem aposta</span></span>
+      </div>
+    </div>
+  )
+}

@@ -10,6 +10,7 @@ import {
   logEmail,
 } from '@/lib/cron/engine'
 import { html0h, subject0h, FROM_NAME } from '@/lib/cron/templates'
+import { COPA2026_ARCHIVED } from '@/lib/tournament-lock'
 
 // T-0h: deadline acabou de passar (dentro dos últimos 5 min)
 // Tolerância negativa = deadline no passado
@@ -22,6 +23,9 @@ export async function GET(req: Request) {
   const auth = req.headers.get('authorization')
   if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  if (COPA2026_ARCHIVED) {
+    return NextResponse.json({ skipped: true, reason: 'Copa 2026 arquivada' })
   }
 
   const supabase = await createAdminClient()

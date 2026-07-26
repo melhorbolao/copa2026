@@ -33,8 +33,8 @@ export async function clearAllBets(): Promise<void> {
     pts_matches: 0, pts_groups: 0, pts_thirds: 0, pts_tournament: 0, pts_total: 0,
   }).in('participant_id', pids)
 
-  revalidatePath('/classificacaoMB')
-  revalidatePath('/tabelaMB')
+  revalidatePath('/copa2026/classificacaoMB')
+  revalidatePath('/copa2026/tabelaMB')
 }
 
 export async function clearAllResults(): Promise<void> {
@@ -77,7 +77,7 @@ export async function clearAllResults(): Promise<void> {
     }).in('participant_id', pids)
   }
 
-  revalidatePath('/classificacaoMB')
-  revalidatePath('/tabelaMB')
+  revalidatePath('/copa2026/classificacaoMB')
+  revalidatePath('/copa2026/tabelaMB')
   revalidatePath('/admin/jogos')
 }

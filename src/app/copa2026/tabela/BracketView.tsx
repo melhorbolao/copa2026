@@ -1,0 +1,558 @@
+'use client'
+
+import { useState, useEffect, useTransition } from 'react'
+import { Flag } from '@/components/ui/Flag'
+import { fillG4FromBracket } from '@/app/copa2026/palpites/actions'
+import { QF_PAIRS, SF_PAIRS } from '@/lib/bracket/engine'
+
+// ── Tipos ────────────────────────────────────────────────────────────────────
+
+export interface BracketTeam { team: string; flag: string }
+export interface R32Slot { matchNum: string; teamA: BracketTeam | null; teamB: BracketTeam | null; labelA: string; labelB: string }
+
+interface Props {
+  r32Slots: R32Slot[]
+  userId: string
+  g4Deadline: string
+  hasTournamentBet: boolean
+  readOnly?: boolean
+}
+
+type Picks = {
+  r32:   (string | null)[]   // 16
+  r16:   (string | null)[]   // 8
+  qf:    (string | null)[]   // 4
+  sf:    (string | null)[]   // 2
+  final: string | null
+  third: string | null
+}
+
+// ── Estado inicial ────────────────────────────────────────────────────────────
+
+function emptyPicks(): Picks {
+  return { r32: Array(16).fill(null), r16: Array(8).fill(null), qf: Array(4).fill(null), sf: Array(2).fill(null), final: null, third: null }
+}
+
+// ── Lógica de picks ───────────────────────────────────────────────────────────
+
+/**
+ * Sanitiza picks vindos do localStorage contra os r32Slots atuais. Sem isso,
+ * picks de Oitavas/Quartas/Semi/Final salvos quando o bracket estava
+ * preenchido indevidamente (fallback alfabético — corrigido em #47) ficam
+ * presos no localStorage para sempre, mesmo depois do bracket ficar vazio.
+ *
+ * Regras:
+ *  - r32[i]: só sobrevive se for o time A OU B do slot i atual; senão null.
+ *  - r16/qf/sf/final/third: só sobrevivem se o pick vier de um pick válido na
+ *    rodada anterior; senão null. Cascade descendente automática.
+ */
+function sanitizePicks(picks: Picks, r32Slots: R32Slot[]): Picks {
+  const r32 = picks.r32.map((p, i) => {
+    if (!p) return null
+    const slot = r32Slots[i]
+    if (!slot) return null
+    if (slot.teamA?.team === p || slot.teamB?.team === p) return p
+    return null
+  })
+  const r16 = picks.r16.map((p, i) => {
+    if (!p) return null
+    const a = r32[i * 2], b = r32[i * 2 + 1]
+    return p === a || p === b ? p : null
+  })
+  // QF: cruzamento oficial (QF_PAIRS) — não o par geometricamente adjacente
+  // i*2/i*2+1 (ver comentário em SF_PAIRS/QF_PAIRS no engine.ts).
+  const qf = picks.qf.map((p, i) => {
+    if (!p) return null
+    const [ra, rb] = QF_PAIRS[i]
+    const a = r16[ra], b = r16[rb]
+    return p === a || p === b ? p : null
+  })
+  // SF: cruzamento oficial (SF_PAIRS) — vencedor do Bloco 1 x vencedor do
+  // Bloco 3, e vencedor do Bloco 2 x vencedor do Bloco 4 (não o par
+  // geometricamente adjacente i*2/i*2+1).
+  const sf = picks.sf.map((p, i) => {
+    if (!p) return null
+    const [qa, qb] = SF_PAIRS[i]
+    const a = qf[qa], b = qf[qb]
+    return p === a || p === b ? p : null
+  })
+  const final = picks.final && (picks.final === sf[0] || picks.final === sf[1]) ? picks.final : null
+  // third = perdedor da SF: pode ser o "outro" do par QF.
+  const thirdValid = (() => {
+    if (!picks.third) return false
+    for (let i = 0; i < 2; i++) {
+      const [qa, qb] = SF_PAIRS[i]
+      const a = qf[qa], b = qf[qb]
+      const sfi = sf[i]
+      if (!sfi) continue
+      const loser = sfi === a ? b : sfi === b ? a : null
+      if (loser && picks.third === loser) return true
+    }
+    return false
+  })()
+  return { r32, r16, qf, sf, final, third: thirdValid ? picks.third : null }
+}
+
+function makePick(picks: Picks, round: string, idx: number, team: string): Picks {
+  const n: Picks = {
+    r32: [...picks.r32], r16: [...picks.r16],
+    qf:  [...picks.qf],  sf:  [...picks.sf],
+    final: picks.final,  third: picks.third,
+  }
+  if (round === 'r32') {
+    n.r32[idx] = team
+    const r16i = Math.floor(idx / 2); n.r16[r16i] = null
+    const qfi  = Math.floor(r16i / 2); n.qf[qfi]  = null
+    const sfi  = Math.floor(qfi / 2);  n.sf[sfi]  = null
+    n.final = null; n.third = null
+  } else if (round === 'r16') {
+    n.r16[idx] = team
+    const qfi = Math.floor(idx / 2); n.qf[qfi] = null
+    const sfi = Math.floor(qfi / 2); n.sf[sfi] = null
+    n.final = null; n.third = null
+  } else if (round === 'qf') {
+    n.qf[idx] = team
+    // Cruzamento oficial (SF_PAIRS): a quarta idx não alimenta a semi
+    // Math.floor(idx/2), e sim a semi cujo par em SF_PAIRS contém idx.
+    const sfi = SF_PAIRS.findIndex(([a, b]) => a === idx || b === idx)
+    if (sfi >= 0) n.sf[sfi] = null
+    n.final = null; n.third = null
+  } else if (round === 'sf') {
+    n.sf[idx] = team; n.final = null; n.third = null
+  } else if (round === 'final') {
+    n.final = team
+  } else if (round === 'third') {
+    n.third = team
+  }
+  return n
+}
+
+// ── Posicionamento vertical ───────────────────────────────────────────────────
+// Fórmula: top = UNIT * (2^(r+1) * i + 2^r − 1), onde UNIT = MATCH_H / 2
+
+const MATCH_H = 58   // altura do card (2 linhas de 28px + 2px divisor)
+const UNIT    = MATCH_H / 2  // 29px
+
+function matchTop(r: number, i: number): number {
+  const mult = 1 << (r + 1)
+  const base = 1 << r
+  return UNIT * (mult * i + base - 1)
+}
+
+// Container height = 16 matches * MATCH_H = 928px
+const CONTAINER_H = 16 * MATCH_H
+
+// ── Dimensões das colunas ─────────────────────────────────────────────────────
+
+const MATCH_W  = 156
+const COL_GAP  = 20
+const COL_STEP = MATCH_W + COL_GAP
+
+const ROUND_HEADERS = ['16avos', 'Oitavas', 'Quartas', 'Semi', 'Final']
+
+// ── Mapa de bandeiras ─────────────────────────────────────────────────────────
+
+function buildFlagMap(r32Slots: R32Slot[]): Map<string, string> {
+  const m = new Map<string, string>()
+  for (const s of r32Slots) {
+    if (s.teamA) m.set(s.teamA.team, s.teamA.flag)
+    if (s.teamB) m.set(s.teamB.team, s.teamB.flag)
+  }
+  return m
+}
+
+// ── Componente principal ──────────────────────────────────────────────────────
+
+export function BracketView({ r32Slots, userId, g4Deadline, hasTournamentBet, readOnly }: Props) {
+  // v3: bump após #47. Invalida picks salvos quando o R32 vinha preenchido
+  // indevidamente (fallback alfabético) — esses picks descendentes ficavam
+  // presos no localStorage mesmo depois do R32 ficar vazio. Limpeza imediata
+  // do v2 antigo no carregamento.
+  const storageKey = `bracket_v3_${userId}`
+  const legacyKey  = `bracket_v2_${userId}`
+
+  const [picks,   setPicks]   = useState<Picks>(emptyPicks)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+    try {
+      // Remove o snapshot antigo (v2) — picks pré-#47 não são confiáveis.
+      localStorage.removeItem(legacyKey)
+      const raw = localStorage.getItem(storageKey)
+      if (raw) {
+        const parsed = JSON.parse(raw) as Picks
+        setPicks(sanitizePicks(parsed, r32Slots))
+      }
+    } catch { /* ignore */ }
+  }, [storageKey, legacyKey, r32Slots])
+
+  useEffect(() => {
+    if (!mounted || readOnly) return
+    localStorage.setItem(storageKey, JSON.stringify(picks))
+  }, [picks, storageKey, mounted, readOnly])
+
+  const flagMap = buildFlagMap(r32Slots)
+  const getTeam = (name: string | null) =>
+    name ? { team: name, flag: flagMap.get(name) ?? '' } : null
+
+  const pick = (round: string, idx: number, team: string) =>
+    setPicks(prev => makePick(prev, round, idx, team))
+
+  // ── G4 fill ────────────────────────────────────────────────
+  const [g4Pending, startG4] = useTransition()
+  const [showG4Confirm, setShowG4Confirm] = useState(false)
+  const [g4Error, setG4Error] = useState('')
+
+  const canFillG4 =
+    picks.r32.every(p => p !== null) &&
+    picks.r16.every(p => p !== null) &&
+    picks.qf.every(p => p !== null) &&
+    picks.sf.every(p => p !== null) &&
+    picks.final !== null
+
+  const g4Open = g4Deadline ? new Date() < new Date(g4Deadline) : false
+
+  const deriveG4 = () => {
+    const champion  = picks.final!
+    const runner_up = picks.sf[0] === champion ? picks.sf[1]! : picks.sf[0]!
+    const [q0a, q0b] = SF_PAIRS[0]
+    const [q1a, q1b] = SF_PAIRS[1]
+    const semi1     = picks.sf[0] === picks.qf[q0a] ? picks.qf[q0b]! : picks.qf[q0a]!
+    const semi2     = picks.sf[1] === picks.qf[q1a] ? picks.qf[q1b]! : picks.qf[q1a]!
+    return { champion, runner_up, semi1, semi2 }
+  }
+
+  const doFillG4 = () => {
+    setG4Error('')
+    startG4(async () => {
+      try {
+        await fillG4FromBracket(deriveG4())
+        setShowG4Confirm(false)
+      } catch (e) {
+        setG4Error(e instanceof Error ? e.message : 'Erro')
+      }
+    })
+  }
+
+  const handleG4Click = () => {
+    if (hasTournamentBet) setShowG4Confirm(true)
+    else doFillG4()
+  }
+
+  // Perdedores das SFs → jogo de 3º lugar (cruzamento oficial, ver SF_PAIRS)
+  const sfLoser = (sfIdx: number): string | null => {
+    const winner = picks.sf[sfIdx]
+    if (!winner) return null
+    const [qa, qb] = SF_PAIRS[sfIdx]
+    const a = picks.qf[qa]
+    const b = picks.qf[qb]
+    if (winner === a) return b
+    if (winner === b) return a
+    return null
+  }
+
+  const thirdA = sfLoser(0)
+  const thirdB = sfLoser(1)
+  const finalTop = matchTop(4, 0)
+  const thirdTop = finalTop + MATCH_H + 48  // abaixo da Final, mesma coluna
+
+  if (!mounted) {
+    return <div className="flex h-32 items-center justify-center text-sm text-gray-400">Carregando chaveamento…</div>
+  }
+
+  const totalWidth = COL_STEP * 4 + MATCH_W
+
+  return (
+    <div>
+      {/* Cabeçalho das rodadas */}
+      <div className="mb-2 flex items-end" style={{ gap: 0 }}>
+        {ROUND_HEADERS.map((lbl, i) => (
+          <div
+            key={lbl}
+            style={{ width: MATCH_W, marginLeft: i === 0 ? 0 : COL_GAP }}
+            className="text-center text-[10px] font-bold uppercase tracking-widest text-gray-400"
+          >
+            {lbl}
+          </div>
+        ))}
+      </div>
+
+      {/* Bracket */}
+      <div className="overflow-x-auto pb-4">
+        <div className="relative" style={{ height: Math.max(CONTAINER_H, thirdTop + MATCH_H + 8), width: totalWidth }}>
+
+          {/* ── R32 ── */}
+          {r32Slots.map((slot, i) => (
+            <div key={slot.matchNum}>
+              {/* Separador visual entre todas as partidas do R32 */}
+              {i > 0 && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: -4,
+                    top: matchTop(0, i) - 6,
+                    width: MATCH_W + 8,
+                    height: 2,
+                    background: 'linear-gradient(to right, #e5e7eb, #9ca3af, #e5e7eb)',
+                    borderRadius: 1,
+                  }}
+                />
+              )}
+              <MatchCard
+                style={{ position: 'absolute', left: 0, top: matchTop(0, i) }}
+                teamA={slot.teamA}
+                teamB={slot.teamB}
+                winner={picks.r32[i]}
+                onPick={t => pick('r32', i, t)}
+                labelA={slot.labelA}
+                labelB={slot.labelB}
+                readOnly={readOnly}
+              />
+            </div>
+          ))}
+
+          {/* ── R16 ── */}
+          {Array.from({ length: 8 }, (_, i) => (
+            <MatchCard
+              key={i}
+              style={{ position: 'absolute', left: COL_STEP, top: matchTop(1, i) }}
+              teamA={getTeam(picks.r32[i * 2])}
+              teamB={getTeam(picks.r32[i * 2 + 1])}
+              winner={picks.r16[i]}
+              onPick={t => pick('r16', i, t)}
+              readOnly={readOnly}
+            />
+          ))}
+
+          {/* ── QF ── */}
+          {/* Cruzamento oficial (QF_PAIRS): não são as oitavas vizinhas i*2/i*2+1 */}
+          {Array.from({ length: 4 }, (_, i) => {
+            const [ra, rb] = QF_PAIRS[i]
+            return (
+              <MatchCard
+                key={i}
+                style={{ position: 'absolute', left: COL_STEP * 2, top: matchTop(2, i) }}
+                teamA={getTeam(picks.r16[ra])}
+                teamB={getTeam(picks.r16[rb])}
+                winner={picks.qf[i]}
+                onPick={t => pick('qf', i, t)}
+                readOnly={readOnly}
+              />
+            )
+          })}
+
+          {/* ── SF ── */}
+          {/* Cruzamento oficial (SF_PAIRS): não são as quartas vizinhas i*2/i*2+1 */}
+          {Array.from({ length: 2 }, (_, i) => {
+            const [qa, qb] = SF_PAIRS[i]
+            return (
+              <MatchCard
+                key={i}
+                style={{ position: 'absolute', left: COL_STEP * 3, top: matchTop(3, i) }}
+                teamA={getTeam(picks.qf[qa])}
+                teamB={getTeam(picks.qf[qb])}
+                winner={picks.sf[i]}
+                onPick={t => pick('sf', i, t)}
+                readOnly={readOnly}
+              />
+            )
+          })}
+
+          {/* ── 3º Lugar (abaixo da Final, mesma coluna) ── */}
+          <div style={{ position: 'absolute', left: COL_STEP * 4, top: thirdTop }}>
+            <div className="mb-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-gray-400">3º Lugar</div>
+            <MatchCard
+              style={{}}
+              teamA={getTeam(thirdA)}
+              teamB={getTeam(thirdB)}
+              winner={picks.third}
+              onPick={t => pick('third', 0, t)}
+              readOnly={readOnly}
+            />
+          </div>
+
+          {/* ── Badge campeão (acima da Final, cresce para cima) ── */}
+          {picks.final && (
+            <div style={{ position: 'absolute', left: COL_STEP * 4, top: finalTop - 34, width: MATCH_W }}
+              className="flex items-center justify-center gap-1 rounded-lg bg-amarelo-100 px-2 py-1"
+            >
+              <Flag code={flagMap.get(picks.final) ?? ''} size="xs" className="shrink-0"/>
+              <span className="text-[11px] font-black text-amarelo-800">{picks.final}</span>
+              <span className="text-[10px]">🏆</span>
+            </div>
+          )}
+
+          {/* ── Final (coluna 4) ── */}
+          <div style={{ position: 'absolute', left: COL_STEP * 4, top: finalTop }}>
+            <div className="mb-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-amarelo-600">Final</div>
+            <MatchCard
+              style={{}}
+              teamA={getTeam(picks.sf[0])}
+              teamB={getTeam(picks.sf[1])}
+              winner={picks.final}
+              onPick={t => pick('final', 0, t)}
+              readOnly={readOnly}
+            />
+          </div>
+
+        </div>
+      </div>
+
+      {/* Rodapé */}
+      {!readOnly ? (
+        <div className="mt-3 flex items-center justify-between gap-4 flex-wrap">
+          <p className="text-xs text-gray-400">
+            Clique em uma seleção para avançá-la à próxima fase.
+          </p>
+          <button
+            onClick={() => setPicks(emptyPicks())}
+            className="text-xs text-gray-400 underline hover:text-gray-600"
+          >
+            Limpar chaveamento
+          </button>
+        </div>
+      ) : (
+        <p className="mt-3 text-xs text-gray-400">
+          Chaveamento baseado nos seus palpites de classificação.
+        </p>
+      )}
+
+      {/* Botão G4 */}
+      {!readOnly && g4Open && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-azul-escuro/20 bg-blue-50 px-4 py-3">
+          <div>
+            <p className="text-sm font-semibold text-azul-escuro">
+              Preencher / atualizar palpites do G4 com base no chaveamento
+            </p>
+            {!canFillG4 && (
+              <p className="mt-0.5 text-xs text-gray-500">
+                Complete todo o chaveamento (16avos até a final) para habilitar.
+              </p>
+            )}
+            {g4Error && <p className="mt-0.5 text-xs text-red-500">{g4Error}</p>}
+          </div>
+          <button
+            onClick={handleG4Click}
+            disabled={!canFillG4 || g4Pending}
+            className="rounded-lg bg-azul-escuro px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {g4Pending ? 'Preenchendo…' : 'Preencher G4'}
+          </button>
+        </div>
+      )}
+
+      {/* Confirmação G4 */}
+      {!readOnly && showG4Confirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-base font-bold text-gray-900">Sobrescrever palpites do G4?</h3>
+            <p className="mt-2 text-sm text-gray-600">
+              Você já tem palpites do G4 preenchidos. Deseja substituí-los pelos times do seu chaveamento?
+              O artilheiro não será alterado.
+            </p>
+            <div className="mt-4 flex justify-end gap-3">
+              <button
+                onClick={() => setShowG4Confirm(false)}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={doFillG4}
+                disabled={g4Pending}
+                className="rounded-lg bg-azul-escuro px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-40"
+              >
+                {g4Pending ? 'Preenchendo…' : 'Sim, substituir'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Sub-componentes ───────────────────────────────────────────────────────────
+
+function MatchCard({
+  teamA, teamB, winner, onPick, label, style, labelA, labelB, readOnly,
+}: {
+  teamA: BracketTeam | null
+  teamB: BracketTeam | null
+  winner: string | null
+  onPick: (team: string) => void
+  label?: string
+  labelA?: string
+  labelB?: string
+  style: React.CSSProperties
+  readOnly?: boolean
+}) {
+  const canPick = !readOnly && !!(teamA && teamB)
+  return (
+    <div
+      style={{ ...style, width: MATCH_W }}
+      className="overflow-hidden rounded border border-gray-200 bg-white shadow-sm"
+    >
+      {label && (
+        <div className="bg-gray-800 px-1.5 py-0.5 text-[9px] font-mono leading-tight text-gray-400">
+          {label}
+        </div>
+      )}
+      <TeamSlot
+        team={teamA}
+        isWinner={!!teamA && winner === teamA.team}
+        onClick={canPick ? () => onPick(teamA!.team) : undefined}
+        posLabel={labelA}
+      />
+      <div className="h-px bg-gray-100" />
+      <TeamSlot
+        team={teamB}
+        isWinner={!!teamB && winner === teamB.team}
+        onClick={canPick ? () => onPick(teamB!.team) : undefined}
+        posLabel={labelB}
+      />
+    </div>
+  )
+}
+
+function TeamSlot({
+  team, isWinner, onClick, posLabel,
+}: {
+  team: BracketTeam | null
+  isWinner: boolean
+  onClick?: () => void
+  posLabel?: string
+}) {
+  return (
+    <div
+      onClick={onClick}
+      className={[
+        'flex h-7 items-center gap-1 px-1.5 text-[11px] leading-none select-none',
+        isWinner  ? 'bg-verde-50 font-bold text-verde-800' : '',
+        // iOS Safari só dispara onClick em divs com cursor-pointer; touch-manipulation
+        // evita que o overflow-x-auto capture o toque como gesto de scroll.
+        onClick   ? 'cursor-pointer touch-manipulation' : '',
+        !isWinner && team && onClick ? 'text-gray-700 hover:bg-gray-50' : '',
+        !isWinner && team && !onClick ? 'text-gray-700' : '',
+        !team ? 'text-gray-300' : '',
+      ].filter(Boolean).join(' ')}
+    >
+      {team ? (
+        <>
+          <Flag code={team.flag} size="xs" className="shrink-0"/>
+          <span className="min-w-0 flex-1 truncate">{team.team}</span>
+          {posLabel && <span className="hidden sm:inline shrink-0 text-[9px] font-medium text-gray-400">{posLabel}</span>}
+          {isWinner && <span className="ml-auto shrink-0 text-[10px] text-verde-500">✓</span>}
+        </>
+      ) : (
+        <>
+          {posLabel && (
+            <span className="text-[9px] font-bold text-gray-300 mr-0.5">{posLabel}</span>
+          )}
+          <span className="text-gray-300">—</span>
+        </>
+      )}
+    </div>
+  )
+}

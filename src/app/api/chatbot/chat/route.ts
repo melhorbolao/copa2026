@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { getPageVisibility, isPageVisible } from '@/lib/page-visibility'
+import { COPA2026_ARCHIVED } from '@/lib/tournament-lock'
 import type { UIMessage } from 'ai'
 
 export const dynamic = 'force-dynamic'
@@ -19,6 +20,10 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+
+  if (COPA2026_ARCHIVED) {
+    return NextResponse.json({ error: 'Assistente indisponível — Copa 2026 encerrada.' }, { status: 403 })
+  }
 
   const { data: profile } = await supabase
     .from('users').select('role').eq('id', user.id).single()

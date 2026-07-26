@@ -23,7 +23,7 @@ export async function setSobeDesceVisible(visible: boolean): Promise<void> {
     .from('tournament_settings')
     .upsert({ key: 'sobe_desce_visible', value: String(visible) }, { onConflict: 'key' })
 
-  revalidatePath('/classificacaoMB')
+  revalidatePath('/copa2026/classificacaoMB')
   revalidatePath('/admin/gestao')
 }
 
@@ -35,7 +35,7 @@ export async function setProductionMode(enabled: boolean): Promise<void> {
     .from('tournament_settings')
     .upsert({ key: 'production_mode', value: String(enabled) }, { onConflict: 'key' })
 
-  revalidatePath('/tabelaMB')
+  revalidatePath('/copa2026/tabelaMB')
   revalidatePath('/admin/gestao')
 }
 
@@ -68,7 +68,7 @@ async function toggleRoundKeyInSetting(
 export async function setRoundReleased(roundKey: string, released: boolean): Promise<void> {
   await requireAdmin()
   await toggleRoundKeyInSetting('released_rounds', roundKey, released)
-  revalidatePath('/tabelaMB')
+  revalidatePath('/copa2026/tabelaMB')
   revalidatePath('/admin/gestao')
 }
 
@@ -82,8 +82,8 @@ export async function setRoundReleased(roundKey: string, released: boolean): Pro
 export async function setRoundAvailable(roundKey: string, available: boolean): Promise<void> {
   await requireAdmin()
   await toggleRoundKeyInSetting('available_rounds', roundKey, available)
-  revalidatePath('/palpites')
-  revalidatePath('/participantes')
+  revalidatePath('/copa2026/palpites')
+  revalidatePath('/copa2026/participantes')
   revalidatePath('/admin/gestao')
 }
 
@@ -201,8 +201,8 @@ export async function clearAllBets(): Promise<void> {
     pts_matches: 0, pts_groups: 0, pts_thirds: 0, pts_tournament: 0, pts_total: 0,
   }).in('participant_id', pids)
 
-  revalidatePath('/classificacaoMB')
-  revalidatePath('/tabelaMB')
+  revalidatePath('/copa2026/classificacaoMB')
+  revalidatePath('/copa2026/tabelaMB')
 }
 
 export async function clearAllResults(): Promise<void> {
@@ -242,7 +242,7 @@ export async function clearAllResults(): Promise<void> {
     }).in('participant_id', pids)
   }
 
-  revalidatePath('/classificacaoMB')
-  revalidatePath('/tabelaMB')
+  revalidatePath('/copa2026/classificacaoMB')
+  revalidatePath('/copa2026/tabelaMB')
   revalidatePath('/admin/jogos')
 }

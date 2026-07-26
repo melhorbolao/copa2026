@@ -721,7 +721,7 @@ export async function updatePhaseDeadline(phase: string, isoDeadline: string) {
     .eq('phase', phase as MatchPhase)
   if (error) throw new Error(error.message)
   revalidatePath('/admin/prazos')
-  revalidatePath('/palpites')
+  revalidatePath('/copa2026/palpites')
 }
 
 /** Atualiza o betting_deadline de todas as partidas de uma rodada da fase de grupos */
@@ -735,7 +735,7 @@ export async function updateGroupRoundDeadline(round: number, isoDeadline: strin
     .eq('round', round)
   if (error) throw new Error(error.message)
   revalidatePath('/admin/prazos')
-  revalidatePath('/palpites')
+  revalidatePath('/copa2026/palpites')
 }
 
 /** Atualiza o betting_deadline de uma partida específica */
@@ -748,7 +748,7 @@ export async function updateMatchDeadline(matchId: string, isoDeadline: string) 
     .eq('id', matchId)
   if (error) throw new Error(error.message)
   revalidatePath('/admin/prazos')
-  revalidatePath('/palpites')
+  revalidatePath('/copa2026/palpites')
 }
 
 export async function saveMatchScore(

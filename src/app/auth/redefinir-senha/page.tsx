@@ -25,7 +25,7 @@ export default function RedefinirSenhaPage() {
       setError('Não foi possível redefinir a senha. O link pode ter expirado — solicite um novo.')
     } else {
       setSuccess(true)
-      setTimeout(() => router.push('/palpites'), 2500)
+      setTimeout(() => router.push('/copa2026/palpites'), 2500)
     }
   }
 

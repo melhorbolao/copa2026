@@ -1,5 +1,6 @@
 import { Resend } from 'resend'
 import { getPageVisibility, isPageVisible } from './page-visibility'
+import { COPA2026_ARCHIVED } from './tournament-lock'
 
 const resend   = new Resend(process.env.RESEND_API_KEY)
 const FROM     = process.env.EMAIL_FROM    ?? 'admin@melhorbolao.app.br'
@@ -12,9 +13,9 @@ async function userLandingPath(): Promise<{ path: string; palpitesOn: boolean }>
   try {
     const rows = await getPageVisibility()
     const palpitesOn = isPageVisible(rows, 'palpites', false)
-    return { path: palpitesOn ? '/palpites' : '/pontuacao', palpitesOn }
+    return { path: palpitesOn ? '/copa2026/palpites' : '/copa2026/pontuacao', palpitesOn }
   } catch {
-    return { path: '/palpites', palpitesOn: true }
+    return { path: '/copa2026/palpites', palpitesOn: true }
   }
 }
 
@@ -29,6 +30,14 @@ const htmlHeader = `
     </span>
   </div>
 `
+
+function skippedIfArchived(fn: string): boolean {
+  if (COPA2026_ARCHIVED) {
+    console.log(`[email] ${fn} ignorado — Copa 2026 arquivada`)
+    return true
+  }
+  return false
+}
 
 const htmlWrapper = (content: string) => `
   <div style="font-family:sans-serif;max-width:520px;margin:auto;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
@@ -46,6 +55,7 @@ const htmlWrapper = (content: string) => `
 
 // ── 1. Notificação para admin: novo usuário cadastrado ────────
 export async function notifyAdminNewUser({ name, email }: { name: string; email: string }) {
+  if (skippedIfArchived('notifyAdminNewUser')) return
   await resend.emails.send({
     from: `Melhor Bolão <${FROM}>`,
     to:   ADMIN_TO,
@@ -72,6 +82,7 @@ export async function notifyAdminNewUser({ name, email }: { name: string; email:
 
 // ── 1b. Confirmação para o usuário: cadastro recebido, aguardando aprovação ──
 export async function notifyUserRegistered({ name, email }: { name: string; email: string }) {
+  if (skippedIfArchived('notifyUserRegistered')) return
   await resend.emails.send({
     from: `Melhor Bolão <${FROM}>`,
     to:   email,
@@ -96,6 +107,7 @@ export async function notifyUserRegistered({ name, email }: { name: string; emai
 
 // ── 2. Boas-vindas ao usuário aprovado ────────────────────────
 export async function notifyUserApproved({ name, email }: { name: string; email: string }) {
+  if (skippedIfArchived('notifyUserApproved')) return
   const { path, palpitesOn } = await userLandingPath()
   const intro = palpitesOn
     ? 'Você já pode começar a fazer seus palpites no link abaixo.'
@@ -131,6 +143,7 @@ export async function notifyUserApproved({ name, email }: { name: string; email:
 
 // ── 2b. Lembrete para completar perfil (usuários que abandonaram o cadastro) ──
 export async function notifyProfileReminder({ name, email }: { name: string; email: string }) {
+  if (skippedIfArchived('notifyProfileReminder')) return
   await resend.emails.send({
     from: `Melhor Bolão <${FROM}>`,
     to:   email,
@@ -193,6 +206,7 @@ export async function sendReminderEmail({
   body: string
   attachments?: Array<{ filename: string; content: Buffer; contentType?: string }>
 }) {
+  if (skippedIfArchived('sendReminderEmail')) return
   const personalizedBody = body.replace(/\{nome\}/gi, name)
   const personalizedSubject = subject.replace(/\{nome\}/gi, name)
   await resend.emails.send({
@@ -204,7 +218,7 @@ export async function sendReminderEmail({
         ${personalizedBody.replace(/\n/g, '<br/>')}
       </p>
       <div style="margin-top:20px">
-        <a href="${BASE_URL}/palpites"
+        <a href="${BASE_URL}/copa2026/palpites"
            style="display:inline-block;background:#009c3b;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px">
           Acessar palpites →
         </a>

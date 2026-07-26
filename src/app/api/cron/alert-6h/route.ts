@@ -9,6 +9,7 @@ import {
   logEmail,
 } from '@/lib/cron/engine'
 import { html6h, subject6h, FROM_NAME } from '@/lib/cron/templates'
+import { COPA2026_ARCHIVED } from '@/lib/tournament-lock'
 
 const WINDOW_6H_MS  = 6 * 3600 * 1000
 const TOLERANCE_MS  = 35 * 60 * 1000   // ±35 min
@@ -19,6 +20,9 @@ export async function GET(req: Request) {
   const auth = req.headers.get('authorization')
   if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  if (COPA2026_ARCHIVED) {
+    return NextResponse.json({ skipped: true, reason: 'Copa 2026 arquivada' })
   }
 
   const supabase = await createAdminClient()
